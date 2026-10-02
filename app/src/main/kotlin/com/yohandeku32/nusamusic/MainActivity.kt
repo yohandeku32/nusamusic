@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
@@ -862,7 +863,7 @@ private fun SongRow(
     }
 }
 
-private val SwipeLibraryShape = androidx.compose.ui.graphics.GenericShape { size, _ ->
+private val SwipeLibraryShape = GenericShape { size, _ ->
     val depth = (size.height * 0.10f).coerceAtLeast(34f)
     val path = androidx.compose.ui.graphics.Path()
     path.moveTo(0f, 0f)
