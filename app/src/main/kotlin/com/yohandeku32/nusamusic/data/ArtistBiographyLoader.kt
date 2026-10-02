@@ -11,6 +11,7 @@ import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
 import java.nio.charset.StandardCharsets
+import java.util.concurrent.ConcurrentHashMap
 
 data class ArtistBiography(
     val artistName: String,
@@ -21,6 +22,8 @@ data class ArtistBiography(
 
 object ArtistBiographyLoader {
     private const val CONNECT_TIMEOUT_MS = 6_000
+    private val cache = ConcurrentHashMap<String, ArtistBiography>()
+
     private const val READ_TIMEOUT_MS = 8_000
 
     suspend fun load(song: Song): ArtistBiography? = withContext(Dispatchers.IO) {
@@ -29,7 +32,14 @@ object ArtistBiographyLoader {
             return@withContext null
         }
 
-        loadFromWikipedia(artist, "id") ?: loadFromWikipedia(artist, "en")
+        val cacheKey = artist.lowercase()
+        cache[cacheKey]?.let { return@withContext it }
+
+        val result = loadFromWikipedia(artist, "id")
+            ?: loadFromWikipedia(artist, "en")
+
+        result?.let { cache[cacheKey] = it }
+        result
     }
 
     private fun loadFromWikipedia(
