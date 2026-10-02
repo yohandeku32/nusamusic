@@ -1296,7 +1296,11 @@ private fun AudioQualityPill(song: Song?) {
 
     val info = codecInfo
     val isLossless = info?.codecName == "Apple Lossless" || info?.codecName == "FLAC"
-    val isHiRes = isLossless && (info?.bitDepth ?: 16) >= 24
+    // FLAC always uses the standard Lossless badge. Hi-Res is reserved
+    // for Apple Lossless tracks detected at 24-bit or above.
+    val isHiRes =
+        info?.codecName == "Apple Lossless" &&
+            (info.bitDepth ?: 16) >= 24
     val label = if (isHiRes) "Hi-Res Lossless" else "Lossless"
 
     androidx.compose.animation.AnimatedVisibility(
