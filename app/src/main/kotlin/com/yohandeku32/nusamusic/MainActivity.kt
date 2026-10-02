@@ -108,7 +108,30 @@ class MainActivity : ComponentActivity() {
         // Draw the white player surface underneath the hidden status-bar area,
         // while keeping the Android navigation bar visible.
         WindowCompat.setDecorFitsSystemWindows(window, false)
+
+        // The phone navigation bar stays visible, but its background exactly
+        // matches Nusa Music's player background instead of appearing black.
+        val isDarkMode =
+            (resources.configuration.uiMode and
+                android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+                android.content.res.Configuration.UI_MODE_NIGHT_YES
+        val navigationBackground = if (isDarkMode) {
+            android.graphics.Color.rgb(5, 5, 5)
+        } else {
+            android.graphics.Color.rgb(242, 240, 235)
+        }
+        window.navigationBarColor = navigationBackground
         window.statusBarColor = android.graphics.Color.TRANSPARENT
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.isNavigationBarContrastEnforced = false
+            window.navigationBarDividerColor = navigationBackground
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            @Suppress("DEPRECATION")
+            window.decorView.systemUiVisibility =
+                window.decorView.systemUiVisibility or
+                    if (isDarkMode) 0 else View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+        }
 
         val permission = if (Build.VERSION.SDK_INT >= 33) {
             Manifest.permission.READ_MEDIA_AUDIO
