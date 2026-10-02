@@ -707,17 +707,17 @@ private fun NusaMusicApp(
 
                                             val titleSize = remember(titleWordCount) {
                                                 when {
-                                                    titleWordCount <= 2 -> 35.sp
-                                                    titleWordCount == 3 -> 31.sp
-                                                    else -> 28.sp
+                                                    titleWordCount <= 2 -> 37.sp
+                                                    titleWordCount == 3 -> 33.sp
+                                                    else -> 30.sp
                                                 }
                                             }
 
                                             val titleLineHeight = remember(titleWordCount) {
                                                 when {
-                                                    titleWordCount <= 2 -> 37.sp
-                                                    titleWordCount == 3 -> 33.sp
-                                                    else -> 30.sp
+                                                    titleWordCount <= 2 -> 40.sp
+                                                    titleWordCount == 3 -> 36.sp
+                                                    else -> 33.sp
                                                 }
                                             }
 
