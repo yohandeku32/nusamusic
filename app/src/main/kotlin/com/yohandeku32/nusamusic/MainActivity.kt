@@ -75,6 +75,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -1147,7 +1148,6 @@ private fun LyricsWindow(
 ) {
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
-    val scope = rememberCoroutineScope()
     val windowHeight = (configuration.screenHeightDp.dp * 0.52f)
         .coerceIn(320.dp, 480.dp)
     val rowHeight = 72.dp
@@ -1257,7 +1257,7 @@ private fun LyricsWindow(
                 distance <= 2 &&
                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
             ) {
-                remember(index) {
+                remember(index, distance) {
                     android.graphics.RenderEffect
                         .createBlurEffect(
                             if (distance == 1) 4.5f else 6f,
@@ -1287,9 +1287,7 @@ private fun LyricsWindow(
                     }
                     .clickable {
                         onSeek(line.startMs)
-                        scope.launch {
-                            smoothPositionMs = currentPositionProvider()
-                        }
+                        smoothPositionMs = currentPositionProvider()
                     },
                 contentAlignment = Alignment.Center
             ) {
