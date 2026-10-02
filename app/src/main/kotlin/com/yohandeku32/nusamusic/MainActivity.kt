@@ -255,7 +255,7 @@ class MainActivity : ComponentActivity() {
                     shuffleEnabled = shuffleEnabled,
                     repeatMode = repeatMode,
                     immersiveArtwork = immersiveArtwork,
-                    onSetImmersiveArtwork = ::setImmersiveArtwork,
+                    onSetImmersiveArtwork = ::updateImmersiveArtwork,
                     onRequestPermission = { permissionLauncher.launch(permission) }
                 )
             }
@@ -323,7 +323,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun setImmersiveArtwork(enabled: Boolean) {
+    private fun updateImmersiveArtwork(enabled: Boolean) {
         immersiveArtwork = enabled
         playbackPrefs.edit()
             .putBoolean("immersive_artwork", enabled)
