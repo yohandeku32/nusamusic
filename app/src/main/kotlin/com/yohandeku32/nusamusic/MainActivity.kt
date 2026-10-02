@@ -88,6 +88,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -463,13 +465,23 @@ private fun NusaMusicApp(
         androidx.compose.foundation.lazy.rememberLazyListState()
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(pagerState.currentPage, currentSong?.id, filtered.size) {
-        if (pagerState.currentPage == 1 && currentSong != null) {
+    val configuration = LocalConfiguration.current
+    val density = LocalDensity.current
+    val libraryCenterOffset = remember(configuration.screenHeightDp, density) {
+        with(density) {
+            -((configuration.screenHeightDp.dp - 82.dp) / 2f).roundToPx()
+        }
+    }
+
+    // Prepare the library position silently as soon as the current song
+    // changes. There is intentionally NO scroll animation here.
+    LaunchedEffect(currentSong?.id, filtered.size) {
+        if (currentSong != null) {
             val index = filtered.indexOfFirst { it.id == currentSong.id }
             if (index >= 0) {
-                libraryListState.animateScrollToItem(
+                libraryListState.scrollToItem(
                     index = index,
-                    scrollOffset = -120
+                    scrollOffset = libraryCenterOffset
                 )
             }
         }
@@ -736,6 +748,17 @@ private fun NusaMusicApp(
                                             IconButton(
                                                 onClick = {
                                                     scope.launch {
+                                                        if (currentSong != null) {
+                                                            val index = filtered.indexOfFirst {
+                                                                it.id == currentSong.id
+                                                            }
+                                                            if (index >= 0) {
+                                                                libraryListState.scrollToItem(
+                                                                    index = index,
+                                                                    scrollOffset = libraryCenterOffset
+                                                                )
+                                                            }
+                                                        }
                                                         pagerState.animateScrollToPage(1)
                                                     }
                                                 },
