@@ -22,7 +22,8 @@ Modern Android music player focused on local/offline playback with a clean vinyl
 - Share current song
 - Favorite toggle on the player
 - Swipe up to open the artist information area
-- Artist biography loaded from Wikipedia, preferring Indonesian Wikipedia and falling back to English
+- Artist biography loaded from Last.fm using the artist.getInfo API
+- Biography lookup tries Indonesian first and falls back to English
 - Biography results cached in memory to avoid repeated requests for the same artist
 - Light and dark theme support
 - Immersive player presentation with the Android status bar hidden while the navigation bar remains available
@@ -61,7 +62,17 @@ The quality tier is based on the detected bit depth:
 
 The former lyrics area is now used for **artist biography**.
 
-Nusa Music searches Wikipedia through the official MediaWiki REST API. The app first searches Indonesian Wikipedia and falls back to English Wikipedia when a suitable article is not found. The biography area shows the artist name, a short biography, and the Wikipedia language used as the source.
+Nusa Music uses the Last.fm `artist.getInfo` API. The app requests the Indonesian biography first and falls back to English when needed. Last.fm's artist metadata includes a biography field, and the response also provides the resolved artist name and source URL.
+
+### Last.fm API Key
+
+Last.fm requires an API key for `artist.getInfo`. The key is read locally from the project's `local.properties` file:
+
+```properties
+LASTFM_API_KEY=YOUR_LASTFM_API_KEY
+```
+
+Do not commit `local.properties` or publish the API key in the repository. Internet access is required when fetching artist biographies.
 
 ## Artist Images
 
