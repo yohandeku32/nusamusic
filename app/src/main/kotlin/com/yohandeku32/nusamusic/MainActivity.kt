@@ -222,7 +222,7 @@ class MainActivity : ComponentActivity() {
                         persistPlaybackState(c)
                     }
                 }
-                delay(if (c.isPlaying) 33L else 400L)
+                delay(if (isPlaying) 33L else 400L)
             }
         }
 
