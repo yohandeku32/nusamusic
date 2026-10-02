@@ -491,6 +491,91 @@ private fun NusaMusicApp(
                     }
                 }
 
+                // Curved black library sheet. The top edge dips in the center
+                // so it matches the rounded "bottom sheet" look of the reference.
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(170.dp)
+                            .clip(SwipeLibraryShape)
+                            .background(Color.Black)
+                            .padding(horizontal = 22.dp)
+                            .padding(top = 22.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .width(46.dp)
+                                    .height(5.dp)
+                                    .clip(RoundedCornerShape(50))
+                                    .background(Color(0xFF666666))
+                            )
+
+                            Spacer(Modifier.height(18.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                ArtworkView(
+                                    song = currentSong,
+                                    maxSizePx = 128,
+                                    modifier = Modifier
+                                        .size(54.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                )
+
+                                Spacer(Modifier.width(14.dp))
+
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        currentSong?.title ?: "Nusa Music",
+                                        color = Color.White,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                    Spacer(Modifier.height(2.dp))
+                                    Text(
+                                        currentSong?.artist ?: "Your music library",
+                                        color = Color(0xFF9D9D9D),
+                                        fontSize = 13.sp,
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                }
+
+                                IconButton(
+                                    onClick = { isFavorite = !isFavorite },
+                                    enabled = currentSong != null,
+                                    modifier = Modifier.size(42.dp)
+                                ) {
+                                    Icon(
+                                        if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                        contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
+                                        tint = if (isFavorite) Color(0xFFC62828) else Color.White
+                                    )
+                                }
+                            }
+
+                            Spacer(Modifier.height(18.dp))
+
+                            Text(
+                                "ALL SONGS",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                letterSpacing = 1.5.sp,
+                                modifier = Modifier.align(Alignment.Start)
+                            )
+                        }
+                    }
+                }
+
             // Lazy rendering: with hundreds of songs, only visible rows are
             // composed. This is the main fix for the previous freeze/force-close.
             if (permissionGranted && filtered.isNotEmpty()) {
