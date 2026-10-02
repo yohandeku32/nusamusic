@@ -21,6 +21,9 @@ Modern Android music player focused on local/offline playback with a clean vinyl
 - Floating button to return to the main player
 - Share current song
 - Favorite toggle on the player
+- Swipe up to open lyrics
+- Embedded lyrics only (USLT, SYLT, lyric metadata, embedded LRC, and local TTML metadata when present)
+- Shows "No lyrics found" when a track has no embedded lyrics
 - Light and dark theme support
 - Immersive player presentation with the Android status bar hidden while the navigation bar remains available
 
@@ -53,6 +56,12 @@ The quality tier is based on the detected bit depth:
 < 24-bit   → Lossless
 >= 24-bit  → Hi-Res Lossless
 ```
+
+## Lyrics
+
+Nusa Music uses **embedded lyrics only**. It does not query online lyric services.
+
+When available, the app reads lyric metadata stored inside the local audio file, including common ID3/Vorbis lyric fields and supported synchronized formats. If no embedded lyrics are found, the lyrics screen shows **No lyrics found**.
 
 ## Artist Images
 
