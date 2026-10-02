@@ -222,7 +222,7 @@ class MainActivity : ComponentActivity() {
                         persistPlaybackState(c)
                     }
                 }
-                delay(400)
+                delay(if (c.isPlaying) 33L else 400L)
             }
         }
 
@@ -461,8 +461,6 @@ private fun NusaMusicApp(
         pageCount = { 2 }
     )
     val playerScrollState =
-        androidx.compose.foundation.lazy.rememberLazyListState()
-    val lyricsListState =
         androidx.compose.foundation.lazy.rememberLazyListState()
     val libraryListState =
         androidx.compose.foundation.lazy.rememberLazyListState()
@@ -743,12 +741,6 @@ private fun NusaMusicApp(
                                                             index = 1,
                                                             scrollOffset = 0
                                                         )
-                                                        if (lyricLines.isNotEmpty()) {
-                                                            val target = activeLyricIndex.coerceAtLeast(0)
-                                                            lyricsListState.scrollToItem(
-                                                                index = target
-                                                            )
-                                                        }
                                                     }
                                                 },
                                                 modifier = Modifier.size(42.dp)
@@ -867,7 +859,6 @@ private fun NusaMusicApp(
                                         lines = lyricLines,
                                         positionMs = positionMs,
                                         activeLineIndex = activeLyricIndex,
-                                        state = lyricsListState,
                                         onSeek = onSeek
                                     )
                                 }
@@ -1148,7 +1139,6 @@ private fun LyricsWindow(
     lines: List<LyricLine>,
     positionMs: Long,
     activeLineIndex: Int,
-    state: androidx.compose.foundation.lazy.LazyListState,
     onSeek: (Long) -> Unit
 ) {
     val configuration = LocalConfiguration.current
@@ -1156,15 +1146,12 @@ private fun LyricsWindow(
     val windowHeight = (configuration.screenHeightDp.dp * 0.52f)
         .coerceIn(320.dp, 480.dp)
 
-    // Keep the active line in the visual focus while the song plays.
-    LaunchedEffect(activeLineIndex, lines.size) {
-        if (activeLineIndex >= 0 && activeLineIndex < lines.size) {
-            state.animateScrollToItem(
-                index = activeLineIndex,
-                scrollOffset = 0
-            )
-        }
-    }
+    // A fixed row height lets the viewport move by a fractional line amount.
+    // This avoids the old "jump to next item" behavior and gives a continuous
+    // Apple-Music-like vertical glide while keeping LazyColumn virtualization.
+    val lyricRowHeight = 72.dp
+    val density = LocalDensity.current
+    val rowHeightPx = with(density) { lyricRowHeight.toPx() }
 
     val nextLyricIndex = when {
         lines.isEmpty() -> -1
@@ -1173,14 +1160,51 @@ private fun LyricsWindow(
         else -> -1
     }
 
+    val currentStartMs = if (activeLineIndex >= 0) {
+        lines[activeLineIndex].startMs
+    } else {
+        lines.firstOrNull()?.startMs ?: 0L
+    }
+
+    val nextStartMs = when {
+        activeLineIndex >= 0 && activeLineIndex < lines.lastIndex ->
+            lines[activeLineIndex + 1].startMs
+        activeLineIndex < 0 && lines.isNotEmpty() ->
+            lines.first().startMs
+        else -> currentStartMs
+    }
+
+    val intervalMs = (nextStartMs - currentStartMs).coerceAtLeast(1L)
+    val lineFraction = if (activeLineIndex >= 0) {
+        ((positionMs - currentStartMs).toFloat() / intervalMs.toFloat())
+            .coerceIn(0f, 0.999f)
+    } else {
+        0f
+    }
+
+    val continuousIndex = when {
+        activeLineIndex >= 0 -> activeLineIndex + lineFraction
+        else -> 0f
+    }
+
+    // Animate only the tiny fractional movement between position samples.
+    // The audio position is sampled at 30 fps above, so this remains fluid
+    // without launching dozens of competing LazyList animations.
+    val animatedContinuousIndex by animateFloatAsState(
+        targetValue = continuousIndex,
+        animationSpec = tween(
+            durationMillis = 70,
+            easing = LinearEasing
+        ),
+        label = "lyricsContinuousPosition"
+    )
+
     val remainingToNextMs = if (nextLyricIndex >= 0) {
         (lines[nextLyricIndex].startMs - positionMs).coerceAtLeast(0L)
     } else {
         0L
     }
 
-    // A small three/two/one-dot countdown appears in the short pause before
-    // the next line starts, giving the transition a more musical feel.
     val countdownDots = if (remainingToNextMs in 1L..3_000L) {
         ((remainingToNextMs + 999L) / 1_000L).toInt().coerceIn(1, 3)
     } else {
@@ -1194,13 +1218,18 @@ private fun LyricsWindow(
             .background(Color.Black)
     ) {
         LazyColumn(
-            state = state,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    // Top padding positions line 0 at the visual center.
+                    translationY = -animatedContinuousIndex * rowHeightPx
+                },
+            userScrollEnabled = false,
             contentPadding = PaddingValues(
-                top = windowHeight / 2f,
-                bottom = windowHeight / 2f
+                top = windowHeight / 2f - lyricRowHeight / 2f,
+                bottom = windowHeight / 2f - lyricRowHeight / 2f
             ),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
             itemsIndexed(
                 items = lines,
@@ -1210,52 +1239,51 @@ private fun LyricsWindow(
                 val distance = if (activeLineIndex >= 0) {
                     abs(index - activeLineIndex)
                 } else {
-                    99
+                    abs(index)
                 }
 
                 val targetAlpha = when {
                     index == activeLineIndex -> 1f
-                    distance == 1 -> 0.80f
+                    distance == 1 -> 0.82f
                     distance == 2 -> 0.58f
                     distance == 3 -> 0.38f
-                    else -> 0.22f
+                    else -> 0.24f
                 }
 
                 LyricLineText(
                     line = line,
                     isActive = index == activeLineIndex,
                     alpha = targetAlpha,
+                    modifier = Modifier.height(lyricRowHeight),
                     onClick = {
                         onSeek(line.startMs)
-                        scope.launch {
-                            state.animateScrollToItem(
-                                index = index,
-                                scrollOffset = 0
-                            )
-                        }
+                        scope.launch { }
                     }
                 )
             }
         }
 
-        if (countdownDots > 0) {
+        // Countdown dots sit just above the upcoming line. The number of
+        // illuminated dots falls from three to one as the timestamp approaches.
+        if (countdownDots > 0 && nextLyricIndex >= 0) {
             Row(
                 modifier = Modifier
                     .align(Alignment.Center)
-                    .offset(y = (-42).dp),
+                    .offset(y = (-46).dp),
                 horizontalArrangement = Arrangement.spacedBy(7.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                repeat(countdownDots) { dotIndex ->
+                repeat(3) { index ->
+                    val activeDot = index < countdownDots
                     val dotAlpha by animateFloatAsState(
-                        targetValue = if (dotIndex == countdownDots - 1) 0.95f else 0.45f,
+                        targetValue = if (activeDot) 0.95f else 0.20f,
                         animationSpec = tween(180),
-                        label = "countdownDotAlpha$dotIndex"
+                        label = "countdownDot$index"
                     )
 
                     Box(
                         modifier = Modifier
-                            .size(5.dp)
+                            .size(if (activeDot) 5.dp else 4.dp)
                             .clip(CircleShape)
                             .background(Color.White.copy(alpha = dotAlpha))
                     )
@@ -1266,7 +1294,7 @@ private fun LyricsWindow(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(52.dp)
+                .height(58.dp)
                 .align(Alignment.TopCenter)
                 .background(
                     Brush.verticalGradient(
@@ -1278,7 +1306,7 @@ private fun LyricsWindow(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(52.dp)
+                .height(58.dp)
                 .align(Alignment.BottomCenter)
                 .background(
                     Brush.verticalGradient(
@@ -1294,6 +1322,7 @@ private fun LyricLineText(
     line: LyricLine,
     isActive: Boolean,
     alpha: Float,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     val animatedAlpha by animateFloatAsState(
@@ -1308,13 +1337,15 @@ private fun LyricLineText(
     )
 
     val blurEffect = if (!isActive && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        android.graphics.RenderEffect
-            .createBlurEffect(
-                5.5f,
-                5.5f,
-                android.graphics.Shader.TileMode.CLAMP
-            )
-            .asComposeRenderEffect()
+        remember {
+            android.graphics.RenderEffect
+                .createBlurEffect(
+                    5.5f,
+                    5.5f,
+                    android.graphics.Shader.TileMode.CLAMP
+                )
+                .asComposeRenderEffect()
+        }
     } else {
         null
     }
@@ -1326,7 +1357,9 @@ private fun LyricLineText(
         fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
         lineHeight = if (isActive) 27.sp else 24.sp,
         textAlign = TextAlign.Center,
-        modifier = Modifier
+        maxLines = 3,
+        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+        modifier = modifier
             .fillMaxWidth()
             .graphicsLayer {
                 this.alpha = if (isActive) 1f else animatedAlpha
