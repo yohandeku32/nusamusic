@@ -839,6 +839,7 @@ private fun NusaMusicApp(
 
                     androidx.compose.material3.Surface(
                         onClick = onToggleShuffle,
+                        enabled = showFloatingControls,
                         shape = CircleShape,
                         color = shuffleActiveColor,
                         tonalElevation = 0.dp,
@@ -863,6 +864,7 @@ private fun NusaMusicApp(
 
                     androidx.compose.material3.Surface(
                         onClick = onToggleRepeat,
+                        enabled = showFloatingControls,
                         shape = CircleShape,
                         color = repeatActiveColor,
                         tonalElevation = 0.dp,
@@ -915,6 +917,7 @@ private fun NusaMusicApp(
                 }
         ) {
             FilledIconButton(
+                enabled = showBackToPlayer,
                 onClick = {
                     scrollScope.launch {
                         listState.animateScrollToItem(0)
@@ -1003,6 +1006,12 @@ private fun AudioQualityPill(song: Song?) {
 private fun ArtistAvatar(song: Song?, modifier: Modifier = Modifier) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var artistBitmap by remember(song?.artist) { mutableStateOf<Bitmap?>(null) }
+    val grayscaleMatrix = remember {
+        ColorMatrix().apply { setToSaturation(0f) }
+    }
+    val grayscaleFilter = remember(grayscaleMatrix) {
+        ColorFilter.colorMatrix(grayscaleMatrix)
+    }
 
     LaunchedEffect(song?.artist) {
         artistBitmap = ArtistImageLoader.load(
@@ -1017,9 +1026,7 @@ private fun ArtistAvatar(song: Song?, modifier: Modifier = Modifier) {
             bitmap = artistBitmap!!.asImageBitmap(),
             contentDescription = song?.artist,
             contentScale = ContentScale.Crop,
-            colorFilter = ColorFilter.colorMatrix(
-                ColorMatrix().apply { setToSaturation(0f) }
-            ),
+            colorFilter = grayscaleFilter,
             modifier = modifier
         )
     } else {
@@ -1376,9 +1383,9 @@ private fun ArtworkView(
                 contentDescription = song?.title,
                 contentScale = ContentScale.Crop,
                 colorFilter = if (monochrome) {
-                    ColorFilter.colorMatrix(ColorMatrix().apply {
-                        setToSaturation(0f)
-                    })
+                    ColorFilter.colorMatrix(
+                        ColorMatrix().apply { setToSaturation(0f) }
+                    )
                 } else {
                     null
                 },
