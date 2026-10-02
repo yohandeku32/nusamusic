@@ -24,6 +24,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.animation.AnimatedVisibility
@@ -69,6 +70,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -76,6 +78,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -451,7 +454,8 @@ private fun NusaMusicApp(
     onRequestPermission: () -> Unit
 ) {
     var isFavorite by remember { mutableStateOf(false) }
-    var lyricsVisible by remember { mutableStateOf(false) }
+    var lyricsProgress by remember { mutableFloatStateOf(0f) }
+    var rootHeightPx by remember { mutableIntStateOf(0) }
 
     val filtered = songs
     val pagerState = androidx.compose.foundation.pager.rememberPagerState(
@@ -468,6 +472,7 @@ private fun NusaMusicApp(
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .onSizeChanged { rootHeightPx = it.height }
                 .padding(padding)
         ) {
             androidx.compose.foundation.pager.HorizontalPager(
@@ -481,13 +486,6 @@ private fun NusaMusicApp(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .background(Color.Black)
-                                .detectNonConsumingSwipes(
-                                    onSwipeUp = {
-                                        if (!lyricsVisible) {
-                                            lyricsVisible = true
-                                        }
-                                    }
-                                )
                         ) {
                             Column(
                                 modifier = Modifier
@@ -738,13 +736,6 @@ private fun NusaMusicApp(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .background(Color.Black)
-                                .detectNonConsumingSwipes(
-                                    onSwipeRight = {
-                                        scope.launch {
-                                            pagerState.animateScrollToPage(0)
-                                        }
-                                    }
-                                )
                         ) {
                             LazyColumn(
                                 state = libraryListState,
@@ -989,33 +980,30 @@ private fun NusaMusicApp(
                 }
             }
 
-            AnimatedVisibility(
-                visible = lyricsVisible,
-                enter = slideInVertically(
-                    initialOffsetY = { it },
-                    animationSpec = tween(
-                        durationMillis = 420,
-                        easing = androidx.compose.animation.core.FastOutSlowInEasing
+            if (lyricsProgress > 0.001f && rootHeightPx > 0) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(
+                            with(androidx.compose.ui.platform.LocalDensity.current) {
+                                rootHeightPx.toDp() * lyricsProgress
+                            }
+                        )
+                ) {
+                    LyricsScreen(
+                        song = currentSong,
+                        positionMs = positionMs,
+                        durationMs = durationMs,
+                        isPlaying = isPlaying,
+                        isFavorite = isFavorite,
+                        onBack = { lyricsProgress = 0f },
+                        onTogglePlay = onTogglePlay,
+                        onShare = onShare,
+                        onProgressChange = { lyricsProgress = it },
+                        maxHeightPx = rootHeightPx.toFloat()
                     )
-                ) + fadeIn(animationSpec = tween(220)),
-                exit = slideOutVertically(
-                    targetOffsetY = { it },
-                    animationSpec = tween(
-                        durationMillis = 340,
-                        easing = androidx.compose.animation.core.FastOutSlowInEasing
-                    )
-                ) + fadeOut(animationSpec = tween(180))
-            ) {
-                LyricsScreen(
-                    song = currentSong,
-                    positionMs = positionMs,
-                    durationMs = durationMs,
-                    isPlaying = isPlaying,
-                    isFavorite = isFavorite,
-                    onBack = { lyricsVisible = false },
-                    onTogglePlay = onTogglePlay,
-                    onShare = onShare
-                )
+                }
             }
         }
     }
@@ -1030,7 +1018,9 @@ private fun LyricsScreen(
     isFavorite: Boolean,
     onBack: () -> Unit,
     onTogglePlay: () -> Unit,
-    onShare: (Song?) -> Unit
+    onShare: (Song?) -> Unit,
+    onProgressChange: (Float) -> Unit,
+    maxHeightPx: Float
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var result by remember(song?.uri) { mutableStateOf<com.yohandeku32.nusamusic.data.LyricsResult?>(null) }
@@ -1045,9 +1035,10 @@ private fun LyricsScreen(
     }
 
     val lines = result?.lines.orEmpty()
-    val activeIndex = remember(lines, positionMs) {
-        lines.indexOfLast { positionMs >= it.startMs }
-            .coerceIn(-1, (lines.size - 1).coerceAtLeast(-1))
+    val activeIndex by remember(lines) {
+        derivedStateOf {
+            findActiveLyricIndex(lines, positionMs)
+        }
     }
 
     LaunchedEffect(activeIndex, lines.size) {
@@ -1063,8 +1054,13 @@ private fun LyricsScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .detectNonConsumingSwipes(
-                onSwipeDown = onBack
+            .detectLyricsDrag(
+                progress = 1f,
+                maxHeightPx = maxHeightPx,
+                onProgressChange = onProgressChange,
+                onSettled = { target ->
+                    if (target <= 0f) onBack()
+                }
             )
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -1185,11 +1181,10 @@ private fun LyricsScreen(
                     ),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(
+                    itemsIndexed(
                         items = lines,
-                        key = { line -> "${line.startMs}-${line.text}" }
-                    ) { line ->
-                        val index = lines.indexOf(line)
+                        key = { _, line -> "${line.startMs}-${line.text}" }
+                    ) { index, line ->
                         val distance = if (activeIndex >= 0) {
                             abs(index - activeIndex)
                         } else {
@@ -1219,136 +1214,62 @@ private fun LyricsScreen(
                 }
             }
 
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color.Black)
-                    .padding(
-                        start = 34.dp,
-                        end = 34.dp,
-                        top = 4.dp,
-                        bottom = 20.dp
-                    )
-            ) {
-                LyricsProgressBar(
-                    positionMs = positionMs,
-                    durationMs = durationMs,
-                    modifier = Modifier.fillMaxWidth()
+        }
+    }
+}
+
+private fun findActiveLyricIndex(
+    lines: List<LyricLine>,
+    positionMs: Long
+): Int {
+    var low = 0
+    var high = lines.lastIndex
+    var answer = -1
+
+    while (low <= high) {
+        val mid = (low + high) ushr 1
+        if (lines[mid].startMs <= positionMs) {
+            answer = mid
+            low = mid + 1
+        } else {
+            high = mid - 1
+        }
+    }
+
+    return answer
+}
+
+private fun Modifier.detectLyricsDrag(
+    progress: Float,
+    maxHeightPx: Float,
+    onProgressChange: (Float) -> Unit,
+    onSettled: (Float) -> Unit
+): Modifier = pointerInput(maxHeightPx) {
+    detectDragGestures(
+        onDragStart = { },
+        onDragEnd = {
+            onSettled(if (progress >= 0.45f) 1f else 0f)
+        },
+        onDragCancel = {
+            onSettled(if (progress >= 0.45f) 1f else 0f)
+        },
+        onDrag = { change, dragAmount ->
+            val horizontal = kotlin.math.abs(dragAmount.x)
+            val vertical = kotlin.math.abs(dragAmount.y)
+
+            // The lyric sheet owns only clearly vertical gestures. Horizontal
+            // swipes remain available to HorizontalPager.
+            if (vertical > horizontal * 1.22f && maxHeightPx > 0f) {
+                change.consume()
+                val deltaProgress = -dragAmount.y / maxHeightPx
+                onProgressChange(
+                    (progress + deltaProgress).coerceIn(0f, 1f)
                 )
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 3.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        formatTime(positionMs),
-                        color = Color(0xFFBDBDBD),
-                        fontSize = 11.sp
-                    )
-                    Text(
-                        "-${formatTime((durationMs - positionMs).coerceAtLeast(0L))}",
-                        color = Color(0xFFBDBDBD),
-                        fontSize = 11.sp
-                    )
-                }
-
-                Spacer(Modifier.height(10.dp))
-
-                Box(
-                    modifier = Modifier.fillMaxWidth(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    androidx.compose.material3.Surface(
-                        onClick = onTogglePlay,
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.background,
-                        tonalElevation = 0.dp,
-                        modifier = Modifier.size(68.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                contentDescription = if (isPlaying) "Pause" else "Play",
-                                tint = Color.Black,
-                                modifier = Modifier.size(29.dp)
-                            )
-                        }
-                    }
-                }
             }
         }
-    }
+    )
 }
 
-@Composable
-private fun LyricsProgressBar(
-    positionMs: Long,
-    durationMs: Long,
-    modifier: Modifier = Modifier
-) {
-    val fraction = if (durationMs > 0L) {
-        (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
-    } else {
-        0f
-    }
-
-    Canvas(modifier.height(14.dp)) {
-        val y = size.height / 2f
-        drawLine(
-            color = Color.White.copy(alpha = 0.16f),
-            start = Offset(0f, y),
-            end = Offset(size.width, y),
-            strokeWidth = 3.dp.toPx()
-        )
-        drawLine(
-            color = Color.White,
-            start = Offset(0f, y),
-            end = Offset(size.width * fraction, y),
-            strokeWidth = 3.dp.toPx()
-        )
-    }
-}
-
-private fun Modifier.detectNonConsumingSwipes(
-    onSwipeLeft: (() -> Unit)? = null,
-    onSwipeRight: (() -> Unit)? = null,
-    onSwipeUp: (() -> Unit)? = null,
-    onSwipeDown: (() -> Unit)? = null
-): Modifier = pointerInput(Unit) {
-    awaitPointerEventScope {
-        var start: Offset? = null
-        var wasPressed = false
-
-        while (true) {
-            val event = awaitPointerEvent(PointerEventPass.Initial)
-            val change = event.changes.firstOrNull() ?: continue
-
-            if (change.pressed && !wasPressed) {
-                start = change.position
-                wasPressed = true
-            } else if (!change.pressed && wasPressed) {
-                val begin = start
-                if (begin != null) {
-                    val dx = change.position.x - begin.x
-                    val dy = change.position.y - begin.y
-                    val threshold = 72f
-                    val horizontalDominance = 1.18f
-                    val verticalDominance = 1.18f
-
-                    if (abs(dx) >= threshold && abs(dx) > abs(dy) * horizontalDominance) {
-                        if (dx < 0) onSwipeLeft?.invoke() else onSwipeRight?.invoke()
-                    } else if (abs(dy) >= threshold && abs(dy) > abs(dx) * verticalDominance) {
-                        if (dy < 0) onSwipeUp?.invoke() else onSwipeDown?.invoke()
-                    }
-                }
-                start = null
-                wasPressed = false
-            }
-        }
-    }
-}
 
 @Composable
 private fun AudioQualityPill(song: Song?) {
