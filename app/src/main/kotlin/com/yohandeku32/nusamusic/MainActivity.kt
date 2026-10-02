@@ -813,15 +813,6 @@ private fun NusaMusicApp(
                                     loading = biographyLoading
                                 )
                             }
-
-                            item {
-                                Spacer(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(120.dp)
-                                        .background(Color.Black)
-                                )
-                            }
                         }
                     }
 
