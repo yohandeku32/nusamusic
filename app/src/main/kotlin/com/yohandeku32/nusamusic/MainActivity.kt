@@ -1165,10 +1165,7 @@ private fun LyricsWindow(
 
         while (isActive) {
             smoothPositionMs = currentPositionProvider()
-            androidx.compose.runtime.withFrameNanos { frameTimeNanos ->
-                // Keep the read tied to the display frame; the value itself comes
-                // directly from MediaController and is only consumed by LyricsWindow.
-            }
+            androidx.compose.runtime.withFrameNanos { }
         }
     }
 
@@ -1239,6 +1236,22 @@ private fun LyricsWindow(
 
             val relativeY = (index - continuousIndex) * rowHeightPx
             val isActive = index == currentIndex
+            val blurEffect = if (
+                !isActive &&
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+            ) {
+                remember(index, distance) {
+                    android.graphics.RenderEffect
+                        .createBlurEffect(
+                            if (distance == 1) 4f else 5.5f,
+                            if (distance == 1) 4f else 5.5f,
+                            android.graphics.Shader.TileMode.CLAMP
+                        )
+                        .asComposeRenderEffect()
+                }
+            } else {
+                null
+            }
 
             Box(
                 modifier = Modifier
@@ -1248,17 +1261,9 @@ private fun LyricsWindow(
                     .graphicsLayer {
                         translationY = relativeY
                         alpha = targetAlpha
-                        if (!isActive && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                            renderEffect = android.graphics.RenderEffect
-                                .createBlurEffect(
-                                    if (distance == 1) 4f else 5.5f,
-                                    if (distance == 1) 4f else 5.5f,
-                                    android.graphics.Shader.TileMode.CLAMP
-                                )
-                                .asComposeRenderEffect()
-                        }
                         scaleX = if (isActive) 1.04f else 1f
                         scaleY = if (isActive) 1.04f else 1f
+                        renderEffect = blurEffect
                     }
                     .clickable {
                         onSeek(line.startMs)
