@@ -722,10 +722,7 @@ private fun NusaMusicApp(
                                             IconButton(
                                                 onClick = {
                                                     scope.launch {
-                                                        // The main arrow now expands the lyrics directly.
-                                                        // Jump to the currently active lyric so the user
-                                                        // immediately sees the relevant line, with no
-                                                        // intermediate scroll or library page.
+                                                        // Open the artist biography section directly.
                                                         playerScrollState.animateScrollToItem(
                                                             index = 1,
                                                             scrollOffset = 0
@@ -736,7 +733,7 @@ private fun NusaMusicApp(
                                             ) {
                                                 Icon(
                                                     Icons.Default.KeyboardArrowDown,
-                                                    contentDescription = "Expand lyrics",
+                                                    contentDescription = "Expand artist biography",
                                                     modifier = Modifier.size(28.dp)
                                                 )
                                             }
@@ -1128,7 +1125,11 @@ private fun ArtistBiographySection(
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Biography not available",
+                    if (ArtistBiographyLoader.isConfigured()) {
+                        "Biography not available"
+                    } else {
+                        "Add LASTFM_API_KEY to local.properties"
+                    },
                     color = Color(0xFF8A8A8A),
                     fontSize = 14.sp,
                     textAlign = TextAlign.Center
@@ -1176,7 +1177,7 @@ private fun ArtistBiographySection(
                             )
                             Spacer(Modifier.height(14.dp))
                             Text(
-                                text = "Source: Wikipedia (" + biography.sourceLanguage.uppercase() + ")",
+                                text = "Source: Last.fm (" + biography.sourceLanguage.uppercase() + ")",
                                 color = Color(0xFF777777),
                                 fontSize = 11.sp
                             )
