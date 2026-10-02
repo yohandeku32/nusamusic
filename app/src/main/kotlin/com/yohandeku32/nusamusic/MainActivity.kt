@@ -1148,25 +1148,30 @@ private fun LyricsWindow(
 ) {
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
+    val scope = rememberCoroutineScope()
+
     val windowHeight = (configuration.screenHeightDp.dp * 0.52f)
         .coerceIn(320.dp, 480.dp)
-
-    // Fixed row geometry makes movement mathematically continuous.
-    // The important difference from the previous version is that we do not
-    // animate a LazyColumn at all. A single graphics layer moves the complete
-    // lyric stack, while the audio clock drives its exact fractional position.
     val rowHeight = 78.dp
     val rowHeightPx = with(density) { rowHeight.toPx() }
-    val centerOffsetPx = with(density) { windowHeight.toPx() / 2f - rowHeightPx / 2f }
+    val topPadding = windowHeight / 2f - rowHeight / 2f
 
+    // Keep the audio clock local to LyricsWindow so the rest of the player is
+    // not recomposed at display refresh rate.
     var renderPositionMs by remember { mutableLongStateOf(positionMs) }
 
-    LaunchedEffect(isPlaying, lines) {
-        if (!isPlaying) {
-            renderPositionMs = currentPositionProvider()
-            return@LaunchedEffect
-        }
+    // The lyric list uses LazyColumn virtualization, but movement is NOT driven
+    // by an animation. We advance it by the exact pixel delta requested by the
+    // audio clock on every display frame. This gives smooth continuous motion
+    // while keeping only on-screen lyric rows laid out.
+    val lyricsState = remember {
+        androidx.compose.foundation.lazy.rememberLazyListState()
+    }
 
+    LaunchedEffect(lines, isPlaying) {
+        if (lines.isEmpty()) return@LaunchedEffect
+
+        val firstStart = lines.first().startMs
         var anchorPositionMs = currentPositionProvider().coerceAtLeast(0L)
         var anchorFrameNanos = 0L
         var lastControllerPositionMs = anchorPositionMs
@@ -1175,77 +1180,77 @@ private fun LyricsWindow(
             val frameNanos = androidx.compose.runtime.withFrameNanos { it }
             val controllerPositionMs = currentPositionProvider().coerceAtLeast(0L)
 
-            // MediaController position is occasionally sampled in coarse
-            // increments. Extrapolate from the latest trusted audio position
-            // using the display clock so lyric motion remains continuous.
             val jump = kotlin.math.abs(controllerPositionMs - lastControllerPositionMs)
+
+            // Reset the interpolation anchor on seek/jump and on the first frame.
             if (
                 anchorFrameNanos == 0L ||
-                jump >= 120L
+                jump > 180L
             ) {
                 anchorPositionMs = controllerPositionMs
                 anchorFrameNanos = frameNanos
             }
 
-            val elapsedMs = if (anchorFrameNanos == 0L) {
-                0L
+            val elapsedMs =
+                ((frameNanos - anchorFrameNanos) / 1_000_000L).coerceAtLeast(0L)
+            val extrapolatedPosition = if (isPlaying) {
+                anchorPositionMs + elapsedMs
             } else {
-                ((frameNanos - anchorFrameNanos) / 1_000_000L)
-                    .coerceAtLeast(0L)
+                controllerPositionMs
             }
 
-            renderPositionMs = (anchorPositionMs + elapsedMs)
-                .coerceAtLeast(0L)
-
+            renderPositionMs = extrapolatedPosition.coerceAtLeast(firstStart)
             lastControllerPositionMs = controllerPositionMs
+
+            // Convert the audio position into a continuous lyric position.
+            val active = findActiveLyricIndex(lines, renderPositionMs)
+            val safeActive = when {
+                active >= 0 -> active
+                else -> 0
+            }
+
+            val startMs = lines[safeActive].startMs
+            val nextMs = lines.getOrNull(safeActive + 1)?.startMs ?: startMs + 1L
+            val interval = (nextMs - startMs).coerceAtLeast(1L)
+            val fraction = if (active >= 0) {
+                ((renderPositionMs - startMs).toFloat() / interval)
+                    .coerceIn(0f, 0.999f)
+            } else {
+                0f
+            }
+
+            val continuousIndex = if (active >= 0) {
+                active + fraction
+            } else {
+                0f
+            }
+
+            val targetScrollPx = continuousIndex * rowHeightPx
+            val currentScrollPx =
+                lyricsState.firstVisibleItemIndex * rowHeightPx +
+                    lyricsState.firstVisibleItemScrollOffset
+
+            lyricsState.scrollBy(targetScrollPx - currentScrollPx)
         }
     }
 
-    val activeIndex = remember(lines) {
-        derivedStateOf {
-            findActiveLyricIndex(lines, renderPositionMs)
-        }
-    }.value
+    LaunchedEffect(lines, positionMs) {
+        if (lines.isEmpty()) return@LaunchedEffect
 
+        // Guarantee that the very beginning of the lyric document can always
+        // be reached/rendered. No special "window around active line" clipping.
+        if (positionMs <= lines.first().startMs + 200L) {
+            lyricsState.scrollToItem(0, 0)
+            renderPositionMs = currentPositionProvider().coerceAtLeast(0L)
+        }
+    }
+
+    val activeIndex = findActiveLyricIndex(lines, renderPositionMs)
     val focusIndex = when {
         activeIndex >= 0 -> activeIndex
         lines.isNotEmpty() -> 0
         else -> -1
     }
-
-    val currentStartMs = when {
-        activeIndex >= 0 -> lines[activeIndex].startMs
-        lines.isNotEmpty() -> lines.first().startMs
-        else -> 0L
-    }
-
-    val nextStartMs = when {
-        activeIndex >= 0 && activeIndex < lines.lastIndex ->
-            lines[activeIndex + 1].startMs
-        activeIndex < 0 && lines.isNotEmpty() ->
-            lines.first().startMs
-        else ->
-            currentStartMs + 1L
-    }
-
-    val intervalMs = (nextStartMs - currentStartMs).coerceAtLeast(1L)
-    val lineFraction = if (activeIndex >= 0) {
-        ((renderPositionMs - currentStartMs).toFloat() / intervalMs)
-            .coerceIn(0f, 0.999f)
-    } else {
-        0f
-    }
-
-    val continuousIndex = when {
-        activeIndex >= 0 -> activeIndex + lineFraction
-        else -> 0f
-    }
-
-    // Keep enough lines around the focus for a natural "depth" effect.
-    // Rendering a small fixed window avoids the cost of laying out the whole
-    // lyric document on every frame and also keeps the opening lines visible.
-    val firstVisible = (focusIndex - 4).coerceAtLeast(0)
-    val lastVisible = (focusIndex + 4).coerceAtMost(lines.lastIndex)
 
     Box(
         modifier = Modifier
@@ -1254,80 +1259,49 @@ private fun LyricsWindow(
             .background(Color.Black)
             .clipToBounds()
     ) {
-        Column(
+        LazyColumn(
+            state = lyricsState,
             modifier = Modifier
-                .fillMaxWidth()
+                .fillMaxSize()
                 .graphicsLayer {
-                    // One GPU translation for the whole stack. This is much
-                    // cheaper than independently translating every line.
-                    translationY =
-                        centerOffsetPx - ((continuousIndex - firstVisible) * rowHeightPx)
+                    // Keep the lyric viewport on the GPU compositor.
+                    clip = true
                 },
-            verticalArrangement = Arrangement.Top
+            userScrollEnabled = false,
+            contentPadding = PaddingValues(
+                top = topPadding,
+                bottom = topPadding
+            ),
+            verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
-            for (index in firstVisible..lastVisible) {
-                val line = lines[index]
+            itemsIndexed(
+                items = lines,
+                key = { index, _ -> "lyric-window-$index" },
+                contentType = { _, _ -> "lyric" }
+            ) { index, line ->
                 val distance = abs(index - focusIndex)
                 val isActive = index == focusIndex
-
                 val alpha = when {
                     isActive -> 1f
                     distance == 1 -> 0.72f
                     distance == 2 -> 0.50f
-                    distance == 3 -> 0.34f
-                    else -> 0.22f
+                    distance == 3 -> 0.32f
+                    else -> 0.20f
                 }
 
-                val blurEffect = if (
-                    !isActive &&
-                    distance <= 2 &&
-                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-                ) {
-                    remember(index, distance) {
-                        android.graphics.RenderEffect
-                            .createBlurEffect(
-                                if (distance == 1) 3.5f else 5f,
-                                if (distance == 1) 3.5f else 5f,
-                                android.graphics.Shader.TileMode.CLAMP
-                            )
-                            .asComposeRenderEffect()
-                    }
-                } else {
-                    null
-                }
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(rowHeight)
-                        .graphicsLayer {
-                            this.alpha = alpha
-                            renderEffect = blurEffect
-                            scaleX = if (isActive) 1.035f else 1f
-                            scaleY = if (isActive) 1.035f else 1f
-                        }
-                        .clickable {
-                            onSeek(line.startMs)
+                LyricLineText(
+                    line = line,
+                    isActive = isActive,
+                    alpha = alpha,
+                    modifier = Modifier.height(rowHeight),
+                    onClick = {
+                        onSeek(line.startMs)
+                        scope.launch {
+                            lyricsState.scrollToItem(index, 0)
                             renderPositionMs = currentPositionProvider()
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = line.text,
-                        color = Color.White,
-                        fontSize = if (isActive) 21.sp else 18.sp,
-                        fontWeight = if (isActive) {
-                            FontWeight.Bold
-                        } else {
-                            FontWeight.SemiBold
-                        },
-                        lineHeight = if (isActive) 28.sp else 25.sp,
-                        textAlign = TextAlign.Center,
-                        maxLines = 3,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(horizontal = 28.dp)
-                    )
-                }
+                        }
+                    }
+                )
             }
         }
 
@@ -1353,6 +1327,57 @@ private fun LyricsWindow(
                         listOf(Color.Transparent, Color.Black)
                     )
                 )
+        )
+    }
+}
+
+@Composable
+private fun LyricLineText(
+    line: LyricLine,
+    isActive: Boolean,
+    alpha: Float,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    val blurEffect = if (
+        !isActive &&
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    ) {
+        remember {
+            android.graphics.RenderEffect
+                .createBlurEffect(
+                    4.5f,
+                    4.5f,
+                    android.graphics.Shader.TileMode.CLAMP
+                )
+                .asComposeRenderEffect()
+        }
+    } else {
+        null
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .graphicsLayer {
+                this.alpha = alpha
+                renderEffect = blurEffect
+                scaleX = if (isActive) 1.035f else 1f
+                scaleY = if (isActive) 1.035f else 1f
+            }
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = line.text,
+            color = Color.White,
+            fontSize = if (isActive) 21.sp else 18.sp,
+            fontWeight = if (isActive) FontWeight.Bold else FontWeight.SemiBold,
+            lineHeight = if (isActive) 28.sp else 25.sp,
+            textAlign = TextAlign.Center,
+            maxLines = 3,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 28.dp)
         )
     }
 }
