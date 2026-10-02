@@ -8,6 +8,7 @@ import android.graphics.Bitmap
 import android.os.Build
 import java.util.Locale
 import android.os.Bundle
+import android.content.SharedPreferences
 import android.view.View
 import android.view.WindowInsets
 import android.view.WindowInsetsController
@@ -40,12 +41,17 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.RepeatOne
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.darkColorScheme
@@ -53,6 +59,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -99,6 +106,13 @@ class MainActivity : ComponentActivity() {
     private var positionMs by mutableLongStateOf(0L)
     private var durationMs by mutableLongStateOf(0L)
     private var permissionGranted by mutableStateOf(false)
+    private var shuffleEnabled by mutableStateOf(false)
+    private var repeatMode by mutableIntStateOf(Player.REPEAT_MODE_OFF)
+
+    private val playbackPrefs: SharedPreferences by lazy {
+        getSharedPreferences("playback_state", MODE_PRIVATE)
+    }
+    private var lastPersistedPosition = -1L
 
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -150,13 +164,29 @@ class MainActivity : ComponentActivity() {
             c.addListener(object : Player.Listener {
                 override fun onIsPlayingChanged(playing: Boolean) {
                     isPlaying = playing
+                    persistPlaybackState(c)
                 }
 
                 override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                     val id = mediaItem?.mediaId?.toLongOrNull()
                     currentSong = songs.firstOrNull { it.id == id } ?: currentSong
+                    persistPlaybackState(c, force = true)
+                }
+
+                override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
+                    shuffleEnabled = shuffleModeEnabled
+                    persistPlaybackState(c, force = true)
+                }
+
+                override fun onRepeatModeChanged(repeatModeValue: Int) {
+                    repeatMode = repeatModeValue
+                    persistPlaybackState(c, force = true)
                 }
             })
+
+            shuffleEnabled = c.shuffleModeEnabled
+            repeatMode = c.repeatMode
+            syncCurrentSong(c)
         }, mainExecutor)
 
         lifecycleScope.launch {
@@ -165,6 +195,17 @@ class MainActivity : ComponentActivity() {
                     positionMs = c.currentPosition.coerceAtLeast(0L)
                     durationMs = c.duration.coerceAtLeast(0L)
                     isPlaying = c.isPlaying
+                    syncCurrentSong(c)
+
+                    // Persist the position periodically so a process restart
+                    // can return to the same song and approximate position.
+                    if (
+                        c.currentMediaItem != null &&
+                        (lastPersistedPosition < 0L ||
+                            kotlin.math.abs(c.currentPosition - lastPersistedPosition) >= 3_000L)
+                    ) {
+                        persistPlaybackState(c)
+                    }
                 }
                 delay(400)
             }
@@ -185,6 +226,10 @@ class MainActivity : ComponentActivity() {
                     onPrevious = ::previousSong,
                     onSeek = ::seekTo,
                     onShare = ::shareCurrentSong,
+                    onToggleShuffle = ::toggleShuffle,
+                    onToggleRepeat = ::toggleRepeat,
+                    shuffleEnabled = shuffleEnabled,
+                    repeatMode = repeatMode,
                     onRequestPermission = { permissionLauncher.launch(permission) }
                 )
             }
@@ -193,10 +238,95 @@ class MainActivity : ComponentActivity() {
         window.decorView.post { hideStatusBar() }
     }
 
+    private fun syncCurrentSong(c: MediaController) {
+        val id = c.currentMediaItem?.mediaId?.toLongOrNull() ?: return
+        songs.firstOrNull { it.id == id }?.let { currentSong = it }
+    }
+
+    private fun persistPlaybackState(
+        c: MediaController,
+        force: Boolean = false
+    ) {
+        val mediaId = c.currentMediaItem?.mediaId ?: return
+        val currentPosition = c.currentPosition.coerceAtLeast(0L)
+
+        if (!force &&
+            lastPersistedPosition >= 0L &&
+            kotlin.math.abs(currentPosition - lastPersistedPosition) < 3_000L
+        ) {
+            return
+        }
+
+        playbackPrefs.edit()
+            .putString("media_id", mediaId)
+            .putLong("position_ms", currentPosition)
+            .putBoolean("is_playing", c.isPlaying)
+            .putBoolean("shuffle_enabled", c.shuffleModeEnabled)
+            .putInt("repeat_mode", c.repeatMode)
+            .apply()
+
+        lastPersistedPosition = currentPosition
+    }
+
+    private fun restorePlaybackStateIfNeeded(c: MediaController) {
+        if (songs.isEmpty() || c.currentMediaItem != null) return
+
+        val mediaId = playbackPrefs.getString("media_id", null) ?: return
+        val index = songs.indexOfFirst { it.id.toString() == mediaId }
+        if (index < 0) return
+
+        val savedPosition = playbackPrefs.getLong("position_ms", 0L).coerceAtLeast(0L)
+        val savedPlaying = playbackPrefs.getBoolean("is_playing", false)
+        val savedShuffle = playbackPrefs.getBoolean("shuffle_enabled", false)
+        val savedRepeat = playbackPrefs.getInt("repeat_mode", Player.REPEAT_MODE_OFF)
+
+        c.setMediaItems(songs.map(::mediaItemFor), index, savedPosition)
+        c.shuffleModeEnabled = savedShuffle
+        c.repeatMode = savedRepeat
+        c.prepare()
+
+        currentSong = songs[index]
+        shuffleEnabled = savedShuffle
+        repeatMode = savedRepeat
+
+        if (savedPlaying) {
+            c.play()
+            isPlaying = true
+        } else {
+            isPlaying = false
+        }
+    }
+
+    private fun toggleShuffle() {
+        controller?.let { c ->
+            c.shuffleModeEnabled = !c.shuffleModeEnabled
+            shuffleEnabled = c.shuffleModeEnabled
+            persistPlaybackState(c, force = true)
+        }
+    }
+
+    private fun toggleRepeat() {
+        controller?.let { c ->
+            val next = when (c.repeatMode) {
+                Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+                Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+                else -> Player.REPEAT_MODE_OFF
+            }
+            c.repeatMode = next
+            repeatMode = next
+            persistPlaybackState(c, force = true)
+        }
+    }
+
     private fun loadSongs() {
         lifecycleScope.launch {
             songs = withContext(Dispatchers.IO) {
                 MusicRepository(this@MainActivity).loadSongs()
+            }
+
+            controller?.let { c ->
+                syncCurrentSong(c)
+                restorePlaybackStateIfNeeded(c)
             }
         }
     }
@@ -274,6 +404,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        controller?.let { persistPlaybackState(it, force = true) }
         controller?.release()
         controller = null
         super.onDestroy()
@@ -295,6 +426,10 @@ private fun NusaMusicApp(
     onPrevious: () -> Unit,
     onSeek: (Long) -> Unit,
     onShare: (Song?) -> Unit,
+    onToggleShuffle: () -> Unit,
+    onToggleRepeat: () -> Unit,
+    shuffleEnabled: Boolean,
+    repeatMode: Int,
     onRequestPermission: () -> Unit
 ) {
     var isFavorite by remember { mutableStateOf(false) }
@@ -307,6 +442,13 @@ private fun NusaMusicApp(
         // must continue behind it so the bar visually follows the background.
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0)
     ) { padding ->
+        val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+        val showFloatingControls = listState.firstVisibleItemIndex >= 3
+        val showBackToPlayer = listState.firstVisibleItemIndex >= 5
+
+        Box(
+            modifier = Modifier.fillMaxSize()
+        ) {
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -595,6 +737,79 @@ private fun NusaMusicApp(
                     )
                 }
             }
+        }
+
+        if (showFloatingControls) {
+            Row(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 18.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = onToggleShuffle,
+                    modifier = Modifier.size(44.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Shuffle,
+                        contentDescription = if (shuffleEnabled) "Shuffle on" else "Shuffle off",
+                        tint = if (shuffleEnabled) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        modifier = Modifier.size(21.dp)
+                    )
+                }
+
+                IconButton(
+                    onClick = onToggleRepeat,
+                    modifier = Modifier.size(44.dp)
+                ) {
+                    Icon(
+                        if (repeatMode == Player.REPEAT_MODE_ONE) {
+                            Icons.Default.RepeatOne
+                        } else {
+                            Icons.Default.Repeat
+                        },
+                        contentDescription = when (repeatMode) {
+                            Player.REPEAT_MODE_ONE -> "Repeat one"
+                            Player.REPEAT_MODE_ALL -> "Repeat all"
+                            else -> "Repeat off"
+                        },
+                        tint = if (repeatMode != Player.REPEAT_MODE_OFF) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        modifier = Modifier.size(21.dp)
+                    )
+                }
+            }
+        }
+
+        if (showBackToPlayer) {
+            FilledIconButton(
+                onClick = {
+                    androidx.compose.runtime.rememberCoroutineScope().launch {
+                        listState.animateScrollToItem(0)
+                    }
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 16.dp, bottom = 18.dp)
+                    .size(46.dp),
+                shape = CircleShape
+            ) {
+                Icon(
+                    Icons.Default.KeyboardArrowUp,
+                    contentDescription = "Back to player",
+                    modifier = Modifier.size(25.dp)
+                )
+            }
+        }
         }
     }
 }
