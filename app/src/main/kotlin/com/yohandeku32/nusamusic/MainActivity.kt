@@ -25,7 +25,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
@@ -743,68 +750,155 @@ private fun NusaMusicApp(
             }
         }
 
-        if (showFloatingControls) {
-            Row(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 18.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                verticalAlignment = Alignment.CenterVertically
+        AnimatedVisibility(
+            visible = showFloatingControls,
+            enter = slideInVertically(
+                initialOffsetY = { it / 2 },
+                animationSpec = tween(280)
+            ) + fadeIn(animationSpec = tween(220)),
+            exit = slideOutVertically(
+                targetOffsetY = { it / 2 },
+                animationSpec = tween(220)
+            ) + fadeOut(animationSpec = tween(160)),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 18.dp)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(50),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                tonalElevation = 3.dp
             ) {
-                IconButton(
-                    onClick = onToggleShuffle,
-                    modifier = Modifier.size(44.dp)
+                Row(
+                    modifier = Modifier.padding(3.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        Icons.Default.Shuffle,
-                        contentDescription = if (shuffleEnabled) "Shuffle on" else "Shuffle off",
-                        tint = if (shuffleEnabled) {
+                    val shuffleActiveColor by animateColorAsState(
+                        targetValue = if (shuffleEnabled) {
                             MaterialTheme.colorScheme.primary
+                        } else {
+                            Color.Transparent
+                        },
+                        animationSpec = tween(180),
+                        label = "shuffleBackground"
+                    )
+                    val shuffleIconColor by animateColorAsState(
+                        targetValue = if (shuffleEnabled) {
+                            MaterialTheme.colorScheme.onPrimary
                         } else {
                             MaterialTheme.colorScheme.onSurfaceVariant
                         },
-                        modifier = Modifier.size(21.dp)
+                        animationSpec = tween(180),
+                        label = "shuffleIcon"
                     )
-                }
+                    val repeatActiveColor by animateColorAsState(
+                        targetValue = if (repeatMode != Player.REPEAT_MODE_OFF) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            Color.Transparent
+                        },
+                        animationSpec = tween(180),
+                        label = "repeatBackground"
+                    )
+                    val repeatIconColor by animateColorAsState(
+                        targetValue = if (repeatMode != Player.REPEAT_MODE_OFF) {
+                            MaterialTheme.colorScheme.onPrimary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        animationSpec = tween(180),
+                        label = "repeatIcon"
+                    )
 
-                IconButton(
-                    onClick = onToggleRepeat,
-                    modifier = Modifier.size(44.dp)
-                ) {
-                    Icon(
-                        if (repeatMode == Player.REPEAT_MODE_ONE) {
-                            Icons.Default.RepeatOne
-                        } else {
-                            Icons.Default.Repeat
-                        },
-                        contentDescription = when (repeatMode) {
-                            Player.REPEAT_MODE_ONE -> "Repeat one"
-                            Player.REPEAT_MODE_ALL -> "Repeat all"
-                            else -> "Repeat off"
-                        },
-                        tint = if (repeatMode != Player.REPEAT_MODE_OFF) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                        modifier = Modifier.size(21.dp)
+                    val shuffleScale by animateFloatAsState(
+                        targetValue = if (shuffleEnabled) 1.08f else 1f,
+                        animationSpec = tween(180),
+                        label = "shuffleScale"
                     )
+                    val repeatScale by animateFloatAsState(
+                        targetValue = if (repeatMode != Player.REPEAT_MODE_OFF) 1.08f else 1f,
+                        animationSpec = tween(180),
+                        label = "repeatScale"
+                    )
+
+                    androidx.compose.material3.Surface(
+                        onClick = onToggleShuffle,
+                        shape = CircleShape,
+                        color = shuffleActiveColor,
+                        tonalElevation = 0.dp,
+                        modifier = Modifier.size(42.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.Default.Shuffle,
+                                contentDescription = if (shuffleEnabled) "Shuffle on" else "Shuffle off",
+                                tint = shuffleIconColor,
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .graphicsLayer {
+                                        scaleX = shuffleScale
+                                        scaleY = shuffleScale
+                                    }
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.width(2.dp))
+
+                    androidx.compose.material3.Surface(
+                        onClick = onToggleRepeat,
+                        shape = CircleShape,
+                        color = repeatActiveColor,
+                        tonalElevation = 0.dp,
+                        modifier = Modifier.size(42.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                if (repeatMode == Player.REPEAT_MODE_ONE) {
+                                    Icons.Default.RepeatOne
+                                } else {
+                                    Icons.Default.Repeat
+                                },
+                                contentDescription = when (repeatMode) {
+                                    Player.REPEAT_MODE_ONE -> "Repeat one"
+                                    Player.REPEAT_MODE_ALL -> "Repeat all"
+                                    else -> "Repeat off"
+                                },
+                                tint = repeatIconColor,
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .graphicsLayer {
+                                        scaleX = repeatScale
+                                        scaleY = repeatScale
+                                    }
+                            )
+                        }
+                    }
                 }
             }
         }
 
-        if (showBackToPlayer) {
+        AnimatedVisibility(
+            visible = showBackToPlayer,
+            enter = slideInVertically(
+                initialOffsetY = { it / 2 },
+                animationSpec = tween(280)
+            ) + fadeIn(animationSpec = tween(220)),
+            exit = slideOutVertically(
+                targetOffsetY = { it / 2 },
+                animationSpec = tween(220)
+            ) + fadeOut(animationSpec = tween(160)),
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 16.dp, bottom = 18.dp)
+        ) {
             FilledIconButton(
                 onClick = {
                     scrollScope.launch {
                         listState.animateScrollToItem(0)
                     }
                 },
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 16.dp, bottom = 18.dp)
-                    .size(46.dp),
+                modifier = Modifier.size(46.dp),
                 shape = CircleShape
             ) {
                 Icon(
@@ -813,7 +907,7 @@ private fun NusaMusicApp(
                     modifier = Modifier.size(25.dp)
                 )
             }
-        }
+        }        }
         }
     }
 }
