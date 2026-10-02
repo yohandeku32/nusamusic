@@ -76,6 +76,7 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.yohandeku32.nusamusic.data.ArtworkLoader
+import com.yohandeku32.nusamusic.data.ArtistImageLoader
 import com.yohandeku32.nusamusic.data.MusicRepository
 import com.yohandeku32.nusamusic.model.Song
 import com.yohandeku32.nusamusic.playback.PlaybackService
@@ -550,7 +551,29 @@ private fun NusaMusicApp(
 
 @Composable
 private fun ArtistAvatar(song: Song?, modifier: Modifier = Modifier) {
-    ArtworkView(song = song, maxSizePx = 96, modifier = modifier)
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var artistBitmap by remember(song?.artist) { mutableStateOf<Bitmap?>(null) }
+
+    LaunchedEffect(song?.artist) {
+        artistBitmap = ArtistImageLoader.load(
+            context = context,
+            artistName = song?.artist,
+            maxSize = 256
+        )
+    }
+
+    if (artistBitmap != null) {
+        androidx.compose.foundation.Image(
+            bitmap = artistBitmap!!.asImageBitmap(),
+            contentDescription = song?.artist,
+            contentScale = ContentScale.Crop,
+            modifier = modifier
+        )
+    } else {
+        // Album art remains the immediate fallback while the artist portrait
+        // is being resolved in the background or when no match is found.
+        ArtworkView(song = song, maxSizePx = 96, modifier = modifier)
+    }
 }
 
 @Composable
