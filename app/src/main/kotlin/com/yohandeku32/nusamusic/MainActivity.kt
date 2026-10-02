@@ -18,11 +18,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -250,17 +247,10 @@ private fun NusaMusicApp(
             TopAppBar(
                 title = {
                     Text(
-                        "NUSA MUSIC",
+                        "NOW PLAYING",
                         fontFamily = FontFamily.Serif,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 1.sp
-                    )
-                },
-                navigationIcon = {
-                    Icon(
-                        Icons.Default.MusicNote,
-                        contentDescription = null,
-                        modifier = Modifier.padding(start = 16.dp).size(24.dp)
                     )
                 },
                 actions = {
@@ -416,30 +406,111 @@ private fun NusaMusicApp(
 
 @Composable
 private fun VinylRecord(song: Song?, isPlaying: Boolean, modifier: Modifier = Modifier) {
-    val infinite = rememberInfiniteTransition(label = "vinyl_rotation")
-    val rotation by infinite.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(
-                durationMillis = 7_000,
-                easing = LinearEasing
-            ),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "vinyl_rotation_value"
-    )
+    // Animatable keeps the exact rotation angle when playback is paused.
+    // Starting playback resumes from that same angle instead of snapping to 0°.
+    val rotation = remember { Animatable(0f) }
+
+    LaunchedEffect(isPlaying) {
+        if (isPlaying) {
+            while (isActive) {
+                rotation.animateTo(
+                    targetValue = rotation.value + 360f,
+                    animationSpec = tween(
+                        durationMillis = 6_500,
+                        easing = LinearEasing
+                    )
+                )
+            }
+        }
+    }
 
     Box(
         modifier = modifier.graphicsLayer {
-            rotationZ = if (isPlaying) rotation else 0f
+            rotationZ = rotation.value
         },
         contentAlignment = Alignment.Center
     ) {
         Canvas(Modifier.fillMaxSize().clip(CircleShape)) {
             val radius = size.minDimension / 2f
 
-            // Dark vinyl base with a subtle radial sheen.
+            // Deep black vinyl with subtle radial light variation.
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        Color(0xFF343434),
+                        Color(0xFF171717),
+                        Color(0xFF060606),
+                        Color(0xFF010101)
+                    ),
+                    center = center,
+                    radius = radius
+                ),
+                radius = radius
+            )
+
+            // Fine pressed-groove texture: many thin circular grooves with
+            // slightly irregular brightness to mimic real reflective vinyl.
+            for (i in 1..210) {
+                val t = i / 210f
+                val grooveRadius = radius * (0.19f + t * 0.77f)
+                val alpha = when {
+                    i % 17 == 0 -> 0.13f
+                    i % 5 == 0 -> 0.075f
+                    else -> 0.028f
+                }
+                drawCircle(
+                    color = Color.White.copy(alpha = alpha),
+                    radius = grooveRadius,
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(
+                        width = if (i % 17 == 0) 1.35f else 0.55f
+                    )
+                )
+            }
+
+            // Broad specular bands. These rotate with the record and create
+            // the characteristic glossy reflection of black vinyl.
+            drawArc(
+                color = Color.White.copy(alpha = 0.16f),
+                startAngle = -64f,
+                sweepAngle = 24f,
+                useCenter = false,
+                topLeft = androidx.compose.ui.geometry.Offset(
+                    size.width * 0.05f,
+                    size.height * 0.05f
+                ),
+                size = androidx.compose.ui.geometry.Size(
+                    size.width * 0.90f,
+                    size.height * 0.90f
+                ),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 10f)
+            )
+            drawArc(
+                color = Color.White.copy(alpha = 0.055f),
+                startAngle = 80f,
+                sweepAngle = 42f,
+                useCenter = false,
+                topLeft = androidx.compose.ui.geometry.Offset(
+                    size.width * 0.09f,
+                    size.height * 0.09f
+                ),
+                size = androidx.compose.ui.geometry.Size(
+                    size.width * 0.82f,
+                    size.height * 0.82f
+                ),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 5f)
+            )
+
+            // Label well / inner pressed area.
+            drawCircle(
+                color = Color.Black.copy(alpha = 0.55f),
+                radius = radius * 0.21f
+            )
+            drawCircle(
+                color = Color.White.copy(alpha = 0.045f),
+                radius = radius * 0.225f,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.8f)
+            )
+
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(
