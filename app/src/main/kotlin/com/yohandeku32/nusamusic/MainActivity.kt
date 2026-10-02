@@ -989,7 +989,23 @@ private fun NusaMusicApp(
                 }
             }
 
-            if (lyricsVisible) {
+            AnimatedVisibility(
+                visible = lyricsVisible,
+                enter = slideInVertically(
+                    initialOffsetY = { it },
+                    animationSpec = tween(
+                        durationMillis = 420,
+                        easing = androidx.compose.animation.core.FastOutSlowInEasing
+                    )
+                ) + fadeIn(animationSpec = tween(220)),
+                exit = slideOutVertically(
+                    targetOffsetY = { it },
+                    animationSpec = tween(
+                        durationMillis = 340,
+                        easing = androidx.compose.animation.core.FastOutSlowInEasing
+                    )
+                ) + fadeOut(animationSpec = tween(180))
+            ) {
                 LyricsScreen(
                     song = currentSong,
                     positionMs = positionMs,
@@ -1317,11 +1333,13 @@ private fun Modifier.detectNonConsumingSwipes(
                 if (begin != null) {
                     val dx = change.position.x - begin.x
                     val dy = change.position.y - begin.y
-                    val threshold = 100f
+                    val threshold = 72f
+                    val horizontalDominance = 1.18f
+                    val verticalDominance = 1.18f
 
-                    if (abs(dx) >= threshold && abs(dx) > abs(dy)) {
+                    if (abs(dx) >= threshold && abs(dx) > abs(dy) * horizontalDominance) {
                         if (dx < 0) onSwipeLeft?.invoke() else onSwipeRight?.invoke()
-                    } else if (abs(dy) >= threshold && abs(dy) > abs(dx)) {
+                    } else if (abs(dy) >= threshold && abs(dy) > abs(dx) * verticalDominance) {
                         if (dy < 0) onSwipeUp?.invoke() else onSwipeDown?.invoke()
                     }
                 }
