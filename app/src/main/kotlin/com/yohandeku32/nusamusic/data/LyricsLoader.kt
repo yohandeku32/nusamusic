@@ -13,15 +13,23 @@ import com.yohandeku32.nusamusic.model.Song
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.w3c.dom.Element
+import org.w3c.dom.Node
 import java.io.StringReader
 import java.util.concurrent.TimeUnit
 import javax.xml.parsers.DocumentBuilderFactory
 import org.xml.sax.InputSource
 
-data class LyricLine(
+data class LyricWord(
     val startMs: Long,
     val endMs: Long,
     val text: String
+)
+
+data class LyricLine(
+    val startMs: Long,
+    val endMs: Long,
+    val text: String,
+    val words: List<LyricWord> = emptyList()
 )
 
 data class LyricsResult(
@@ -943,23 +951,48 @@ object LyricsLoader {
     private fun parseTtml(raw: String): List<LyricLine>? {
         val factory = DocumentBuilderFactory.newInstance().apply {
             isNamespaceAware = true
-            runCatching { setFeature("http://apache.org/xml/features/disallow-doctype-decl", true) }
-            runCatching { setFeature("http://xml.org/sax/features/external-general-entities", false) }
-            runCatching { setFeature("http://xml.org/sax/features/external-parameter-entities", false) }
+            runCatching {
+                setFeature(
+                    "http://apache.org/xml/features/disallow-doctype-decl",
+                    true
+                )
+            }
+            runCatching {
+                setFeature(
+                    "http://xml.org/sax/features/external-general-entities",
+                    false
+                )
+            }
+            runCatching {
+                setFeature(
+                    "http://xml.org/sax/features/external-parameter-entities",
+                    false
+                )
+            }
         }
 
         val document = runCatching {
-            factory.newDocumentBuilder().parse(InputSource(StringReader(raw)))
+            factory.newDocumentBuilder().parse(
+                InputSource(StringReader(raw))
+            )
         }.getOrNull() ?: return null
 
         val nodes = document.getElementsByTagNameNS("*", "p")
         val result = buildList {
             for (index in 0 until nodes.length) {
                 val element = nodes.item(index) as? Element ?: continue
-                val begin = parseTimeMs(element.getAttribute("begin")) ?: continue
-                val end = parseTimeMs(element.getAttribute("end"))
-                    ?: (parseTimeMs(element.getAttribute("dur"))?.let { begin + it })
-                    ?: Long.MAX_VALUE
+
+                val begin = parseTimeMs(
+                    element.getAttribute("begin")
+                ) ?: continue
+
+                val lineEnd = parseTimeMs(
+                    element.getAttribute("end")
+                ) ?: (
+                    parseTimeMs(element.getAttribute("dur"))?.let {
+                        begin + it
+                    }
+                ) ?: Long.MAX_VALUE
 
                 val text = element.textContent
                     .replace("\r", "")
@@ -967,17 +1000,87 @@ object LyricsLoader {
                     .replace(Regex("\\s+"), " ")
                     .trim()
 
-                if (text.isNotBlank()) {
-                    add(LyricLine(begin, end, text))
+                if (text.isBlank()) continue
+
+                val words = buildList {
+                    val children = element.childNodes
+                    for (childIndex in 0 until children.length) {
+                        val child = children.item(childIndex)
+                        if (
+                            child.nodeType != Node.ELEMENT_NODE ||
+                            (child as? Element)?.localName != "span"
+                        ) {
+                            continue
+                        }
+
+                        val span = child as Element
+                        val rawSpanBegin = parseTimeMs(
+                            span.getAttribute("begin")
+                        )
+                        val rawSpanEnd = parseTimeMs(
+                            span.getAttribute("end")
+                        )
+
+                        val spanBegin = when {
+                            rawSpanBegin == null -> begin
+                            rawSpanBegin < begin && begin > 0L -> begin + rawSpanBegin
+                            else -> rawSpanBegin
+                        }
+
+                        val spanEnd = when {
+                            rawSpanEnd == null -> lineEnd
+                            rawSpanEnd < spanBegin && begin > 0L -> begin + rawSpanEnd
+                            else -> rawSpanEnd
+                        }.coerceAtLeast(spanBegin)
+
+                        val spanText = span.textContent
+                            .replace("\r", "")
+                            .replace("\n", " ")
+                            .replace(Regex("\\s+"), " ")
+                            .trim()
+
+                        if (spanText.isNotBlank()) {
+                            add(
+                                LyricWord(
+                                    startMs = spanBegin,
+                                    endMs = spanEnd,
+                                    text = spanText
+                                )
+                            )
+                        }
+                    }
                 }
+
+                add(
+                    LyricLine(
+                        startMs = begin,
+                        endMs = lineEnd,
+                        text = text,
+                        words = words
+                            .sortedBy { it.startMs }
+                            .mapIndexed { wordIndex, word ->
+                                if (word.endMs == Long.MAX_VALUE) {
+                                    word.copy(
+                                        endMs = words.getOrNull(wordIndex + 1)?.startMs
+                                            ?: lineEnd
+                                    )
+                                } else {
+                                    word
+                                }
+                            }
+                    )
+                )
             }
         }
 
         return result
             .sortedBy { it.startMs }
-            .mapIndexed { index, line ->
+            .mapIndexed { lineIndex, line ->
                 if (line.endMs == Long.MAX_VALUE) {
-                    line.copy(endMs = result.getOrNull(index + 1)?.startMs ?: Long.MAX_VALUE)
+                    line.copy(
+                        endMs = result.getOrNull(lineIndex + 1)?.startMs
+                            ?: Long.MAX_VALUE
+                    )
                 } else {
                     line
                 }
