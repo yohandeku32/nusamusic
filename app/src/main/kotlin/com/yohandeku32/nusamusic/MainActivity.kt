@@ -13,6 +13,9 @@ import android.view.WindowInsetsController
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -22,7 +25,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
@@ -103,6 +105,14 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Draw the app edge-to-edge so the Android navigation area does not
+        // create a visible bottom boundary while the library is scrolling.
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        window.navigationBarColor = android.graphics.Color.TRANSPARENT
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.isNavigationBarContrastEnforced = false
+        }
 
         val permission = if (Build.VERSION.SDK_INT >= 33) {
             Manifest.permission.READ_MEDIA_AUDIO
@@ -229,19 +239,20 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun hideSystemBars() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val insetsController = window.decorView.windowInsetsController ?: return
-            insetsController.hide(WindowInsets.Type.systemBars())
-            insetsController.systemBarsBehavior =
-                WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        } else {
-            @Suppress("DEPRECATION")
-            window.decorView.systemUiVisibility =
-                window.decorView.systemUiVisibility or
-                    View.SYSTEM_UI_FLAG_FULLSCREEN or
-                    View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
-                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-        }
+        val controller = WindowInsetsControllerCompat(window, window.decorView)
+        controller.hide(WindowInsetsCompat.Type.systemBars())
+        controller.systemBarsBehavior =
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+
+        @Suppress("DEPRECATION")
+        window.decorView.systemUiVisibility =
+            window.decorView.systemUiVisibility or
+                View.SYSTEM_UI_FLAG_FULLSCREEN or
+                View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
+                View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
+                View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE
     }
 
     override fun onDestroy() {
@@ -274,9 +285,11 @@ private fun NusaMusicApp(
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
                 title = { },
+                windowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
                 navigationIcon = {
                     ArtistAvatar(
                         song = currentSong,
@@ -501,7 +514,12 @@ private fun NusaMusicApp(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(170.dp)
-                            .clip(SwipeLibraryShape)
+                            .clip(
+                                RoundedCornerShape(
+                                    topStart = 34.dp,
+                                    topEnd = 34.dp
+                                )
+                            )
                             .background(Color.Black)
                             .padding(horizontal = 22.dp)
                             .padding(top = 22.dp)
@@ -1028,22 +1046,6 @@ private fun SongRow(
             )
         }
     }
-}
-
-private val SwipeLibraryShape = GenericShape { size, _ ->
-    val depth = (size.height * 0.10f).coerceAtLeast(34f)
-    val path = androidx.compose.ui.graphics.Path()
-    path.moveTo(0f, 0f)
-    path.quadraticBezierTo(
-        size.width / 2f,
-        depth * 1.8f,
-        size.width,
-        0f
-    )
-    path.lineTo(size.width, size.height)
-    path.lineTo(0f, size.height)
-    path.close()
-    addPath(path)
 }
 
 private fun formatTime(ms: Long): String {
