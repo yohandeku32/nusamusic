@@ -128,6 +128,7 @@ class MainActivity : ComponentActivity() {
     private var permissionGranted by mutableStateOf(false)
     private var shuffleEnabled by mutableStateOf(false)
     private var repeatMode by mutableIntStateOf(Player.REPEAT_MODE_OFF)
+    private var immersiveArtwork by mutableStateOf(false)
 
     private val playbackPrefs: SharedPreferences by lazy {
         getSharedPreferences("playback_state", MODE_PRIVATE)
@@ -175,6 +176,8 @@ class MainActivity : ComponentActivity() {
 
         permissionGranted = checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
         if (permissionGranted) loadSongs() else permissionLauncher.launch(permission)
+
+        immersiveArtwork = playbackPrefs.getBoolean("immersive_artwork", false)
 
         val token = SessionToken(this, ComponentName(this, PlaybackService::class.java))
         val future = MediaController.Builder(this, token).buildAsync()
@@ -251,6 +254,8 @@ class MainActivity : ComponentActivity() {
                     onToggleRepeat = ::toggleRepeat,
                     shuffleEnabled = shuffleEnabled,
                     repeatMode = repeatMode,
+                    immersiveArtwork = immersiveArtwork,
+                    onSetImmersiveArtwork = ::setImmersiveArtwork,
                     onRequestPermission = { permissionLauncher.launch(permission) }
                 )
             }
@@ -316,6 +321,13 @@ class MainActivity : ComponentActivity() {
         } else {
             isPlaying = false
         }
+    }
+
+    private fun setImmersiveArtwork(enabled: Boolean) {
+        immersiveArtwork = enabled
+        playbackPrefs.edit()
+            .putBoolean("immersive_artwork", enabled)
+            .apply()
     }
 
     private fun toggleShuffle() {
@@ -451,6 +463,8 @@ private fun NusaMusicApp(
     onToggleRepeat: () -> Unit,
     shuffleEnabled: Boolean,
     repeatMode: Int,
+    immersiveArtwork: Boolean,
+    onSetImmersiveArtwork: (Boolean) -> Unit,
     onRequestPermission: () -> Unit
 ) {
     var isFavorite by remember { mutableStateOf(false) }
@@ -527,6 +541,91 @@ private fun NusaMusicApp(
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(Modifier.height(18.dp))
+
+                Text(
+                    "PLAYER STYLE",
+                    fontSize = 11.sp,
+                    letterSpacing = 1.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(10.dp))
+
+                Surface(
+                    onClick = { onSetImmersiveArtwork(false) },
+                    shape = RoundedCornerShape(16.dp),
+                    color = if (!immersiveArtwork) {
+                        MaterialTheme.colorScheme.surfaceVariant
+                    } else {
+                        Color.Transparent
+                    },
+                    tonalElevation = 0.dp,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                "Vinyl",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                "Classic rotating vinyl player",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Text(
+                            if (!immersiveArtwork) "✓" else "",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(6.dp))
+
+                Surface(
+                    onClick = { onSetImmersiveArtwork(true) },
+                    shape = RoundedCornerShape(16.dp),
+                    color = if (immersiveArtwork) {
+                        MaterialTheme.colorScheme.surfaceVariant
+                    } else {
+                        Color.Transparent
+                    },
+                    tonalElevation = 0.dp,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                "Immersive Artwork",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                "Album artwork as the main player surface",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Text(
+                            if (immersiveArtwork) "✓" else "",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(22.dp))
 
                 Text(
                     "ABOUT NUSA MUSIC",
@@ -622,6 +721,37 @@ private fun NusaMusicApp(
                             contentPadding = PaddingValues(0.dp)
                         ) {
                             item {
+                                Crossfade(
+                                    targetState = immersiveArtwork,
+                                    animationSpec = tween(durationMillis = 260),
+                                    label = "playerStyleCrossfade"
+                                ) { immersive ->
+                                    if (immersive) {
+                                        ImmersiveArtworkPlayer(
+                                            song = currentSong,
+                                            isPlaying = isPlaying,
+                                            positionMs = positionMs,
+                                            durationMs = durationMs,
+                                            onTogglePlay = onTogglePlay,
+                                            onNext = onNext,
+                                            onPrevious = onPrevious,
+                                            onSeek = onSeek,
+                                            onShare = onShare,
+                                            isFavorite = isFavorite,
+                                            onToggleFavorite = { isFavorite = !isFavorite },
+                                            onExpandBiography = {
+                                                scope.launch {
+                                                    playerScrollState.animateScrollToItem(
+                                                        index = 1,
+                                                        scrollOffset = 0
+                                                    )
+                                                }
+                                            },
+                                            permissionGranted = permissionGranted,
+                                            filteredEmpty = filtered.isEmpty(),
+                                            onRequestPermission = onRequestPermission
+                                        )
+                                    } else {
                                 Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -908,6 +1038,8 @@ private fun NusaMusicApp(
                                         }
                                     }
                                 }
+                                    }
+                                }
                             }
 
                             // Artist biography section.
@@ -1181,6 +1313,268 @@ private fun NusaMusicApp(
 }
 
 @Composable
+private fun ImmersiveArtworkPlayer(
+    song: Song?,
+    isPlaying: Boolean,
+    positionMs: Long,
+    durationMs: Long,
+    onTogglePlay: () -> Unit,
+    onNext: () -> Unit,
+    onPrevious: () -> Unit,
+    onSeek: (Long) -> Unit,
+    onShare: (Song?) -> Unit,
+    isFavorite: Boolean,
+    onToggleFavorite: () -> Unit,
+    onExpandBiography: () -> Unit,
+    permissionGranted: Boolean,
+    filteredEmpty: Boolean,
+    onRequestPermission: () -> Unit
+) {
+    val titleText = song?.title ?: "Choose a song"
+    val titleWordCount = remember(titleText) {
+        titleText.trim().split(Regex("\\s+")).count { it.isNotBlank() }
+    }
+    val titleSize = remember(titleWordCount) {
+        when {
+            titleWordCount <= 2 -> 37.sp
+            titleWordCount == 3 -> 33.sp
+            else -> 30.sp
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .fillParentMaxHeight()
+            .clip(
+                RoundedCornerShape(
+                    bottomStart = 34.dp,
+                    bottomEnd = 34.dp
+                )
+            )
+            .background(Color.Black),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f)
+        ) {
+            ArtworkView(
+                song = song,
+                maxSizePx = 1024,
+                modifier = Modifier.fillMaxSize()
+            )
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Black.copy(alpha = 0.18f),
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.80f)
+                            )
+                        )
+                    )
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 24.dp, start = 18.dp, end = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                ArtistAvatar(
+                    song = song,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                )
+
+                Spacer(Modifier.weight(1f))
+
+                IconButton(onClick = {}) {
+                    Icon(
+                        Icons.Default.MoreHoriz,
+                        contentDescription = "More",
+                        tint = Color.White
+                    )
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 22.dp)
+            ) {
+                Text(
+                    titleText,
+                    color = Color.White,
+                    fontFamily = FontFamily.Serif,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = titleSize,
+                    lineHeight = titleSize,
+                    maxLines = 2,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                )
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    song?.artist ?: "Your local music library",
+                    color = Color.White.copy(alpha = 0.82f),
+                    fontSize = 14.sp,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                )
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 22.dp)
+        ) {
+            Spacer(Modifier.height(10.dp))
+
+            SimpleProgressBar(
+                positionMs = positionMs,
+                durationMs = durationMs,
+                enabled = song != null && durationMs > 0L,
+                onSeek = onSeek,
+                modifier = Modifier.fillMaxWidth(),
+                trackColor = Color.White.copy(alpha = 0.25f),
+                progressColor = Color.White
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(formatTime(positionMs), color = Color.White.copy(alpha = 0.75f), fontSize = 12.sp)
+                Text(formatTime(durationMs), color = Color.White.copy(alpha = 0.75f), fontSize = 12.sp)
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                TransportPillButton(
+                    icon = Icons.Default.FastRewind,
+                    contentDescription = "Previous",
+                    onClick = onPrevious,
+                    enabled = song != null,
+                    darkSurface = true
+                )
+
+                Spacer(Modifier.width(14.dp))
+
+                Surface(
+                    onClick = onTogglePlay,
+                    enabled = song != null,
+                    shape = CircleShape,
+                    color = Color.White,
+                    tonalElevation = 0.dp,
+                    modifier = Modifier.size(76.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = if (isPlaying) "Pause" else "Play",
+                            tint = Color.Black,
+                            modifier = Modifier.size(34.dp)
+                        )
+                    }
+                }
+
+                Spacer(Modifier.width(14.dp))
+
+                TransportPillButton(
+                    icon = Icons.Default.FastForward,
+                    contentDescription = "Next",
+                    onClick = onNext,
+                    enabled = song != null,
+                    darkSurface = true
+                )
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onExpandBiography, modifier = Modifier.size(42.dp)) {
+                    Icon(
+                        Icons.Default.KeyboardArrowDown,
+                        contentDescription = "Expand artist biography",
+                        tint = Color.White,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+
+                Spacer(Modifier.weight(1f))
+
+                IconButton(
+                    onClick = { onShare(song) },
+                    enabled = song != null,
+                    modifier = Modifier.size(42.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Share,
+                        contentDescription = "Share song",
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+
+                IconButton(
+                    onClick = onToggleFavorite,
+                    enabled = song != null,
+                    modifier = Modifier.size(42.dp)
+                ) {
+                    Icon(
+                        if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = if (isFavorite) "Favorite" else "Add to favorites",
+                        tint = if (isFavorite) Color(0xFFE57373) else Color.White,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+
+            AudioQualityPill(song = song)
+
+            if (!permissionGranted) {
+                Text(
+                    "Give Nusa Music access to your audio files.",
+                    color = Color(0xFF9D9D9D),
+                    fontSize = 14.sp
+                )
+                Spacer(Modifier.height(12.dp))
+                FilledIconButton(onClick = onRequestPermission) {
+                    Icon(
+                        Icons.Default.FolderOpen,
+                        contentDescription = "Allow music access"
+                    )
+                }
+            } else if (filteredEmpty) {
+                Text(
+                    "No local music found",
+                    color = Color(0xFF9D9D9D),
+                    fontSize = 14.sp
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun ArtistBiographySection(
     artistName: String?,
     biography: com.yohandeku32.nusamusic.data.ArtistBiography?,
@@ -1411,14 +1805,16 @@ private fun SimpleProgressBar(
     durationMs: Long,
     enabled: Boolean,
     onSeek: (Long) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    trackColor: Color = Color(0xFFD0CDC6),
+    progressColor: Color = MaterialTheme.colorScheme.primary
 ) {
     val fraction = if (durationMs > 0L) {
         (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
     } else {
         0f
     }
-    val primary = MaterialTheme.colorScheme.primary
+    val primary = progressColor
 
     androidx.compose.foundation.Canvas(
         modifier = modifier
@@ -1456,7 +1852,7 @@ private fun SimpleProgressBar(
         val stroke = 3.4.dp.toPx()
 
         drawLine(
-            color = Color(0xFFD0CDC6),
+            color = trackColor,
             start = androidx.compose.ui.geometry.Offset(0f, y),
             end = androidx.compose.ui.geometry.Offset(size.width, y),
             strokeWidth = stroke
@@ -1482,20 +1878,26 @@ private fun TransportPillButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     contentDescription: String,
     onClick: () -> Unit,
-    enabled: Boolean
+    enabled: Boolean,
+    darkSurface: Boolean = false
 ) {
     androidx.compose.material3.Surface(
         onClick = onClick,
         enabled = enabled,
         modifier = Modifier.size(width = 92.dp, height = 54.dp),
         shape = RoundedCornerShape(50),
-        color = MaterialTheme.colorScheme.surfaceVariant,
+        color = if (darkSurface) {
+            Color.White.copy(alpha = 0.18f)
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant
+        },
         tonalElevation = 0.dp
     ) {
         Box(contentAlignment = Alignment.Center) {
             Icon(
                 icon,
                 contentDescription = contentDescription,
+                tint = if (darkSurface) Color.White else LocalContentColor.current,
                 modifier = Modifier
                     .size(28.dp)
                     .graphicsLayer {
