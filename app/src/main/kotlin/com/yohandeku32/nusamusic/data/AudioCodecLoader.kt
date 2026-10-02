@@ -40,6 +40,7 @@ object AudioCodecLoader {
                     mime.contains("flac") -> "FLAC"
                     mime.contains("alac") -> "Apple Lossless"
                     mime.contains("mp4a") || mime.contains("aac") -> "AAC"
+                    mime.contains("mpeg") -> "MP3"
                     mime.contains("opus") -> "Opus"
                     mime.contains("vorbis") -> "Vorbis"
                     mime.contains("pcm") || mime.contains("raw") -> "PCM"
