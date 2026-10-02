@@ -86,9 +86,11 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -492,6 +494,36 @@ private fun NusaMusicApp(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .fillMaxHeight()
+                                    .lyricsVerticalDrag(
+                                        progress = { lyricsProgress },
+                                        maxHeightPx = rootHeightPx.toFloat(),
+                                        onProgressChange = { lyricsProgress = it },
+                                        onDragStopped = { velocity ->
+                                            val target = when {
+                                                velocity < -900f -> 1f
+                                                velocity > 900f -> 0f
+                                                lyricsProgress < 0.06f -> 0f
+                                                lyricsProgress > 0.94f -> 1f
+                                                else -> null
+                                            }
+
+                                            if (target != null) {
+                                                scope.launch {
+                                                    androidx.compose.animation.core.Animatable(lyricsProgress)
+                                                        .animateTo(
+                                                            target,
+                                                            tween(
+                                                                durationMillis = if (target > lyricsProgress) 320 else 260,
+                                                                easing = androidx.compose.animation.core.FastOutSlowInEasing
+                                                            )
+                                                        )
+                                                        .also { animation ->
+                                                            lyricsProgress = animation.value
+                                                        }
+                                                }
+                                            }
+                                        }
+                                    )
                                     .clip(
                                         RoundedCornerShape(
                                             bottomStart = 34.dp,
@@ -1015,10 +1047,8 @@ private fun LyricsScreen(
     song: Song?,
     positionMs: Long,
     durationMs: Long,
-    isPlaying: Boolean,
     isFavorite: Boolean,
     onBack: () -> Unit,
-    onTogglePlay: () -> Unit,
     onShare: (Song?) -> Unit,
     onProgressChange: (Float) -> Unit,
     maxHeightPx: Float
@@ -1055,12 +1085,12 @@ private fun LyricsScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .detectLyricsDrag(
-                progress = 1f,
+            .lyricsVerticalDrag(
+                progress = { 1f },
                 maxHeightPx = maxHeightPx,
                 onProgressChange = onProgressChange,
-                onSettled = { target ->
-                    if (target <= 0f) onBack()
+                onDragStopped = { velocity ->
+                    if (velocity > 900f) onBack()
                 }
             )
     ) {
@@ -1219,6 +1249,25 @@ private fun LyricsScreen(
     }
 }
 
+private fun Modifier.lyricsVerticalDrag(
+    progress: () -> Float,
+    maxHeightPx: Float,
+    onProgressChange: (Float) -> Unit,
+    onDragStopped: (Float) -> Unit
+): Modifier {
+    if (maxHeightPx <= 0f) return this
+
+    return draggable(
+        orientation = Orientation.Vertical,
+        state = rememberDraggableState { delta ->
+            val next = (progress() - delta / maxHeightPx).coerceIn(0f, 1f)
+            onProgressChange(next)
+        },
+        onDragStopped = onDragStopped,
+        startDragImmediately = false
+    )
+}
+
 private fun findActiveLyricIndex(
     lines: List<LyricLine>,
     positionMs: Long
@@ -1240,38 +1289,7 @@ private fun findActiveLyricIndex(
     return answer
 }
 
-private fun Modifier.detectLyricsDrag(
-    progress: Float,
-    maxHeightPx: Float,
-    onProgressChange: (Float) -> Unit,
-    onSettled: (Float) -> Unit
-): Modifier = pointerInput(maxHeightPx, progress) {
-    var currentProgress = progress
 
-    detectDragGestures(
-        onDragStart = { },
-        onDragEnd = {
-            onSettled(if (currentProgress >= 0.45f) 1f else 0f)
-        },
-        onDragCancel = {
-            onSettled(if (currentProgress >= 0.45f) 1f else 0f)
-        },
-        onDrag = { change, dragAmount ->
-            val horizontal = kotlin.math.abs(dragAmount.x)
-            val vertical = kotlin.math.abs(dragAmount.y)
-
-            // Only a clearly vertical gesture belongs to the lyrics sheet.
-            // Horizontal movement is left untouched for HorizontalPager.
-            if (vertical > horizontal * 1.22f && maxHeightPx > 0f) {
-                change.consume()
-                currentProgress = (
-                    currentProgress - dragAmount.y / maxHeightPx
-                ).coerceIn(0f, 1f)
-                onProgressChange(currentProgress)
-            }
-        }
-    )
-}
 
 
 @Composable
