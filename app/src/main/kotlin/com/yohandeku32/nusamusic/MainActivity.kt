@@ -21,6 +21,7 @@ import androidx.core.view.WindowCompat
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -55,6 +56,8 @@ import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -450,6 +453,7 @@ private fun NusaMusicApp(
     onRequestPermission: () -> Unit
 ) {
     var isFavorite by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
     var artistBiography by remember(currentSong?.artist) {
         mutableStateOf<com.yohandeku32.nusamusic.data.ArtistBiography?>(null)
     }
@@ -499,6 +503,98 @@ private fun NusaMusicApp(
             ArtistBiographyLoader.load(it)
         }
         biographyLoading = false
+    }
+
+    if (showSettings) {
+        val settingsSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+        ModalBottomSheet(
+            onDismissRequest = { showSettings = false },
+            sheetState = settingsSheetState,
+            containerColor = MaterialTheme.colorScheme.background,
+            contentColor = MaterialTheme.colorScheme.onBackground
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .padding(bottom = 24.dp)
+            ) {
+                Text(
+                    "Settings",
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.height(18.dp))
+
+                Text(
+                    "ABOUT NUSA MUSIC",
+                    fontSize = 11.sp,
+                    letterSpacing = 1.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(10.dp))
+
+                Text(
+                    "Nusa Music adalah pemutar musik lokal Android yang dirancang dengan fokus pada pengalaman mendengarkan musik yang bersih dan sederhana.",
+                    fontSize = 14.sp,
+                    lineHeight = 21.sp
+                )
+                Spacer(Modifier.height(18.dp))
+
+                Text(
+                    "Developer",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "yohandeku32",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                Spacer(Modifier.height(16.dp))
+
+                Text(
+                    "Project",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Nusa Music  •  Version 1.0",
+                    fontSize = 15.sp
+                )
+
+                Spacer(Modifier.height(18.dp))
+
+                Text(
+                    "Technology",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Kotlin • Jetpack Compose • Material 3 • Media3",
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp
+                )
+
+                Spacer(Modifier.height(22.dp))
+
+                Text(
+                    "Artist biographies are provided through Last.fm when configured.",
+                    fontSize = 12.sp,
+                    lineHeight = 18.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
     }
 
     Scaffold(
@@ -567,7 +663,7 @@ private fun NusaMusicApp(
                                                     contentDescription = "More"
                                                 )
                                             }
-                                            IconButton(onClick = {}) {
+                                            IconButton(onClick = { showSettings = true }) {
                                                 Icon(
                                                     Icons.Default.Settings,
                                                     contentDescription = "Settings"
@@ -1312,7 +1408,7 @@ private fun SimpleProgressBar(
 
     androidx.compose.foundation.Canvas(
         modifier = modifier
-            .height(18.dp)
+            .height(28.dp)
             .pointerInput(durationMs, enabled) {
                 if (enabled && durationMs > 0L) {
                     detectTapGestures { offset ->
@@ -1320,6 +1416,25 @@ private fun SimpleProgressBar(
                             (offset.x / size.width.toFloat()).coerceIn(0f, 1f)
                         onSeek((tappedFraction * durationMs).toLong())
                     }
+                }
+            }
+            .pointerInput(durationMs, enabled) {
+                if (enabled && durationMs > 0L) {
+                    detectDragGestures(
+                        onDragStart = { offset ->
+                            val fraction =
+                                (offset.x / size.width.toFloat()).coerceIn(0f, 1f)
+                            onSeek((fraction * durationMs).toLong())
+                        },
+                        onDragEnd = {},
+                        onDragCancel = {},
+                        onDrag = { change, _ ->
+                            change.consume()
+                            val fraction =
+                                (change.position.x / size.width.toFloat()).coerceIn(0f, 1f)
+                            onSeek((fraction * durationMs).toLong())
+                        }
+                    )
                 }
             }
     ) {
