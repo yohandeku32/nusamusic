@@ -1092,16 +1092,17 @@ private fun ArtistBiographySection(
 ) {
     val displayArtist = artistName?.trim().orEmpty().ifBlank { "Unknown artist" }
 
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .height(420.dp)
             .background(Color.Black)
             .padding(horizontal = 28.dp, vertical = 24.dp)
     ) {
         if (loading) {
             Box(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(180.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -1112,8 +1113,9 @@ private fun ArtistBiographySection(
             }
         } else if (biography == null) {
             Column(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 72.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
@@ -1136,55 +1138,45 @@ private fun ArtistBiographySection(
                 )
             }
         } else {
-            Column(Modifier.fillMaxSize()) {
+            Text(
+                "ABOUT THE ARTIST",
+                color = Color(0xFF8E8E8E),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.6.sp
+            )
+            Spacer(Modifier.height(7.dp))
+            Text(
+                text = biography.artistName,
+                color = Color.White,
+                fontSize = 24.sp,
+                lineHeight = 28.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 2,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
+            Spacer(Modifier.height(16.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(Color(0xFF111111))
+                    .padding(horizontal = 18.dp, vertical = 16.dp)
+            ) {
                 Text(
-                    "ABOUT THE ARTIST",
-                    color = Color(0xFF8E8E8E),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.6.sp
+                    text = biography.text,
+                    color = Color(0xFFE7E7E7),
+                    fontSize = 15.sp,
+                    lineHeight = 23.sp,
+                    fontWeight = FontWeight.Medium
                 )
-                Spacer(Modifier.height(7.dp))
-                Text(
-                    text = biography.artistName,
-                    color = Color.White,
-                    fontSize = 24.sp,
-                    lineHeight = 28.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 2,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                )
-                Spacer(Modifier.height(16.dp))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(Color(0xFF111111))
-                        .padding(horizontal = 18.dp, vertical = 16.dp)
-                ) {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = 12.dp)
-                    ) {
-                        item {
-                            Text(
-                                text = biography.text,
-                                color = Color(0xFFE7E7E7),
-                                fontSize = 15.sp,
-                                lineHeight = 23.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                            Spacer(Modifier.height(14.dp))
-                            Text(
-                                text = "Source: Last.fm (" + biography.sourceLanguage.uppercase() + ")",
-                                color = Color(0xFF777777),
-                                fontSize = 11.sp
-                            )
-                        }
-                    }
-                }
             }
+            Text(
+                text = "Source: Last.fm (" + biography.sourceLanguage.uppercase() + ")",
+                color = Color(0xFF777777),
+                fontSize = 11.sp,
+                modifier = Modifier.padding(start = 4.dp, top = 10.dp)
+            )
         }
     }
 }
