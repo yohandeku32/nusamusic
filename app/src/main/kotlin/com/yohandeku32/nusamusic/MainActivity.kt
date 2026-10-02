@@ -109,22 +109,18 @@ class MainActivity : ComponentActivity() {
         // while keeping the Android navigation bar visible.
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
-        // The phone navigation bar stays visible, but its background exactly
-        // matches Nusa Music's player background instead of appearing black.
+        // Android 15/16 edge-to-edge ignores a custom navigation-bar color
+        // for gesture navigation. The correct solution is to make the system
+        // navigation area transparent and let the scrolling content draw behind it.
         val isDarkMode =
             (resources.configuration.uiMode and
                 android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
                 android.content.res.Configuration.UI_MODE_NIGHT_YES
-        val navigationBackground = if (isDarkMode) {
-            android.graphics.Color.rgb(5, 5, 5)
-        } else {
-            android.graphics.Color.rgb(242, 240, 235)
-        }
-        window.navigationBarColor = navigationBackground
+        window.navigationBarColor = android.graphics.Color.TRANSPARENT
         window.statusBarColor = android.graphics.Color.TRANSPARENT
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             window.isNavigationBarContrastEnforced = false
-            window.navigationBarDividerColor = navigationBackground
+            window.navigationBarDividerColor = android.graphics.Color.TRANSPARENT
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             @Suppress("DEPRECATION")
@@ -303,7 +299,9 @@ private fun NusaMusicApp(
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        contentWindowInsets = androidx.compose.foundation.layout.WindowInsets.navigationBars
+        // Do not reserve the navigation-bar area. The scrollable player/list
+        // must continue behind it so the bar visually follows the background.
+        contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0)
     ) { padding ->
         LazyColumn(
             modifier = Modifier
