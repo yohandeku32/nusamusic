@@ -1247,11 +1247,12 @@ private fun LyricsScreen(
 }
 
 @Composable
+@Composable
 private fun Modifier.lyricsVerticalDrag(
     progress: () -> Float,
     maxHeightPx: Float,
     onProgressChange: (Float) -> Unit,
-    onDragStopped: (Float) -> Unit
+    onDragStopped: suspend (Float) -> Unit
 ): Modifier {
     if (maxHeightPx <= 0f) return this
 
