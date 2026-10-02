@@ -300,8 +300,16 @@ object LyricsLoader {
         )
 
         return candidates
-            .map { runCatching { it.decode(bytes).toString().trim(' ', ' ', '\n', '\r', '\t') }.getOrDefault("") }
-            .maxByOrNull { it.count { ch -> ch.isLetter() || ch.isWhitespace() } }
+            .map {
+                runCatching {
+                    it.decode(java.nio.ByteBuffer.wrap(bytes))
+                        .toString()
+                        .trim('\u0000', ' ', '\n', '\r', '\t')
+                }.getOrDefault("")
+            }
+            .maxByOrNull { value ->
+                value.count { ch -> ch.isLetter() || ch.isWhitespace() }
+            }
             .orEmpty()
     }
 
