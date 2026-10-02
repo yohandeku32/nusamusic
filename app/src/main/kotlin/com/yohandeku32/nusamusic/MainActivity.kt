@@ -63,6 +63,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -187,6 +188,7 @@ class MainActivity : ComponentActivity() {
             shuffleEnabled = c.shuffleModeEnabled
             repeatMode = c.repeatMode
             syncCurrentSong(c)
+            restorePlaybackStateIfNeeded(c)
         }, mainExecutor)
 
         lifecycleScope.launch {
@@ -445,11 +447,13 @@ private fun NusaMusicApp(
         val listState = androidx.compose.foundation.lazy.rememberLazyListState()
         val showFloatingControls = listState.firstVisibleItemIndex >= 3
         val showBackToPlayer = listState.firstVisibleItemIndex >= 5
+        val scrollScope = rememberCoroutineScope()
 
         Box(
             modifier = Modifier.fillMaxSize()
         ) {
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black)
@@ -793,7 +797,7 @@ private fun NusaMusicApp(
         if (showBackToPlayer) {
             FilledIconButton(
                 onClick = {
-                    androidx.compose.runtime.rememberCoroutineScope().launch {
+                    scrollScope.launch {
                         listState.animateScrollToItem(0)
                     }
                 },
