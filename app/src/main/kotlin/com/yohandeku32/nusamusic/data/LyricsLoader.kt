@@ -532,9 +532,10 @@ object LyricsLoader {
             .filter { it.isNotBlank() }
             .maxByOrNull { value ->
                 value.count { ch ->
-                    ch.isLetter() ||
-                        ch.isWhitespace() ||
-                        ch.isPunctuation()
+                    Character.isLetter(ch) ||
+                        Character.isWhitespace(ch) ||
+                        Character.isDigit(ch) ||
+                        ".,!?;:'-()[]{}\"".contains(ch)
                 }
             }
     }
