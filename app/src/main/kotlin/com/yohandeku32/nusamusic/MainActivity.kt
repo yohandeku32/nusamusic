@@ -864,7 +864,6 @@ private fun NusaMusicApp(
                                 } else {
                                     LyricsWindow(
                                         lines = lyricLines,
-                                        positionMs = positionMs,
                                         activeLineIndex = activeLyricIndex,
                                         state = lyricsListState,
                                         onSeek = onSeek
@@ -1145,7 +1144,6 @@ private fun NusaMusicApp(
 @Composable
 private fun LyricsWindow(
     lines: List<LyricLine>,
-    positionMs: Long,
     activeLineIndex: Int,
     state: androidx.compose.foundation.lazy.LazyListState,
     onSeek: (Long) -> Unit
@@ -1155,12 +1153,15 @@ private fun LyricsWindow(
     val windowHeight = (configuration.screenHeightDp.dp * 0.52f)
         .coerceIn(320.dp, 480.dp)
 
+    // Keep the active line visually centered in the bounded lyrics window.
+    // The large top/bottom content padding gives the active line room to sit
+    // in the middle without requiring a fragile negative scroll offset.
     LaunchedEffect(activeLineIndex, lines.size) {
         if (activeLineIndex >= 0 && activeLineIndex < lines.size) {
             if (!state.isScrollInProgress) {
                 state.animateScrollToItem(
                     index = activeLineIndex,
-                    scrollOffset = -(windowHeight.value * 0.22f).toInt()
+                    scrollOffset = 0
                 )
             }
         }
@@ -1192,26 +1193,25 @@ private fun LyricsWindow(
                     99
                 }
 
-                val alpha = when {
+                val targetAlpha = when {
                     index == activeLineIndex -> 1f
-                    distance == 1 -> 0.68f
-                    distance == 2 -> 0.42f
-                    else -> 0.20f
+                    distance == 1 -> 0.62f
+                    distance == 2 -> 0.36f
+                    else -> 0.18f
                 }
 
                 LyricLineText(
                     line = line,
-                    positionMs = positionMs,
                     isActive = index == activeLineIndex,
-                    alpha = alpha,
+                    alpha = targetAlpha,
                     onClick = {
                         onSeek(line.startMs)
-                        // Move the lyrics window at once instead of waiting for
-                        // the next 400 ms playback-position update.
+                        // Seek immediately and move the tapped line to the
+                        // active position without waiting for the 400 ms ticker.
                         scope.launch {
                             state.animateScrollToItem(
                                 index = index,
-                                scrollOffset = -(windowHeight.value * 0.22f).toInt()
+                                scrollOffset = 0
                             )
                         }
                     }
@@ -1224,7 +1224,7 @@ private fun LyricsWindow(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(44.dp)
+                .height(52.dp)
                 .align(Alignment.TopCenter)
                 .background(
                     Brush.verticalGradient(
@@ -1236,7 +1236,7 @@ private fun LyricsWindow(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(44.dp)
+                .height(52.dp)
                 .align(Alignment.BottomCenter)
                 .background(
                     Brush.verticalGradient(
@@ -1250,25 +1250,45 @@ private fun LyricsWindow(
 @Composable
 private fun LyricLineText(
     line: LyricLine,
-    positionMs: Long,
     isActive: Boolean,
     alpha: Float,
     onClick: () -> Unit
 ) {
+    val animatedAlpha by animateFloatAsState(
+        targetValue = alpha,
+        animationSpec = tween(220),
+        label = "lyricAlpha"
+    )
+    val animatedScale by animateFloatAsState(
+        targetValue = if (isActive) 1.045f else 1f,
+        animationSpec = tween(220),
+        label = "lyricScale"
+    )
+
     Text(
         text = line.text,
-        color = Color.White.copy(alpha = alpha),
-        fontSize = if (isActive) 18.sp else 17.sp,
+        color = if (isActive) {
+            Color.White
+        } else {
+            Color.White.copy(alpha = animatedAlpha)
+        },
+        fontSize = if (isActive) 20.sp else 17.sp,
         fontWeight = if (isActive) {
-            FontWeight.Medium
+            FontWeight.Bold
         } else {
             FontWeight.Normal
         },
-        lineHeight = 24.sp,
+        lineHeight = if (isActive) 27.sp else 24.sp,
+        textAlign = TextAlign.Center,
         modifier = Modifier
             .fillMaxWidth()
+            .graphicsLayer {
+                alpha = if (isActive) 1f else animatedAlpha
+                scaleX = animatedScale
+                scaleY = animatedScale
+            }
             .clickable(onClick = onClick)
-            .padding(horizontal = 38.dp)
+            .padding(horizontal = 28.dp)
     )
 }
 
