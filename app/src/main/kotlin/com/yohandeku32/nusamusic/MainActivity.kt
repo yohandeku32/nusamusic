@@ -502,17 +502,16 @@ private fun NusaMusicApp(
 
                                             if (target != null) {
                                                 scope.launch {
+                                                    val animation =
                                                     androidx.compose.animation.core.Animatable(lyricsProgress)
-                                                        .animateTo(
-                                                            target,
-                                                            tween(
-                                                                durationMillis = if (target > lyricsProgress) 320 else 260,
-                                                                easing = androidx.compose.animation.core.FastOutSlowInEasing
-                                                            )
-                                                        )
-                                                        .also { animation ->
-                                                            lyricsProgress = animation.value
-                                                        }
+                                                animation.animateTo(
+                                                    target,
+                                                    tween(
+                                                        durationMillis = if (target > lyricsProgress) 320 else 260,
+                                                        easing = androidx.compose.animation.core.FastOutSlowInEasing
+                                                    )
+                                                )
+                                                lyricsProgress = animation.value
                                                 }
                                             }
                                         }
@@ -1026,10 +1025,9 @@ private fun NusaMusicApp(
                         song = currentSong,
                         positionMs = positionMs,
                         durationMs = durationMs,
-                        isPlaying = isPlaying,
                         isFavorite = isFavorite,
+                        sheetProgress = lyricsProgress,
                         onBack = { lyricsProgress = 0f },
-                        onTogglePlay = onTogglePlay,
                         onShare = onShare,
                         onProgressChange = { lyricsProgress = it },
                         maxHeightPx = rootHeightPx.toFloat()
