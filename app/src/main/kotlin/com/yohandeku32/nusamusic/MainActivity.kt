@@ -910,7 +910,6 @@ private fun NusaMusicApp(
         }        }
         }
     }
-}
 
 @Composable
 private fun AudioQualityPill(song: Song?) {
