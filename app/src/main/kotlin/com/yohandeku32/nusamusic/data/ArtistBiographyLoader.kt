@@ -149,7 +149,7 @@ object ArtistBiographyLoader {
 
         return spanned.toString()
             .replace("\u00A0", " ")
-            .replace(Regex("\s+"), " ")
+            .replace(Regex("\\s+"), " ")
             .trim()
             .removeSuffix("Read more on Last.fm")
             .trim()
