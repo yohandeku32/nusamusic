@@ -1033,11 +1033,14 @@ object LyricsLoader {
                             else -> rawSpanEnd
                         }.coerceAtLeast(spanBegin)
 
+                        // Preserve meaningful spaces between TTML spans.
+                        // This is important for word/syllable timing: syllables
+                        // inside one word should stay adjacent, while the source
+                        // can still provide a leading/trailing space when needed.
                         val spanText = span.textContent
                             .replace("\r", "")
                             .replace("\n", " ")
                             .replace(Regex("\\s+"), " ")
-                            .trim()
 
                         if (spanText.isNotBlank()) {
                             add(
