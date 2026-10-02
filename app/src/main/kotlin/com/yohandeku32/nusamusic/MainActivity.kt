@@ -526,7 +526,7 @@ private fun NusaMusicApp(
 
                     // Technical audio information sits directly under the
                     // down/share/favorite controls and updates per active song.
-                    AudioCodecPill(song = currentSong)
+                    AudioQualityPill(song = currentSong)
 
                         if (!permissionGranted) {
                             Text(
@@ -599,7 +599,7 @@ private fun NusaMusicApp(
 }
 
 @Composable
-private fun AudioCodecPill(song: Song?) {
+private fun AudioQualityPill(song: Song?) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var codecInfo by remember(song?.uri) { mutableStateOf<AudioCodecInfo?>(null) }
 
@@ -612,38 +612,82 @@ private fun AudioCodecPill(song: Song?) {
         }
     }
 
-    if (codecInfo != null) {
-        val sampleRate = codecInfo!!.sampleRateHz
-        val label = buildString {
-            append(codecInfo!!.codecName)
-            if (sampleRate != null && sampleRate > 0) {
-                append("  •  ")
-                append(
-                    if (sampleRate % 1000 == 0) {
-                        (sampleRate / 1000).toString() + " kHz"
-                    } else {
-                        String.format(Locale.US, "%.1f kHz", sampleRate / 1000f)
-                    }
-                )
-            }
+    val info = codecInfo ?: return
+    val sampleRate = info.sampleRateHz ?: 0
+
+    // Lossless: ALAC/FLAC up to 48 kHz.
+    // Hi-Res Lossless: ALAC/FLAC above 48 kHz.
+    val isLossless = info.codecName == "Apple Lossless" || info.codecName == "FLAC"
+    if (!isLossless) return
+
+    val isHiRes = sampleRate > 48_000
+
+    androidx.compose.material3.Surface(
+        shape = RoundedCornerShape(50),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        tonalElevation = 0.dp,
+        modifier = Modifier.padding(top = 4.dp)
+    ) {
+        AudioQualityLogo(
+            hiRes = isHiRes,
+            modifier = Modifier
+                .padding(horizontal = 11.dp, vertical = 6.dp)
+                .size(width = if (isHiRes) 35.dp else 29.dp, height = 18.dp)
+        )
+    }
+
+    Spacer(Modifier.height(4.dp))
+}
+
+@Composable
+private fun AudioQualityLogo(
+    hiRes: Boolean,
+    modifier: Modifier = Modifier
+) {
+    androidx.compose.foundation.Canvas(modifier = modifier) {
+        val stroke = size.minDimension * 0.105f
+        val height = size.height
+        val width = size.width
+
+        fun wavePath(offset: Float, amplitude: Float, phase: Float): androidx.compose.ui.graphics.Path {
+            val path = androidx.compose.ui.graphics.Path()
+            val centerY = height * (0.50f + offset)
+            val startX = width * 0.02f
+            val endX = width * 0.98f
+            path.moveTo(startX, centerY)
+
+            val segment = (endX - startX) / 2f
+            path.cubicTo(
+                startX + segment * 0.22f, centerY - amplitude,
+                startX + segment * 0.58f, centerY - amplitude,
+                startX + segment, centerY
+            )
+            path.cubicTo(
+                startX + segment * 1.42f, centerY + amplitude,
+                startX + segment * 1.78f, centerY + amplitude,
+                endX, centerY
+            )
+            return path
         }
 
-        androidx.compose.material3.Surface(
-            shape = RoundedCornerShape(50),
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            tonalElevation = 0.dp,
-            modifier = Modifier.padding(top = 4.dp)
-        ) {
-            Text(
-                text = label,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 13.dp, vertical = 6.dp)
+        val count = if (hiRes) 6 else 5
+        val amplitude = height * 0.40f
+        val spread = if (hiRes) height * 0.15f else height * 0.18f
+
+        for (i in 0 until count) {
+            val offset = (i - (count - 1) / 2f) * spread / height
+            val path = wavePath(offset, amplitude - i * height * 0.025f, i * 0.2f)
+
+            drawPath(
+                path = path,
+                color = Color.Black.copy(alpha = if (i == count / 2) 1f else 0.78f),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(
+                    width = stroke + if (i == count / 2) 0.7f else 0f,
+                    cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                    join = androidx.compose.ui.graphics.StrokeJoin.Round
+                )
             )
         }
-
-        Spacer(Modifier.height(4.dp))
     }
 }
 
