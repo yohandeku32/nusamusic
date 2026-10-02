@@ -245,21 +245,17 @@ private fun NusaMusicApp(
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
-                title = {
-                    Text(
-                        "NUSA MUSIC",
-                        fontFamily = FontFamily.Serif,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp
-                    )
-                },
+                title = { },
                 navigationIcon = {
-                    Icon(
-                        Icons.Default.MusicNote,
-                        contentDescription = null,
-                        modifier = Modifier.padding(start = 16.dp).size(24.dp)
+                    ArtistAvatar(
+                        song = currentSong,
+                        modifier = Modifier
+                            .padding(start = 18.dp)
+                            .size(40.dp)
+                            .clip(CircleShape)
                     )
                 },
                 actions = {
@@ -278,14 +274,15 @@ private fun NusaMusicApp(
                 .fillMaxSize()
                 .padding(padding),
             horizontalAlignment = Alignment.CenterHorizontally,
-            contentPadding = PaddingValues(bottom = 32.dp)
+            contentPadding = PaddingValues(0.dp)
         ) {
             item {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .fillParentMaxHeight()
-                        .padding(horizontal = 20.dp)
+                        .padding(horizontal = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     if (showSearch) {
                         OutlinedTextField(
@@ -293,28 +290,24 @@ private fun NusaMusicApp(
                             onValueChange = { query = it },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(top = 4.dp, bottom = 4.dp),
+                                .padding(top = 2.dp, bottom = 6.dp),
                             placeholder = { Text("Search songs, artists, albums") },
                             singleLine = true
                         )
                     }
 
-                    Spacer(Modifier.height(10.dp))
+                    Spacer(Modifier.height(8.dp))
 
                     VinylRecord(
                         song = currentSong,
                         isPlaying = isPlaying,
                         modifier = Modifier
-                            .sizeIn(maxWidth = 340.dp, maxHeight = 340.dp)
-                            .fillMaxWidth(0.84f)
+                            .fillMaxWidth(0.82f)
                             .aspectRatio(1f)
-                            .align(Alignment.CenterHorizontally)
                     )
 
                     Spacer(Modifier.height(18.dp))
 
-                    // Fixed-height title area keeps the transport controls stable,
-                    // even when a song has a very long title.
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -329,7 +322,7 @@ private fun NusaMusicApp(
                             lineHeight = 30.sp,
                             maxLines = 3,
                             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(horizontal = 10.dp),
+                            modifier = Modifier.padding(horizontal = 6.dp),
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
                     }
@@ -338,31 +331,34 @@ private fun NusaMusicApp(
 
                     Text(
                         currentSong?.artist ?: "Your local music library",
+                        modifier = Modifier.fillMaxWidth(),
                         fontSize = 14.sp,
                         maxLines = 1,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
-                    Spacer(Modifier.height(14.dp))
+                    Spacer(Modifier.height(12.dp))
 
                     SimpleProgressBar(
                         positionMs = positionMs,
                         durationMs = durationMs,
                         enabled = currentSong != null && durationMs > 0L,
-                        onSeek = onSeek
+                        onSeek = onSeek,
+                        modifier = Modifier.fillMaxWidth()
                     )
 
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 5.dp),
+                            .padding(top = 2.dp),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(formatTime(positionMs), fontSize = 12.sp)
                         Text(formatTime(durationMs), fontSize = 12.sp)
                     }
 
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(11.dp))
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -376,11 +372,11 @@ private fun NusaMusicApp(
                             enabled = currentSong != null
                         )
 
-                        Spacer(Modifier.width(22.dp))
+                        Spacer(Modifier.width(18.dp))
 
                         FilledIconButton(
                             onClick = if (currentSong == null) onRequestPermission else onTogglePlay,
-                            modifier = Modifier.size(76.dp),
+                            modifier = Modifier.size(78.dp),
                             shape = CircleShape
                         ) {
                             Icon(
@@ -390,7 +386,7 @@ private fun NusaMusicApp(
                             )
                         }
 
-                        Spacer(Modifier.width(22.dp))
+                        Spacer(Modifier.width(18.dp))
 
                         TransportPillButton(
                             icon = Icons.Default.SkipNext,
@@ -400,61 +396,106 @@ private fun NusaMusicApp(
                         )
                     }
 
-                    Spacer(Modifier.height(18.dp))
+                    Spacer(Modifier.height(10.dp))
                 }
             }
 
             item {
-                Row(
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .background(Color.Black)
+                        .padding(horizontal = 22.dp, vertical = 24.dp)
                 ) {
-                    Text(
-                        "YOUR SONGS",
-                        fontFamily = FontFamily.Serif,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 24.sp,
-                        modifier = Modifier.weight(1f)
-                    )
-                    if (songs.isNotEmpty()) {
-                        Icon(Icons.Default.FavoriteBorder, contentDescription = "Favorites")
-                    }
-                }
-            }
-
-            if (!permissionGranted) {
-                item {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(24.dp)
-                    ) {
-                        Text(
-                            "Give Nusa Music access to your audio files.",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                    Column(Modifier.fillMaxWidth()) {
+                        Box(
+                            modifier = Modifier
+                                .width(42.dp)
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(50))
+                                .background(Color(0xFF6F6F6F))
+                                .align(Alignment.CenterHorizontally)
                         )
-                        Spacer(Modifier.height(12.dp))
-                        FilledIconButton(onClick = onRequestPermission) {
-                            Icon(Icons.Default.FolderOpen, contentDescription = "Allow music access")
+
+                        Spacer(Modifier.height(18.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            ArtworkView(
+                                song = currentSong,
+                                modifier = Modifier
+                                    .size(54.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                            )
+
+                            Spacer(Modifier.width(14.dp))
+
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    currentSong?.title ?: "Nusa Music",
+                                    color = Color.White,
+                                    fontFamily = FontFamily.Serif,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 20.sp,
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    currentSong?.artist ?: "Your library",
+                                    color = Color(0xFF9D9D9D),
+                                    fontSize = 13.sp,
+                                    maxLines = 1
+                                )
+                            }
+
+                            Icon(
+                                Icons.Default.FavoriteBorder,
+                                contentDescription = "Favorite",
+                                tint = Color.White
+                            )
+                        }
+
+                        Spacer(Modifier.height(28.dp))
+
+                        Text(
+                            "ALL SONGS",
+                            color = Color.White,
+                            fontFamily = FontFamily.Serif,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 24.sp
+                        )
+
+                        Spacer(Modifier.height(10.dp))
+
+                        if (!permissionGranted) {
+                            Text(
+                                "Give Nusa Music access to your audio files.",
+                                color = Color(0xFF9D9D9D),
+                                fontSize = 14.sp
+                            )
+                            Spacer(Modifier.height(12.dp))
+                            FilledIconButton(onClick = onRequestPermission) {
+                                Icon(Icons.Default.FolderOpen, contentDescription = "Allow music access")
+                            }
+                        } else if (filtered.isEmpty()) {
+                            Text(
+                                "No local music found",
+                                color = Color(0xFF9D9D9D),
+                                fontSize = 14.sp
+                            )
+                        } else {
+                            filtered.forEach { song ->
+                                SongRow(
+                                    song = song,
+                                    selected = currentSong?.id == song.id,
+                                    onPlay = onPlay,
+                                    darkSurface = true
+                                )
+                            }
                         }
                     }
-                }
-            } else if (filtered.isEmpty()) {
-                item {
-                    Text(
-                        "No local music found",
-                        modifier = Modifier.padding(32.dp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            } else {
-                items(filtered, key = { it.id }) { song ->
-                    SongRow(
-                        song = song,
-                        selected = currentSong?.id == song.id,
-                        onPlay = onPlay
-                    )
                 }
             }
         }
@@ -462,11 +503,17 @@ private fun NusaMusicApp(
 }
 
 @Composable
+private fun ArtistAvatar(song: Song?, modifier: Modifier = Modifier) {
+    ArtworkView(song = song, modifier = modifier)
+}
+
+@Composable
 private fun SimpleProgressBar(
     positionMs: Long,
     durationMs: Long,
     enabled: Boolean,
-    onSeek: (Long) -> Unit
+    onSeek: (Long) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val fraction = if (durationMs > 0L) {
         (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
@@ -476,9 +523,8 @@ private fun SimpleProgressBar(
     val primary = MaterialTheme.colorScheme.primary
 
     androidx.compose.foundation.Canvas(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(20.dp)
+        modifier = modifier
+            .height(18.dp)
             .pointerInput(durationMs, enabled) {
                 if (enabled && durationMs > 0L) {
                     detectTapGestures { offset ->
@@ -490,10 +536,10 @@ private fun SimpleProgressBar(
             }
     ) {
         val y = size.height / 2f
-        val stroke = 2.5.dp.toPx()
+        val stroke = 3.4.dp.toPx()
 
         drawLine(
-            color = Color(0xFFD1CEC7),
+            color = Color(0xFFD0CDC6),
             start = androidx.compose.ui.geometry.Offset(0f, y),
             end = androidx.compose.ui.geometry.Offset(size.width, y),
             strokeWidth = stroke
@@ -508,7 +554,7 @@ private fun SimpleProgressBar(
 
         drawCircle(
             color = primary,
-            radius = 3.dp.toPx(),
+            radius = 3.2.dp.toPx(),
             center = androidx.compose.ui.geometry.Offset(size.width * fraction, y)
         )
     }
@@ -738,33 +784,57 @@ private fun ArtworkView(song: Song?, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun SongRow(song: Song, selected: Boolean, onPlay: (Song) -> Unit) {
+private fun SongRow(
+    song: Song,
+    selected: Boolean,
+    onPlay: (Song) -> Unit,
+    darkSurface: Boolean = false
+) {
+    val selectedBackground =
+        if (darkSurface) Color(0xFF191919) else MaterialTheme.colorScheme.surfaceVariant
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 6.dp)
-            .clip(RoundedCornerShape(18.dp))
-            .background(if (selected) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent)
+            .padding(vertical = 5.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(if (selected) selectedBackground else Color.Transparent)
             .clickable { onPlay(song) }
-            .padding(10.dp),
+            .padding(horizontal = 8.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        ArtworkView(song = song, modifier = Modifier.size(58.dp).clip(RoundedCornerShape(13.dp)))
+        ArtworkView(
+            song = song,
+            modifier = Modifier
+                .size(56.dp)
+                .clip(RoundedCornerShape(12.dp))
+        )
+
         Spacer(Modifier.width(14.dp))
+
         Column(Modifier.weight(1f)) {
-            Text(song.title, maxLines = 1, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium)
+            Text(
+                song.title,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                color = if (darkSurface) Color.White else MaterialTheme.colorScheme.onBackground
+            )
             Spacer(Modifier.height(2.dp))
             Text(
                 "${song.artist}  •  ${song.album}",
                 maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = if (darkSurface) Color(0xFF9D9D9D) else MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+
         IconButton(onClick = { onPlay(song) }) {
             Icon(
                 if (selected) Icons.Default.Pause else Icons.Default.PlayArrow,
-                contentDescription = if (selected) "Pause" else "Play"
+                contentDescription = if (selected) "Pause" else "Play",
+                tint = if (darkSurface) Color.White else MaterialTheme.colorScheme.onBackground
             )
         }
     }
