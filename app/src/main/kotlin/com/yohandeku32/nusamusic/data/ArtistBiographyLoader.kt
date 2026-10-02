@@ -3,9 +3,11 @@ package com.yohandeku32.nusamusic.data
 import android.net.Uri
 import android.text.Html
 import android.text.Spanned
+import com.yohandeku32.nusamusic.BuildConfig
 import com.yohandeku32.nusamusic.model.Song
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
@@ -22,64 +24,80 @@ data class ArtistBiography(
 
 object ArtistBiographyLoader {
     private const val CONNECT_TIMEOUT_MS = 6_000
+    private const val READ_TIMEOUT_MS = 8_000
+    private const val API_ROOT = "https://ws.audioscrobbler.com/2.0/"
+
     private val cache = ConcurrentHashMap<String, ArtistBiography>()
 
-    private const val READ_TIMEOUT_MS = 8_000
+    fun isConfigured(): Boolean = BuildConfig.LASTFM_API_KEY.isNotBlank()
 
     suspend fun load(song: Song): ArtistBiography? = withContext(Dispatchers.IO) {
         val artist = song.artist.trim()
-        if (artist.isBlank() || artist.equals("Unknown artist", ignoreCase = true)) {
+        if (artist.isBlank() ||
+            artist.equals("Unknown artist", ignoreCase = true) ||
+            !isConfigured()
+        ) {
             return@withContext null
         }
 
         val cacheKey = artist.lowercase()
         cache[cacheKey]?.let { return@withContext it }
 
-        val result = loadFromWikipedia(artist, "id")
-            ?: loadFromWikipedia(artist, "en")
+        val result = loadFromLastFm(artist, "id")
+            ?: loadFromLastFm(artist, "en")
 
         result?.let { cache[cacheKey] = it }
         result
     }
 
-    private fun loadFromWikipedia(
+    private fun loadFromLastFm(
         artist: String,
         language: String
     ): ArtistBiography? {
-        val searchUrl =
-            "https://$language.wikipedia.org/w/rest.php/v1/search/page" +
-                "?q=" + Uri.encode(artist) + "&limit=5"
+        val requestUrl = Uri.parse(API_ROOT).buildUpon()
+            .appendQueryParameter("method", "artist.getInfo")
+            .appendQueryParameter("artist", artist)
+            .appendQueryParameter("api_key", BuildConfig.LASTFM_API_KEY)
+            .appendQueryParameter("autocorrect", "1")
+            .appendQueryParameter("lang", language)
+            .appendQueryParameter("format", "json")
+            .build()
+            .toString()
 
-        val searchJson = httpGet(searchUrl) ?: return null
-        val pageTitle = findBestPageTitle(searchJson, artist) ?: return null
+        val jsonText = httpGet(requestUrl) ?: return null
 
-        val encodedTitle = Uri.encode(pageTitle).replace("+", "%20")
-        val pageUrl =
-            "https://$language.wikipedia.org/w/rest.php/v1/page/" +
-                encodedTitle + "/with_html"
+        return runCatching {
+            val root = JSONObject(jsonText)
+            if (root.has("error")) return null
 
-        val pageJson = httpGet(pageUrl) ?: return null
-        val html = extractJsonString(pageJson, "html") ?: return null
-        val paragraphs = extractParagraphs(html)
+            val artistObject = root.optJSONObject("artist") ?: return null
+            val bio = artistObject.optJSONObject("bio") ?: return null
 
-        val text = paragraphs
-            .asSequence()
-            .map(::cleanParagraph)
-            .filter(::isUsefulParagraph)
-            .take(3)
-            .joinToString("\n\n")
-            .trim()
+            val summary = cleanBiography(bio.optString("summary"))
+            val content = cleanBiography(bio.optString("content"))
+            val biographyText = when {
+                content.length >= summary.length && content.isNotBlank() -> content
+                else -> summary
+            }
 
-        if (text.length < 80) return null
+            if (!isUsefulBiography(biographyText)) return null
 
-        return ArtistBiography(
-            artistName = pageTitle,
-            text = text,
-            sourceLanguage = language,
-            sourceUrl =
-                "https://$language.wikipedia.org/wiki/" +
-                    Uri.encode(pageTitle).replace("+", "_")
-        )
+            val resolvedName = artistObject.optString("name").trim()
+                .ifBlank { artist }
+
+            val sourceUrl = artistObject.optString("url").trim()
+                .ifBlank {
+                    "https://www.last.fm/music/" +
+                        Uri.encode(resolvedName).replace("+", "%20")
+                }
+
+            ArtistBiography(
+                artistName = resolvedName,
+                text = biographyText,
+                sourceLanguage = language,
+                sourceUrl = sourceUrl
+            )
+        }.getOrNull()
     }
 
     private fun httpGet(urlString: String): String? {
@@ -88,7 +106,10 @@ object ArtistBiographyLoader {
             connection.requestMethod = "GET"
             connection.connectTimeout = CONNECT_TIMEOUT_MS
             connection.readTimeout = READ_TIMEOUT_MS
-            connection.setRequestProperty("User-Agent", "NusaMusic/1.0 (local music player)")
+            connection.setRequestProperty(
+                "User-Agent",
+                "NusaMusic/1.0 (local music player)"
+            )
             connection.setRequestProperty("Accept", "application/json")
             connection.instanceFollowRedirects = true
 
@@ -104,78 +125,47 @@ object ArtistBiographyLoader {
         }.getOrNull()
     }
 
-    private fun findBestPageTitle(json: String, artist: String): String? {
-        val pagesStart = json.indexOf("\"pages\"")
-        if (pagesStart < 0) return null
+    private fun cleanBiography(value: String): String {
+        if (value.isBlank()) return ""
 
-        val titles = Regex("\"title\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"")
-            .findAll(json.substring(pagesStart))
-            .mapNotNull { unescapeJson(it.groupValues[1]) }
-            .toList()
+        val normalized = value
+            .replace(
+                Regex(
+                    "<script.*?</script>",
+                    setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
+                ),
+                ""
+            )
+            .replace(
+                Regex(
+                    "<style.*?</style>",
+                    setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
+                ),
+                ""
+            )
 
-        if (titles.isEmpty()) return null
+        val spanned: Spanned =
+            Html.fromHtml(normalized, Html.FROM_HTML_MODE_LEGACY)
 
-        val normalizedArtist = normalize(artist)
-        return titles.firstOrNull { normalize(it) == normalizedArtist }
-            ?: titles.firstOrNull {
-                normalize(it).contains(normalizedArtist) ||
-                    normalizedArtist.contains(normalize(it))
-            }
-            ?: titles.firstOrNull()
-    }
-
-    private fun extractJsonString(json: String, key: String): String? {
-        val pattern = "\"$key\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"".toRegex()
-        return pattern.find(json)?.let { unescapeJson(it.groupValues[1]) }
-    }
-
-    private fun unescapeJson(value: String): String =
-        value
-            .replace("\\\\", "\u0000")
-            .replace("\\\"", "\"")
-            .replace("\\/", "/")
-            .replace("\\n", "\n")
-            .replace("\\r", "\r")
-            .replace("\\t", "\t")
-            .replace("\u0000", "\\")
-
-    private fun extractParagraphs(html: String): List<String> =
-        Regex(
-            "<p(?:\\s[^>]*)?>(.*?)</p>",
-            setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
-        )
-            .findAll(html)
-            .map { it.groupValues[1] }
-            .toList()
-
-    private fun cleanParagraph(html: String): String {
-        val normalized = html
-            .replace(Regex(
-                "<sup.*?</sup>",
-                setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
-            ), "")
-            .replace(Regex(
-                "<style.*?</style>",
-                setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
-            ), "")
-            .replace(Regex(
-                "<script.*?</script>",
-                setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
-            ), "")
-
-        val spanned: Spanned = Html.fromHtml(normalized, Html.FROM_HTML_MODE_LEGACY)
         return spanned.toString()
             .replace("\u00A0", " ")
-            .replace(Regex("\\s+"), " ")
+            .replace(Regex("\s+"), " ")
+            .trim()
+            .removeSuffix("Read more on Last.fm")
             .trim()
     }
 
-    private fun isUsefulParagraph(text: String): Boolean {
-        if (text.length < 40) return false
-        val lower = text.lowercase()
-        return listOf("may refer to", "disambiguation", "redirect").none(lower::contains)
-    }
+    private fun isUsefulBiography(text: String): Boolean {
+        if (text.length < 80) return false
 
-    private fun normalize(value: String): String =
-        value.lowercase().replace(Regex("[^\\p{L}\\p{N}]+"), "")
+        val lower = text.lowercase()
+        val blocked = listOf(
+            "no biography",
+            "no bio",
+            "biography is not available",
+            "there is currently no biography"
+        )
+
+        return blocked.none(lower::contains)
+    }
 }
