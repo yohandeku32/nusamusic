@@ -1202,17 +1202,28 @@ private fun AudioQualityPill(song: Song?) {
     val isLossless = info.codecName == "Apple Lossless" || info.codecName == "FLAC"
     if (!isLossless) return
 
-    val label = if ((info.bitDepth ?: 16) >= 24) {
-        "Hi-Res Lossless"
-    } else {
-        "Lossless"
-    }
+    val isHiRes = (info.bitDepth ?: 16) >= 24
+    val label = if (isHiRes) "Hi-Res Lossless" else "Lossless"
 
-    androidx.compose.material3.Surface(
-        shape = RoundedCornerShape(50),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        tonalElevation = 0.dp,
-        modifier = Modifier.padding(top = 4.dp)
+    Box(
+        modifier = Modifier
+            .padding(top = 4.dp)
+            .clip(RoundedCornerShape(50))
+            .background(
+                brush = if (isHiRes) {
+                    Brush.horizontalGradient(
+                        colors = listOf(
+                            Color(0xFF8A641A),
+                            Color(0xFFE2B94F),
+                            Color(0xFFFFE9A3),
+                            Color(0xFFC89A2E),
+                            Color(0xFF7A5513)
+                        )
+                    )
+                } else {
+                    Brush.solidColor(MaterialTheme.colorScheme.surfaceVariant)
+                }
+            )
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
@@ -1224,7 +1235,7 @@ private fun AudioQualityPill(song: Song?) {
                 contentDescription = label,
                 contentScale = ContentScale.Fit,
                 colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(
-                    MaterialTheme.colorScheme.onSurface
+                    if (isHiRes) Color(0xFF201708) else MaterialTheme.colorScheme.onSurface
                 ),
                 modifier = Modifier.size(
                     width = 24.dp,
@@ -1239,7 +1250,11 @@ private fun AudioQualityPill(song: Song?) {
                 fontSize = 10.sp,
                 lineHeight = 12.sp,
                 fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurface
+                color = if (isHiRes) {
+                    Color(0xFF201708)
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                }
             )
         }
     }
