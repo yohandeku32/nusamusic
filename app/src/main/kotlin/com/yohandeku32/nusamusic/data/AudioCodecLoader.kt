@@ -37,18 +37,22 @@ object AudioCodecLoader {
                     null
                 }
 
-                val bitDepth = when {
-                    format.containsKey(MediaFormat.KEY_BITS_PER_SAMPLE) ->
-                        runCatching { format.getInteger(MediaFormat.KEY_BITS_PER_SAMPLE) }.getOrNull()
-                    format.containsKey(MediaFormat.KEY_PCM_ENCODING) ->
-                        when (runCatching { format.getInteger(MediaFormat.KEY_PCM_ENCODING) }.getOrNull()) {
-                            android.media.AudioFormat.ENCODING_PCM_8BIT -> 8
-                            android.media.AudioFormat.ENCODING_PCM_16BIT -> 16
-                            android.media.AudioFormat.ENCODING_PCM_24BIT_PACKED -> 24
-                            android.media.AudioFormat.ENCODING_PCM_32BIT -> 32
-                            else -> null
-                        }
-                    else -> null
+                // MediaFormat does not expose a KEY_BITS_PER_SAMPLE field in
+                // the Android stubs used by this project. PCM can still be inferred
+                // from KEY_PCM_ENCODING; ALAC/FLAC bit depth is read below using
+                // MediaMetadataRetriever on API 31+.
+                val bitDepth = if (format.containsKey(MediaFormat.KEY_PCM_ENCODING)) {
+                    when (runCatching {
+                        format.getInteger(MediaFormat.KEY_PCM_ENCODING)
+                    }.getOrNull()) {
+                        android.media.AudioFormat.ENCODING_PCM_8BIT -> 8
+                        android.media.AudioFormat.ENCODING_PCM_16BIT -> 16
+                        android.media.AudioFormat.ENCODING_PCM_24BIT_PACKED -> 24
+                        android.media.AudioFormat.ENCODING_PCM_32BIT -> 32
+                        else -> null
+                    }
+                } else {
+                    null
                 }
 
                 val codec = when {
