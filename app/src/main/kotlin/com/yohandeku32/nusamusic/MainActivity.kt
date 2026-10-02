@@ -217,7 +217,6 @@ class MainActivity : ComponentActivity() {
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NusaMusicApp(
     songs: List<Song>,
@@ -474,47 +473,44 @@ private fun SimpleProgressBar(
     } else {
         0f
     }
+    val primary = MaterialTheme.colorScheme.primary
 
-    Box(
+    androidx.compose.foundation.Canvas(
         modifier = Modifier
             .fillMaxWidth()
             .height(20.dp)
-            .clickable(enabled = enabled) { /* handled by the gesture modifier below */ }
-    ) {
-        androidx.compose.foundation.Canvas(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(20.dp)
-                .pointerInput(durationMs, enabled) {
-                    if (enabled && durationMs > 0L) {
-                        androidx.compose.foundation.gestures.detectTapGestures { offset ->
-                            val tappedFraction =
-                                (offset.x / size.width.toFloat()).coerceIn(0f, 1f)
-                            onSeek((tappedFraction * durationMs).toLong())
-                        }
+            .pointerInput(durationMs, enabled) {
+                if (enabled && durationMs > 0L) {
+                    detectTapGestures { offset ->
+                        val tappedFraction =
+                            (offset.x / size.width.toFloat()).coerceIn(0f, 1f)
+                        onSeek((tappedFraction * durationMs).toLong())
                     }
                 }
-        ) {
-            val y = size.height / 2f
-            val stroke = 3.dp.toPx()
-            drawLine(
-                color = Color(0xFFD2D0CB),
-                start = androidx.compose.ui.geometry.Offset(0f, y),
-                end = androidx.compose.ui.geometry.Offset(size.width, y),
-                strokeWidth = stroke
-            )
-            drawLine(
-                color = MaterialTheme.colorScheme.primary,
-                start = androidx.compose.ui.geometry.Offset(0f, y),
-                end = androidx.compose.ui.geometry.Offset(size.width * fraction, y),
-                strokeWidth = stroke
-            )
-            drawCircle(
-                color = MaterialTheme.colorScheme.primary,
-                radius = 3.5.dp.toPx(),
-                center = androidx.compose.ui.geometry.Offset(size.width * fraction, y)
-            )
-        }
+            }
+    ) {
+        val y = size.height / 2f
+        val stroke = 2.5.dp.toPx()
+
+        drawLine(
+            color = Color(0xFFD1CEC7),
+            start = androidx.compose.ui.geometry.Offset(0f, y),
+            end = androidx.compose.ui.geometry.Offset(size.width, y),
+            strokeWidth = stroke
+        )
+
+        drawLine(
+            color = primary,
+            start = androidx.compose.ui.geometry.Offset(0f, y),
+            end = androidx.compose.ui.geometry.Offset(size.width * fraction, y),
+            strokeWidth = stroke
+        )
+
+        drawCircle(
+            color = primary,
+            radius = 3.dp.toPx(),
+            center = androidx.compose.ui.geometry.Offset(size.width * fraction, y)
+        )
     }
 }
 
