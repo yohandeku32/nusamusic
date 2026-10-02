@@ -750,6 +750,7 @@ private fun NusaMusicApp(
                                                     )
                                                 }
                                             },
+                                            onOpenSettings = { showSettings = true },
                                             permissionGranted = permissionGranted,
                                             filteredEmpty = filtered.isEmpty(),
                                             onRequestPermission = onRequestPermission
@@ -1330,6 +1331,7 @@ private fun ImmersiveArtworkPlayer(
     isFavorite: Boolean,
     onToggleFavorite: () -> Unit,
     onExpandBiography: () -> Unit,
+    onOpenSettings: () -> Unit,
     permissionGranted: Boolean,
     filteredEmpty: Boolean,
     onRequestPermission: () -> Unit
@@ -1401,6 +1403,14 @@ private fun ImmersiveArtworkPlayer(
                     Icon(
                         Icons.Default.MoreHoriz,
                         contentDescription = "More",
+                        tint = Color.White
+                    )
+                }
+
+                IconButton(onClick = onOpenSettings) {
+                    Icon(
+                        Icons.Default.Settings,
+                        contentDescription = "Settings",
                         tint = Color.White
                     )
                 }
