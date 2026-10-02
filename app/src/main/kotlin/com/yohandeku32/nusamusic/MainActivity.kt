@@ -1176,19 +1176,17 @@ private fun LyricsWindow(
         else -> -1
     }
 
-    // Apple Music-like movement: the lyric stack stays still while the current
-    // line is playing, then makes one soft transition when the next timestamp
-    // is reached. This avoids the stiff frame-by-frame scrolling used before.
+    // Keep the active lyric locked near the top of the lyrics window.
+    // Only the lyric list moves upward when the active timestamp changes.
     val density = LocalDensity.current
-    val centerScrollOffset = with(density) {
-        -((windowHeight - rowHeight) / 2f).roundToPx()
-    }
+    val topAnchorPadding = 24.dp
+    val topAnchorOffset = with(density) { topAnchorPadding.roundToPx() }
 
     LaunchedEffect(lines) {
         if (lines.isNotEmpty()) {
             lyricsState.scrollToItem(
                 index = 0,
-                scrollOffset = centerScrollOffset
+                scrollOffset = topAnchorOffset
             )
         }
     }
@@ -1197,7 +1195,7 @@ private fun LyricsWindow(
         if (focusIndex >= 0) {
             lyricsState.animateScrollToItem(
                 index = focusIndex,
-                scrollOffset = centerScrollOffset
+                scrollOffset = topAnchorOffset
             )
         }
     }
@@ -1218,8 +1216,8 @@ private fun LyricsWindow(
                 },
             userScrollEnabled = false,
             contentPadding = PaddingValues(
-                top = windowHeight / 2f - rowHeight / 2f,
-                bottom = windowHeight / 2f - rowHeight / 2f
+                top = topAnchorPadding,
+                bottom = windowHeight - topAnchorPadding - rowHeight
             ),
             verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
@@ -1249,25 +1247,13 @@ private fun LyricsWindow(
                         scope.launch {
                             lyricsState.animateScrollToItem(
                                 index = index,
-                                scrollOffset = centerScrollOffset
+                                scrollOffset = topAnchorOffset
                             )
                         }
                     }
                 )
             }
         }
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(58.dp)
-                .align(Alignment.TopCenter)
-                .background(
-                    Brush.verticalGradient(
-                        listOf(Color.Black, Color.Transparent)
-                    )
-                )
-        )
 
         Box(
             modifier = Modifier
