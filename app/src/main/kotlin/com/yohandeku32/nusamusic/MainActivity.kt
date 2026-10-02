@@ -46,7 +46,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -228,8 +227,8 @@ private fun NusaMusicApp(
     onSeek: (Long) -> Unit,
     onRequestPermission: () -> Unit
 ) {
-    var query by rememberSaveable { mutableStateOf("") }
-    var showSearch by rememberSaveable { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
+    var showSearch by remember { mutableStateOf(false) }
 
     val filtered = remember(songs, query) {
         if (query.isBlank()) songs
