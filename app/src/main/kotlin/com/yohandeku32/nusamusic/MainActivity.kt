@@ -82,6 +82,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.asComposeRenderEffect
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -1302,6 +1303,15 @@ private fun LyricLineText(
                 renderEffect = blurEffect
                 scaleX = if (isActive) 1.035f else 1f
                 scaleY = if (isActive) 1.035f else 1f
+
+                // Keep transforms and alpha on the hardware compositor.
+                // Blurred lines use an offscreen GPU buffer; the active line
+                // avoids that extra buffer.
+                compositingStrategy = if (blurEffect != null) {
+                    CompositingStrategy.Offscreen
+                } else {
+                    CompositingStrategy.ModulateAlpha
+                }
             }
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
