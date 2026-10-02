@@ -490,7 +490,6 @@ private fun NusaMusicApp(
                         }
                     }
                 }
-            }
 
             // Lazy rendering: with hundreds of songs, only visible rows are
             // composed. This is the main fix for the previous freeze/force-close.
