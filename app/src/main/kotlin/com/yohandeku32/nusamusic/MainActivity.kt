@@ -37,8 +37,6 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Repeat
-import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -96,8 +94,6 @@ class MainActivity : ComponentActivity() {
     private var positionMs by mutableLongStateOf(0L)
     private var durationMs by mutableLongStateOf(0L)
     private var permissionGranted by mutableStateOf(false)
-    private var shuffleEnabled by mutableStateOf(false)
-    private var repeatMode by mutableStateOf(Player.REPEAT_MODE_OFF)
 
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -160,10 +156,6 @@ class MainActivity : ComponentActivity() {
                     onPrevious = ::previousSong,
                     onSeek = ::seekTo,
                     onShare = ::shareCurrentSong,
-                    shuffleEnabled = shuffleEnabled,
-                    repeatMode = repeatMode,
-                    onToggleShuffle = ::toggleShuffle,
-                    onToggleRepeat = ::toggleRepeat,
                     onRequestPermission = { permissionLauncher.launch(permission) }
                 )
             }
@@ -226,26 +218,6 @@ class MainActivity : ComponentActivity() {
         controller?.seekTo(value)
     }
 
-    private fun toggleShuffle() {
-        controller?.let { c ->
-            val next = !c.shuffleModeEnabled
-            c.shuffleModeEnabled = next
-            shuffleEnabled = next
-        }
-    }
-
-    private fun toggleRepeat() {
-        controller?.let { c ->
-            val next = when (c.repeatMode) {
-                Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
-                Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
-                else -> Player.REPEAT_MODE_OFF
-            }
-            c.repeatMode = next
-            repeatMode = next
-        }
-    }
-
     private fun shareCurrentSong(song: Song?) {
         if (song == null) return
         val shareText = "Listening to ${song.title} — ${song.artist}"
@@ -291,10 +263,6 @@ private fun NusaMusicApp(
     onPrevious: () -> Unit,
     onSeek: (Long) -> Unit,
     onShare: (Song?) -> Unit,
-    shuffleEnabled: Boolean,
-    repeatMode: Int,
-    onToggleShuffle: () -> Unit,
-    onToggleRepeat: () -> Unit,
     onRequestPermission: () -> Unit
 ) {
     var isFavorite by remember { mutableStateOf(false) }
@@ -451,8 +419,9 @@ private fun NusaMusicApp(
                     // the main transport controls.
                     Spacer(Modifier.height(12.dp))
 
-                    // Bottom utility controls stay visually quiet so the main
-                    // player remains the focus.
+                    Spacer(Modifier.height(18.dp))
+
+                    // Bottom utility controls sit farther below the main transport.
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
@@ -471,40 +440,6 @@ private fun NusaMusicApp(
                         Spacer(Modifier.weight(1f))
 
                         IconButton(
-                            onClick = onToggleShuffle,
-                            enabled = currentSong != null,
-                            modifier = Modifier.size(42.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Shuffle,
-                                contentDescription = "Shuffle",
-                                modifier = Modifier.size(21.dp),
-                                tint = if (shuffleEnabled) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.onBackground
-                                }
-                            )
-                        }
-
-                        IconButton(
-                            onClick = onToggleRepeat,
-                            enabled = currentSong != null,
-                            modifier = Modifier.size(42.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Repeat,
-                                contentDescription = "Repeat",
-                                modifier = Modifier.size(21.dp),
-                                tint = if (repeatMode != Player.REPEAT_MODE_OFF) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.onBackground
-                                }
-                            )
-                        }
-
-                        IconButton(
                             onClick = { onShare(currentSong) },
                             enabled = currentSong != null,
                             modifier = Modifier.size(42.dp)
@@ -512,7 +447,7 @@ private fun NusaMusicApp(
                             Icon(
                                 Icons.Default.Share,
                                 contentDescription = "Share song",
-                                modifier = Modifier.size(21.dp)
+                                modifier = Modifier.size(22.dp)
                             )
                         }
 
@@ -524,7 +459,7 @@ private fun NusaMusicApp(
                             Icon(
                                 if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                                 contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
-                                modifier = Modifier.size(21.dp),
+                                modifier = Modifier.size(22.dp),
                                 tint = if (isFavorite) {
                                     Color(0xFFC62828)
                                 } else {
@@ -535,80 +470,6 @@ private fun NusaMusicApp(
                     }
 
                     Spacer(Modifier.height(8.dp))
-                }
-            }
-
-            // Only this small header is composed before the song rows.
-            item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(SwipeLibraryShape)
-                        .background(Color.Black)
-                        .padding(horizontal = 22.dp, vertical = 20.dp)
-                ) {
-                    Column(Modifier.fillMaxWidth()) {
-                        Box(
-                            modifier = Modifier
-                                .width(42.dp)
-                                .height(4.dp)
-                                .clip(RoundedCornerShape(50))
-                                .background(Color(0xFF777777))
-                                .align(Alignment.CenterHorizontally)
-                        )
-
-                        Spacer(Modifier.height(18.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            ArtworkView(
-                                song = currentSong,
-                                maxSizePx = 96,
-                                modifier = Modifier
-                                    .size(54.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                            )
-
-                            Spacer(Modifier.width(14.dp))
-
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    currentSong?.title ?: "Nusa Music",
-                                    color = Color.White,
-                                    fontFamily = FontFamily.Serif,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 20.sp,
-                                    maxLines = 1,
-                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    currentSong?.artist ?: "Your library",
-                                    color = Color(0xFF9D9D9D),
-                                    fontSize = 13.sp,
-                                    maxLines = 1
-                                )
-                            }
-
-                            Icon(
-                                Icons.Default.FavoriteBorder,
-                                contentDescription = "Favorite",
-                                tint = Color.White
-                            )
-                        }
-
-                        Spacer(Modifier.height(24.dp))
-
-                        Text(
-                            "ALL SONGS",
-                            color = Color.White,
-                            fontFamily = FontFamily.Serif,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 24.sp
-                        )
-
-                        Spacer(Modifier.height(4.dp))
 
                         if (!permissionGranted) {
                             Text(
