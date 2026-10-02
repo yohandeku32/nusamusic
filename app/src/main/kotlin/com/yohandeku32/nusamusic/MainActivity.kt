@@ -1211,7 +1211,7 @@ private fun AudioQualityPill(song: Song?) {
             .clip(RoundedCornerShape(50))
             .background(
                 color = if (isHiRes) {
-                    Color(0xFFB8862B)
+                    Color(0xFFA99A76)
                 } else {
                     MaterialTheme.colorScheme.surfaceVariant
                 }
@@ -1221,11 +1221,11 @@ private fun AudioQualityPill(song: Song?) {
                     Modifier.background(
                         Brush.horizontalGradient(
                             colors = listOf(
-                                Color(0xFF8A641A),
-                                Color(0xFFE2B94F),
-                                Color(0xFFFFE9A3),
-                                Color(0xFFC89A2E),
-                                Color(0xFF7A5513)
+                                Color(0xFF8F835F),
+                                Color(0xFFAAA07D),
+                                Color(0xFFC2B690),
+                                Color(0xFFAAA07D),
+                                Color(0xFF887B58)
                             )
                         )
                     )
@@ -1244,7 +1244,7 @@ private fun AudioQualityPill(song: Song?) {
                 contentDescription = label,
                 contentScale = ContentScale.Fit,
                 colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(
-                    if (isHiRes) Color(0xFF201708) else MaterialTheme.colorScheme.onSurface
+                    if (isHiRes) Color(0xFF3D3728) else MaterialTheme.colorScheme.onSurface
                 ),
                 modifier = Modifier.size(
                     width = 24.dp,
@@ -1260,7 +1260,7 @@ private fun AudioQualityPill(song: Song?) {
                 lineHeight = 12.sp,
                 fontWeight = FontWeight.Medium,
                 color = if (isHiRes) {
-                    Color(0xFF201708)
+                    Color(0xFF3D3728)
                 } else {
                     MaterialTheme.colorScheme.onSurface
                 }
