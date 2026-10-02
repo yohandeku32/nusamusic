@@ -284,7 +284,7 @@ private fun NusaMusicApp(
                             .aspectRatio(1f)
                     )
 
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(24.dp))
 
                     Box(
                         modifier = Modifier
@@ -372,7 +372,7 @@ private fun NusaMusicApp(
                         )
                     }
 
-                    Spacer(Modifier.height(2.dp))
+                    Spacer(Modifier.height(4.dp))
                 }
             }
 
@@ -381,12 +381,7 @@ private fun NusaMusicApp(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(
-                            RoundedCornerShape(
-                                topStart = 34.dp,
-                                topEnd = 34.dp
-                            )
-                        )
+                        .clip(SwipeLibraryShape)
                         .background(Color.Black)
                         .padding(horizontal = 22.dp, vertical = 20.dp)
                 ) {
@@ -865,6 +860,22 @@ private fun SongRow(
             )
         }
     }
+}
+
+private val SwipeLibraryShape = androidx.compose.ui.graphics.GenericShape { size, _ ->
+    val depth = (size.height * 0.10f).coerceAtLeast(34f)
+    val path = androidx.compose.ui.graphics.Path()
+    path.moveTo(0f, 0f)
+    path.quadraticBezierTo(
+        size.width / 2f,
+        depth * 1.8f,
+        size.width,
+        0f
+    )
+    path.lineTo(size.width, size.height)
+    path.lineTo(0f, size.height)
+    path.close()
+    addPath(path)
 }
 
 private fun formatTime(ms: Long): String {
