@@ -3,7 +3,6 @@ package com.yohandeku32.nusamusic.data
 import android.content.Context
 import android.net.Uri
 import androidx.media3.common.MediaItem
-import androidx.media3.common.Metadata
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.container.MdtaMetadataEntry
 import androidx.media3.extractor.metadata.id3.BinaryFrame
@@ -15,10 +14,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.w3c.dom.Element
 import java.io.StringReader
-import java.net.HttpURLConnection
-import java.net.URLEncoder
-import java.net.URL
-import java.nio.charset.Charset
 import java.util.concurrent.TimeUnit
 import javax.xml.parsers.DocumentBuilderFactory
 import org.xml.sax.InputSource
@@ -36,16 +31,11 @@ data class LyricsResult(
 
 @OptIn(UnstableApi::class)
 object LyricsLoader {
-    private const val CONNECT_TIMEOUT = 7_000
-    private const val READ_TIMEOUT = 10_000
-
     suspend fun load(
         context: Context,
         song: Song
     ): LyricsResult? = withContext(Dispatchers.IO) {
-        loadEmbedded(context, song.uri)?.let { return@withContext it }
-        loadTtml(song)?.let { return@withContext it }
-        null
+        loadEmbedded(context, song.uri)
     }
 
     private fun loadEmbedded(context: Context, uriString: String): LyricsResult? {
@@ -132,6 +122,14 @@ object LyricsLoader {
             .trim()
 
         if (normalized.isBlank()) return null
+
+        // Some local metadata may itself contain TTML XML. Support that
+        // without making any network request.
+        if (normalized.startsWith("<?xml", ignoreCase = true) ||
+            normalized.contains("<tt", ignoreCase = true)
+        ) {
+            parseTtml(normalized)?.let { return it }
+        }
 
         // Support embedded LRC as well as plain unsynchronized lyrics.
         val lrc = Regex(
@@ -305,49 +303,6 @@ object LyricsLoader {
             .map { runCatching { it.decode(bytes).toString().trim(' ', ' ', '\n', '\r', '\t') }.getOrDefault("") }
             .maxByOrNull { it.count { ch -> ch.isLetter() || ch.isWhitespace() } }
             .orEmpty()
-    }
-
-    private fun loadTtml(song: Song): LyricsResult? {
-        val title = URLEncoder.encode(song.title, "UTF-8")
-        val artist = URLEncoder.encode(song.artist, "UTF-8")
-        val album = URLEncoder.encode(song.album, "UTF-8")
-        val duration = (song.durationMs / 1000f).toString()
-
-        val endpoints = listOf(
-            "https://api.liriqo-alfarrizi.my.id/v1/ttml?title=$title&artist=$artist&album=$album&duration=$duration",
-            "https://lyricsplus.prjktla.my.id/v1/ttml/get?title=$title&artist=$artist&album=$album&duration=$duration",
-            "https://lyrics-api.binimum.org/v1/ttml/get?title=$title&artist=$artist&album=$album&duration=$duration"
-        )
-
-        for (endpoint in endpoints) {
-            val ttml = requestText(endpoint) ?: continue
-            parseTtml(ttml)?.let {
-                return LyricsResult(it, "TTML")
-            }
-        }
-
-        return null
-    }
-
-    private fun requestText(endpoint: String): String? {
-        val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
-            requestMethod = "GET"
-            connectTimeout = CONNECT_TIMEOUT
-            readTimeout = READ_TIMEOUT
-            instanceFollowRedirects = true
-            setRequestProperty("Accept", "application/ttml+xml, application/xml, text/xml, text/plain")
-            setRequestProperty("User-Agent", "NusaMusic/1.0")
-            setRequestProperty("X-Client-Package", "NusaMusic <https://github.com/yohandeku32/nusamusic>")
-        }
-
-        return try {
-            if (connection.responseCode !in 200..299) return null
-            connection.inputStream.bufferedReader().use { it.readText() }
-        } catch (_: Exception) {
-            null
-        } finally {
-            connection.disconnect()
-        }
     }
 
     private fun parseTtml(raw: String): List<LyricLine>? {
