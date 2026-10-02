@@ -3,6 +3,7 @@ package com.yohandeku32.nusamusic
 import android.Manifest
 import android.content.ComponentName
 import android.content.pm.PackageManager
+import android.content.Intent
 import android.graphics.Bitmap
 import android.os.Build
 import android.os.Bundle
@@ -30,6 +31,9 @@ import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -148,6 +152,7 @@ class MainActivity : ComponentActivity() {
                     onNext = ::nextSong,
                     onPrevious = ::previousSong,
                     onSeek = ::seekTo,
+                    onShare = ::shareCurrentSong,
                     onRequestPermission = { permissionLauncher.launch(permission) }
                 )
             }
@@ -208,6 +213,16 @@ class MainActivity : ComponentActivity() {
         controller?.seekTo(value)
     }
 
+    private fun shareCurrentSong(song: Song?) {
+        if (song == null) return
+        val shareText = "Listening to ${song.title} — ${song.artist}"
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, shareText)
+        }
+        startActivity(Intent.createChooser(intent, "Share song"))
+    }
+
     override fun onDestroy() {
         controller?.release()
         controller = null
@@ -229,8 +244,11 @@ private fun NusaMusicApp(
     onNext: () -> Unit,
     onPrevious: () -> Unit,
     onSeek: (Long) -> Unit,
+    onShare: (Song?) -> Unit,
     onRequestPermission: () -> Unit
 ) {
+    var isFavorite by remember { mutableStateOf(false) }
+
     val filtered = songs
 
     Scaffold(
@@ -316,6 +334,51 @@ private fun NusaMusicApp(
                     )
 
                     Spacer(Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(
+                            onClick = { },
+                            modifier = Modifier.size(42.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.KeyboardArrowDown,
+                                contentDescription = "Show songs",
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+
+                        Spacer(Modifier.weight(1f))
+
+                        IconButton(
+                            onClick = { onShare(currentSong) },
+                            enabled = currentSong != null,
+                            modifier = Modifier.size(42.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Share,
+                                contentDescription = "Share song",
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+
+                        IconButton(
+                            onClick = { isFavorite = !isFavorite },
+                            enabled = currentSong != null,
+                            modifier = Modifier.size(42.dp)
+                        ) {
+                            Icon(
+                                if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
+                                modifier = Modifier.size(22.dp),
+                                tint = if (isFavorite) Color(0xFFC62828) else MaterialTheme.colorScheme.onBackground
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(6.dp))
 
                     SimpleProgressBar(
                         positionMs = positionMs,
