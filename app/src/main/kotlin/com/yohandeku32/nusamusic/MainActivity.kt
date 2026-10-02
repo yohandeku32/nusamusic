@@ -37,6 +37,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.FastForward
@@ -1316,6 +1317,62 @@ private fun NusaMusicApp(
     }
 }
 
+private fun extractArtworkPalette(bitmap: Bitmap?): List<Color> {
+    if (bitmap == null || bitmap.width <= 0 || bitmap.height <= 0) {
+        return listOf(
+            Color(0xFFE7E3DC),
+            Color(0xFFF0ECE6),
+            Color(0xFFDAD3C9)
+        )
+    }
+
+    val width = bitmap.width
+    val height = bitmap.height
+    val points = arrayOf(
+        0.18f to 0.18f,
+        0.50f to 0.22f,
+        0.82f to 0.20f,
+        0.20f to 0.50f,
+        0.50f to 0.50f,
+        0.80f to 0.52f,
+        0.20f to 0.82f,
+        0.52f to 0.80f,
+        0.82f to 0.82f
+    )
+
+    val samples = points.map { (fx, fy) ->
+        val pixel = bitmap.getPixel(
+            (width * fx).toInt().coerceIn(0, width - 1),
+            (height * fy).toInt().coerceIn(0, height - 1)
+        )
+        val r = android.graphics.Color.red(pixel) / 255f
+        val g = android.graphics.Color.green(pixel) / 255f
+        val b = android.graphics.Color.blue(pixel) / 255f
+        Color(r, g, b)
+    }
+
+    fun average(group: List<Color>): Color {
+        val r = group.map { it.red }.average().toFloat()
+        val g = group.map { it.green }.average().toFloat()
+        val b = group.map { it.blue }.average().toFloat()
+
+        // Keep the palette soft and premium rather than producing a saturated
+        // neon background.
+        val lift = 0.18f
+        return Color(
+            r * (1f - lift) + lift,
+            g * (1f - lift) + lift,
+            b * (1f - lift) + lift
+        )
+    }
+
+    return listOf(
+        average(samples.take(3)),
+        average(samples.slice(3..5)),
+        average(samples.takeLast(3))
+    )
+}
+
 @Composable
 private fun ImmersiveArtworkPlayer(
     modifier: Modifier = Modifier,
@@ -1348,6 +1405,65 @@ private fun ImmersiveArtworkPlayer(
         }
     }
 
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var immersiveBitmap by remember { mutableStateOf<Bitmap?>(null) }
+
+    LaunchedEffect(song?.uri) {
+        immersiveBitmap = song?.let {
+            ArtworkLoader.load(
+                context = context,
+                uriString = it.uri,
+                maxSize = 256
+            )
+        }
+    }
+
+    val palette = remember(immersiveBitmap) {
+        extractArtworkPalette(immersiveBitmap)
+    }
+    val paletteStart = palette.getOrElse(0) { Color(0xFFE7E3DC) }
+    val paletteMid = palette.getOrElse(1) { Color(0xFFF0ECE6) }
+    val paletteEnd = palette.getOrElse(2) { Color(0xFFDAD3C9) }
+
+    val infiniteTransition = rememberInfiniteTransition(label = "immersiveArtworkMotion")
+    val gradientShift by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            animation = tween(durationMillis = 9_000, easing = androidx.compose.animation.core.LinearEasing),
+            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+        ),
+        label = "immersiveGradientShift"
+    )
+
+    val immersiveBackground = Brush.linearGradient(
+        colors = listOf(
+            Color(
+                paletteStart.red * 0.72f + 0.28f,
+                paletteStart.green * 0.72f + 0.28f,
+                paletteStart.blue * 0.72f + 0.28f
+            ),
+            Color(
+                paletteMid.red * 0.72f + 0.28f,
+                paletteMid.green * 0.72f + 0.28f,
+                paletteMid.blue * 0.72f + 0.28f
+            ),
+            Color(
+                paletteEnd.red * 0.72f + 0.28f,
+                paletteEnd.green * 0.72f + 0.28f,
+                paletteEnd.blue * 0.72f + 0.28f
+            )
+        ),
+        start = androidx.compose.ui.geometry.Offset(
+            x = -600f + 850f * gradientShift,
+            y = 0f
+        ),
+        end = androidx.compose.ui.geometry.Offset(
+            x = 850f + 850f * gradientShift,
+            y = 1300f
+        )
+    )
+
     Column(
         modifier = modifier
             .clip(
@@ -1356,7 +1472,7 @@ private fun ImmersiveArtworkPlayer(
                     bottomEnd = 34.dp
                 )
             )
-            .background(Color.Black),
+            .background(immersiveBackground),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(
@@ -1367,7 +1483,31 @@ private fun ImmersiveArtworkPlayer(
             ArtworkView(
                 song = song,
                 maxSizePx = 1024,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(14.dp)
+                    .clip(RoundedCornerShape(28.dp))
+            )
+
+            // Soft color bloom around the artwork, inspired by Apple Music's
+            // ambient artwork presentation. It uses the sampled artwork colors
+            // instead of a black background.
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(
+                                paletteMid.copy(alpha = 0.18f),
+                                Color.Transparent
+                            ),
+                            center = androidx.compose.ui.geometry.Offset(
+                                x = 150f + gradientShift * 240f,
+                                y = 170f
+                            ),
+                            radius = 650f
+                        )
+                    )
             )
 
             Box(
@@ -1376,9 +1516,9 @@ private fun ImmersiveArtworkPlayer(
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                Color.Black.copy(alpha = 0.18f),
+                                Color.White.copy(alpha = 0.05f),
                                 Color.Transparent,
-                                Color.Black.copy(alpha = 0.80f)
+                                Color.White.copy(alpha = 0.10f)
                             )
                         )
                     )
@@ -1446,6 +1586,7 @@ private fun ImmersiveArtworkPlayer(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .background(immersiveBackground)
                 .padding(horizontal = 22.dp)
         ) {
             Spacer(Modifier.height(10.dp))
