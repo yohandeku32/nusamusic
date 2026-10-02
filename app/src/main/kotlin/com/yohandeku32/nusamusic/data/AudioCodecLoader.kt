@@ -66,7 +66,43 @@ object AudioCodecLoader {
                     else -> mime.removePrefix("audio/").uppercase()
                 }
 
-                return@withContext AudioCodecInfo(codec, sampleRate, bitDepth)
+                val retrieverBitDepth =
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S && bitDepth == null) {
+                        runCatching {
+                            android.media.MediaMetadataRetriever().use { retriever ->
+                                retriever.setDataSource(context, uri)
+                                retriever
+                                    .extractMetadata(
+                                        android.media.MediaMetadataRetriever.METADATA_KEY_BITS_PER_SAMPLE
+                                    )
+                                    ?.toIntOrNull()
+                            }
+                        }.getOrNull()
+                    } else {
+                        null
+                    }
+
+                val retrieverSampleRate =
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S && sampleRate == null) {
+                        runCatching {
+                            android.media.MediaMetadataRetriever().use { retriever ->
+                                retriever.setDataSource(context, uri)
+                                retriever
+                                    .extractMetadata(
+                                        android.media.MediaMetadataRetriever.METADATA_KEY_SAMPLERATE
+                                    )
+                                    ?.toIntOrNull()
+                            }
+                        }.getOrNull()
+                    } else {
+                        null
+                    }
+
+                return@withContext AudioCodecInfo(
+                    codecName = codec,
+                    sampleRateHz = sampleRate ?: retrieverSampleRate,
+                    bitDepth = bitDepth ?: retrieverBitDepth
+                )
             }
 
             null
