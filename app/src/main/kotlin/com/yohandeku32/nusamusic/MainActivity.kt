@@ -1048,6 +1048,7 @@ private fun LyricsScreen(
     positionMs: Long,
     durationMs: Long,
     isFavorite: Boolean,
+    sheetProgress: Float,
     onBack: () -> Unit,
     onShare: (Song?) -> Unit,
     onProgressChange: (Float) -> Unit,
@@ -1086,7 +1087,7 @@ private fun LyricsScreen(
             .fillMaxSize()
             .background(Color.Black)
             .lyricsVerticalDrag(
-                progress = { 1f },
+                progress = { sheetProgress },
                 maxHeightPx = maxHeightPx,
                 onProgressChange = onProgressChange,
                 onDragStopped = { velocity ->
@@ -1249,6 +1250,7 @@ private fun LyricsScreen(
     }
 }
 
+@Composable
 private fun Modifier.lyricsVerticalDrag(
     progress: () -> Float,
     maxHeightPx: Float,
