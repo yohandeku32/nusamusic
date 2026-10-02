@@ -1164,9 +1164,8 @@ private fun LyricsWindow(
     // by an animation. We advance it by the exact pixel delta requested by the
     // audio clock on every display frame. This gives smooth continuous motion
     // while keeping only on-screen lyric rows laid out.
-    val lyricsState = remember {
+    val lyricsState =
         androidx.compose.foundation.lazy.rememberLazyListState()
-    }
 
     LaunchedEffect(lines, isPlaying) {
         if (lines.isEmpty()) return@LaunchedEffect
