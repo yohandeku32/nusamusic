@@ -31,6 +31,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
@@ -1282,7 +1283,7 @@ private fun ArtistBiographySection(
 @Composable
 private fun AudioQualityPill(song: Song?) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    var codecInfo by remember(song?.uri) { mutableStateOf<AudioCodecInfo?>(null) }
+    var codecInfo by remember { mutableStateOf<AudioCodecInfo?>(null) }
 
     LaunchedEffect(song?.uri) {
         codecInfo = song?.let {
@@ -1293,63 +1294,76 @@ private fun AudioQualityPill(song: Song?) {
         }
     }
 
-    val info = codecInfo ?: return
-
-    // Only ALAC/FLAC receive an Apple-style Lossless badge.
-    // 24-bit and above is Hi-Res Lossless; anything below 24-bit is Lossless.
-    val isLossless = info.codecName == "Apple Lossless" || info.codecName == "FLAC"
-    if (!isLossless) return
-
-    val isHiRes = (info.bitDepth ?: 16) >= 24
+    val info = codecInfo
+    val isLossless = info?.codecName == "Apple Lossless" || info?.codecName == "FLAC"
+    val isHiRes = isLossless && (info?.bitDepth ?: 16) >= 24
     val label = if (isHiRes) "Hi-Res Lossless" else "Lossless"
 
-    Box(
-        modifier = Modifier
-            .padding(top = 4.dp)
-            .clip(RoundedCornerShape(50))
-            .background(
-                color = if (isHiRes) {
-                    Color(0xFFB5A77C).copy(alpha = 0.42f)
-                } else {
-                    MaterialTheme.colorScheme.surfaceVariant
-                }
-            )
+    androidx.compose.animation.AnimatedVisibility(
+        visible = isLossless,
+        enter = androidx.compose.animation.fadeIn(
+            animationSpec = tween(durationMillis = 180)
+        ),
+        exit = androidx.compose.animation.fadeOut(
+            animationSpec = tween(durationMillis = 180)
+        )
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            androidx.compose.foundation.Image(
-                painter = painterResource(id = R.drawable.apple_lossless_logo),
-                contentDescription = label,
-                contentScale = ContentScale.Fit,
-                colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(
-                    if (isHiRes) Color(0xFF3D3728) else MaterialTheme.colorScheme.onSurface
-                ),
-                modifier = Modifier.size(
-                    width = 24.dp,
-                    height = 13.dp
-                )
-            )
+        Crossfade(
+            targetState = isHiRes,
+            animationSpec = tween(durationMillis = 180),
+            label = "qualityBadgeCrossfade"
+        ) { hiRes ->
+            Box(
+                modifier = Modifier
+                    .padding(top = 4.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(
+                        color = if (hiRes) {
+                            Color(0xFFB5A77C).copy(alpha = 0.42f)
+                        } else {
+                            MaterialTheme.colorScheme.surfaceVariant
+                        }
+                    )
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    androidx.compose.foundation.Image(
+                        painter = painterResource(id = R.drawable.apple_lossless_logo),
+                        contentDescription = if (hiRes) "Hi-Res Lossless" else "Lossless",
+                        contentScale = ContentScale.Fit,
+                        colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(
+                            if (hiRes) Color(0xFF3D3728) else MaterialTheme.colorScheme.onSurface
+                        ),
+                        modifier = Modifier.size(
+                            width = 24.dp,
+                            height = 13.dp
+                        )
+                    )
 
-            Spacer(Modifier.width(5.dp))
+                    Spacer(Modifier.width(5.dp))
 
-            Text(
-                text = label,
-                fontSize = 10.sp,
-                lineHeight = 12.sp,
-                fontWeight = FontWeight.Medium,
-                color = if (isHiRes) {
-                    Color(0xFF3D3728)
-                } else {
-                    MaterialTheme.colorScheme.onSurface
+                    Text(
+                        text = if (hiRes) "Hi-Res Lossless" else "Lossless",
+                        fontSize = 10.sp,
+                        lineHeight = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = if (hiRes) {
+                            Color(0xFF3D3728)
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        }
+                    )
                 }
-            )
+            }
         }
     }
 
-    Spacer(Modifier.height(4.dp))
+    if (isLossless) {
+        Spacer(Modifier.height(4.dp))
+    }
 }
 
 @Composable
@@ -1814,7 +1828,7 @@ private fun ArtworkView(
     monochrome: Boolean = false
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    var bitmap by remember(song?.uri, maxSizePx) { mutableStateOf<Bitmap?>(null) }
+    var bitmap by remember { mutableStateOf<Bitmap?>(null) }
 
     LaunchedEffect(song?.uri, maxSizePx) {
         bitmap = song?.let {
@@ -1837,26 +1851,32 @@ private fun ArtworkView(
         ),
         contentAlignment = Alignment.Center
     ) {
-        if (bitmap != null) {
-            androidx.compose.foundation.Image(
-                bitmap = bitmap!!.asImageBitmap(),
-                contentDescription = song?.title,
-                contentScale = ContentScale.Crop,
-                colorFilter = if (monochrome) {
-                    ColorFilter.colorMatrix(
-                        ColorMatrix().apply { setToSaturation(0f) }
-                    )
-                } else {
-                    null
-                },
-                modifier = Modifier.fillMaxSize()
-            )
-        } else {
-            Icon(
-                Icons.Default.MusicNote,
-                contentDescription = null,
-                modifier = Modifier.size(42.dp)
-            )
+        Crossfade(
+            targetState = bitmap,
+            animationSpec = tween(durationMillis = 220),
+            label = "artworkCrossfade"
+        ) { targetBitmap ->
+            if (targetBitmap != null) {
+                androidx.compose.foundation.Image(
+                    bitmap = targetBitmap.asImageBitmap(),
+                    contentDescription = song?.title,
+                    contentScale = ContentScale.Crop,
+                    colorFilter = if (monochrome) {
+                        ColorFilter.colorMatrix(
+                            ColorMatrix().apply { setToSaturation(0f) }
+                        )
+                    } else {
+                        null
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Icon(
+                    Icons.Default.MusicNote,
+                    contentDescription = null,
+                    modifier = Modifier.size(42.dp)
+                )
+            }
         }
     }
 }
