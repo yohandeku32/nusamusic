@@ -1150,6 +1150,7 @@ private fun LyricsWindow(
     val windowHeight = (configuration.screenHeightDp.dp * 0.52f)
         .coerceIn(320.dp, 480.dp)
     val rowHeight = 78.dp
+    val scope = rememberCoroutineScope()
 
     val lyricsState =
         androidx.compose.foundation.lazy.rememberLazyListState()
@@ -1245,10 +1246,12 @@ private fun LyricsWindow(
                     modifier = Modifier.height(rowHeight),
                     onClick = {
                         onSeek(line.startMs)
-                        lyricsState.animateScrollToItem(
-                            index = index,
-                            scrollOffset = centerScrollOffset
-                        )
+                        scope.launch {
+                            lyricsState.animateScrollToItem(
+                                index = index,
+                                scrollOffset = centerScrollOffset
+                            )
+                        }
                     }
                 )
             }
