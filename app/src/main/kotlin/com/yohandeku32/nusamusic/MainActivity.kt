@@ -13,6 +13,7 @@ import android.view.WindowInsetsController
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.view.WindowCompat
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -103,6 +104,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Draw the white player surface underneath the hidden status-bar area,
+        // while keeping the Android navigation bar visible.
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        window.statusBarColor = android.graphics.Color.TRANSPARENT
 
         val permission = if (Build.VERSION.SDK_INT >= 33) {
             Manifest.permission.READ_MEDIA_AUDIO
@@ -273,7 +279,8 @@ private fun NusaMusicApp(
     val filtered = songs
 
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background
+        containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = androidx.compose.foundation.layout.WindowInsets.navigationBars
     ) { padding ->
         LazyColumn(
             modifier = Modifier
@@ -299,8 +306,15 @@ private fun NusaMusicApp(
                         .background(MaterialTheme.colorScheme.background),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+                    Spacer(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(24.dp)
+                    )
+
                     TopAppBar(
                         title = { },
+                        windowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
                         navigationIcon = {
                             ArtistAvatar(
                                 song = currentSong,
