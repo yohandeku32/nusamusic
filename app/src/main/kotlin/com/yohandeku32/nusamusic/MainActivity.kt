@@ -1180,14 +1180,19 @@ private fun LyricsWindow(
     // Keep the active lyric locked near the top of the lyrics window.
     // Only the lyric list moves upward when the active timestamp changes.
     val density = LocalDensity.current
-    val topAnchorPadding = 24.dp
-    val topAnchorOffset = with(density) { topAnchorPadding.roundToPx() }
+    // Place the active line slightly below the top edge. Using a zero
+    // scroll offset preserves the padding instead of pulling the text flush
+    // against the top of the viewport.
+    val topAnchorPadding = 38.dp
 
     LaunchedEffect(lines) {
+        // Always start a newly loaded lyric document from its first line.
+        // This prevents the first lines from inheriting an old LazyColumn
+        // position from the previous song.
         if (lines.isNotEmpty()) {
             lyricsState.scrollToItem(
                 index = 0,
-                scrollOffset = topAnchorOffset
+                scrollOffset = 0
             )
         }
     }
@@ -1196,7 +1201,7 @@ private fun LyricsWindow(
         if (focusIndex >= 0) {
             lyricsState.animateScrollToItem(
                 index = focusIndex,
-                scrollOffset = topAnchorOffset
+                scrollOffset = 0
             )
         }
     }
@@ -1248,7 +1253,7 @@ private fun LyricsWindow(
                         scope.launch {
                             lyricsState.animateScrollToItem(
                                 index = index,
-                                scrollOffset = topAnchorOffset
+                                scrollOffset = 0
                             )
                         }
                     }
