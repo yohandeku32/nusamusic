@@ -89,6 +89,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -1244,27 +1245,29 @@ private fun Modifier.detectLyricsDrag(
     maxHeightPx: Float,
     onProgressChange: (Float) -> Unit,
     onSettled: (Float) -> Unit
-): Modifier = pointerInput(maxHeightPx) {
+): Modifier = pointerInput(maxHeightPx, progress) {
+    var currentProgress = progress
+
     detectDragGestures(
         onDragStart = { },
         onDragEnd = {
-            onSettled(if (progress >= 0.45f) 1f else 0f)
+            onSettled(if (currentProgress >= 0.45f) 1f else 0f)
         },
         onDragCancel = {
-            onSettled(if (progress >= 0.45f) 1f else 0f)
+            onSettled(if (currentProgress >= 0.45f) 1f else 0f)
         },
         onDrag = { change, dragAmount ->
             val horizontal = kotlin.math.abs(dragAmount.x)
             val vertical = kotlin.math.abs(dragAmount.y)
 
-            // The lyric sheet owns only clearly vertical gestures. Horizontal
-            // swipes remain available to HorizontalPager.
+            // Only a clearly vertical gesture belongs to the lyrics sheet.
+            // Horizontal movement is left untouched for HorizontalPager.
             if (vertical > horizontal * 1.22f && maxHeightPx > 0f) {
                 change.consume()
-                val deltaProgress = -dragAmount.y / maxHeightPx
-                onProgressChange(
-                    (progress + deltaProgress).coerceIn(0f, 1f)
-                )
+                currentProgress = (
+                    currentProgress - dragAmount.y / maxHeightPx
+                ).coerceIn(0f, 1f)
+                onProgressChange(currentProgress)
             }
         }
     )
