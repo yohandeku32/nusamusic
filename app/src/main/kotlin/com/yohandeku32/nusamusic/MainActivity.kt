@@ -1285,26 +1285,6 @@ private fun LyricsWindow(
             }
         }
 
-        if (countdownDots > 0) {
-            Row(
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .offset(y = (-42).dp),
-                horizontalArrangement = Arrangement.spacedBy(7.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                repeat(3) { index ->
-                    val activeDot = index < countdownDots
-                    Box(
-                        modifier = Modifier
-                            .size(if (activeDot) 5.dp else 4.dp)
-                            .clip(CircleShape)
-                            .background(Color.White.copy(alpha = if (activeDot) 0.95f else 0.18f))
-                    )
-                }
-            }
-        }
-
         Box(
             modifier = Modifier
                 .fillMaxWidth()
