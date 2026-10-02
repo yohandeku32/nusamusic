@@ -57,6 +57,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -215,6 +217,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NusaMusicApp(
     songs: List<Song>,
@@ -247,10 +250,17 @@ private fun NusaMusicApp(
             TopAppBar(
                 title = {
                     Text(
-                        "NOW PLAYING",
+                        "NUSA MUSIC",
                         fontFamily = FontFamily.Serif,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 1.sp
+                    )
+                },
+                navigationIcon = {
+                    Icon(
+                        Icons.Default.MusicNote,
+                        contentDescription = null,
+                        modifier = Modifier.padding(start = 16.dp).size(24.dp)
                     )
                 },
                 actions = {
@@ -271,96 +281,135 @@ private fun NusaMusicApp(
             horizontalAlignment = Alignment.CenterHorizontally,
             contentPadding = PaddingValues(bottom = 32.dp)
         ) {
-            if (showSearch) {
-                item {
-                    OutlinedTextField(
-                        value = query,
-                        onValueChange = { query = it },
+            item {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillParentMaxHeight()
+                        .padding(horizontal = 20.dp)
+                ) {
+                    if (showSearch) {
+                        OutlinedTextField(
+                            value = query,
+                            onValueChange = { query = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 4.dp, bottom = 4.dp),
+                            placeholder = { Text("Search songs, artists, albums") },
+                            singleLine = true
+                        )
+                    }
+
+                    Spacer(Modifier.height(10.dp))
+
+                    VinylRecord(
+                        song = currentSong,
+                        isPlaying = isPlaying,
+                        modifier = Modifier
+                            .sizeIn(maxWidth = 340.dp, maxHeight = 340.dp)
+                            .fillMaxWidth(0.84f)
+                            .aspectRatio(1f)
+                            .align(Alignment.CenterHorizontally)
+                    )
+
+                    Spacer(Modifier.height(18.dp))
+
+                    // Fixed-height title area keeps the transport controls stable,
+                    // even when a song has a very long title.
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 8.dp),
-                        placeholder = { Text("Search songs, artists, albums") },
-                        singleLine = true
-                    )
-                }
-            }
+                            .height(94.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            currentSong?.title ?: "Choose a song",
+                            fontFamily = FontFamily.Serif,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 28.sp,
+                            lineHeight = 30.sp,
+                            maxLines = 3,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(horizontal = 10.dp),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
 
-            item {
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    "NOW PLAYING",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 2.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(18.dp))
-                VinylRecord(
-                    song = currentSong,
-                    isPlaying = isPlaying,
-                    modifier = Modifier.size(310.dp)
-                )
-                Spacer(Modifier.height(22.dp))
-                Text(
-                    currentSong?.title ?: "Choose a song",
-                    fontFamily = FontFamily.Serif,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 30.sp,
-                    lineHeight = 32.sp,
-                    modifier = Modifier.padding(horizontal = 24.dp),
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                )
-                Spacer(Modifier.height(5.dp))
-                Text(
-                    currentSong?.artist ?: "Your local music library",
-                    fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(20.dp))
-                Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
-                    val safeDuration = durationMs.coerceAtLeast(0L)
-                    val safePosition = positionMs.coerceIn(0L, safeDuration.coerceAtLeast(1L))
-                    Slider(
-                        value = if (safeDuration > 0) safePosition.toFloat() / safeDuration.toFloat() else 0f,
-                        onValueChange = { fraction ->
-                            if (safeDuration > 0) onSeek((fraction * safeDuration).toLong())
-                        },
-                        enabled = currentSong != null && safeDuration > 0
+                    Spacer(Modifier.height(2.dp))
+
+                    Text(
+                        currentSong?.artist ?: "Your local music library",
+                        fontSize = 14.sp,
+                        maxLines = 1,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+
+                    Spacer(Modifier.height(14.dp))
+
+                    SimpleProgressBar(
+                        positionMs = positionMs,
+                        durationMs = durationMs,
+                        enabled = currentSong != null && durationMs > 0L,
+                        onSeek = onSeek
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 5.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
                         Text(formatTime(positionMs), fontSize = 12.sp)
                         Text(formatTime(durationMs), fontSize = 12.sp)
                     }
-                }
-                Spacer(Modifier.height(10.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(24.dp)
-                ) {
-                    IconButton(onClick = onPrevious, enabled = currentSong != null) {
-                        Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", modifier = Modifier.size(30.dp))
-                    }
-                    FilledIconButton(
-                        onClick = if (currentSong == null) onRequestPermission else onTogglePlay,
-                        modifier = Modifier.size(76.dp),
-                        shape = CircleShape
+
+                    Spacer(Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
                     ) {
-                        Icon(
-                            if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = if (isPlaying) "Pause" else "Play",
-                            modifier = Modifier.size(34.dp)
+                        TransportPillButton(
+                            icon = Icons.Default.SkipPrevious,
+                            contentDescription = "Previous",
+                            onClick = onPrevious,
+                            enabled = currentSong != null
+                        )
+
+                        Spacer(Modifier.width(22.dp))
+
+                        FilledIconButton(
+                            onClick = if (currentSong == null) onRequestPermission else onTogglePlay,
+                            modifier = Modifier.size(76.dp),
+                            shape = CircleShape
+                        ) {
+                            Icon(
+                                if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = if (isPlaying) "Pause" else "Play",
+                                modifier = Modifier.size(34.dp)
+                            )
+                        }
+
+                        Spacer(Modifier.width(22.dp))
+
+                        TransportPillButton(
+                            icon = Icons.Default.SkipNext,
+                            contentDescription = "Next",
+                            onClick = onNext,
+                            enabled = currentSong != null
                         )
                     }
-                    IconButton(onClick = onNext, enabled = currentSong != null) {
-                        Icon(Icons.Default.SkipNext, contentDescription = "Next", modifier = Modifier.size(30.dp))
-                    }
+
+                    Spacer(Modifier.height(18.dp))
                 }
-                Spacer(Modifier.height(28.dp))
             }
 
             item {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
@@ -374,13 +423,18 @@ private fun NusaMusicApp(
                         Icon(Icons.Default.FavoriteBorder, contentDescription = "Favorites")
                     }
                 }
-                Spacer(Modifier.height(8.dp))
             }
 
             if (!permissionGranted) {
                 item {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(24.dp)) {
-                        Text("Give Nusa Music access to your audio files.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(24.dp)
+                    ) {
+                        Text(
+                            "Give Nusa Music access to your audio files.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                         Spacer(Modifier.height(12.dp))
                         FilledIconButton(onClick = onRequestPermission) {
                             Icon(Icons.Default.FolderOpen, contentDescription = "Allow music access")
@@ -389,7 +443,11 @@ private fun NusaMusicApp(
                 }
             } else if (filtered.isEmpty()) {
                 item {
-                    Text("No local music found", modifier = Modifier.padding(32.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        "No local music found",
+                        modifier = Modifier.padding(32.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             } else {
                 items(filtered, key = { it.id }) { song ->
@@ -405,9 +463,89 @@ private fun NusaMusicApp(
 }
 
 @Composable
+private fun SimpleProgressBar(
+    positionMs: Long,
+    durationMs: Long,
+    enabled: Boolean,
+    onSeek: (Long) -> Unit
+) {
+    val fraction = if (durationMs > 0L) {
+        (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
+    } else {
+        0f
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(20.dp)
+            .clickable(enabled = enabled) { /* handled by the gesture modifier below */ }
+    ) {
+        androidx.compose.foundation.Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(20.dp)
+                .pointerInput(durationMs, enabled) {
+                    if (enabled && durationMs > 0L) {
+                        androidx.compose.foundation.gestures.detectTapGestures { offset ->
+                            val tappedFraction =
+                                (offset.x / size.width.toFloat()).coerceIn(0f, 1f)
+                            onSeek((tappedFraction * durationMs).toLong())
+                        }
+                    }
+                }
+        ) {
+            val y = size.height / 2f
+            val stroke = 3.dp.toPx()
+            drawLine(
+                color = Color(0xFFD2D0CB),
+                start = androidx.compose.ui.geometry.Offset(0f, y),
+                end = androidx.compose.ui.geometry.Offset(size.width, y),
+                strokeWidth = stroke
+            )
+            drawLine(
+                color = MaterialTheme.colorScheme.primary,
+                start = androidx.compose.ui.geometry.Offset(0f, y),
+                end = androidx.compose.ui.geometry.Offset(size.width * fraction, y),
+                strokeWidth = stroke
+            )
+            drawCircle(
+                color = MaterialTheme.colorScheme.primary,
+                radius = 3.5.dp.toPx(),
+                center = androidx.compose.ui.geometry.Offset(size.width * fraction, y)
+            )
+        }
+    }
+}
+
+@Composable
+private fun TransportPillButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+    enabled: Boolean
+) {
+    androidx.compose.material3.Surface(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.size(width = 84.dp, height = 50.dp),
+        shape = RoundedCornerShape(50),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        tonalElevation = 0.dp
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                icon,
+                contentDescription = contentDescription,
+                modifier = Modifier.size(24.dp)
+            )
+        }
+    }
+}
+
+@Composable
 private fun VinylRecord(song: Song?, isPlaying: Boolean, modifier: Modifier = Modifier) {
-    // Keep one continuous rotation value. Pausing cancels the coroutine but
-    // does not reset the angle, so the center label stays exactly where it was.
+    // Keep the exact physical angle across pause/resume.
     val rotation = remember { Animatable(0f) }
 
     LaunchedEffect(isPlaying) {
@@ -428,14 +566,18 @@ private fun VinylRecord(song: Song?, isPlaying: Boolean, modifier: Modifier = Mo
         modifier = modifier.graphicsLayer { rotationZ = rotation.value },
         contentAlignment = Alignment.Center
     ) {
-        Canvas(Modifier.fillMaxSize().clip(CircleShape)) {
+        Canvas(
+            Modifier
+                .fillMaxSize()
+                .clip(CircleShape)
+        ) {
             val radius = size.minDimension / 2f
 
-            // Deep black press with a slight radial sheen.
+            // Deep black pressed PVC with very subtle tonal variation.
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(
-                        Color(0xFF3C3C3C),
+                        Color(0xFF3A3A3A),
                         Color(0xFF171717),
                         Color(0xFF070707),
                         Color(0xFF010101)
@@ -446,102 +588,107 @@ private fun VinylRecord(song: Song?, isPlaying: Boolean, modifier: Modifier = Mo
                 radius = radius
             )
 
-            // Very fine concentric grooves.
-            for (i in 1..240) {
-                val t = i / 240f
+            // Dense, fine grooves. Their low contrast is intentional so the
+            // texture reads like a real record instead of drawn rings.
+            for (i in 1..280) {
+                val t = i / 280f
                 val grooveRadius = radius * (0.215f + t * 0.735f)
-
                 val alpha = when {
-                    i % 23 == 0 -> 0.125f
-                    i % 9 == 0 -> 0.072f
-                    i % 3 == 0 -> 0.040f
-                    else -> 0.020f
+                    i % 29 == 0 -> 0.105f
+                    i % 11 == 0 -> 0.060f
+                    i % 5 == 0 -> 0.034f
+                    else -> 0.016f
                 }
 
                 drawCircle(
                     color = Color.White.copy(alpha = alpha),
                     radius = grooveRadius,
                     style = androidx.compose.ui.graphics.drawscope.Stroke(
-                        width = if (i % 23 == 0) 1.15f else 0.48f
+                        width = if (i % 29 == 0) 1.0f else 0.42f
                     )
                 )
             }
 
-            // A darker inner run-in area before the paper label.
-            drawCircle(
-                color = Color.Black.copy(alpha = 0.52f),
-                radius = radius * 0.235f
-            )
-            drawCircle(
-                color = Color.White.copy(alpha = 0.055f),
-                radius = radius * 0.245f,
-                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5f)
-            )
+            // Tiny discontinuous reflection marks break up the perfect
+            // computer-generated look of the concentric grooves.
+            for (i in 0 until 54) {
+                val startAngle = (i * 137f) % 360f
+                val sweep = 16f + (i % 6) * 7f
+                val arcRadius = radius * (0.30f + ((i * 17) % 58) / 100f)
 
-            // Strong glossy reflection band similar to polished vinyl.
+                drawArc(
+                    color = Color.White.copy(alpha = 0.018f + (i % 4) * 0.008f),
+                    startAngle = startAngle,
+                    sweepAngle = sweep,
+                    useCenter = false,
+                    topLeft = androidx.compose.ui.geometry.Offset(
+                        center.x - arcRadius,
+                        center.y - arcRadius
+                    ),
+                    size = androidx.compose.ui.geometry.Size(
+                        arcRadius * 2f,
+                        arcRadius * 2f
+                    ),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 0.8f)
+                )
+            }
+
+            // Broad glossy highlights characteristic of black vinyl.
             drawArc(
-                color = Color.White.copy(alpha = 0.16f),
+                color = Color.White.copy(alpha = 0.145f),
                 startAngle = -70f,
-                sweepAngle = 30f,
+                sweepAngle = 28f,
                 useCenter = false,
                 topLeft = androidx.compose.ui.geometry.Offset(
-                    size.width * 0.055f,
-                    size.height * 0.055f
+                    size.width * 0.05f,
+                    size.height * 0.05f
                 ),
                 size = androidx.compose.ui.geometry.Size(
-                    size.width * 0.89f,
-                    size.height * 0.89f
+                    size.width * 0.90f,
+                    size.height * 0.90f
                 ),
-                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 9f)
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 10f)
             )
-
             drawArc(
-                color = Color.White.copy(alpha = 0.075f),
-                startAngle = -48f,
-                sweepAngle = 62f,
+                color = Color.White.copy(alpha = 0.060f),
+                startAngle = -49f,
+                sweepAngle = 58f,
                 useCenter = false,
                 topLeft = androidx.compose.ui.geometry.Offset(
-                    size.width * 0.10f,
-                    size.height * 0.10f
+                    size.width * 0.11f,
+                    size.height * 0.11f
                 ),
                 size = androidx.compose.ui.geometry.Size(
-                    size.width * 0.80f,
-                    size.height * 0.80f
-                ),
-                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.5f)
-            )
-
-            // Secondary cool reflection on the opposite side.
-            drawArc(
-                color = Color.White.copy(alpha = 0.045f),
-                startAngle = 118f,
-                sweepAngle = 38f,
-                useCenter = false,
-                topLeft = androidx.compose.ui.geometry.Offset(
-                    size.width * 0.16f,
-                    size.height * 0.16f
-                ),
-                size = androidx.compose.ui.geometry.Size(
-                    size.width * 0.68f,
-                    size.height * 0.68f
+                    size.width * 0.78f,
+                    size.height * 0.78f
                 ),
                 style = androidx.compose.ui.graphics.drawscope.Stroke(width = 4f)
             )
 
-            // Pressed outer rim and inner label boundary.
+            // Inner run-in and label well.
             drawCircle(
-                color = Color.Black.copy(alpha = 0.85f),
-                radius = radius * 0.986f,
+                color = Color.Black.copy(alpha = 0.48f),
+                radius = radius * 0.235f
+            )
+            drawCircle(
+                color = Color.White.copy(alpha = 0.05f),
+                radius = radius * 0.248f,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.4f)
+            )
+
+            // Pressed outer rim.
+            drawCircle(
+                color = Color.Black.copy(alpha = 0.90f),
+                radius = radius * 0.987f,
                 style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3f)
             )
             drawCircle(
-                color = Color.White.copy(alpha = 0.085f),
-                radius = radius * 0.955f,
-                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.4f)
+                color = Color.White.copy(alpha = 0.065f),
+                radius = radius * 0.958f,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.2f)
             )
         }
 
-        // Embedded album artwork is the record label.
         ArtworkView(
             song = song,
             modifier = Modifier
@@ -549,7 +696,7 @@ private fun VinylRecord(song: Song?, isPlaying: Boolean, modifier: Modifier = Mo
                 .clip(CircleShape)
         )
 
-        // Small spindle cap and metal center.
+        // Spindle and small metal center.
         Box(
             modifier = Modifier
                 .size(18.dp)
