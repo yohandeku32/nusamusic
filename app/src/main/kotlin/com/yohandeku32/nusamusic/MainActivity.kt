@@ -108,8 +108,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        hideStatusBar()
-
         val permission = if (Build.VERSION.SDK_INT >= 33) {
             Manifest.permission.READ_MEDIA_AUDIO
         } else {
@@ -170,6 +168,8 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+
+        window.decorView.post { hideStatusBar() }
     }
 
     private fun loadSongs() {
@@ -258,8 +258,9 @@ class MainActivity : ComponentActivity() {
 
     private fun hideStatusBar() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            window.insetsController?.hide(WindowInsets.Type.statusBars())
-            window.insetsController?.systemBarsBehavior =
+            val insetsController = window.decorView.windowInsetsController ?: return
+            insetsController.hide(WindowInsets.Type.statusBars())
+            insetsController.systemBarsBehavior =
                 WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         } else {
             @Suppress("DEPRECATION")
