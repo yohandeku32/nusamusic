@@ -103,8 +103,7 @@ import com.yohandeku32.nusamusic.data.ArtworkLoader
 import com.yohandeku32.nusamusic.data.AudioCodecInfo
 import com.yohandeku32.nusamusic.data.AudioCodecLoader
 import com.yohandeku32.nusamusic.data.ArtistImageLoader
-import com.yohandeku32.nusamusic.data.LyricLine
-import com.yohandeku32.nusamusic.data.LyricsLoader
+import com.yohandeku32.nusamusic.data.ArtistBiographyLoader
 import com.yohandeku32.nusamusic.data.MusicRepository
 import com.yohandeku32.nusamusic.model.Song
 import com.yohandeku32.nusamusic.playback.PlaybackService
@@ -236,7 +235,6 @@ class MainActivity : ComponentActivity() {
                     isPlaying = isPlaying,
                     positionMs = positionMs,
                     durationMs = durationMs,
-                    currentPositionProvider = { controller?.currentPosition?.coerceAtLeast(0L) ?: positionMs },
                     permissionGranted = permissionGranted,
                     onPlay = ::playSong,
                     onTogglePlay = ::togglePlay,
@@ -437,7 +435,6 @@ private fun NusaMusicApp(
     isPlaying: Boolean,
     positionMs: Long,
     durationMs: Long,
-    currentPositionProvider: () -> Long,
     permissionGranted: Boolean,
     onPlay: (Song) -> Unit,
     onTogglePlay: () -> Unit,
@@ -452,10 +449,12 @@ private fun NusaMusicApp(
     onRequestPermission: () -> Unit
 ) {
     var isFavorite by remember { mutableStateOf(false) }
-    var embeddedLyrics by remember(currentSong?.uri) {
-        mutableStateOf<com.yohandeku32.nusamusic.data.LyricsResult?>(null)
+    var artistBiography by remember(currentSong?.artist) {
+        mutableStateOf<com.yohandeku32.nusamusic.data.ArtistBiography?>(null)
     }
-    var lyricsLoading by remember(currentSong?.uri) { mutableStateOf(false) }
+    var biographyLoading by remember(currentSong?.artist) {
+        mutableStateOf(false)
+    }
 
     val context = androidx.compose.ui.platform.LocalContext.current
     val filtered = songs
@@ -492,24 +491,13 @@ private fun NusaMusicApp(
         }
     }
 
-    LaunchedEffect(currentSong?.uri) {
-        embeddedLyrics = null
-        lyricsLoading = currentSong != null
-        embeddedLyrics = currentSong?.let {
-            LyricsLoader.load(
-                context = context,
-                song = it
-            )
+    LaunchedEffect(currentSong?.artist) {
+        artistBiography = null
+        biographyLoading = currentSong?.artist?.isNotBlank() == true
+        artistBiography = currentSong?.let {
+            ArtistBiographyLoader.load(it)
         }
-        lyricsLoading = false
-    }
-
-    val lyricLines = embeddedLyrics?.lines.orEmpty()
-
-    val activeLyricIndex by remember(lyricLines) {
-        derivedStateOf {
-            findActiveLyricIndex(lyricLines, positionMs)
-        }
+        biographyLoading = false
     }
 
     Scaffold(
@@ -823,50 +811,13 @@ private fun NusaMusicApp(
                                 }
                             }
 
-                            // The player and the lyrics are one continuous
-                            // vertical scroll. This makes a slow upward drag
-                            // move the player itself with the finger.
-                            // Lyrics begin directly below the player.
-                            // No separate hanging title header is used here.
-
+                            // Artist biography replaces the old lyrics area.
                             item {
-                                if (lyricsLoading) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(420.dp)
-                                            .background(Color.Black),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            "Loading lyrics…",
-                                            color = Color(0xFF8A8A8A),
-                                            fontSize = 14.sp
-                                        )
-                                    }
-                                } else if (lyricLines.isEmpty()) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(420.dp)
-                                            .background(Color.Black),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            "No lyrics found",
-                                            color = Color(0xFF8A8A8A),
-                                            fontSize = 15.sp
-                                        )
-                                    }
-                                } else {
-                                    LyricsWindow(
-                                        lines = lyricLines,
-                                        isPlaying = isPlaying,
-                                        positionMs = positionMs,
-                                        currentPositionProvider = currentPositionProvider,
-                                        onSeek = onSeek
-                                    )
-                                }
+                                ArtistBiographySection(
+                                    artistName = currentSong?.artist,
+                                    biography = artistBiography,
+                                    loading = biographyLoading
+                                )
                             }
 
                             item {
@@ -1140,240 +1091,105 @@ private fun NusaMusicApp(
 }
 
 @Composable
-private fun LyricsWindow(
-    lines: List<LyricLine>,
-    isPlaying: Boolean,
-    positionMs: Long,
-    currentPositionProvider: () -> Long,
-    onSeek: (Long) -> Unit
+private fun ArtistBiographySection(
+    artistName: String?,
+    biography: com.yohandeku32.nusamusic.data.ArtistBiography?,
+    loading: Boolean
 ) {
-    val configuration = LocalConfiguration.current
-    val windowHeight = (configuration.screenHeightDp.dp * 0.52f)
-        .coerceIn(320.dp, 480.dp)
-    val rowHeight = 78.dp
-    val scope = rememberCoroutineScope()
-
-    val lyricsState =
-        androidx.compose.foundation.lazy.rememberLazyListState()
-
-    var syncedPositionMs by remember { mutableLongStateOf(positionMs) }
-
-    LaunchedEffect(lines, isPlaying) {
-        if (lines.isEmpty()) return@LaunchedEffect
-
-        while (isActive) {
-            syncedPositionMs = currentPositionProvider().coerceAtLeast(0L)
-            delay(if (isPlaying) 80L else 300L)
-        }
-    }
-
-    val activeIndex = remember(lines, syncedPositionMs) {
-        findActiveLyricIndex(lines, syncedPositionMs)
-    }
-
-    val focusIndex = when {
-        activeIndex >= 0 -> activeIndex
-        lines.isNotEmpty() -> 0
-        else -> -1
-    }
-
-    // Keep the active lyric locked near the top of the lyrics window.
-    // Only the lyric list moves upward when the active timestamp changes.
-    // Use explicit spacer items so the first lyric is always a normal list item.
-    // This avoids content-padding edge cases at the beginning of a song.
-    val topAnchorPadding = 38.dp
-
-    LaunchedEffect(lines) {
-        // Always start a newly loaded lyric document from its first line.
-        // This prevents the first lines from inheriting an old LazyColumn
-        // position from the previous song.
-        if (lines.isNotEmpty()) {
-            lyricsState.scrollToItem(
-                index = 0,
-                scrollOffset = 0
-            )
-        }
-    }
-
-    LaunchedEffect(focusIndex, lines.size) {
-        if (focusIndex >= 0) {
-            lyricsState.animateScrollToItem(
-                index = focusIndex + 1,
-                scrollOffset = 0
-            )
-        }
-    }
+    val displayArtist = artistName?.trim().orEmpty().ifBlank { "Unknown artist" }
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(windowHeight)
+            .height(420.dp)
             .background(Color.Black)
-            .clipToBounds()
+            .padding(horizontal = 28.dp, vertical = 24.dp)
     ) {
-        LazyColumn(
-            state = lyricsState,
-            modifier = Modifier
-                .fillMaxSize()
-                .graphicsLayer {
-                    clip = true
-                },
-            userScrollEnabled = false,
-            verticalArrangement = Arrangement.spacedBy(0.dp)
-        ) {
-            item(
-                key = "lyrics-top-spacer",
-                contentType = "spacer"
+        if (loading) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
             ) {
-                Spacer(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(topAnchorPadding)
+                Text(
+                    "Loading artist biography…",
+                    color = Color(0xFF9A9A9A),
+                    fontSize = 14.sp
                 )
             }
-
-            itemsIndexed(
-                items = lines,
-                key = { index, _ -> "lyric-window-" + (index + 1) },
-                contentType = { _, _ -> "lyric" }
-            ) { index, line ->
-                val distance = abs(index - focusIndex)
-                val isActive = index == focusIndex
-
-                val alpha = when {
-                    isActive -> 1f
-                    distance == 1 -> 0.72f
-                    distance == 2 -> 0.48f
-                    distance == 3 -> 0.30f
-                    else -> 0.18f
-                }
-
-                LyricLineText(
-                    line = line,
-                    isActive = isActive,
-                    alpha = alpha,
-                    modifier = Modifier.height(rowHeight),
-                    onClick = {
-                        onSeek(line.startMs)
-                        scope.launch {
-                            lyricsState.animateScrollToItem(
-                                index = index + 1,
-                                scrollOffset = 0
+        } else if (biography == null) {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = displayArtist,
+                    color = Color.White,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Biography not available",
+                    color = Color(0xFF8A8A8A),
+                    fontSize = 14.sp,
+                    textAlign = TextAlign.Center
+                )
+            }
+        } else {
+            Column(Modifier.fillMaxSize()) {
+                Text(
+                    "ABOUT THE ARTIST",
+                    color = Color(0xFF8E8E8E),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.6.sp
+                )
+                Spacer(Modifier.height(7.dp))
+                Text(
+                    text = biography.artistName,
+                    color = Color.White,
+                    fontSize = 24.sp,
+                    lineHeight = 28.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 2,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                )
+                Spacer(Modifier.height(16.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(Color(0xFF111111))
+                        .padding(horizontal = 18.dp, vertical = 16.dp)
+                ) {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(bottom = 12.dp)
+                    ) {
+                        item {
+                            Text(
+                                text = biography.text,
+                                color = Color(0xFFE7E7E7),
+                                fontSize = 15.sp,
+                                lineHeight = 23.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Spacer(Modifier.height(14.dp))
+                            Text(
+                                text = "Source: Wikipedia (" + biography.sourceLanguage.uppercase() + ")",
+                                color = Color(0xFF777777),
+                                fontSize = 11.sp
                             )
                         }
                     }
-                )
-            }
-
-            item(
-                key = "lyrics-bottom-spacer",
-                contentType = "spacer"
-            ) {
-                Spacer(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(windowHeight - topAnchorPadding - rowHeight)
-                )
-            }
-        }
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(58.dp)
-                .align(Alignment.BottomCenter)
-                .background(
-                    Brush.verticalGradient(
-                        listOf(Color.Transparent, Color.Black)
-                    )
-                )
-        )
-    }
-}
-
-@Composable
-private fun LyricLineText(
-    line: LyricLine,
-    isActive: Boolean,
-    alpha: Float,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
-) {
-    val blurEffect = if (
-        !isActive &&
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-    ) {
-        remember {
-            android.graphics.RenderEffect
-                .createBlurEffect(
-                    4.0f,
-                    4.0f,
-                    android.graphics.Shader.TileMode.CLAMP
-                )
-                .asComposeRenderEffect()
-        }
-    } else {
-        null
-    }
-
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .graphicsLayer {
-                this.alpha = alpha
-                renderEffect = blurEffect
-                scaleX = if (isActive) 1.035f else 1f
-                scaleY = if (isActive) 1.035f else 1f
-
-                // Keep transforms and alpha on the hardware compositor.
-                // Blurred lines use an offscreen GPU buffer; the active line
-                // avoids that extra buffer.
-                compositingStrategy = if (blurEffect != null) {
-                    CompositingStrategy.Offscreen
-                } else {
-                    CompositingStrategy.ModulateAlpha
                 }
             }
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = line.text,
-            color = Color.White,
-            fontSize = if (isActive) 21.sp else 18.sp,
-            fontWeight = if (isActive) FontWeight.Bold else FontWeight.SemiBold,
-            lineHeight = if (isActive) 28.sp else 25.sp,
-            textAlign = TextAlign.Center,
-            maxLines = 3,
-            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 28.dp)
-        )
-    }
-}
-
-private fun findActiveLyricIndex(
-    lines: List<LyricLine>,
-    positionMs: Long
-): Int {
-    var low = 0
-    var high = lines.lastIndex
-    var answer = -1
-
-    while (low <= high) {
-        val mid = (low + high) ushr 1
-        if (lines[mid].startMs <= positionMs) {
-            answer = mid
-            low = mid + 1
-        } else {
-            high = mid - 1
         }
     }
-
-    return answer
 }
-
-
-
 
 @Composable
 private fun AudioQualityPill(song: Song?) {
