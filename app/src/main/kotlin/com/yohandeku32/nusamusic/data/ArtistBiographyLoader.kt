@@ -130,16 +130,28 @@ object ArtistBiographyLoader {
             .replace("\u0000", "\\")
 
     private fun extractParagraphs(html: String): List<String> =
-        Regex("<p(?:\\s[^>]*)?>(.*?)</p>", RegexOption.IGNORE_CASE or RegexOption.DOT_MATCHES_ALL)
+        Regex(
+            "<p(?:\\s[^>]*)?>(.*?)</p>",
+            setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
+        )
             .findAll(html)
             .map { it.groupValues[1] }
             .toList()
 
     private fun cleanParagraph(html: String): String {
         val normalized = html
-            .replace(Regex("<sup.*?</sup>", RegexOption.IGNORE_CASE or RegexOption.DOT_MATCHES_ALL), "")
-            .replace(Regex("<style.*?</style>", RegexOption.IGNORE_CASE or RegexOption.DOT_MATCHES_ALL), "")
-            .replace(Regex("<script.*?</script>", RegexOption.IGNORE_CASE or RegexOption.DOT_MATCHES_ALL), "")
+            .replace(Regex(
+                "<sup.*?</sup>",
+                setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
+            ), "")
+            .replace(Regex(
+                "<style.*?</style>",
+                setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
+            ), "")
+            .replace(Regex(
+                "<script.*?</script>",
+                setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
+            ), "")
 
         val spanned: Spanned = Html.fromHtml(normalized, Html.FROM_HTML_MODE_LEGACY)
         return spanned.toString()
