@@ -273,29 +273,7 @@ private fun NusaMusicApp(
     val filtered = songs
 
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
-            TopAppBar(
-                title = { },
-                navigationIcon = {
-                    ArtistAvatar(
-                        song = currentSong,
-                        modifier = Modifier
-                            .padding(start = 18.dp)
-                            .size(40.dp)
-                            .clip(CircleShape)
-                    )
-                },
-                actions = {
-                    IconButton(onClick = {}) {
-                        Icon(Icons.Default.MoreHoriz, contentDescription = "More")
-                    }
-                    IconButton(onClick = {}) {
-                        Icon(Icons.Default.Settings, contentDescription = "Settings")
-                    }
-                }
-            )
-        }
+        containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         LazyColumn(
             modifier = Modifier
@@ -318,11 +296,37 @@ private fun NusaMusicApp(
                                 bottomEnd = 34.dp
                             )
                         )
-                        .background(MaterialTheme.colorScheme.background)
-                        .padding(horizontal = 22.dp),
+                        .background(MaterialTheme.colorScheme.background),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Spacer(Modifier.height(2.dp))
+                    TopAppBar(
+                        title = { },
+                        navigationIcon = {
+                            ArtistAvatar(
+                                song = currentSong,
+                                modifier = Modifier
+                                    .padding(start = 18.dp)
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                            )
+                        },
+                        actions = {
+                            IconButton(onClick = {}) {
+                                Icon(Icons.Default.MoreHoriz, contentDescription = "More")
+                            }
+                            IconButton(onClick = {}) {
+                                Icon(Icons.Default.Settings, contentDescription = "Settings")
+                            }
+                        }
+                    )
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 22.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Spacer(Modifier.height(2.dp))
 
                     VinylRecord(
                         song = currentSong,
@@ -362,7 +366,7 @@ private fun NusaMusicApp(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
-                    Spacer(Modifier.height(10.dp))
+                    Spacer(Modifier.height(16.dp))
 
                     // Slight side margins keep the progress line visually compact,
                     // like the supplied reference.
@@ -404,13 +408,13 @@ private fun NusaMusicApp(
 
                         FilledIconButton(
                             onClick = if (currentSong == null) onRequestPermission else onTogglePlay,
-                            modifier = Modifier.size(80.dp),
+                            modifier = Modifier.size(84.dp),
                             shape = CircleShape
                         ) {
                             Icon(
                                 if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                 contentDescription = if (isPlaying) "Pause" else "Play",
-                                modifier = Modifier.size(34.dp)
+                                modifier = Modifier.size(36.dp)
                             )
                         }
 
@@ -500,6 +504,9 @@ private fun NusaMusicApp(
                             )
                         }
                     }
+                }
+
+                // Close the nested scrollable player content column.
                 }
 
                 // Black library content begins directly below the white player panel.
@@ -639,7 +646,7 @@ private fun TransportPillButton(
     androidx.compose.material3.Surface(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier.size(width = 88.dp, height = 52.dp),
+        modifier = Modifier.size(width = 92.dp, height = 54.dp),
         shape = RoundedCornerShape(50),
         color = MaterialTheme.colorScheme.surfaceVariant,
         tonalElevation = 0.dp
@@ -648,7 +655,7 @@ private fun TransportPillButton(
             Icon(
                 icon,
                 contentDescription = contentDescription,
-                modifier = Modifier.size(23.dp)
+                modifier = Modifier.size(24.dp)
             )
         }
     }
