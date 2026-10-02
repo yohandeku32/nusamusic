@@ -410,48 +410,129 @@ private fun NusaMusicApp(
 
 @Composable
 private fun VinylRecord(song: Song?, isPlaying: Boolean, modifier: Modifier = Modifier) {
-    val rotation = remember { androidx.compose.animation.core.Animatable(0f) }
-    LaunchedEffect(isPlaying) {
-        if (isPlaying) {
-            while (true) {
-                val start = rotation.value
-                rotation.animateTo(start + 360f, androidx.compose.animation.core.tween(durationMillis = 6_000))
-                rotation.snapTo(rotation.value % 360f)
-            }
-        }
-    }
+    val infinite = androidx.compose.animation.core.rememberInfiniteTransition(label = "vinyl_rotation")
+    val rotation by infinite.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            animation = androidx.compose.animation.core.tween(
+                durationMillis = 7_000,
+                easing = androidx.compose.animation.core.LinearEasing
+            ),
+            repeatMode = androidx.compose.animation.core.RepeatMode.Restart
+        ),
+        label = "vinyl_rotation_value"
+    )
 
     Box(
-        modifier = modifier.graphicsLayer { rotationZ = rotation.value },
+        modifier = modifier.graphicsLayer {
+            rotationZ = if (isPlaying) rotation else 0f
+        },
         contentAlignment = Alignment.Center
     ) {
         Canvas(Modifier.fillMaxSize().clip(CircleShape)) {
-            drawCircle(Color(0xFF090909))
-            val maxRadius = size.minDimension / 2f
-            for (i in 1..24) {
-                val radius = maxRadius * (0.16f + (i * 0.033f))
+            val radius = size.minDimension / 2f
+
+            // Dark vinyl base with a subtle radial sheen.
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        Color(0xFF303030),
+                        Color(0xFF111111),
+                        Color(0xFF030303)
+                    ),
+                    radius = radius
+                ),
+                radius = radius
+            )
+
+            // Dense micro-grooves to make the record look physically textured.
+            for (i in 1..150) {
+                val grooveRadius = radius * (0.16f + (i / 150f) * 0.82f)
+                val alpha = when {
+                    i % 7 == 0 -> 0.11f
+                    i % 3 == 0 -> 0.065f
+                    else -> 0.035f
+                }
+
                 drawCircle(
-                    Color.White.copy(alpha = 0.045f),
-                    radius = radius,
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.1f)
+                    color = Color.White.copy(alpha = alpha),
+                    radius = grooveRadius,
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(
+                        width = if (i % 7 == 0) 1.15f else 0.65f
+                    )
                 )
             }
+
+            // Subtle inner rings and outer rim.
             drawCircle(
-                Color.White.copy(alpha = 0.08f),
-                radius = maxRadius * 0.98f,
-                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2f)
+                color = Color.Black.copy(alpha = 0.65f),
+                radius = radius * 0.18f
+            )
+            drawCircle(
+                color = Color.White.copy(alpha = 0.10f),
+                radius = radius * 0.985f,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.2f)
+            )
+            drawCircle(
+                color = Color.Black.copy(alpha = 0.75f),
+                radius = radius * 0.945f,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.5f)
+            )
+
+            // Soft reflected highlights across the vinyl surface.
+            drawArc(
+                color = Color.White.copy(alpha = 0.10f),
+                startAngle = -52f,
+                sweepAngle = 68f,
+                useCenter = false,
+                topLeft = androidx.compose.ui.geometry.Offset(
+                    size.width * 0.08f,
+                    size.height * 0.08f
+                ),
+                size = androidx.compose.ui.geometry.Size(
+                    size.width * 0.84f,
+                    size.height * 0.84f
+                ),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 6f)
+            )
+            drawArc(
+                color = Color.White.copy(alpha = 0.055f),
+                startAngle = 138f,
+                sweepAngle = 42f,
+                useCenter = false,
+                topLeft = androidx.compose.ui.geometry.Offset(
+                    size.width * 0.16f,
+                    size.height * 0.16f
+                ),
+                size = androidx.compose.ui.geometry.Size(
+                    size.width * 0.68f,
+                    size.height * 0.68f
+                ),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3f)
             )
         }
 
+        // Embedded album artwork becomes the center label.
         ArtworkView(
             song = song,
-            modifier = Modifier.size(142.dp).clip(CircleShape)
+            modifier = Modifier
+                .size(142.dp)
+                .clip(CircleShape)
+        )
+
+        // Center spindle and hole.
+        Box(
+            modifier = Modifier
+                .size(18.dp)
+                .clip(CircleShape)
+                .background(Color(0xFF0A0A0A))
         )
         Box(
-            modifier = Modifier.size(18.dp).clip(CircleShape).background(Color(0xFF0B0B0B))
-        )
-        Box(
-            modifier = Modifier.size(5.dp).clip(CircleShape).background(Color(0xFF8A8A8A))
+            modifier = Modifier
+                .size(5.dp)
+                .clip(CircleShape)
+                .background(Color(0xFF9A9A9A))
         )
     }
 }
