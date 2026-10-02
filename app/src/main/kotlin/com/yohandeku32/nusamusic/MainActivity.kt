@@ -1142,7 +1142,6 @@ private fun LyricsWindow(
     onSeek: (Long) -> Unit
 ) {
     val configuration = LocalConfiguration.current
-    val scope = rememberCoroutineScope()
     val windowHeight = (configuration.screenHeightDp.dp * 0.52f)
         .coerceIn(320.dp, 480.dp)
 
@@ -1257,7 +1256,6 @@ private fun LyricsWindow(
                     modifier = Modifier.height(lyricRowHeight),
                     onClick = {
                         onSeek(line.startMs)
-                        scope.launch { }
                     }
                 )
             }
@@ -1337,7 +1335,7 @@ private fun LyricLineText(
     )
 
     val blurEffect = if (!isActive && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        remember {
+        remember(isActive) {
             android.graphics.RenderEffect
                 .createBlurEffect(
                     5.5f,
