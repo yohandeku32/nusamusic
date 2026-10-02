@@ -1211,26 +1211,9 @@ private fun AudioQualityPill(song: Song?) {
             .clip(RoundedCornerShape(50))
             .background(
                 color = if (isHiRes) {
-                    Color(0xFFA99A76)
+                    Color(0xFFB5A77C).copy(alpha = 0.42f)
                 } else {
                     MaterialTheme.colorScheme.surfaceVariant
-                }
-            )
-            .then(
-                if (isHiRes) {
-                    Modifier.background(
-                        Brush.horizontalGradient(
-                            colors = listOf(
-                                Color(0xFF8F835F),
-                                Color(0xFFAAA07D),
-                                Color(0xFFC2B690),
-                                Color(0xFFAAA07D),
-                                Color(0xFF887B58)
-                            )
-                        )
-                    )
-                } else {
-                    Modifier
                 }
             )
     ) {
