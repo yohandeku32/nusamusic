@@ -161,7 +161,7 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        window.decorView.post { hideSystemBars() }
+        window.decorView.post { hideStatusBar() }
     }
 
     private fun loadSongs() {
@@ -228,19 +228,19 @@ class MainActivity : ComponentActivity() {
         startActivity(Intent.createChooser(intent, "Share song"))
     }
 
-    private fun hideSystemBars() {
+    private fun hideStatusBar() {
+        // Hide only the status bar. Keep Android's navigation bar visible.
+        window.statusBarColor = android.graphics.Color.TRANSPARENT
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             val insetsController = window.decorView.windowInsetsController ?: return
-            insetsController.hide(WindowInsets.Type.systemBars())
+            insetsController.hide(WindowInsets.Type.statusBars())
             insetsController.systemBarsBehavior =
                 WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         } else {
             @Suppress("DEPRECATION")
             window.decorView.systemUiVisibility =
-                window.decorView.systemUiVisibility or
-                    View.SYSTEM_UI_FLAG_FULLSCREEN or
-                    View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
-                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                window.decorView.systemUiVisibility or View.SYSTEM_UI_FLAG_FULLSCREEN
         }
     }
 
