@@ -6,6 +6,8 @@ import android.content.pm.PackageManager
 import android.content.Intent
 import android.graphics.Bitmap
 import android.os.Build
+import android.graphics.BitmapFactory
+import android.util.Base64
 import java.util.Locale
 import android.os.Bundle
 import android.view.View
@@ -613,14 +615,27 @@ private fun AudioQualityPill(song: Song?) {
     }
 
     val info = codecInfo ?: return
-    val sampleRate = info.sampleRateHz ?: 0
 
-    // Lossless: ALAC/FLAC up to 48 kHz.
-    // Hi-Res Lossless: ALAC/FLAC above 48 kHz.
+    // Only ALAC/FLAC are shown as Lossless badges. The quality tier is
+    // determined from the actual bits-per-sample value in the audio file:
+    // 24-bit and above = Hi-Res Lossless; below 24-bit = Lossless.
     val isLossless = info.codecName == "Apple Lossless" || info.codecName == "FLAC"
     if (!isLossless) return
 
-    val isHiRes = sampleRate > 48_000
+    val isHiRes = (info.bitDepth ?: 16) >= 24
+
+    val logoBitmap = remember {
+        runCatching {
+            val encoded = context.resources
+                .openRawResource(R.raw.apple_lossless_logo)
+                .bufferedReader()
+                .use { it.readText() }
+            val bytes = Base64.decode(encoded, Base64.DEFAULT)
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+        }.getOrNull()
+    }
+
+    if (logoBitmap == null) return
 
     androidx.compose.material3.Surface(
         shape = RoundedCornerShape(50),
@@ -628,67 +643,37 @@ private fun AudioQualityPill(song: Song?) {
         tonalElevation = 0.dp,
         modifier = Modifier.padding(top = 4.dp)
     ) {
-        AudioQualityLogo(
-            hiRes = isHiRes,
-            modifier = Modifier
-                .padding(horizontal = 11.dp, vertical = 6.dp)
-                .size(width = if (isHiRes) 35.dp else 29.dp, height = 18.dp)
-        )
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            androidx.compose.foundation.Image(
+                bitmap = logoBitmap.asImageBitmap(),
+                contentDescription = if (isHiRes) "Hi-Res Lossless" else "Lossless",
+                contentScale = ContentScale.Fit,
+                colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(
+                    MaterialTheme.colorScheme.onSurface
+                ),
+                modifier = Modifier.size(
+                    width = 24.dp,
+                    height = 13.dp
+                )
+            )
+
+            Spacer(Modifier.width(5.dp))
+
+            Text(
+                text = if (isHiRes) "Hi-Res Lossless" else "Lossless",
+                fontSize = 10.sp,
+                lineHeight = 12.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
     }
 
     Spacer(Modifier.height(4.dp))
-}
-
-@Composable
-private fun AudioQualityLogo(
-    hiRes: Boolean,
-    modifier: Modifier = Modifier
-) {
-    androidx.compose.foundation.Canvas(modifier = modifier) {
-        val stroke = size.minDimension * 0.105f
-        val height = size.height
-        val width = size.width
-
-        fun wavePath(offset: Float, amplitude: Float, phase: Float): androidx.compose.ui.graphics.Path {
-            val path = androidx.compose.ui.graphics.Path()
-            val centerY = height * (0.50f + offset)
-            val startX = width * 0.02f
-            val endX = width * 0.98f
-            path.moveTo(startX, centerY)
-
-            val segment = (endX - startX) / 2f
-            path.cubicTo(
-                startX + segment * 0.22f, centerY - amplitude,
-                startX + segment * 0.58f, centerY - amplitude,
-                startX + segment, centerY
-            )
-            path.cubicTo(
-                startX + segment * 1.42f, centerY + amplitude,
-                startX + segment * 1.78f, centerY + amplitude,
-                endX, centerY
-            )
-            return path
-        }
-
-        val count = if (hiRes) 6 else 5
-        val amplitude = height * 0.40f
-        val spread = if (hiRes) height * 0.15f else height * 0.18f
-
-        for (i in 0 until count) {
-            val offset = (i - (count - 1) / 2f) * spread / height
-            val path = wavePath(offset, amplitude - i * height * 0.025f, i * 0.2f)
-
-            drawPath(
-                path = path,
-                color = Color.Black.copy(alpha = if (i == count / 2) 1f else 0.78f),
-                style = androidx.compose.ui.graphics.drawscope.Stroke(
-                    width = stroke + if (i == count / 2) 0.7f else 0f,
-                    cap = androidx.compose.ui.graphics.StrokeCap.Round,
-                    join = androidx.compose.ui.graphics.StrokeJoin.Round
-                )
-            )
-        }
-    }
 }
 
 @Composable
