@@ -64,6 +64,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -77,6 +78,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -452,8 +455,12 @@ private fun NusaMusicApp(
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0)
     ) { padding ->
         val listState = androidx.compose.foundation.lazy.rememberLazyListState()
-        val showFloatingControls = listState.firstVisibleItemIndex >= 3
-        val showBackToPlayer = listState.firstVisibleItemIndex >= 5
+        val showFloatingControls by remember {
+            derivedStateOf { listState.firstVisibleItemIndex >= 3 }
+        }
+        val showBackToPlayer by remember {
+            derivedStateOf { listState.firstVisibleItemIndex >= 5 }
+        }
         val scrollScope = rememberCoroutineScope()
 
         Box(
@@ -750,19 +757,28 @@ private fun NusaMusicApp(
             }
         }
 
-        AnimatedVisibility(
-            visible = showFloatingControls,
-            enter = slideInVertically(
-                initialOffsetY = { it / 2 },
-                animationSpec = tween(280)
-            ) + fadeIn(animationSpec = tween(220)),
-            exit = slideOutVertically(
-                targetOffsetY = { it / 2 },
-                animationSpec = tween(220)
-            ) + fadeOut(animationSpec = tween(160)),
+        val floatingAlpha by animateFloatAsState(
+            targetValue = if (showFloatingControls) 1f else 0f,
+            animationSpec = tween(320),
+            label = "floatingAlpha"
+        )
+        val floatingOffset by animateFloatAsState(
+            targetValue = if (showFloatingControls) 0f else 28f,
+            animationSpec = tween(360),
+            label = "floatingOffset"
+        )
+
+        Surface(
+            shape = RoundedCornerShape(50),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            tonalElevation = 3.dp,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 18.dp)
+                .graphicsLayer {
+                    alpha = floatingAlpha
+                    translationY = floatingOffset
+                }
         ) {
             Surface(
                 shape = RoundedCornerShape(50),
@@ -878,19 +894,25 @@ private fun NusaMusicApp(
             }
         }
 
-        AnimatedVisibility(
-            visible = showBackToPlayer,
-            enter = slideInVertically(
-                initialOffsetY = { it / 2 },
-                animationSpec = tween(280)
-            ) + fadeIn(animationSpec = tween(220)),
-            exit = slideOutVertically(
-                targetOffsetY = { it / 2 },
-                animationSpec = tween(220)
-            ) + fadeOut(animationSpec = tween(160)),
+        val backButtonAlpha by animateFloatAsState(
+            targetValue = if (showBackToPlayer) 1f else 0f,
+            animationSpec = tween(300),
+            label = "backButtonAlpha"
+        )
+        val backButtonOffset by animateFloatAsState(
+            targetValue = if (showBackToPlayer) 0f else 26f,
+            animationSpec = tween(340),
+            label = "backButtonOffset"
+        )
+
+        Box(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(end = 16.dp, bottom = 18.dp)
+                .graphicsLayer {
+                    alpha = backButtonAlpha
+                    translationY = backButtonOffset
+                }
         ) {
             FilledIconButton(
                 onClick = {
@@ -995,12 +1017,20 @@ private fun ArtistAvatar(song: Song?, modifier: Modifier = Modifier) {
             bitmap = artistBitmap!!.asImageBitmap(),
             contentDescription = song?.artist,
             contentScale = ContentScale.Crop,
+            colorFilter = ColorFilter.colorMatrix(
+                ColorMatrix().apply { setToSaturation(0f) }
+            ),
             modifier = modifier
         )
     } else {
-        // Album art remains the immediate fallback while the artist portrait
-        // is being resolved in the background or when no match is found.
-        ArtworkView(song = song, maxSizePx = 96, modifier = modifier)
+        // Keep the avatar monochrome even while the artist portrait is being
+        // resolved and when album art is used as the fallback.
+        ArtworkView(
+            song = song,
+            maxSizePx = 96,
+            modifier = modifier,
+            monochrome = true
+        )
     }
 }
 
@@ -1313,7 +1343,8 @@ private fun VinylRecord(song: Song?, isPlaying: Boolean, modifier: Modifier = Mo
 private fun ArtworkView(
     song: Song?,
     maxSizePx: Int = 512,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    monochrome: Boolean = false
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var bitmap by remember(song?.uri, maxSizePx) { mutableStateOf<Bitmap?>(null) }
@@ -1344,6 +1375,13 @@ private fun ArtworkView(
                 bitmap = bitmap!!.asImageBitmap(),
                 contentDescription = song?.title,
                 contentScale = ContentScale.Crop,
+                colorFilter = if (monochrome) {
+                    ColorFilter.colorMatrix(ColorMatrix().apply {
+                        setToSaturation(0f)
+                    })
+                } else {
+                    null
+                },
                 modifier = Modifier.fillMaxSize()
             )
         } else {
