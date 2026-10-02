@@ -333,65 +333,24 @@ private fun NusaMusicApp(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(10.dp))
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(
-                            onClick = { },
-                            modifier = Modifier.size(42.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.KeyboardArrowDown,
-                                contentDescription = "Show songs",
-                                modifier = Modifier.size(28.dp)
-                            )
-                        }
-
-                        Spacer(Modifier.weight(1f))
-
-                        IconButton(
-                            onClick = { onShare(currentSong) },
-                            enabled = currentSong != null,
-                            modifier = Modifier.size(42.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Share,
-                                contentDescription = "Share song",
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-
-                        IconButton(
-                            onClick = { isFavorite = !isFavorite },
-                            enabled = currentSong != null,
-                            modifier = Modifier.size(42.dp)
-                        ) {
-                            Icon(
-                                if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
-                                modifier = Modifier.size(22.dp),
-                                tint = if (isFavorite) Color(0xFFC62828) else MaterialTheme.colorScheme.onBackground
-                            )
-                        }
-                    }
-
-                    Spacer(Modifier.height(6.dp))
-
+                    // Slight side margins keep the progress line visually compact,
+                    // like the supplied reference.
                     SimpleProgressBar(
                         positionMs = positionMs,
                         durationMs = durationMs,
                         enabled = currentSong != null && durationMs > 0L,
                         onSeek = onSeek,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp)
                     )
 
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 1.dp),
+                            .padding(horizontal = 12.dp, vertical = 0.dp),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(formatTime(positionMs), fontSize = 12.sp)
@@ -434,6 +393,53 @@ private fun NusaMusicApp(
                             onClick = onNext,
                             enabled = currentSong != null
                         )
+                    }
+
+                    Spacer(Modifier.height(10.dp))
+
+                    // Bottom action bar: arrow at the far left, share + like at
+                    // the far right, matching the supplied reference.
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(
+                            onClick = { },
+                            modifier = Modifier.size(42.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.KeyboardArrowDown,
+                                contentDescription = "Show songs",
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+
+                        Spacer(Modifier.weight(1f))
+
+                        IconButton(
+                            onClick = { onShare(currentSong) },
+                            enabled = currentSong != null,
+                            modifier = Modifier.size(42.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Share,
+                                contentDescription = "Share song",
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+
+                        IconButton(
+                            onClick = { isFavorite = !isFavorite },
+                            enabled = currentSong != null,
+                            modifier = Modifier.size(42.dp)
+                        ) {
+                            Icon(
+                                if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
+                                modifier = Modifier.size(22.dp),
+                                tint = if (isFavorite) Color(0xFFC62828) else MaterialTheme.colorScheme.onBackground
+                            )
+                        }
                     }
 
                     Spacer(Modifier.height(4.dp))
