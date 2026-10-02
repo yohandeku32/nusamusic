@@ -37,6 +37,8 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.FastForward
+import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.MoreHoriz
@@ -675,7 +677,7 @@ private fun NusaMusicApp(
                                             horizontalArrangement = Arrangement.Center
                                         ) {
                                             TransportPillButton(
-                                                icon = Icons.Default.SkipPrevious,
+                                                icon = Icons.Default.FastRewind,
                                                 contentDescription = "Previous",
                                                 onClick = onPrevious,
                                                 enabled = currentSong != null
@@ -710,7 +712,7 @@ private fun NusaMusicApp(
                                             Spacer(Modifier.width(16.dp))
 
                                             TransportPillButton(
-                                                icon = Icons.Default.SkipNext,
+                                                icon = Icons.Default.FastForward,
                                                 contentDescription = "Next",
                                                 onClick = onNext,
                                                 enabled = currentSong != null
@@ -1365,7 +1367,12 @@ private fun TransportPillButton(
             Icon(
                 icon,
                 contentDescription = contentDescription,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier
+                    .size(28.dp)
+                    .graphicsLayer {
+                        scaleX = 1.05f
+                        scaleY = 1.05f
+                    }
             )
         }
     }
