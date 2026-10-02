@@ -84,10 +84,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -869,7 +866,8 @@ private fun NusaMusicApp(
                                         lines = lyricLines,
                                         positionMs = positionMs,
                                         activeLineIndex = activeLyricIndex,
-                                        state = lyricsListState
+                                        state = lyricsListState,
+                                        onSeek = onSeek
                                     )
                                 }
                             }
@@ -1149,9 +1147,11 @@ private fun LyricsWindow(
     lines: List<LyricLine>,
     positionMs: Long,
     activeLineIndex: Int,
-    state: androidx.compose.foundation.lazy.LazyListState
+    state: androidx.compose.foundation.lazy.LazyListState,
+    onSeek: (Long) -> Unit
 ) {
     val configuration = LocalConfiguration.current
+    val scope = rememberCoroutineScope()
     val windowHeight = (configuration.screenHeightDp.dp * 0.52f)
         .coerceIn(320.dp, 480.dp)
 
@@ -1203,7 +1203,18 @@ private fun LyricsWindow(
                     line = line,
                     positionMs = positionMs,
                     isActive = index == activeLineIndex,
-                    alpha = alpha
+                    alpha = alpha,
+                    onClick = {
+                        onSeek(line.startMs)
+                        // Move the lyrics window at once instead of waiting for
+                        // the next 400 ms playback-position update.
+                        scope.launch {
+                            state.animateScrollToItem(
+                                index = index,
+                                scrollOffset = -(windowHeight.value * 0.22f).toInt()
+                            )
+                        }
+                    }
                 )
             }
         }
@@ -1241,64 +1252,24 @@ private fun LyricLineText(
     line: LyricLine,
     positionMs: Long,
     isActive: Boolean,
-    alpha: Float
+    alpha: Float,
+    onClick: () -> Unit
 ) {
-    val text = remember(line, positionMs, isActive) {
-        if (!isActive || line.words.isEmpty()) {
-            null
+    Text(
+        text = line.text,
+        color = Color.White.copy(alpha = alpha),
+        fontSize = if (isActive) 18.sp else 17.sp,
+        fontWeight = if (isActive) {
+            FontWeight.Medium
         } else {
-            buildAnnotatedString {
-                for (word in line.words) {
-                    val played = positionMs >= word.endMs
-                    val current = positionMs >= word.startMs &&
-                        positionMs < word.endMs
-
-                    withStyle(
-                        SpanStyle(
-                            color = when {
-                                current -> Color.White
-                                played -> Color.White.copy(alpha = 0.88f)
-                                else -> Color.White.copy(alpha = 0.28f)
-                            },
-                            fontWeight = if (current) {
-                                FontWeight.Medium
-                            } else {
-                                FontWeight.Normal
-                            }
-                        )
-                    ) {
-                        append(word.text)
-                    }
-                }
-            }
-        }
-    }
-
-    if (text != null) {
-        Text(
-            text = text,
-            fontSize = 18.sp,
-            lineHeight = 25.sp,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 38.dp)
-        )
-    } else {
-        Text(
-            text = line.text,
-            color = Color.White.copy(alpha = alpha),
-            fontSize = if (isActive) 18.sp else 17.sp,
-            fontWeight = if (isActive) {
-                FontWeight.Medium
-            } else {
-                FontWeight.Normal
-            },
-            lineHeight = 24.sp,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 38.dp)
-        )
-    }
+            FontWeight.Normal
+        },
+        lineHeight = 24.sp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 38.dp)
+    )
 }
 
 private fun findActiveLyricIndex(
