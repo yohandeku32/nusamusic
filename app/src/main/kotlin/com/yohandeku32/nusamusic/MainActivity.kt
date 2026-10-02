@@ -18,6 +18,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.FolderOpen
@@ -410,16 +416,16 @@ private fun NusaMusicApp(
 
 @Composable
 private fun VinylRecord(song: Song?, isPlaying: Boolean, modifier: Modifier = Modifier) {
-    val infinite = androidx.compose.animation.core.rememberInfiniteTransition(label = "vinyl_rotation")
+    val infinite = rememberInfiniteTransition(label = "vinyl_rotation")
     val rotation by infinite.animateFloat(
         initialValue = 0f,
         targetValue = 360f,
-        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-            animation = androidx.compose.animation.core.tween(
+        animationSpec = infiniteRepeatable(
+            animation = tween(
                 durationMillis = 7_000,
-                easing = androidx.compose.animation.core.LinearEasing
+                easing = LinearEasing
             ),
-            repeatMode = androidx.compose.animation.core.RepeatMode.Restart
+            repeatMode = RepeatMode.Restart
         ),
         label = "vinyl_rotation_value"
     )
