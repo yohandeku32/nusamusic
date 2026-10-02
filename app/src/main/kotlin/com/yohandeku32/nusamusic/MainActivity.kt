@@ -1165,7 +1165,10 @@ private fun LyricsWindow(
 
         while (isActive) {
             smoothPositionMs = currentPositionProvider()
-            androidx.compose.runtime.withFrameNanos { }
+            androidx.compose.runtime.withFrameNanos { frameTimeNanos ->
+                // Keep the read tied to the display frame; the value itself comes
+                // directly from MediaController and is only consumed by LyricsWindow.
+            }
         }
     }
 
@@ -1211,21 +1214,9 @@ private fun LyricsWindow(
         0
     }
     val lastVisible = if (currentIndex >= 0) {
-        (currentIndex + 4).coerceAtMost(lines.lastIndex)
+        (currentIndex + 3).coerceAtMost(lines.lastIndex)
     } else {
         -1
-    }
-
-    val remainingToNextMs = if (activeIndex >= 0 && activeIndex < lines.lastIndex) {
-        (lines[activeIndex + 1].startMs - smoothPositionMs).coerceAtLeast(0L)
-    } else {
-        0L
-    }
-
-    val countdownDots = if (remainingToNextMs in 1L..3_000L) {
-        ((remainingToNextMs + 999L) / 1_000L).toInt().coerceIn(1, 3)
-    } else {
-        0
     }
 
     Box(
@@ -1246,30 +1237,6 @@ private fun LyricsWindow(
                 else -> 0.20f
             }
 
-            val animatedAlpha by animateFloatAsState(
-                targetValue = targetAlpha,
-                animationSpec = tween(180),
-                label = "lyricAlpha$index"
-            )
-
-            val blurEffect = if (
-                index != currentIndex &&
-                distance <= 2 &&
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-            ) {
-                remember(index, distance) {
-                    android.graphics.RenderEffect
-                        .createBlurEffect(
-                            if (distance == 1) 4.5f else 6f,
-                            if (distance == 1) 4.5f else 6f,
-                            android.graphics.Shader.TileMode.CLAMP
-                        )
-                        .asComposeRenderEffect()
-                }
-            } else {
-                null
-            }
-
             val relativeY = (index - continuousIndex) * rowHeightPx
             val isActive = index == currentIndex
 
@@ -1280,10 +1247,18 @@ private fun LyricsWindow(
                     .align(Alignment.Center)
                     .graphicsLayer {
                         translationY = relativeY
-                        alpha = if (isActive) 1f else animatedAlpha
-                        renderEffect = blurEffect
-                        scaleX = if (isActive) 1.045f else 1f
-                        scaleY = if (isActive) 1.045f else 1f
+                        alpha = targetAlpha
+                        if (!isActive && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                            renderEffect = android.graphics.RenderEffect
+                                .createBlurEffect(
+                                    if (distance == 1) 4f else 5.5f,
+                                    if (distance == 1) 4f else 5.5f,
+                                    android.graphics.Shader.TileMode.CLAMP
+                                )
+                                .asComposeRenderEffect()
+                        }
+                        scaleX = if (isActive) 1.04f else 1f
+                        scaleY = if (isActive) 1.04f else 1f
                     }
                     .clickable {
                         onSeek(line.startMs)
@@ -1294,9 +1269,9 @@ private fun LyricsWindow(
                 Text(
                     text = line.text,
                     color = Color.White,
-                    fontSize = if (isActive) 20.sp else 17.sp,
-                    fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
-                    lineHeight = if (isActive) 27.sp else 24.sp,
+                    fontSize = if (isActive) 21.sp else 18.sp,
+                    fontWeight = if (isActive) FontWeight.Bold else FontWeight.SemiBold,
+                    lineHeight = if (isActive) 28.sp else 25.sp,
                     textAlign = TextAlign.Center,
                     maxLines = 3,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
