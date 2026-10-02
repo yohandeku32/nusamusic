@@ -748,25 +748,31 @@ private fun NusaMusicApp(
                                             IconButton(
                                                 onClick = {
                                                     scope.launch {
-                                                        if (currentSong != null) {
-                                                            val index = filtered.indexOfFirst {
-                                                                it.id == currentSong.id
-                                                            }
-                                                            if (index >= 0) {
-                                                                libraryListState.scrollToItem(
-                                                                    index = index,
-                                                                    scrollOffset = libraryCenterOffset
-                                                                )
-                                                            }
+                                                        // The main arrow now expands the lyrics directly.
+                                                        // Jump to the currently active lyric so the user
+                                                        // immediately sees the relevant line, with no
+                                                        // intermediate scroll or library page.
+                                                        if (lyricLines.isNotEmpty()) {
+                                                            playerScrollState.animateScrollToItem(
+                                                                index = activeLyricIndex
+                                                                    .coerceAtLeast(0) + 1,
+                                                                scrollOffset = 14
+                                                            )
+                                                        } else {
+                                                            // No embedded lyrics: open the lyrics area
+                                                            // so "No lyrics found" appears immediately.
+                                                            playerScrollState.animateScrollToItem(
+                                                                index = 1,
+                                                                scrollOffset = 0
+                                                            )
                                                         }
-                                                        pagerState.animateScrollToPage(1)
                                                     }
                                                 },
                                                 modifier = Modifier.size(42.dp)
                                             ) {
                                                 Icon(
                                                     Icons.Default.KeyboardArrowDown,
-                                                    contentDescription = "Show songs",
+                                                    contentDescription = "Expand lyrics",
                                                     modifier = Modifier.size(28.dp)
                                                 )
                                             }
