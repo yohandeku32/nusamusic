@@ -35,7 +35,531 @@ object LyricsLoader {
         context: Context,
         song: Song
     ): LyricsResult? = withContext(Dispatchers.IO) {
+        // Parse the actual audio container first. Media3's high-level metadata
+        // path does not expose every lyric tag used by local music files.
+        extractRawEmbeddedLyrics(context, song.uri)?.let { raw ->
+            parseEmbeddedText(raw)?.let {
+                return@withContext LyricsResult(it, "Embedded")
+            }
+        }
+
+        // Keep Media3 as a secondary fallback.
         loadEmbedded(context, song.uri)
+    }
+
+
+    private fun extractRawEmbeddedLyrics(
+        context: Context,
+        uriString: String
+    ): String? {
+        val uri = runCatching { Uri.parse(uriString) }.getOrNull() ?: return null
+
+        val bytes = runCatching {
+            context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+        }.getOrNull() ?: return null
+
+        if (bytes.isEmpty()) return null
+
+        // TTML may be embedded directly in an MP4/M4A metadata payload.
+        findEmbeddedTtml(bytes)?.let { return it }
+
+        return when {
+            bytes.startsWithAscii("ID3") -> extractId3Lyrics(bytes)
+            bytes.startsWithAscii("fLaC") -> extractFlacLyrics(bytes)
+            looksLikeMp4(bytes) -> extractMp4Lyrics(bytes)
+            looksLikeMp3(bytes) -> extractId3Lyrics(bytes)
+            else -> extractTaggedText(bytes, "LYRICS")
+        }
+    }
+
+    private fun looksLikeMp3(bytes: ByteArray): Boolean {
+        var offset = 0
+        if (bytes.size >= 10 && bytes.startsWithAscii("ID3")) {
+            offset = (10 + syncSafeInt(bytes, 6)).coerceAtMost(bytes.size)
+        }
+
+        while (offset + 2 < bytes.size) {
+            if ((bytes[offset].toInt() and 0xFF) == 0xFF) {
+                val second = bytes[offset + 1].toInt() and 0xFF
+                if ((second and 0xE0) == 0xE0) return true
+            }
+            if (bytes[offset].toInt() != 0) break
+            offset++
+        }
+        return false
+    }
+
+    private fun looksLikeMp4(bytes: ByteArray): Boolean {
+        if (bytes.size < 12) return false
+        val ftyp = "ftyp".toByteArray(Charsets.US_ASCII)
+        return bytes.indexOfBytes(ftyp, 0, minOf(bytes.size, 64)) >= 0
+    }
+
+    private fun extractId3Lyrics(bytes: ByteArray): String? {
+        if (!bytes.startsWithAscii("ID3") || bytes.size < 10) return null
+
+        val version = bytes[3].toInt() and 0xFF
+        val flags = bytes[5].toInt() and 0xFF
+        var offset = 10
+
+        if ((flags and 0x40) != 0 && offset + 4 <= bytes.size) {
+            val extensionSize = if (version >= 4) {
+                syncSafeInt(bytes, offset)
+            } else {
+                int32(bytes, offset)
+            }
+            offset += if (version >= 4) extensionSize else extensionSize + 4
+        }
+
+        val end = (10 + syncSafeInt(bytes, 6)).coerceAtMost(bytes.size)
+
+        while (offset + 10 <= end) {
+            val id = bytes.copyOfRange(offset, offset + 4)
+                .toString(Charsets.ISO_8859_1)
+                .trim('\u0000', ' ')
+
+            if (id.isBlank()) break
+
+            val frameSize = if (version >= 4) {
+                syncSafeInt(bytes, offset + 4)
+            } else {
+                int32(bytes, offset + 4)
+            }
+
+            if (frameSize <= 0 || offset + 10 + frameSize > end) break
+
+            val payload = bytes.copyOfRange(
+                offset + 10,
+                offset + 10 + frameSize
+            )
+
+            when (id.uppercase()) {
+                "USLT" -> {
+                    val text = decodeUsltText(payload)
+                    if (!text.isNullOrBlank()) return text
+                }
+
+                "SYLT" -> {
+                    parseSyltAsLines(payload)?.let { lines ->
+                        return lines.joinToString("\n") { line ->
+                            "[" + (line.startMs / 60000) + ":" +
+                                ((line.startMs / 1000) % 60).toString().padStart(2, '0') +
+                                "." +
+                                (line.startMs % 1000).toString().padStart(3, '0') +
+                                "] " + line.text
+                        }
+                    }
+                }
+
+                "TXXX" -> {
+                    decodeTxxx(payload)?.let { (description, text) ->
+                        if (
+                            description.contains(
+                                "LYRIC",
+                                ignoreCase = true
+                            ) &&
+                            text.isNotBlank()
+                        ) {
+                            return text
+                        }
+                    }
+                }
+            }
+
+            offset += 10 + frameSize
+        }
+
+        return null
+    }
+
+    private fun decodeUsltText(payload: ByteArray): String? {
+        if (payload.size < 4) return null
+
+        val encoding = payload[0].toInt() and 0xFF
+        val charset = when (encoding) {
+            0 -> Charsets.ISO_8859_1
+            1 -> Charsets.UTF_16
+            2 -> Charsets.UTF_16BE
+            3 -> Charsets.UTF_8
+            else -> Charsets.UTF_8
+        }
+        val terminatorSize = if (encoding == 1 || encoding == 2) 2 else 1
+
+        var offset = 4
+        while (offset + terminatorSize <= payload.size) {
+            val terminated = if (terminatorSize == 2) {
+                payload[offset].toInt() == 0 &&
+                    payload[offset + 1].toInt() == 0
+            } else {
+                payload[offset].toInt() == 0
+            }
+
+            if (terminated) {
+                offset += terminatorSize
+                break
+            }
+            offset++
+        }
+
+        if (offset >= payload.size) return null
+
+        return runCatching {
+            charset.decode(
+                java.nio.ByteBuffer.wrap(
+                    payload,
+                    offset,
+                    payload.size - offset
+                )
+            ).toString().trim()
+        }.getOrNull()
+    }
+
+    private fun decodeTxxx(payload: ByteArray): Pair<String, String>? {
+        if (payload.isEmpty()) return null
+
+        val encoding = payload[0].toInt() and 0xFF
+        val charset = when (encoding) {
+            0 -> Charsets.ISO_8859_1
+            1 -> Charsets.UTF_16
+            2 -> Charsets.UTF_16BE
+            3 -> Charsets.UTF_8
+            else -> Charsets.UTF_8
+        }
+
+        val terminatorSize = if (encoding == 1 || encoding == 2) 2 else 1
+        val separator = findTerminator(payload, 1, terminatorSize)
+        if (separator < 0) return null
+
+        val description = runCatching {
+            charset.decode(
+                java.nio.ByteBuffer.wrap(
+                    payload,
+                    1,
+                    separator - 1
+                )
+            ).toString().trim()
+        }.getOrNull().orEmpty()
+
+        val textStart = separator + terminatorSize
+        if (textStart >= payload.size) return null
+
+        val text = runCatching {
+            charset.decode(
+                java.nio.ByteBuffer.wrap(
+                    payload,
+                    textStart,
+                    payload.size - textStart
+                )
+            ).toString().trim()
+        }.getOrNull().orEmpty()
+
+        return description to text
+    }
+
+    private fun extractFlacLyrics(bytes: ByteArray): String? {
+        if (!bytes.startsWithAscii("fLaC")) return null
+
+        var offset = 4
+        while (offset + 4 <= bytes.size) {
+            val type = bytes[offset].toInt() and 0x7F
+            val isLast = (bytes[offset].toInt() and 0x80) != 0
+            val blockSize = ((bytes[offset + 1].toInt() and 0xFF) shl 16) or
+                ((bytes[offset + 2].toInt() and 0xFF) shl 8) or
+                (bytes[offset + 3].toInt() and 0xFF)
+
+            val blockStart = offset + 4
+            val blockEnd = blockStart + blockSize
+            if (blockEnd > bytes.size) break
+
+            if (type == 4) {
+                parseVorbisComments(
+                    bytes,
+                    blockStart,
+                    blockEnd
+                )?.let { return it }
+            }
+
+            offset = blockEnd
+            if (isLast) break
+        }
+
+        return null
+    }
+
+    private fun parseVorbisComments(
+        bytes: ByteArray,
+        start: Int,
+        end: Int
+    ): String? {
+        if (start + 4 > end) return null
+
+        var offset = start
+        val vendorLength = littleEndianInt(bytes, offset)
+        offset += 4
+        if (vendorLength < 0 || offset + vendorLength > end) return null
+        offset += vendorLength
+
+        if (offset + 4 > end) return null
+        val commentCount = littleEndianInt(bytes, offset)
+        offset += 4
+
+        repeat(commentCount.coerceIn(0, 10_000)) {
+            if (offset + 4 > end) return null
+
+            val length = littleEndianInt(bytes, offset)
+            offset += 4
+            if (length < 0 || offset + length > end) return null
+
+            val comment = runCatching {
+                bytes.copyOfRange(offset, offset + length)
+                    .toString(Charsets.UTF_8)
+            }.getOrNull().orEmpty()
+
+            val equals = comment.indexOf('=')
+            if (equals > 0) {
+                val key = comment.substring(0, equals)
+                val value = comment.substring(equals + 1)
+
+                if (
+                    key.equals("LYRICS", true) ||
+                    key.equals("UNSYNCEDLYRICS", true) ||
+                    key.contains("LYRIC", true)
+                ) {
+                    if (value.isNotBlank()) return value
+                }
+            }
+
+            offset += length
+        }
+
+        return null
+    }
+
+    private fun extractMp4Lyrics(bytes: ByteArray): String? {
+        var result: String? = null
+
+        fun readDataAtom(atomStart: Int, atomEnd: Int): String? {
+            if (atomEnd - atomStart < 16) return null
+            return decodeLikelyText(
+                bytes.copyOfRange(atomStart + 16, atomEnd)
+            )
+        }
+
+        fun walk(
+            start: Int,
+            end: Int,
+            depth: Int,
+            lyricContext: Boolean = false
+        ) {
+            if (result != null || depth > 16) return
+
+            var offset = start
+            while (offset + 8 <= end) {
+                var atomSize =
+                    int32(bytes, offset).toLong() and 0xFFFF_FFFFL
+                val type = bytes.copyOfRange(offset + 4, offset + 8)
+                    .toString(Charsets.ISO_8859_1)
+
+                var headerSize = 8
+                if (atomSize == 1L) {
+                    if (offset + 16 > end) return
+                    atomSize = long64(bytes, offset + 8)
+                    headerSize = 16
+                } else if (atomSize == 0L) {
+                    atomSize = (end - offset).toLong()
+                }
+
+                val atomEndLong = offset.toLong() + atomSize
+                if (
+                    atomEndLong > end ||
+                    atomEndLong <= offset + headerSize
+                ) return
+
+                val atomEnd = atomEndLong.toInt()
+
+                when (type) {
+                    "mdat", "free", "skip", "wide" -> Unit
+
+                    "meta" -> {
+                        if (atomEnd - offset - headerSize >= 4) {
+                            walk(
+                                offset + headerSize + 4,
+                                atomEnd,
+                                depth + 1,
+                                lyricContext
+                            )
+                        }
+                    }
+
+                    "moov", "udta", "ilst", "----" -> {
+                        walk(
+                            offset + headerSize,
+                            atomEnd,
+                            depth + 1,
+                            lyricContext || type == "----"
+                        )
+                    }
+
+                    "©lyr" -> {
+                        walk(
+                            offset + headerSize,
+                            atomEnd,
+                            depth + 1,
+                            true
+                        )
+                        if (result == null) {
+                            result = readDataAtom(offset, atomEnd)
+                        }
+                    }
+
+                    "data" -> {
+                        val text = readDataAtom(offset, atomEnd)
+                        if (
+                            text != null &&
+                            (
+                                lyricContext ||
+                                    text.contains("<tt", true) ||
+                                    text.contains("[00:", true) ||
+                                    text.contains("[0:", true)
+                            )
+                        ) {
+                            result = text
+                        }
+                    }
+                }
+
+                offset = atomEnd
+            }
+        }
+
+        walk(0, bytes.size, 0)
+        return result ?: extractTaggedText(bytes, "LYRICS")
+    }
+
+    private fun findEmbeddedTtml(bytes: ByteArray): String? {
+        val marker = "<tt".toByteArray(Charsets.UTF_8)
+        val start = bytes.indexOfBytes(marker, 0, bytes.size)
+        if (start < 0) return null
+
+        val endMarker = "</tt>".toByteArray(Charsets.UTF_8)
+        val end = bytes.indexOfBytes(
+            endMarker,
+            start,
+            bytes.size
+        )
+        if (end < 0) return null
+
+        return bytes.copyOfRange(
+            start,
+            end + endMarker.size
+        ).toString(Charsets.UTF_8).trim()
+    }
+
+    private fun extractTaggedText(
+        bytes: ByteArray,
+        key: String
+    ): String? {
+        val keyBytes = (key + "=").toByteArray(Charsets.UTF_8)
+        val start = bytes.indexOfBytes(
+            keyBytes,
+            0,
+            bytes.size
+        )
+        if (start < 0) return null
+
+        val valueStart = start + keyBytes.size
+        var end = valueStart
+        while (end < bytes.size && bytes[end].toInt() != 0) {
+            end++
+        }
+
+        return bytes.copyOfRange(valueStart, end)
+            .toString(Charsets.UTF_8)
+            .trim()
+            .takeIf { it.isNotBlank() }
+    }
+
+    private fun syncSafeInt(bytes: ByteArray, offset: Int): Int {
+        if (offset + 4 > bytes.size) return 0
+        return ((bytes[offset].toInt() and 0x7F) shl 21) or
+            ((bytes[offset + 1].toInt() and 0x7F) shl 14) or
+            ((bytes[offset + 2].toInt() and 0x7F) shl 7) or
+            (bytes[offset + 3].toInt() and 0x7F)
+    }
+
+    private fun int32(bytes: ByteArray, offset: Int): Int {
+        if (offset + 4 > bytes.size) return 0
+        return ((bytes[offset].toInt() and 0xFF) shl 24) or
+            ((bytes[offset + 1].toInt() and 0xFF) shl 16) or
+            ((bytes[offset + 2].toInt() and 0xFF) shl 8) or
+            (bytes[offset + 3].toInt() and 0xFF)
+    }
+
+    private fun long64(bytes: ByteArray, offset: Int): Long {
+        if (offset + 8 > bytes.size) return 0L
+        var value = 0L
+        repeat(8) { index ->
+            value = (value shl 8) or
+                (bytes[offset + index].toLong() and 0xFF)
+        }
+        return value
+    }
+
+    private fun littleEndianInt(bytes: ByteArray, offset: Int): Int {
+        if (offset + 4 > bytes.size) return 0
+        return (bytes[offset].toInt() and 0xFF) or
+            ((bytes[offset + 1].toInt() and 0xFF) shl 8) or
+            ((bytes[offset + 2].toInt() and 0xFF) shl 16) or
+            ((bytes[offset + 3].toInt() and 0xFF) shl 24)
+    }
+
+    private fun decodeLikelyText(bytes: ByteArray): String? {
+        val candidates = listOf(
+            Charsets.UTF_8,
+            Charsets.UTF_16,
+            Charsets.UTF_16BE,
+            Charsets.ISO_8859_1
+        )
+
+        return candidates
+            .mapNotNull { charset ->
+                runCatching {
+                    charset.decode(java.nio.ByteBuffer.wrap(bytes))
+                        .toString()
+                        .trim('\u0000', ' ', '\n', '\r', '\t')
+                }.getOrNull()
+            }
+            .filter { it.isNotBlank() }
+            .maxByOrNull { value ->
+                value.count { ch ->
+                    ch.isLetter() ||
+                        ch.isWhitespace() ||
+                        ch.isPunctuation()
+                }
+            }
+    }
+
+    private fun ByteArray.startsWithAscii(text: String): Boolean {
+        val value = text.toByteArray(Charsets.US_ASCII)
+        return size >= value.size &&
+            copyOfRange(0, value.size).contentEquals(value)
+    }
+
+    private fun ByteArray.indexOfBytes(
+        needle: ByteArray,
+        from: Int,
+        to: Int
+    ): Int {
+        if (needle.isEmpty() || to - from < needle.size) return -1
+
+        outer@ for (i in from..(to - needle.size)) {
+            for (j in needle.indices) {
+                if (this[i + j] != needle[j]) continue@outer
+            }
+            return i
+        }
+
+        return -1
     }
 
     private fun loadEmbedded(context: Context, uriString: String): LyricsResult? {
