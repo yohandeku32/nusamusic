@@ -7,6 +7,9 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.os.Build
 import android.os.Bundle
+import android.view.View
+import android.view.WindowInsets
+import android.view.WindowInsetsController
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -34,6 +37,8 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -91,6 +96,8 @@ class MainActivity : ComponentActivity() {
     private var positionMs by mutableLongStateOf(0L)
     private var durationMs by mutableLongStateOf(0L)
     private var permissionGranted by mutableStateOf(false)
+    private var shuffleEnabled by mutableStateOf(false)
+    private var repeatMode by mutableStateOf(Player.REPEAT_MODE_OFF)
 
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -100,6 +107,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        hideStatusBar()
 
         val permission = if (Build.VERSION.SDK_INT >= 33) {
             Manifest.permission.READ_MEDIA_AUDIO
@@ -153,6 +162,10 @@ class MainActivity : ComponentActivity() {
                     onPrevious = ::previousSong,
                     onSeek = ::seekTo,
                     onShare = ::shareCurrentSong,
+                    shuffleEnabled = shuffleEnabled,
+                    repeatMode = repeatMode,
+                    onToggleShuffle = ::toggleShuffle,
+                    onToggleRepeat = ::toggleRepeat,
                     onRequestPermission = { permissionLauncher.launch(permission) }
                 )
             }
@@ -213,6 +226,26 @@ class MainActivity : ComponentActivity() {
         controller?.seekTo(value)
     }
 
+    private fun toggleShuffle() {
+        controller?.let { c ->
+            val next = !c.shuffleModeEnabled
+            c.shuffleModeEnabled = next
+            shuffleEnabled = next
+        }
+    }
+
+    private fun toggleRepeat() {
+        controller?.let { c ->
+            val next = when (c.repeatMode) {
+                Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+                Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+                else -> Player.REPEAT_MODE_OFF
+            }
+            c.repeatMode = next
+            repeatMode = next
+        }
+    }
+
     private fun shareCurrentSong(song: Song?) {
         if (song == null) return
         val shareText = "Listening to ${song.title} — ${song.artist}"
@@ -221,6 +254,18 @@ class MainActivity : ComponentActivity() {
             putExtra(Intent.EXTRA_TEXT, shareText)
         }
         startActivity(Intent.createChooser(intent, "Share song"))
+    }
+
+    private fun hideStatusBar() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            window.insetsController?.hide(WindowInsets.Type.statusBars())
+            window.insetsController?.systemBarsBehavior =
+                WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        } else {
+            @Suppress("DEPRECATION")
+            window.decorView.systemUiVisibility =
+                window.decorView.systemUiVisibility or View.SYSTEM_UI_FLAG_FULLSCREEN
+        }
     }
 
     override fun onDestroy() {
@@ -245,6 +290,10 @@ private fun NusaMusicApp(
     onPrevious: () -> Unit,
     onSeek: (Long) -> Unit,
     onShare: (Song?) -> Unit,
+    shuffleEnabled: Boolean,
+    repeatMode: Int,
+    onToggleShuffle: () -> Unit,
+    onToggleRepeat: () -> Unit,
     onRequestPermission: () -> Unit
 ) {
     var isFavorite by remember { mutableStateOf(false) }
@@ -397,8 +446,8 @@ private fun NusaMusicApp(
 
                     Spacer(Modifier.height(10.dp))
 
-                    // Bottom action bar: arrow at the far left, share + like at
-                    // the far right, matching the supplied reference.
+                    // Bottom utility controls stay visually quiet so the main
+                    // player remains the focus.
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
@@ -417,6 +466,40 @@ private fun NusaMusicApp(
                         Spacer(Modifier.weight(1f))
 
                         IconButton(
+                            onClick = onToggleShuffle,
+                            enabled = currentSong != null,
+                            modifier = Modifier.size(42.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Shuffle,
+                                contentDescription = "Shuffle",
+                                modifier = Modifier.size(21.dp),
+                                tint = if (shuffleEnabled) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onBackground
+                                }
+                            )
+                        }
+
+                        IconButton(
+                            onClick = onToggleRepeat,
+                            enabled = currentSong != null,
+                            modifier = Modifier.size(42.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Repeat,
+                                contentDescription = "Repeat",
+                                modifier = Modifier.size(21.dp),
+                                tint = if (repeatMode != Player.REPEAT_MODE_OFF) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onBackground
+                                }
+                            )
+                        }
+
+                        IconButton(
                             onClick = { onShare(currentSong) },
                             enabled = currentSong != null,
                             modifier = Modifier.size(42.dp)
@@ -424,7 +507,7 @@ private fun NusaMusicApp(
                             Icon(
                                 Icons.Default.Share,
                                 contentDescription = "Share song",
-                                modifier = Modifier.size(22.dp)
+                                modifier = Modifier.size(21.dp)
                             )
                         }
 
@@ -436,8 +519,12 @@ private fun NusaMusicApp(
                             Icon(
                                 if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                                 contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
-                                modifier = Modifier.size(22.dp),
-                                tint = if (isFavorite) Color(0xFFC62828) else MaterialTheme.colorScheme.onBackground
+                                modifier = Modifier.size(21.dp),
+                                tint = if (isFavorite) Color(0xFFC62828) {
+                                    Color(0xFFC62828)
+                                } else {
+                                    MaterialTheme.colorScheme.onBackground
+                                }
                             )
                         }
                     }
