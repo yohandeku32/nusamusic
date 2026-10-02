@@ -1299,7 +1299,7 @@ private fun Modifier.detectNonConsumingSwipes(
                 if (begin != null) {
                     val dx = change.position.x - begin.x
                     val dy = change.position.y - begin.y
-                    val threshold = 90.dp.toPx()
+                    val threshold = 100f
 
                     if (abs(dx) >= threshold && abs(dx) > abs(dy)) {
                         if (dx < 0) onSwipeLeft?.invoke() else onSwipeRight?.invoke()
