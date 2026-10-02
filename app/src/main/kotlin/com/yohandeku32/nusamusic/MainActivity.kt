@@ -1158,12 +1158,13 @@ private fun LyricsWindow(
     // in the middle without requiring a fragile negative scroll offset.
     LaunchedEffect(activeLineIndex, lines.size) {
         if (activeLineIndex >= 0 && activeLineIndex < lines.size) {
-            if (!state.isScrollInProgress) {
-                state.animateScrollToItem(
-                    index = activeLineIndex,
-                    scrollOffset = 0
-                )
-            }
+            // Restart the smooth scroll whenever the active lyric changes.
+            // LazyListState's scroll mutex safely cancels the previous
+            // animation, so the window keeps following the song continuously.
+            state.animateScrollToItem(
+                index = activeLineIndex,
+                scrollOffset = 0
+            )
         }
     }
 
