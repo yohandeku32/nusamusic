@@ -60,6 +60,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -542,6 +543,10 @@ private fun NusaMusicApp(
 
                                     TopAppBar(
                                         title = { },
+                                        colors = TopAppBarDefaults.topAppBarColors(
+                                            containerColor = MaterialTheme.colorScheme.background,
+                                            scrolledContainerColor = MaterialTheme.colorScheme.background
+                                        ),
                                         windowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
                                         navigationIcon = {
                                             ArtistAvatar(
@@ -1150,6 +1155,7 @@ private fun ArtistBiographySection(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .height(178.dp)
                     .clip(RoundedCornerShape(20.dp))
                     .background(Color(0xFF111111))
                     .padding(horizontal = 18.dp, vertical = 16.dp)
@@ -1159,14 +1165,16 @@ private fun ArtistBiographySection(
                     color = Color(0xFFE7E7E7),
                     fontSize = 15.sp,
                     lineHeight = 23.sp,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 6,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
             }
             Text(
                 text = "Source: Last.fm (" + biography.sourceLanguage.uppercase() + ")",
                 color = Color(0xFF777777),
                 fontSize = 11.sp,
-                modifier = Modifier.padding(start = 4.dp, top = 10.dp)
+                modifier = Modifier.padding(start = 4.dp, top = 8.dp)
             )
         }
     }
