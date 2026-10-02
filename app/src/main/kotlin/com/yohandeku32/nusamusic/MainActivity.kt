@@ -446,6 +446,10 @@ private fun NusaMusicApp(
 
                     Spacer(Modifier.height(10.dp))
 
+                    // Give the secondary actions a little more separation from
+                    // the main transport controls.
+                    Spacer(Modifier.height(12.dp))
+
                     // Bottom utility controls stay visually quiet so the main
                     // player remains the focus.
                     Row(
@@ -529,7 +533,7 @@ private fun NusaMusicApp(
                         }
                     }
 
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(8.dp))
                 }
             }
 
