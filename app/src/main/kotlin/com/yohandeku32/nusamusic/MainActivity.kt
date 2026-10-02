@@ -20,7 +20,6 @@ import androidx.core.view.WindowCompat
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -1155,8 +1154,19 @@ private fun LyricsWindow(
     val lyricsState =
         androidx.compose.foundation.lazy.rememberLazyListState()
 
-    val activeIndex = remember(lines, positionMs) {
-        findActiveLyricIndex(lines, positionMs)
+    var syncedPositionMs by remember { mutableLongStateOf(positionMs) }
+
+    LaunchedEffect(lines, isPlaying) {
+        if (lines.isEmpty()) return@LaunchedEffect
+
+        while (isActive) {
+            syncedPositionMs = currentPositionProvider().coerceAtLeast(0L)
+            delay(if (isPlaying) 80L else 300L)
+        }
+    }
+
+    val activeIndex = remember(lines, syncedPositionMs) {
+        findActiveLyricIndex(lines, syncedPositionMs)
     }
 
     val focusIndex = when {
@@ -1186,11 +1196,7 @@ private fun LyricsWindow(
         if (focusIndex >= 0) {
             lyricsState.animateScrollToItem(
                 index = focusIndex,
-                scrollOffset = centerScrollOffset,
-                animationSpec = androidx.compose.animation.core.tween(
-                    durationMillis = 420,
-                    easing = androidx.compose.animation.core.FastOutSlowInEasing
-                )
+                scrollOffset = centerScrollOffset
             )
         }
     }
