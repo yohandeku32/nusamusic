@@ -1148,108 +1148,49 @@ private fun LyricsWindow(
     onSeek: (Long) -> Unit
 ) {
     val configuration = LocalConfiguration.current
-    val density = LocalDensity.current
-    val scope = rememberCoroutineScope()
-
     val windowHeight = (configuration.screenHeightDp.dp * 0.52f)
         .coerceIn(320.dp, 480.dp)
     val rowHeight = 78.dp
-    val rowHeightPx = with(density) { rowHeight.toPx() }
-    val topPadding = windowHeight / 2f - rowHeight / 2f
 
-    // Keep the audio clock local to LyricsWindow so the rest of the player is
-    // not recomposed at display refresh rate.
-    var renderPositionMs by remember { mutableLongStateOf(positionMs) }
-
-    // The lyric list uses LazyColumn virtualization, but movement is NOT driven
-    // by an animation. We advance it by the exact pixel delta requested by the
-    // audio clock on every display frame. This gives smooth continuous motion
-    // while keeping only on-screen lyric rows laid out.
     val lyricsState =
         androidx.compose.foundation.lazy.rememberLazyListState()
 
-    LaunchedEffect(lines, isPlaying) {
-        if (lines.isEmpty()) return@LaunchedEffect
-
-        val firstStart = lines.first().startMs
-        var anchorPositionMs = currentPositionProvider().coerceAtLeast(0L)
-        var anchorFrameNanos = 0L
-        var lastControllerPositionMs = anchorPositionMs
-
-        while (isActive) {
-            val frameNanos = androidx.compose.runtime.withFrameNanos { it }
-            val controllerPositionMs = currentPositionProvider().coerceAtLeast(0L)
-
-            val jump = kotlin.math.abs(controllerPositionMs - lastControllerPositionMs)
-
-            // Reset the interpolation anchor on seek/jump and on the first frame.
-            if (
-                anchorFrameNanos == 0L ||
-                jump > 180L
-            ) {
-                anchorPositionMs = controllerPositionMs
-                anchorFrameNanos = frameNanos
-            }
-
-            val elapsedMs =
-                ((frameNanos - anchorFrameNanos) / 1_000_000L).coerceAtLeast(0L)
-            val extrapolatedPosition = if (isPlaying) {
-                anchorPositionMs + elapsedMs
-            } else {
-                controllerPositionMs
-            }
-
-            renderPositionMs = extrapolatedPosition.coerceAtLeast(firstStart)
-            lastControllerPositionMs = controllerPositionMs
-
-            // Convert the audio position into a continuous lyric position.
-            val active = findActiveLyricIndex(lines, renderPositionMs)
-            val safeActive = when {
-                active >= 0 -> active
-                else -> 0
-            }
-
-            val startMs = lines[safeActive].startMs
-            val nextMs = lines.getOrNull(safeActive + 1)?.startMs ?: startMs + 1L
-            val interval = (nextMs - startMs).coerceAtLeast(1L)
-            val fraction = if (active >= 0) {
-                ((renderPositionMs - startMs).toFloat() / interval)
-                    .coerceIn(0f, 0.999f)
-            } else {
-                0f
-            }
-
-            val continuousIndex = if (active >= 0) {
-                active + fraction
-            } else {
-                0f
-            }
-
-            val targetScrollPx = continuousIndex * rowHeightPx
-            val currentScrollPx =
-                lyricsState.firstVisibleItemIndex * rowHeightPx +
-                    lyricsState.firstVisibleItemScrollOffset
-
-            lyricsState.scrollBy(targetScrollPx - currentScrollPx)
-        }
+    val activeIndex = remember(lines, positionMs) {
+        findActiveLyricIndex(lines, positionMs)
     }
 
-    LaunchedEffect(lines, positionMs) {
-        if (lines.isEmpty()) return@LaunchedEffect
-
-        // Guarantee that the very beginning of the lyric document can always
-        // be reached/rendered. No special "window around active line" clipping.
-        if (positionMs <= lines.first().startMs + 200L) {
-            lyricsState.scrollToItem(0, 0)
-            renderPositionMs = currentPositionProvider().coerceAtLeast(0L)
-        }
-    }
-
-    val activeIndex = findActiveLyricIndex(lines, renderPositionMs)
     val focusIndex = when {
         activeIndex >= 0 -> activeIndex
         lines.isNotEmpty() -> 0
         else -> -1
+    }
+
+    // Apple Music-like movement: the lyric stack stays still while the current
+    // line is playing, then makes one soft transition when the next timestamp
+    // is reached. This avoids the stiff frame-by-frame scrolling used before.
+    val centerScrollOffset =
+        -((windowHeight - rowHeight) / 2f).value.toInt().coerceAtLeast(0)
+
+    LaunchedEffect(lines) {
+        if (lines.isNotEmpty()) {
+            lyricsState.scrollToItem(
+                index = 0,
+                scrollOffset = centerScrollOffset
+            )
+        }
+    }
+
+    LaunchedEffect(focusIndex, lines.size, isPlaying) {
+        if (focusIndex >= 0) {
+            lyricsState.animateScrollToItem(
+                index = focusIndex,
+                scrollOffset = centerScrollOffset,
+                animationSpec = androidx.compose.animation.core.tween(
+                    durationMillis = 420,
+                    easing = androidx.compose.animation.core.FastOutSlowInEasing
+                )
+            )
+        }
     }
 
     Box(
@@ -1264,13 +1205,12 @@ private fun LyricsWindow(
             modifier = Modifier
                 .fillMaxSize()
                 .graphicsLayer {
-                    // Keep the lyric viewport on the GPU compositor.
                     clip = true
                 },
             userScrollEnabled = false,
             contentPadding = PaddingValues(
-                top = topPadding,
-                bottom = topPadding
+                top = windowHeight / 2f - rowHeight / 2f,
+                bottom = windowHeight / 2f - rowHeight / 2f
             ),
             verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
@@ -1281,12 +1221,13 @@ private fun LyricsWindow(
             ) { index, line ->
                 val distance = abs(index - focusIndex)
                 val isActive = index == focusIndex
+
                 val alpha = when {
                     isActive -> 1f
                     distance == 1 -> 0.72f
-                    distance == 2 -> 0.50f
-                    distance == 3 -> 0.32f
-                    else -> 0.20f
+                    distance == 2 -> 0.48f
+                    distance == 3 -> 0.30f
+                    else -> 0.18f
                 }
 
                 LyricLineText(
@@ -1296,10 +1237,14 @@ private fun LyricsWindow(
                     modifier = Modifier.height(rowHeight),
                     onClick = {
                         onSeek(line.startMs)
-                        scope.launch {
-                            lyricsState.scrollToItem(index, 0)
-                            renderPositionMs = currentPositionProvider()
-                        }
+                        lyricsState.animateScrollToItem(
+                            index = index,
+                            scrollOffset = centerScrollOffset,
+                            animationSpec = androidx.compose.animation.core.tween(
+                                durationMillis = 420,
+                                easing = androidx.compose.animation.core.FastOutSlowInEasing
+                            )
+                        )
                     }
                 )
             }
@@ -1346,8 +1291,8 @@ private fun LyricLineText(
         remember {
             android.graphics.RenderEffect
                 .createBlurEffect(
-                    4.5f,
-                    4.5f,
+                    4.0f,
+                    4.0f,
                     android.graphics.Shader.TileMode.CLAMP
                 )
                 .asComposeRenderEffect()
