@@ -463,6 +463,18 @@ private fun NusaMusicApp(
         androidx.compose.foundation.lazy.rememberLazyListState()
     val scope = rememberCoroutineScope()
 
+    LaunchedEffect(pagerState.currentPage, currentSong?.id, filtered.size) {
+        if (pagerState.currentPage == 1 && currentSong != null) {
+            val index = filtered.indexOfFirst { it.id == currentSong.id }
+            if (index >= 0) {
+                libraryListState.animateScrollToItem(
+                    index = index,
+                    scrollOffset = -120
+                )
+            }
+        }
+    }
+
     LaunchedEffect(currentSong?.uri) {
         embeddedLyrics = null
         lyricsLoading = currentSong != null
@@ -493,7 +505,7 @@ private fun NusaMusicApp(
             !playerScrollState.isScrollInProgress
         ) {
             playerScrollState.animateScrollToItem(
-                index = activeLyricIndex + 2,
+                index = activeLyricIndex + 1,
                 scrollOffset = -110
             )
         }
@@ -806,71 +818,8 @@ private fun NusaMusicApp(
                             // The player and the lyrics are one continuous
                             // vertical scroll. This makes a slow upward drag
                             // move the player itself with the finger.
-                            item {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .background(Color.Black)
-                                ) {
-                                    Spacer(Modifier.height(12.dp))
-
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(188.dp)
-                                            .clip(
-                                                RoundedCornerShape(
-                                                    bottomStart = 34.dp,
-                                                    bottomEnd = 34.dp
-                                                )
-                                            )
-                                            .background(MaterialTheme.colorScheme.background)
-                                            .padding(horizontal = 16.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        IconButton(
-                                            onClick = {
-                                                scope.launch {
-                                                    playerScrollState.animateScrollToItem(0)
-                                                }
-                                            }
-                                        ) {
-                                            Icon(
-                                                Icons.Default.KeyboardArrowDown,
-                                                contentDescription = "Back to player",
-                                                modifier = Modifier.size(28.dp)
-                                            )
-                                        }
-
-                                        Spacer(Modifier.weight(1f))
-
-                                        Column(
-                                            horizontalAlignment = Alignment.CenterHorizontally
-                                        ) {
-                                            Text(
-                                                text = currentSong?.title ?: "Lyrics",
-                                                fontFamily = FontFamily.Serif,
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 27.sp,
-                                                lineHeight = 29.sp,
-                                                maxLines = 2,
-                                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                                textAlign = TextAlign.Center
-                                            )
-                                            Text(
-                                                text = currentSong?.artist ?: "",
-                                                fontSize = 12.sp,
-                                                maxLines = 1,
-                                                textAlign = TextAlign.Center,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-
-                                        Spacer(Modifier.weight(1f))
-                                        Spacer(Modifier.width(48.dp))
-                                    }
-                                }
-                            }
+                            // Lyrics begin directly below the player.
+                            // No separate hanging title header is used here.
 
                             if (lyricsLoading) {
                                 item {
