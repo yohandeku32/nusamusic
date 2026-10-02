@@ -406,8 +406,8 @@ private fun NusaMusicApp(
 
 @Composable
 private fun VinylRecord(song: Song?, isPlaying: Boolean, modifier: Modifier = Modifier) {
-    // Animatable keeps the exact rotation angle when playback is paused.
-    // Starting playback resumes from that same angle instead of snapping to 0°.
+    // Keep one continuous rotation value. Pausing cancels the coroutine but
+    // does not reset the angle, so the center label stays exactly where it was.
     val rotation = remember { Animatable(0f) }
 
     LaunchedEffect(isPlaying) {
@@ -425,21 +425,19 @@ private fun VinylRecord(song: Song?, isPlaying: Boolean, modifier: Modifier = Mo
     }
 
     Box(
-        modifier = modifier.graphicsLayer {
-            rotationZ = rotation.value
-        },
+        modifier = modifier.graphicsLayer { rotationZ = rotation.value },
         contentAlignment = Alignment.Center
     ) {
         Canvas(Modifier.fillMaxSize().clip(CircleShape)) {
             val radius = size.minDimension / 2f
 
-            // Deep black vinyl with subtle radial light variation.
+            // Deep black press with a slight radial sheen.
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(
-                        Color(0xFF343434),
+                        Color(0xFF3C3C3C),
                         Color(0xFF171717),
-                        Color(0xFF060606),
+                        Color(0xFF070707),
                         Color(0xFF010101)
                     ),
                     center = center,
@@ -448,135 +446,76 @@ private fun VinylRecord(song: Song?, isPlaying: Boolean, modifier: Modifier = Mo
                 radius = radius
             )
 
-            // Fine pressed-groove texture: many thin circular grooves with
-            // slightly irregular brightness to mimic real reflective vinyl.
-            for (i in 1..210) {
-                val t = i / 210f
-                val grooveRadius = radius * (0.19f + t * 0.77f)
+            // Very fine concentric grooves.
+            for (i in 1..240) {
+                val t = i / 240f
+                val grooveRadius = radius * (0.215f + t * 0.735f)
+
                 val alpha = when {
-                    i % 17 == 0 -> 0.13f
-                    i % 5 == 0 -> 0.075f
-                    else -> 0.028f
+                    i % 23 == 0 -> 0.125f
+                    i % 9 == 0 -> 0.072f
+                    i % 3 == 0 -> 0.040f
+                    else -> 0.020f
                 }
+
                 drawCircle(
                     color = Color.White.copy(alpha = alpha),
                     radius = grooveRadius,
                     style = androidx.compose.ui.graphics.drawscope.Stroke(
-                        width = if (i % 17 == 0) 1.35f else 0.55f
+                        width = if (i % 23 == 0) 1.15f else 0.48f
                     )
                 )
             }
 
-            // Broad specular bands. These rotate with the record and create
-            // the characteristic glossy reflection of black vinyl.
+            // A darker inner run-in area before the paper label.
+            drawCircle(
+                color = Color.Black.copy(alpha = 0.52f),
+                radius = radius * 0.235f
+            )
+            drawCircle(
+                color = Color.White.copy(alpha = 0.055f),
+                radius = radius * 0.245f,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5f)
+            )
+
+            // Strong glossy reflection band similar to polished vinyl.
             drawArc(
                 color = Color.White.copy(alpha = 0.16f),
-                startAngle = -64f,
-                sweepAngle = 24f,
+                startAngle = -70f,
+                sweepAngle = 30f,
                 useCenter = false,
                 topLeft = androidx.compose.ui.geometry.Offset(
-                    size.width * 0.05f,
-                    size.height * 0.05f
+                    size.width * 0.055f,
+                    size.height * 0.055f
                 ),
                 size = androidx.compose.ui.geometry.Size(
-                    size.width * 0.90f,
-                    size.height * 0.90f
+                    size.width * 0.89f,
+                    size.height * 0.89f
                 ),
-                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 10f)
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 9f)
             )
+
             drawArc(
-                color = Color.White.copy(alpha = 0.055f),
-                startAngle = 80f,
-                sweepAngle = 42f,
+                color = Color.White.copy(alpha = 0.075f),
+                startAngle = -48f,
+                sweepAngle = 62f,
                 useCenter = false,
                 topLeft = androidx.compose.ui.geometry.Offset(
-                    size.width * 0.09f,
-                    size.height * 0.09f
+                    size.width * 0.10f,
+                    size.height * 0.10f
                 ),
                 size = androidx.compose.ui.geometry.Size(
-                    size.width * 0.82f,
-                    size.height * 0.82f
+                    size.width * 0.80f,
+                    size.height * 0.80f
                 ),
-                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 5f)
-            )
-
-            // Label well / inner pressed area.
-            drawCircle(
-                color = Color.Black.copy(alpha = 0.55f),
-                radius = radius * 0.21f
-            )
-            drawCircle(
-                color = Color.White.copy(alpha = 0.045f),
-                radius = radius * 0.225f,
-                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.8f)
-            )
-
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        Color(0xFF303030),
-                        Color(0xFF111111),
-                        Color(0xFF030303)
-                    ),
-                    radius = radius
-                ),
-                radius = radius
-            )
-
-            // Dense micro-grooves to make the record look physically textured.
-            for (i in 1..150) {
-                val grooveRadius = radius * (0.16f + (i / 150f) * 0.82f)
-                val alpha = when {
-                    i % 7 == 0 -> 0.11f
-                    i % 3 == 0 -> 0.065f
-                    else -> 0.035f
-                }
-
-                drawCircle(
-                    color = Color.White.copy(alpha = alpha),
-                    radius = grooveRadius,
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(
-                        width = if (i % 7 == 0) 1.15f else 0.65f
-                    )
-                )
-            }
-
-            // Subtle inner rings and outer rim.
-            drawCircle(
-                color = Color.Black.copy(alpha = 0.65f),
-                radius = radius * 0.18f
-            )
-            drawCircle(
-                color = Color.White.copy(alpha = 0.10f),
-                radius = radius * 0.985f,
-                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.2f)
-            )
-            drawCircle(
-                color = Color.Black.copy(alpha = 0.75f),
-                radius = radius * 0.945f,
                 style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.5f)
             )
 
-            // Soft reflected highlights across the vinyl surface.
+            // Secondary cool reflection on the opposite side.
             drawArc(
-                color = Color.White.copy(alpha = 0.10f),
-                startAngle = -52f,
-                sweepAngle = 68f,
-                useCenter = false,
-                topLeft = androidx.compose.ui.geometry.Offset(
-                    size.width * 0.08f,
-                    size.height * 0.08f
-                ),
-                size = androidx.compose.ui.geometry.Size(
-                    size.width * 0.84f,
-                    size.height * 0.84f
-                ),
-                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 6f)
-            )
-            drawArc(
-                color = Color.White.copy(alpha = 0.055f),
-                startAngle = 138f,
-                sweepAngle = 42f,
+                color = Color.White.copy(alpha = 0.045f),
+                startAngle = 118f,
+                sweepAngle = 38f,
                 useCenter = false,
                 topLeft = androidx.compose.ui.geometry.Offset(
                     size.width * 0.16f,
@@ -586,11 +525,23 @@ private fun VinylRecord(song: Song?, isPlaying: Boolean, modifier: Modifier = Mo
                     size.width * 0.68f,
                     size.height * 0.68f
                 ),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 4f)
+            )
+
+            // Pressed outer rim and inner label boundary.
+            drawCircle(
+                color = Color.Black.copy(alpha = 0.85f),
+                radius = radius * 0.986f,
                 style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3f)
+            )
+            drawCircle(
+                color = Color.White.copy(alpha = 0.085f),
+                radius = radius * 0.955f,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.4f)
             )
         }
 
-        // Embedded album artwork becomes the center label.
+        // Embedded album artwork is the record label.
         ArtworkView(
             song = song,
             modifier = Modifier
@@ -598,18 +549,18 @@ private fun VinylRecord(song: Song?, isPlaying: Boolean, modifier: Modifier = Mo
                 .clip(CircleShape)
         )
 
-        // Center spindle and hole.
+        // Small spindle cap and metal center.
         Box(
             modifier = Modifier
                 .size(18.dp)
                 .clip(CircleShape)
-                .background(Color(0xFF0A0A0A))
+                .background(Color(0xFF090909))
         )
         Box(
             modifier = Modifier
                 .size(5.dp)
                 .clip(CircleShape)
-                .background(Color(0xFF9A9A9A))
+                .background(Color(0xFFB2B2B2))
         )
     }
 }
