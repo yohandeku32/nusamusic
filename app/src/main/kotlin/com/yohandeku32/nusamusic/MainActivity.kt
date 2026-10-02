@@ -1247,11 +1247,7 @@ private fun LyricsWindow(
                         onSeek(line.startMs)
                         lyricsState.animateScrollToItem(
                             index = index,
-                            scrollOffset = centerScrollOffset,
-                            animationSpec = androidx.compose.animation.core.tween(
-                                durationMillis = 420,
-                                easing = androidx.compose.animation.core.FastOutSlowInEasing
-                            )
+                            scrollOffset = centerScrollOffset
                         )
                     }
                 )
