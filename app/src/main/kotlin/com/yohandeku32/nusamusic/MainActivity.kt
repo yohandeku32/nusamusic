@@ -1168,8 +1168,10 @@ private fun LyricsWindow(
     // Apple Music-like movement: the lyric stack stays still while the current
     // line is playing, then makes one soft transition when the next timestamp
     // is reached. This avoids the stiff frame-by-frame scrolling used before.
-    val centerScrollOffset =
-        -((windowHeight - rowHeight) / 2f).value.toInt().coerceAtLeast(0)
+    val density = LocalDensity.current
+    val centerScrollOffset = with(density) {
+        -((windowHeight - rowHeight) / 2f).roundToPx()
+    }
 
     LaunchedEffect(lines) {
         if (lines.isNotEmpty()) {
@@ -1180,7 +1182,7 @@ private fun LyricsWindow(
         }
     }
 
-    LaunchedEffect(focusIndex, lines.size, isPlaying) {
+    LaunchedEffect(focusIndex, lines.size) {
         if (focusIndex >= 0) {
             lyricsState.animateScrollToItem(
                 index = focusIndex,
