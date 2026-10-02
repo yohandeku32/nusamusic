@@ -1,7 +1,21 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.inputStream().use { input ->
+        localProperties.load(input)
+    }
+}
+
+val lastFmApiKey = localProperties.getProperty("LASTFM_API_KEY", "")
+    .replace("\\", "\\\\")
+    .replace(""", "\\"")
 
 android {
     namespace = "com.yohandeku32.nusamusic"
@@ -13,6 +27,8 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
+
+        buildConfigField("String", "LASTFM_API_KEY", ""$lastFmApiKey"")
     }
 
     compileOptions {
@@ -22,6 +38,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     packaging {
