@@ -21,9 +21,9 @@ Modern Android music player focused on local/offline playback with a clean vinyl
 - Floating button to return to the main player
 - Share current song
 - Favorite toggle on the player
-- Swipe up to open lyrics
-- Embedded lyrics only (USLT, SYLT, lyric metadata, embedded LRC, and local TTML metadata when present)
-- Shows "No lyrics found" when a track has no embedded lyrics
+- Swipe up to open the artist information area
+- Artist biography loaded from Wikipedia, preferring Indonesian Wikipedia and falling back to English
+- Biography results cached in memory to avoid repeated requests for the same artist
 - Light and dark theme support
 - Immersive player presentation with the Android status bar hidden while the navigation bar remains available
 
@@ -57,11 +57,11 @@ The quality tier is based on the detected bit depth:
 >= 24-bit  → Hi-Res Lossless
 ```
 
-## Lyrics
+## Artist Biography
 
-Nusa Music uses **embedded lyrics only**. It does not query online lyric services.
+The former lyrics area is now used for **artist biography**.
 
-When available, the app reads lyric metadata stored inside the local audio file, including common ID3/Vorbis lyric fields and supported synchronized formats. If no embedded lyrics are found, the lyrics screen shows **No lyrics found**.
+Nusa Music searches Wikipedia through the official MediaWiki REST API. The app first searches Indonesian Wikipedia and falls back to English Wikipedia when a suitable article is not found. The biography area shows the artist name, a short biography, and the Wikipedia language used as the source.
 
 ## Artist Images
 
@@ -69,7 +69,7 @@ When a song starts playing, Nusa Music can look up the artist name through the p
 
 The lookup is cached locally so the same artist does not need to be requested repeatedly. When a portrait cannot be resolved, the app falls back to local album artwork.
 
-Internet access is only needed for fetching artist portraits.
+Internet access is needed for fetching artist portraits and artist biographies.
 
 ## Tech Stack
 
