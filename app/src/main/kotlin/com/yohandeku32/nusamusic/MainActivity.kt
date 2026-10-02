@@ -1179,10 +1179,8 @@ private fun LyricsWindow(
 
     // Keep the active lyric locked near the top of the lyrics window.
     // Only the lyric list moves upward when the active timestamp changes.
-    val density = LocalDensity.current
-    // Place the active line slightly below the top edge. Using a zero
-    // scroll offset preserves the padding instead of pulling the text flush
-    // against the top of the viewport.
+    // Use explicit spacer items so the first lyric is always a normal list item.
+    // This avoids content-padding edge cases at the beginning of a song.
     val topAnchorPadding = 38.dp
 
     LaunchedEffect(lines) {
@@ -1200,7 +1198,7 @@ private fun LyricsWindow(
     LaunchedEffect(focusIndex, lines.size) {
         if (focusIndex >= 0) {
             lyricsState.animateScrollToItem(
-                index = focusIndex,
+                index = focusIndex + 1,
                 scrollOffset = 0
             )
         }
@@ -1221,15 +1219,22 @@ private fun LyricsWindow(
                     clip = true
                 },
             userScrollEnabled = false,
-            contentPadding = PaddingValues(
-                top = topAnchorPadding,
-                bottom = windowHeight - topAnchorPadding - rowHeight
-            ),
             verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
+            item(
+                key = "lyrics-top-spacer",
+                contentType = "spacer"
+            ) {
+                Spacer(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(topAnchorPadding)
+                )
+            }
+
             itemsIndexed(
                 items = lines,
-                key = { index, _ -> "lyric-window-$index" },
+                key = { index, _ -> "lyric-window-" + (index + 1) },
                 contentType = { _, _ -> "lyric" }
             ) { index, line ->
                 val distance = abs(index - focusIndex)
@@ -1252,11 +1257,22 @@ private fun LyricsWindow(
                         onSeek(line.startMs)
                         scope.launch {
                             lyricsState.animateScrollToItem(
-                                index = index,
+                                index = index + 1,
                                 scrollOffset = 0
                             )
                         }
                     }
+                )
+            }
+
+            item(
+                key = "lyrics-bottom-spacer",
+                contentType = "spacer"
+            ) {
+                Spacer(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(windowHeight - topAnchorPadding - rowHeight)
                 )
             }
         }
