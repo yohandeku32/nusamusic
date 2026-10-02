@@ -84,7 +84,11 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -101,6 +105,7 @@ import com.yohandeku32.nusamusic.data.AudioCodecInfo
 import com.yohandeku32.nusamusic.data.AudioCodecLoader
 import com.yohandeku32.nusamusic.data.ArtistImageLoader
 import com.yohandeku32.nusamusic.data.LyricLine
+import com.yohandeku32.nusamusic.data.LyricWord
 import com.yohandeku32.nusamusic.data.LyricsLoader
 import com.yohandeku32.nusamusic.data.MusicRepository
 import com.yohandeku32.nusamusic.model.Song
@@ -461,6 +466,8 @@ private fun NusaMusicApp(
     )
     val playerScrollState =
         androidx.compose.foundation.lazy.rememberLazyListState()
+    val lyricsListState =
+        androidx.compose.foundation.lazy.rememberLazyListState()
     val libraryListState =
         androidx.compose.foundation.lazy.rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -504,22 +511,6 @@ private fun NusaMusicApp(
     val activeLyricIndex by remember(lyricLines) {
         derivedStateOf {
             findActiveLyricIndex(lyricLines, positionMs)
-        }
-    }
-
-    // Keep the active lyric in view only after the user has entered the lyrics
-    // section. During a manual drag, the user's scroll always wins.
-    LaunchedEffect(activeLyricIndex, lyricLines.size) {
-        if (
-            activeLyricIndex >= 0 &&
-            lyricLines.isNotEmpty() &&
-            playerScrollState.firstVisibleItemIndex >= 1 &&
-            !playerScrollState.isScrollInProgress
-        ) {
-            playerScrollState.animateScrollToItem(
-                index = activeLyricIndex + 1,
-                scrollOffset = -110
-            )
         }
     }
 
@@ -752,18 +743,14 @@ private fun NusaMusicApp(
                                                         // Jump to the currently active lyric so the user
                                                         // immediately sees the relevant line, with no
                                                         // intermediate scroll or library page.
+                                                        playerScrollState.animateScrollToItem(
+                                                            index = 1,
+                                                            scrollOffset = 0
+                                                        )
                                                         if (lyricLines.isNotEmpty()) {
-                                                            playerScrollState.animateScrollToItem(
-                                                                index = activeLyricIndex
-                                                                    .coerceAtLeast(0) + 1,
-                                                                scrollOffset = 14
-                                                            )
-                                                        } else {
-                                                            // No embedded lyrics: open the lyrics area
-                                                            // so "No lyrics found" appears immediately.
-                                                            playerScrollState.animateScrollToItem(
-                                                                index = 1,
-                                                                scrollOffset = 0
+                                                            val target = activeLyricIndex.coerceAtLeast(0)
+                                                            lyricsListState.scrollToItem(
+                                                                index = target
                                                             )
                                                         }
                                                     }
@@ -850,12 +837,12 @@ private fun NusaMusicApp(
                             // Lyrics begin directly below the player.
                             // No separate hanging title header is used here.
 
-                            if (lyricsLoading) {
-                                item {
+                            item {
+                                if (lyricsLoading) {
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .height(240.dp)
+                                            .height(420.dp)
                                             .background(Color.Black),
                                         contentAlignment = Alignment.Center
                                     ) {
@@ -865,13 +852,11 @@ private fun NusaMusicApp(
                                             fontSize = 14.sp
                                         )
                                     }
-                                }
-                            } else if (lyricLines.isEmpty()) {
-                                item {
+                                } else if (lyricLines.isEmpty()) {
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .height(240.dp)
+                                            .height(420.dp)
                                             .background(Color.Black),
                                         contentAlignment = Alignment.Center
                                     ) {
@@ -881,43 +866,12 @@ private fun NusaMusicApp(
                                             fontSize = 15.sp
                                         )
                                     }
-                                }
-                            } else {
-                                itemsIndexed(
-                                    items = lyricLines,
-                                    key = { index, _ -> "lyric-$index" },
-                                    contentType = { _, _ -> "lyric" }
-                                ) { index, line ->
-                                    val distance = if (activeLyricIndex >= 0) {
-                                        abs(index - activeLyricIndex)
-                                    } else {
-                                        99
-                                    }
-
-                                    val alpha = when {
-                                        index == activeLyricIndex -> 1f
-                                        distance == 1 -> 0.72f
-                                        distance == 2 -> 0.46f
-                                        else -> 0.24f
-                                    }
-
-                                    Text(
-                                        text = line.text,
-                                        color = Color.White.copy(alpha = alpha),
-                                        fontSize = if (index == activeLyricIndex) 18.sp else 17.sp,
-                                        fontWeight = if (index == activeLyricIndex) {
-                                            FontWeight.Medium
-                                        } else {
-                                            FontWeight.Normal
-                                        },
-                                        lineHeight = 24.sp,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .background(Color.Black)
-                                            .padding(
-                                                horizontal = 38.dp,
-                                                vertical = 6.dp
-                                            )
+                                } else {
+                                    LyricsWindow(
+                                        lines = lyricLines,
+                                        positionMs = positionMs,
+                                        activeLineIndex = activeLyricIndex,
+                                        state = lyricsListState
                                     )
                                 }
                             }
@@ -1189,6 +1143,163 @@ private fun NusaMusicApp(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun LyricsWindow(
+    lines: List<LyricLine>,
+    positionMs: Long,
+    activeLineIndex: Int,
+    state: androidx.compose.foundation.lazy.LazyListState
+) {
+    val configuration = LocalConfiguration.current
+    val windowHeight = (configuration.screenHeightDp.dp * 0.52f)
+        .coerceIn(320.dp, 480.dp)
+
+    LaunchedEffect(activeLineIndex, lines.size) {
+        if (activeLineIndex >= 0 && activeLineIndex < lines.size) {
+            if (!state.isScrollInProgress) {
+                state.animateScrollToItem(
+                    index = activeLineIndex,
+                    scrollOffset = -(windowHeight.value * 0.22f).toInt()
+                )
+            }
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(windowHeight)
+            .background(Color.Black)
+    ) {
+        LazyColumn(
+            state = state,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                top = windowHeight / 2f,
+                bottom = windowHeight / 2f
+            ),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            itemsIndexed(
+                items = lines,
+                key = { index, _ -> "lyric-window-$index" },
+                contentType = { _, _ -> "lyric" }
+            ) { index, line ->
+                val distance = if (activeLineIndex >= 0) {
+                    abs(index - activeLineIndex)
+                } else {
+                    99
+                }
+
+                val alpha = when {
+                    index == activeLineIndex -> 1f
+                    distance == 1 -> 0.68f
+                    distance == 2 -> 0.42f
+                    else -> 0.20f
+                }
+
+                LyricLineText(
+                    line = line,
+                    positionMs = positionMs,
+                    isActive = index == activeLineIndex,
+                    alpha = alpha
+                )
+            }
+        }
+
+        // A subtle fade at the edges keeps the lyrics window visually bounded
+        // without adding another panel or changing the established layout.
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(44.dp)
+                .align(Alignment.TopCenter)
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color.Black, Color.Transparent)
+                    )
+                )
+        )
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(44.dp)
+                .align(Alignment.BottomCenter)
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color.Transparent, Color.Black)
+                    )
+                )
+        )
+    }
+}
+
+@Composable
+private fun LyricLineText(
+    line: LyricLine,
+    positionMs: Long,
+    isActive: Boolean,
+    alpha: Float
+) {
+    val text = remember(line, positionMs, isActive) {
+        if (!isActive || line.words.isEmpty()) {
+            null
+        } else {
+            buildAnnotatedString {
+                for (word in line.words) {
+                    val played = positionMs >= word.endMs
+                    val current = positionMs >= word.startMs &&
+                        positionMs < word.endMs
+
+                    withStyle(
+                        SpanStyle(
+                            color = when {
+                                current -> Color.White
+                                played -> Color.White.copy(alpha = 0.88f)
+                                else -> Color.White.copy(alpha = 0.28f)
+                            },
+                            fontWeight = if (current) {
+                                FontWeight.Medium
+                            } else {
+                                FontWeight.Normal
+                            }
+                        )
+                    ) {
+                        append(word.text)
+                    }
+                }
+            }
+        }
+    }
+
+    if (text != null) {
+        Text(
+            text = text,
+            fontSize = 18.sp,
+            lineHeight = 25.sp,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 38.dp)
+        )
+    } else {
+        Text(
+            text = line.text,
+            color = Color.White.copy(alpha = alpha),
+            fontSize = if (isActive) 18.sp else 17.sp,
+            fontWeight = if (isActive) {
+                FontWeight.Medium
+            } else {
+                FontWeight.Normal
+            },
+            lineHeight = 24.sp,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 38.dp)
+        )
     }
 }
 
