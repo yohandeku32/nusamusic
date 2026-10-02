@@ -805,7 +805,7 @@ private fun NusaMusicApp(
                                 }
                             }
 
-                            // Artist biography replaces the old lyrics area.
+                            // Artist biography section.
                             item {
                                 ArtistBiographySection(
                                     artistName = currentSong?.artist,
