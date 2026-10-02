@@ -885,7 +885,7 @@ private fun NusaMusicApp(
                             } else {
                                 itemsIndexed(
                                     items = lyricLines,
-                                    key = { _, line -> "\${line.startMs}-\${line.text}" },
+                                    key = { index, _ -> "lyric-$index" },
                                     contentType = { _, _ -> "lyric" }
                                 ) { index, line ->
                                     val distance = if (activeLyricIndex >= 0) {
