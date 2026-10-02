@@ -1284,7 +1284,7 @@ private fun LyricLineText(
         modifier = Modifier
             .fillMaxWidth()
             .graphicsLayer {
-                alpha = if (isActive) 1f else animatedAlpha
+                this.alpha = if (isActive) 1f else animatedAlpha
                 scaleX = animatedScale
                 scaleY = animatedScale
             }
