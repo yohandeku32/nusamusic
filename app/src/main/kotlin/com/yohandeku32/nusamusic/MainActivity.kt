@@ -77,6 +77,8 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.yohandeku32.nusamusic.data.ArtworkLoader
+import com.yohandeku32.nusamusic.data.AudioCodecInfo
+import com.yohandeku32.nusamusic.data.AudioCodecLoader
 import com.yohandeku32.nusamusic.data.ArtistImageLoader
 import com.yohandeku32.nusamusic.data.MusicRepository
 import com.yohandeku32.nusamusic.model.Song
@@ -521,6 +523,10 @@ private fun NusaMusicApp(
 
                     Spacer(Modifier.height(8.dp))
 
+                    // Technical audio information sits directly under the
+                    // down/share/favorite controls and updates per active song.
+                    AudioCodecPill(song = currentSong)
+
                         if (!permissionGranted) {
                             Text(
                                 "Give Nusa Music access to your audio files.",
@@ -588,6 +594,55 @@ private fun NusaMusicApp(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun AudioCodecPill(song: Song?) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var codecInfo by remember(song?.uri) { mutableStateOf<AudioCodecInfo?>(null) }
+
+    LaunchedEffect(song?.uri) {
+        codecInfo = song?.let {
+            AudioCodecLoader.load(
+                context = context,
+                uriString = it.uri
+            )
+        }
+    }
+
+    if (codecInfo != null) {
+        val sampleRate = codecInfo!!.sampleRateHz
+        val label = buildString {
+            append(codecInfo!!.codecName)
+            if (sampleRate != null && sampleRate > 0) {
+                append("  •  ")
+                append(
+                    if (sampleRate % 1000 == 0) {
+                        (sampleRate / 1000).toString() + " kHz"
+                    } else {
+                        String.format("%.1f kHz", sampleRate / 1000f)
+                    }
+                )
+            }
+        }
+
+        androidx.compose.material3.Surface(
+            shape = RoundedCornerShape(50),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            tonalElevation = 0.dp,
+            modifier = Modifier.padding(top = 4.dp)
+        ) {
+            Text(
+                text = label,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 13.dp, vertical = 6.dp)
+            )
+        }
+
+        Spacer(Modifier.height(4.dp))
     }
 }
 
