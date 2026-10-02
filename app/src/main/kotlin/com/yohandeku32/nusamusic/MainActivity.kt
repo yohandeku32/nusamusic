@@ -524,7 +524,7 @@ private fun NusaMusicApp(
                                 if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                                 contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
                                 modifier = Modifier.size(21.dp),
-                                tint = if (isFavorite) Color(0xFFC62828) {
+                                tint = if (isFavorite) {
                                     Color(0xFFC62828)
                                 } else {
                                     MaterialTheme.colorScheme.onBackground
