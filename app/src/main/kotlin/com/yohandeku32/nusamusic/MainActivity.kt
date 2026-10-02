@@ -9,6 +9,7 @@ import android.os.Build
 import java.util.Locale
 import android.os.Bundle
 import android.content.SharedPreferences
+import kotlin.math.abs
 import android.view.View
 import android.view.WindowInsets
 import android.view.WindowInsetsController
@@ -82,12 +83,15 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
@@ -100,6 +104,8 @@ import com.yohandeku32.nusamusic.data.ArtworkLoader
 import com.yohandeku32.nusamusic.data.AudioCodecInfo
 import com.yohandeku32.nusamusic.data.AudioCodecLoader
 import com.yohandeku32.nusamusic.data.ArtistImageLoader
+import com.yohandeku32.nusamusic.data.LyricLine
+import com.yohandeku32.nusamusic.data.LyricsLoader
 import com.yohandeku32.nusamusic.data.MusicRepository
 import com.yohandeku32.nusamusic.model.Song
 import com.yohandeku32.nusamusic.playback.PlaybackService
@@ -445,6 +451,7 @@ private fun NusaMusicApp(
     onRequestPermission: () -> Unit
 ) {
     var isFavorite by remember { mutableStateOf(false) }
+    var lyricsVisible by remember { mutableStateOf(false) }
 
     val filtered = songs
 
@@ -482,6 +489,20 @@ private fun NusaMusicApp(
                     modifier = Modifier
                         .fillMaxWidth()
                         .fillParentMaxHeight()
+                        .detectNonConsumingSwipes(
+                            onSwipeLeft = {
+                                if (!lyricsVisible) {
+                                    scrollScope.launch {
+                                        listState.animateScrollToItem(2)
+                                    }
+                                }
+                            },
+                            onSwipeUp = {
+                                if (!lyricsVisible) {
+                                    lyricsVisible = true
+                                }
+                            }
+                        )
                         .clip(
                             RoundedCornerShape(
                                 bottomStart = 34.dp,
@@ -913,6 +934,19 @@ private fun NusaMusicApp(
             }
         }
 
+        if (lyricsVisible) {
+            LyricsScreen(
+                song = currentSong,
+                positionMs = positionMs,
+                durationMs = durationMs,
+                isPlaying = isPlaying,
+                isFavorite = isFavorite,
+                onBack = { lyricsVisible = false },
+                onTogglePlay = onTogglePlay,
+                onShare = onShare
+            )
+        }
+
         val backButtonAlpha by animateFloatAsState(
             targetValue = if (showBackToPlayer) 1f else 0f,
             animationSpec = tween(300),
@@ -952,6 +986,333 @@ private fun NusaMusicApp(
         }        }
         }
     }
+
+@Composable
+private fun LyricsScreen(
+    song: Song?,
+    positionMs: Long,
+    durationMs: Long,
+    isPlaying: Boolean,
+    isFavorite: Boolean,
+    onBack: () -> Unit,
+    onTogglePlay: () -> Unit,
+    onShare: (Song?) -> Unit
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var result by remember(song?.uri) { mutableStateOf<com.yohandeku32.nusamusic.data.LyricsResult?>(null) }
+    var loading by remember(song?.uri) { mutableStateOf(false) }
+    val lyricListState = androidx.compose.foundation.lazy.rememberLazyListState()
+
+    LaunchedEffect(song?.uri) {
+        result = null
+        loading = song != null
+        result = song?.let { LyricsLoader.load(context, it) }
+        loading = false
+    }
+
+    val lines = result?.lines.orEmpty()
+    val activeIndex = remember(lines, positionMs) {
+        lines.indexOfLast { positionMs >= it.startMs }
+            .coerceIn(-1, (lines.size - 1).coerceAtLeast(-1))
+    }
+
+    LaunchedEffect(activeIndex, lines.size) {
+        if (activeIndex >= 0 && activeIndex < lines.size) {
+            lyricListState.animateScrollToItem(
+                index = activeIndex.coerceAtLeast(0),
+                scrollOffset = -120
+            )
+        }
+    }
+
+    androidx.compose.foundation.layout.Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .detectNonConsumingSwipes(
+                onSwipeDown = onBack
+            )
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(188.dp)
+                    .clip(
+                        RoundedCornerShape(
+                            bottomStart = 34.dp,
+                            bottomEnd = 34.dp
+                        )
+                    )
+                    .background(MaterialTheme.colorScheme.background)
+                    .padding(horizontal = 16.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 18.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            Icons.Default.KeyboardArrowDown,
+                            contentDescription = "Back to player",
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+
+                    Spacer(Modifier.weight(1f))
+
+                    IconButton(
+                        onClick = { onShare(song) },
+                        enabled = song != null
+                    ) {
+                        Icon(
+                            Icons.Default.Share,
+                            contentDescription = "Share song",
+                            modifier = Modifier.size(21.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = { },
+                        enabled = song != null
+                    ) {
+                        Icon(
+                            if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                            contentDescription = "Favorite",
+                            modifier = Modifier.size(22.dp),
+                            tint = if (isFavorite) Color(0xFFC62828) else MaterialTheme.colorScheme.onBackground
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(7.dp))
+
+                Text(
+                    text = song?.title ?: "Lyrics",
+                    fontFamily = FontFamily.Serif,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 27.sp,
+                    lineHeight = 29.sp,
+                    maxLines = 2,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center
+                )
+
+                Text(
+                    text = song?.artist ?: "",
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            if (loading) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "Loading lyrics…",
+                        color = Color(0xFF8A8A8A),
+                        fontSize = 14.sp
+                    )
+                }
+            } else if (lines.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "No lyrics found",
+                        color = Color(0xFF8A8A8A),
+                        fontSize = 15.sp
+                    )
+                }
+            } else {
+                androidx.compose.foundation.lazy.LazyColumn(
+                    state = lyricListState,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentPadding = PaddingValues(
+                        start = 38.dp,
+                        end = 38.dp,
+                        top = 34.dp,
+                        bottom = 150.dp
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(
+                        items = lines,
+                        key = { line -> "${line.startMs}-${line.text}" }
+                    ) { line ->
+                        val index = lines.indexOf(line)
+                        val distance = if (activeIndex >= 0) {
+                            abs(index - activeIndex)
+                        } else {
+                            99
+                        }
+
+                        val alpha = when {
+                            index == activeIndex -> 1f
+                            distance == 1 -> 0.72f
+                            distance == 2 -> 0.46f
+                            else -> 0.24f
+                        }
+
+                        Text(
+                            text = line.text,
+                            color = Color.White.copy(alpha = alpha),
+                            fontSize = if (index == activeIndex) 18.sp else 17.sp,
+                            fontWeight = if (index == activeIndex) {
+                                FontWeight.Medium
+                            } else {
+                                FontWeight.Normal
+                            },
+                            lineHeight = 24.sp,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color.Black)
+                    .padding(
+                        start = 34.dp,
+                        end = 34.dp,
+                        top = 4.dp,
+                        bottom = 20.dp
+                    )
+            ) {
+                LyricsProgressBar(
+                    positionMs = positionMs,
+                    durationMs = durationMs,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 3.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        formatTime(positionMs),
+                        color = Color(0xFFBDBDBD),
+                        fontSize = 11.sp
+                    )
+                    Text(
+                        "-${formatTime((durationMs - positionMs).coerceAtLeast(0L))}",
+                        color = Color(0xFFBDBDBD),
+                        fontSize = 11.sp
+                    )
+                }
+
+                Spacer(Modifier.height(10.dp))
+
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    androidx.compose.material3.Surface(
+                        onClick = onTogglePlay,
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.background,
+                        tonalElevation = 0.dp,
+                        modifier = Modifier.size(68.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = if (isPlaying) "Pause" else "Play",
+                                tint = Color.Black,
+                                modifier = Modifier.size(29.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LyricsProgressBar(
+    positionMs: Long,
+    durationMs: Long,
+    modifier: Modifier = Modifier
+) {
+    val fraction = if (durationMs > 0L) {
+        (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
+    } else {
+        0f
+    }
+
+    Canvas(modifier.height(14.dp)) {
+        val y = size.height / 2f
+        drawLine(
+            color = Color.White.copy(alpha = 0.16f),
+            start = Offset(0f, y),
+            end = Offset(size.width, y),
+            strokeWidth = 3.dp.toPx()
+        )
+        drawLine(
+            color = Color.White,
+            start = Offset(0f, y),
+            end = Offset(size.width * fraction, y),
+            strokeWidth = 3.dp.toPx()
+        )
+    }
+}
+
+private fun Modifier.detectNonConsumingSwipes(
+    onSwipeLeft: (() -> Unit)? = null,
+    onSwipeRight: (() -> Unit)? = null,
+    onSwipeUp: (() -> Unit)? = null,
+    onSwipeDown: (() -> Unit)? = null
+): Modifier = pointerInput(Unit) {
+    awaitPointerEventScope {
+        var start: Offset? = null
+        var wasPressed = false
+
+        while (true) {
+            val event = awaitPointerEvent(PointerEventPass.Initial)
+            val change = event.changes.firstOrNull() ?: continue
+
+            if (change.pressed && !wasPressed) {
+                start = change.position
+                wasPressed = true
+            } else if (!change.pressed && wasPressed) {
+                val begin = start
+                if (begin != null) {
+                    val dx = change.position.x - begin.x
+                    val dy = change.position.y - begin.y
+                    val threshold = 90.dp.toPx()
+
+                    if (abs(dx) >= threshold && abs(dx) > abs(dy)) {
+                        if (dx < 0) onSwipeLeft?.invoke() else onSwipeRight?.invoke()
+                    } else if (abs(dy) >= threshold && abs(dy) > abs(dx)) {
+                        if (dy < 0) onSwipeUp?.invoke() else onSwipeDown?.invoke()
+                    }
+                }
+                start = null
+                wasPressed = false
+            }
+        }
+    }
+}
 
 @Composable
 private fun AudioQualityPill(song: Song?) {
