@@ -28,7 +28,6 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
@@ -37,9 +36,7 @@ import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.darkColorScheme
@@ -233,17 +230,7 @@ private fun NusaMusicApp(
     onSeek: (Long) -> Unit,
     onRequestPermission: () -> Unit
 ) {
-    var query by remember { mutableStateOf("") }
-    var showSearch by remember { mutableStateOf(false) }
-
-    val filtered = remember(songs, query) {
-        if (query.isBlank()) songs
-        else songs.filter {
-            it.title.contains(query, true) ||
-                it.artist.contains(query, true) ||
-                it.album.contains(query, true)
-        }
-    }
+    val filtered = songs
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -260,8 +247,8 @@ private fun NusaMusicApp(
                     )
                 },
                 actions = {
-                    IconButton(onClick = { showSearch = !showSearch }) {
-                        Icon(Icons.Default.Search, contentDescription = "Search")
+                    IconButton(onClick = {}) {
+                        Icon(Icons.Default.MoreHoriz, contentDescription = "More")
                     }
                     IconButton(onClick = {}) {
                         Icon(Icons.Default.Settings, contentDescription = "Settings")
@@ -287,18 +274,6 @@ private fun NusaMusicApp(
                         .padding(horizontal = 22.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    if (showSearch) {
-                        OutlinedTextField(
-                            value = query,
-                            onValueChange = { query = it },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 3.dp),
-                            placeholder = { Text("Search songs, artists, albums") },
-                            singleLine = true
-                        )
-                    }
-
                     Spacer(Modifier.height(2.dp))
 
                     VinylRecord(
@@ -339,7 +314,7 @@ private fun NusaMusicApp(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
-                    Spacer(Modifier.height(9.dp))
+                    Spacer(Modifier.height(8.dp))
 
                     SimpleProgressBar(
                         positionMs = positionMs,
@@ -359,7 +334,7 @@ private fun NusaMusicApp(
                         Text(formatTime(durationMs), fontSize = 12.sp)
                     }
 
-                    Spacer(Modifier.height(7.dp))
+                    Spacer(Modifier.height(5.dp))
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -377,7 +352,7 @@ private fun NusaMusicApp(
 
                         FilledIconButton(
                             onClick = if (currentSong == null) onRequestPermission else onTogglePlay,
-                            modifier = Modifier.size(78.dp),
+                            modifier = Modifier.size(80.dp),
                             shape = CircleShape
                         ) {
                             Icon(
@@ -603,7 +578,7 @@ private fun TransportPillButton(
     androidx.compose.material3.Surface(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier.size(width = 84.dp, height = 50.dp),
+        modifier = Modifier.size(width = 88.dp, height = 52.dp),
         shape = RoundedCornerShape(50),
         color = MaterialTheme.colorScheme.surfaceVariant,
         tonalElevation = 0.dp
@@ -612,7 +587,7 @@ private fun TransportPillButton(
             Icon(
                 icon,
                 contentDescription = contentDescription,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(23.dp)
             )
         }
     }
