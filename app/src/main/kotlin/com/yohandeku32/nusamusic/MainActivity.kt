@@ -728,6 +728,9 @@ private fun NusaMusicApp(
                                 ) { immersive ->
                                     if (immersive) {
                                         ImmersiveArtworkPlayer(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .fillParentMaxHeight(),
                                             song = currentSong,
                                             isPlaying = isPlaying,
                                             positionMs = positionMs,
@@ -1314,6 +1317,7 @@ private fun NusaMusicApp(
 
 @Composable
 private fun ImmersiveArtworkPlayer(
+    modifier: Modifier = Modifier,
     song: Song?,
     isPlaying: Boolean,
     positionMs: Long,
@@ -1343,9 +1347,7 @@ private fun ImmersiveArtworkPlayer(
     }
 
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .fillParentMaxHeight()
+        modifier = modifier
             .clip(
                 RoundedCornerShape(
                     bottomStart = 34.dp,
@@ -1897,7 +1899,7 @@ private fun TransportPillButton(
             Icon(
                 icon,
                 contentDescription = contentDescription,
-                tint = if (darkSurface) Color.White else LocalContentColor.current,
+                tint = if (darkSurface) Color.White else MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier
                     .size(28.dp)
                     .graphicsLayer {
