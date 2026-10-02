@@ -31,6 +31,8 @@ data class LyricsResult(
 
 @OptIn(UnstableApi::class)
 object LyricsLoader {
+    private const val MAX_TAG_SCAN_BYTES = 16 * 1024 * 1024
+
     suspend fun load(
         context: Context,
         song: Song
@@ -55,7 +57,21 @@ object LyricsLoader {
         val uri = runCatching { Uri.parse(uriString) }.getOrNull() ?: return null
 
         val bytes = runCatching {
-            context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            context.contentResolver.openInputStream(uri)?.buffered()?.use { input ->
+                val out = java.io.ByteArrayOutputStream()
+                val buffer = ByteArray(32 * 1024)
+                var total = 0
+
+                while (total < MAX_TAG_SCAN_BYTES) {
+                    val wanted = minOf(buffer.size, MAX_TAG_SCAN_BYTES - total)
+                    val read = input.read(buffer, 0, wanted)
+                    if (read <= 0) break
+                    out.write(buffer, 0, read)
+                    total += read
+                }
+
+                out.toByteArray()
+            }
         }.getOrNull() ?: return null
 
         if (bytes.isEmpty()) return null
@@ -345,6 +361,66 @@ object LyricsLoader {
             )
         }
 
+        fun readFreeformLyrics(start: Int, end: Int): String? {
+            var offset = start
+            var name = ""
+            var dataText: String? = null
+
+            while (offset + 8 <= end) {
+                var atomSize =
+                    int32(bytes, offset).toLong() and 0xFFFF_FFFFL
+                val type = bytes.copyOfRange(
+                    offset + 4,
+                    offset + 8
+                ).toString(Charsets.ISO_8859_1)
+
+                var headerSize = 8
+                if (atomSize == 1L) {
+                    if (offset + 16 > end) break
+                    atomSize = long64(bytes, offset + 8)
+                    headerSize = 16
+                } else if (atomSize == 0L) {
+                    atomSize = (end - offset).toLong()
+                }
+
+                val atomEndLong = offset.toLong() + atomSize
+                if (
+                    atomEndLong > end ||
+                    atomEndLong <= offset + headerSize
+                ) break
+
+                val atomEnd = atomEndLong.toInt()
+
+                when (type) {
+                    "name" -> {
+                        name = decodeLikelyText(
+                            bytes.copyOfRange(
+                                offset + headerSize,
+                                atomEnd
+                            )
+                        ).orEmpty()
+                    }
+
+                    "data" -> {
+                        if (dataText == null) {
+                            dataText = readDataAtom(offset, atomEnd)
+                        }
+                    }
+                }
+
+                offset = atomEnd
+            }
+
+            return if (
+                name.contains("LYRIC", ignoreCase = true) &&
+                dataText != null
+            ) {
+                dataText
+            } else {
+                null
+            }
+        }
+
         fun walk(
             start: Int,
             end: Int,
@@ -357,8 +433,10 @@ object LyricsLoader {
             while (offset + 8 <= end) {
                 var atomSize =
                     int32(bytes, offset).toLong() and 0xFFFF_FFFFL
-                val type = bytes.copyOfRange(offset + 4, offset + 8)
-                    .toString(Charsets.ISO_8859_1)
+                val type = bytes.copyOfRange(
+                    offset + 4,
+                    offset + 8
+                ).toString(Charsets.ISO_8859_1)
 
                 var headerSize = 8
                 if (atomSize == 1L) {
@@ -391,24 +469,26 @@ object LyricsLoader {
                         }
                     }
 
-                    "moov", "udta", "ilst", "----" -> {
+                    "moov", "udta", "ilst" -> {
                         walk(
                             offset + headerSize,
                             atomEnd,
                             depth + 1,
-                            lyricContext || type == "----"
+                            lyricContext
                         )
                     }
 
-                    "©lyr" -> {
-                        walk(
+                    "----" -> {
+                        readFreeformLyrics(
                             offset + headerSize,
-                            atomEnd,
-                            depth + 1,
-                            true
-                        )
-                        if (result == null) {
-                            result = readDataAtom(offset, atomEnd)
+                            atomEnd
+                        )?.let { result = it }
+                    }
+
+                    "©lyr" -> {
+                        val text = readDataAtom(offset, atomEnd)
+                        if (text != null) {
+                            result = text
                         }
                     }
 
@@ -416,11 +496,9 @@ object LyricsLoader {
                         val text = readDataAtom(offset, atomEnd)
                         if (
                             text != null &&
-                            (
-                                lyricContext ||
-                                    text.contains("<tt", true) ||
-                                    text.contains("[00:", true) ||
-                                    text.contains("[0:", true)
+                            lyricContext &&
+                            isPlausibleLyricsText(
+                                text.lines()
                             )
                         ) {
                             result = text
@@ -433,7 +511,9 @@ object LyricsLoader {
         }
 
         walk(0, bytes.size, 0)
-        return result ?: extractTaggedText(bytes, "LYRICS")
+        return result?.takeIf {
+            isPlausibleLyricsText(it.lines())
+        } ?: extractTaggedText(bytes, "LYRICS")
     }
 
     private fun findEmbeddedTtml(bytes: ByteArray): String? {
@@ -692,15 +772,37 @@ object LyricsLoader {
                 }
         }
 
-        return normalized
+        val plainLines = normalized
             .lineSequence()
             .map { it.trim() }
             .filter { it.isNotBlank() }
+            .toList()
+
+        // Do not mistake a title, artist, track number or other single
+        // metadata value for lyrics.
+        if (!isPlausibleLyricsText(plainLines)) return null
+
+        return plainLines
             .mapIndexed { index, text ->
                 LyricLine(index * 4_000L, (index + 1) * 4_000L, text)
             }
             .toList()
-            .takeIf { it.isNotEmpty() }
+    }
+
+    private fun isPlausibleLyricsText(lines: List<String>): Boolean {
+        if (lines.isEmpty()) return false
+
+        val text = lines.joinToString("\n").trim()
+        if (text.length < 24) return false
+
+        val letters = text.count { Character.isLetter(it) }
+        val digits = text.count { Character.isDigit(it) }
+        if (letters < 12) return false
+        if (digits > letters * 2) return false
+
+        // A real lyric payload normally contains multiple lines or enough text
+        // to be clearly more than a single metadata label.
+        return lines.size >= 2 || text.length >= 70
     }
 
     private fun parseUslt(data: ByteArray): List<LyricLine>? {
