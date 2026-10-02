@@ -7,7 +7,8 @@ import android.net.Uri
 
 data class AudioCodecInfo(
     val codecName: String,
-    val sampleRateHz: Int?
+    val sampleRateHz: Int?,
+    val bitDepth: Int?
 )
 
 object AudioCodecLoader {
@@ -36,6 +37,20 @@ object AudioCodecLoader {
                     null
                 }
 
+                val bitDepth = when {
+                    format.containsKey(MediaFormat.KEY_BITS_PER_SAMPLE) ->
+                        runCatching { format.getInteger(MediaFormat.KEY_BITS_PER_SAMPLE) }.getOrNull()
+                    format.containsKey(MediaFormat.KEY_PCM_ENCODING) ->
+                        when (runCatching { format.getInteger(MediaFormat.KEY_PCM_ENCODING) }.getOrNull()) {
+                            android.media.AudioFormat.ENCODING_PCM_8BIT -> 8
+                            android.media.AudioFormat.ENCODING_PCM_16BIT -> 16
+                            android.media.AudioFormat.ENCODING_PCM_24BIT_PACKED -> 24
+                            android.media.AudioFormat.ENCODING_PCM_32BIT -> 32
+                            else -> null
+                        }
+                    else -> null
+                }
+
                 val codec = when {
                     mime.contains("flac") -> "FLAC"
                     mime.contains("alac") -> "Apple Lossless"
@@ -51,7 +66,7 @@ object AudioCodecLoader {
                     else -> mime.removePrefix("audio/").uppercase()
                 }
 
-                return@withContext AudioCodecInfo(codec, sampleRate)
+                return@withContext AudioCodecInfo(codec, sampleRate, bitDepth)
             }
 
             null
