@@ -161,7 +161,7 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        window.decorView.post { hideStatusBar() }
+        window.decorView.post { hideSystemBars() }
     }
 
     private fun loadSongs() {
@@ -228,16 +228,19 @@ class MainActivity : ComponentActivity() {
         startActivity(Intent.createChooser(intent, "Share song"))
     }
 
-    private fun hideStatusBar() {
+    private fun hideSystemBars() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             val insetsController = window.decorView.windowInsetsController ?: return
-            insetsController.hide(WindowInsets.Type.statusBars())
+            insetsController.hide(WindowInsets.Type.systemBars())
             insetsController.systemBarsBehavior =
                 WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         } else {
             @Suppress("DEPRECATION")
             window.decorView.systemUiVisibility =
-                window.decorView.systemUiVisibility or View.SYSTEM_UI_FLAG_FULLSCREEN
+                window.decorView.systemUiVisibility or
+                    View.SYSTEM_UI_FLAG_FULLSCREEN or
+                    View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
         }
     }
 
