@@ -818,11 +818,6 @@ private fun NusaMusicApp(
                     translationY = floatingOffset
                 }
         ) {
-            Surface(
-                shape = RoundedCornerShape(50),
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                tonalElevation = 3.dp
-            ) {
                 Row(
                     modifier = Modifier.padding(3.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -931,7 +926,6 @@ private fun NusaMusicApp(
                         }
                     }
                 }
-            }
         }
 
         if (lyricsVisible) {
