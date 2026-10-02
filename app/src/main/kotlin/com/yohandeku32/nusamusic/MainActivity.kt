@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.content.Intent
 import android.graphics.Bitmap
 import android.os.Build
+import java.util.Locale
 import android.os.Bundle
 import android.view.View
 import android.view.WindowInsets
@@ -621,7 +622,7 @@ private fun AudioCodecPill(song: Song?) {
                     if (sampleRate % 1000 == 0) {
                         (sampleRate / 1000).toString() + " kHz"
                     } else {
-                        String.format("%.1f kHz", sampleRate / 1000f)
+                        String.format(Locale.US, "%.1f kHz", sampleRate / 1000f)
                     }
                 )
             }
