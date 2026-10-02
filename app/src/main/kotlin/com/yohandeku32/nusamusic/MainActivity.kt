@@ -13,9 +13,6 @@ import android.view.WindowInsetsController
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -105,14 +102,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // Draw the app edge-to-edge so the Android navigation area does not
-        // create a visible bottom boundary while the library is scrolling.
-        WindowCompat.setDecorFitsSystemWindows(window, false)
-        window.navigationBarColor = android.graphics.Color.TRANSPARENT
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            window.isNavigationBarContrastEnforced = false
-        }
 
         val permission = if (Build.VERSION.SDK_INT >= 33) {
             Manifest.permission.READ_MEDIA_AUDIO
@@ -239,20 +228,19 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun hideSystemBars() {
-        val controller = WindowInsetsControllerCompat(window, window.decorView)
-        controller.hide(WindowInsetsCompat.Type.systemBars())
-        controller.systemBarsBehavior =
-            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-
-        @Suppress("DEPRECATION")
-        window.decorView.systemUiVisibility =
-            window.decorView.systemUiVisibility or
-                View.SYSTEM_UI_FLAG_FULLSCREEN or
-                View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
-                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
-                View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
-                View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
-                View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val insetsController = window.decorView.windowInsetsController ?: return
+            insetsController.hide(WindowInsets.Type.systemBars())
+            insetsController.systemBarsBehavior =
+                WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        } else {
+            @Suppress("DEPRECATION")
+            window.decorView.systemUiVisibility =
+                window.decorView.systemUiVisibility or
+                    View.SYSTEM_UI_FLAG_FULLSCREEN or
+                    View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+        }
     }
 
     override fun onDestroy() {
@@ -285,11 +273,9 @@ private fun NusaMusicApp(
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
                 title = { },
-                windowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
                 navigationIcon = {
                     ArtistAvatar(
                         song = currentSong,
@@ -313,6 +299,7 @@ private fun NusaMusicApp(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
+                .background(Color.Black)
                 .padding(padding),
             horizontalAlignment = Alignment.CenterHorizontally,
             contentPadding = PaddingValues(0.dp)
@@ -324,6 +311,13 @@ private fun NusaMusicApp(
                     modifier = Modifier
                         .fillMaxWidth()
                         .fillParentMaxHeight()
+                        .clip(
+                            RoundedCornerShape(
+                                bottomStart = 34.dp,
+                                bottomEnd = 34.dp
+                            )
+                        )
+                        .background(MaterialTheme.colorScheme.background)
                         .padding(horizontal = 22.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
@@ -507,94 +501,15 @@ private fun NusaMusicApp(
                     }
                 }
 
-                // Curved black library sheet. The top edge dips in the center
-                // so it matches the rounded "bottom sheet" look of the reference.
+                // Black library content begins directly below the white player panel.
+                // The player's rounded bottom corners create the only curve.
                 item {
-                    Box(
+                    Spacer(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(170.dp)
-                            .clip(
-                                RoundedCornerShape(
-                                    topStart = 34.dp,
-                                    topEnd = 34.dp
-                                )
-                            )
+                            .height(18.dp)
                             .background(Color.Black)
-                            .padding(horizontal = 22.dp)
-                            .padding(top = 22.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .width(46.dp)
-                                    .height(5.dp)
-                                    .clip(RoundedCornerShape(50))
-                                    .background(Color(0xFF666666))
-                            )
-
-                            Spacer(Modifier.height(18.dp))
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                ArtworkView(
-                                    song = currentSong,
-                                    maxSizePx = 128,
-                                    modifier = Modifier
-                                        .size(54.dp)
-                                        .clip(RoundedCornerShape(12.dp))
-                                )
-
-                                Spacer(Modifier.width(14.dp))
-
-                                Column(Modifier.weight(1f)) {
-                                    Text(
-                                        currentSong?.title ?: "Nusa Music",
-                                        color = Color.White,
-                                        fontWeight = FontWeight.SemiBold,
-                                        maxLines = 1,
-                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                    )
-                                    Spacer(Modifier.height(2.dp))
-                                    Text(
-                                        currentSong?.artist ?: "Your music library",
-                                        color = Color(0xFF9D9D9D),
-                                        fontSize = 13.sp,
-                                        maxLines = 1,
-                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                    )
-                                }
-
-                                IconButton(
-                                    onClick = { isFavorite = !isFavorite },
-                                    enabled = currentSong != null,
-                                    modifier = Modifier.size(42.dp)
-                                ) {
-                                    Icon(
-                                        if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                        contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
-                                        tint = if (isFavorite) Color(0xFFC62828) else Color.White
-                                    )
-                                }
-                            }
-
-                            Spacer(Modifier.height(18.dp))
-
-                            Text(
-                                "ALL SONGS",
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 12.sp,
-                                letterSpacing = 1.5.sp,
-                                modifier = Modifier.align(Alignment.Start)
-                            )
-                        }
-                    }
+                    )
                 }
 
             // Lazy rendering: with hundreds of songs, only visible rows are
