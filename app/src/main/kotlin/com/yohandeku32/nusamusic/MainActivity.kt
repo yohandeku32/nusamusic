@@ -27,12 +27,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.LinearEasing
@@ -86,12 +81,10 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -586,20 +579,25 @@ private fun NusaMusicApp(
                                         contentAlignment = Alignment.Center
                                     ) {
                                         val titleText = currentSong?.title ?: "Choose a song"
-                                        val titleWordCount = titleText
-                                            .trim()
-                                            .split(Regex("\\s+"))
-                                            .count { it.isNotBlank() }
-
-                                        val titleSize = when {
-                                            titleWordCount <= 2 -> 35.sp
-                                            titleWordCount == 3 -> 31.sp
-                                            else -> 28.sp
+                                        val titleWordCount = remember(titleText) {
+                                            titleText.trim()
+                                                .split(Regex("\\s+"))
+                                                .count { it.isNotBlank() }
                                         }
-                                        val titleLineHeight = when {
-                                            titleWordCount <= 2 -> 37.sp
-                                            titleWordCount == 3 -> 33.sp
-                                            else -> 30.sp
+
+                                        val titleSize = remember(titleWordCount) {
+                                            when {
+                                                titleWordCount <= 2 -> 35.sp
+                                                titleWordCount == 3 -> 31.sp
+                                                else -> 28.sp
+                                            }
+                                        }
+                                        val titleLineHeight = remember(titleWordCount) {
+                                            when {
+                                                titleWordCount <= 2 -> 37.sp
+                                                titleWordCount == 3 -> 33.sp
+                                                else -> 30.sp
+                                            }
                                         }
 
                                         Text(
