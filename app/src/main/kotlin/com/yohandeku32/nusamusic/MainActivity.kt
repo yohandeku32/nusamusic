@@ -6,8 +6,6 @@ import android.content.pm.PackageManager
 import android.content.Intent
 import android.graphics.Bitmap
 import android.os.Build
-import android.graphics.BitmapFactory
-import android.util.Base64
 import java.util.Locale
 import android.os.Bundle
 import android.view.View
@@ -69,6 +67,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -616,26 +615,16 @@ private fun AudioQualityPill(song: Song?) {
 
     val info = codecInfo ?: return
 
-    // Only ALAC/FLAC are shown as Lossless badges. The quality tier is
-    // determined from the actual bits-per-sample value in the audio file:
-    // 24-bit and above = Hi-Res Lossless; below 24-bit = Lossless.
+    // Only ALAC/FLAC receive an Apple-style Lossless badge.
+    // 24-bit and above is Hi-Res Lossless; anything below 24-bit is Lossless.
     val isLossless = info.codecName == "Apple Lossless" || info.codecName == "FLAC"
     if (!isLossless) return
 
-    val isHiRes = (info.bitDepth ?: 16) >= 24
-
-    val logoBitmap = remember {
-        runCatching {
-            val encoded = context.resources
-                .openRawResource(R.raw.apple_lossless_logo)
-                .bufferedReader()
-                .use { it.readText() }
-            val bytes = Base64.decode(encoded, Base64.DEFAULT)
-            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-        }.getOrNull()
+    val label = if ((info.bitDepth ?: 16) >= 24) {
+        "Hi-Res Lossless"
+    } else {
+        "Lossless"
     }
-
-    if (logoBitmap == null) return
 
     androidx.compose.material3.Surface(
         shape = RoundedCornerShape(50),
@@ -644,13 +633,13 @@ private fun AudioQualityPill(song: Song?) {
         modifier = Modifier.padding(top = 4.dp)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {
             androidx.compose.foundation.Image(
-                bitmap = logoBitmap.asImageBitmap(),
-                contentDescription = if (isHiRes) "Hi-Res Lossless" else "Lossless",
+                painter = painterResource(id = R.drawable.apple_lossless_logo),
+                contentDescription = label,
                 contentScale = ContentScale.Fit,
                 colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(
                     MaterialTheme.colorScheme.onSurface
@@ -664,7 +653,7 @@ private fun AudioQualityPill(song: Song?) {
             Spacer(Modifier.width(5.dp))
 
             Text(
-                text = if (isHiRes) "Hi-Res Lossless" else "Lossless",
+                text = label,
                 fontSize = 10.sp,
                 lineHeight = 12.sp,
                 fontWeight = FontWeight.Medium,
