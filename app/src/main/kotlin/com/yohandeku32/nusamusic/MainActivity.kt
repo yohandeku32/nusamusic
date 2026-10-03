@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.net.Uri
+import android.provider.DocumentsContract
 import android.provider.MediaStore
 import java.util.Locale
 import kotlin.random.Random
@@ -71,6 +72,7 @@ import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -152,7 +154,11 @@ class MainActivity : ComponentActivity() {
     private val playbackPrefs: SharedPreferences by lazy {
         getSharedPreferences("playback_state", MODE_PRIVATE)
     }
+    private val libraryPrefs: SharedPreferences by lazy {
+        getSharedPreferences("library_preferences", MODE_PRIVATE)
+    }
     private var lastPersistedPosition = -1L
+    private var selectedMusicFolders by mutableStateOf<List<String>>(emptyList())
     private var isScanningMusic by mutableStateOf(false)
     private var automaticMusicScanJob: Job? = null
 
@@ -173,6 +179,24 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    private val musicFolderPicker =
+        registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+            if (uri == null) return@registerForActivityResult
+
+            runCatching {
+                contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
+
+            val uriString = uri.toString()
+            val updatedFolders = (selectedMusicFolders + uriString).distinct()
+            selectedMusicFolders = updatedFolders
+            persistSelectedMusicFolders(updatedFolders)
+            scanMusic()
+        }
 
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -217,6 +241,11 @@ class MainActivity : ComponentActivity() {
             Manifest.permission.READ_EXTERNAL_STORAGE
         }
 
+        selectedMusicFolders = libraryPrefs
+            .getStringSet("music_folder_uris", emptySet())
+            ?.toList()
+            .orEmpty()
+
         permissionGranted = checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
 
         contentResolver.registerContentObserver(
@@ -225,7 +254,12 @@ class MainActivity : ComponentActivity() {
             musicContentObserver
         )
 
-        if (permissionGranted) loadSongs() else permissionLauncher.launch(permission)
+        if (permissionGranted || selectedMusicFolders.isNotEmpty()) {
+            loadSongs()
+        }
+        if (!permissionGranted) {
+            permissionLauncher.launch(permission)
+        }
 
         val token = SessionToken(this, ComponentName(this, PlaybackService::class.java))
         val future = MediaController.Builder(this, token).buildAsync()
@@ -303,7 +337,10 @@ class MainActivity : ComponentActivity() {
                     shuffleEnabled = shuffleEnabled,
                     repeatMode = repeatMode,
                     isScanningMusic = isScanningMusic,
+                    selectedMusicFolders = selectedMusicFolders,
                     onScanMusic = ::scanMusic,
+                    onSelectMusicFolder = ::openMusicFolderPicker,
+                    onRemoveMusicFolder = ::removeMusicFolder,
                     onRequestPermission = { permissionLauncher.launch(permission) }
                 )
             }
@@ -415,66 +452,109 @@ class MainActivity : ComponentActivity() {
 
         songs = refreshedSongs
 
-        val addedCount = refreshedSongs.count { it.id !in previousIds }
+        val newSongs = if (previousIds.isEmpty()) {
+            emptyList()
+        } else {
+            refreshedSongs.filter { it.id !in previousIds }
+        }
 
         controller?.let { c ->
             syncCurrentSong(c)
             restorePlaybackStateIfNeeded(c)
-            reconcileControllerQueue(c, refreshedSongs)
+
+            // Never clear or rebuild the current Media3 queue during a scan.
+            // Newly discovered tracks are appended only, so the current
+            // playback/playlist position remains intact.
+            if (newSongs.isNotEmpty() && c.mediaItemCount > 0) {
+                val queuedIds = HashSet<Long>(c.mediaItemCount)
+                for (index in 0 until c.mediaItemCount) {
+                    c.getMediaItemAt(index).mediaId.toLongOrNull()?.let {
+                        queuedIds += it
+                    }
+                }
+
+                val queueAdditions = newSongs.filter { it.id !in queuedIds }
+                if (queueAdditions.isNotEmpty()) {
+                    c.addMediaItems(queueAdditions.map(::mediaItemFor))
+                }
+            }
         }
 
-        return addedCount
+        return newSongs.size
     }
 
-    private fun reconcileControllerQueue(
-        c: MediaController,
-        refreshedSongs: List<Song>
-    ) {
-        val validIds = refreshedSongs.asSequence()
-            .map { it.id }
-            .toSet()
+    private fun persistSelectedMusicFolders(folders: List<String>) {
+        libraryPrefs.edit()
+            .putStringSet("music_folder_uris", folders.toSet())
+            .apply()
+    }
 
-        // Remove stale/now-excluded queue items, including tracks that are
-        // below the 10-second library threshold after a fresh scan.
-        for (index in c.mediaItemCount - 1 downTo 0) {
-            val mediaId = c.getMediaItemAt(index).mediaId.toLongOrNull()
-            if (mediaId == null || mediaId !in validIds) {
-                c.removeMediaItem(index)
-            }
+    private fun openMusicFolderPicker() {
+        musicFolderPicker.launch(null)
+    }
+
+    private fun removeMusicFolder(uriString: String) {
+        val updatedFolders = selectedMusicFolders.filterNot { it == uriString }
+        if (updatedFolders.size == selectedMusicFolders.size) return
+
+        runCatching {
+            contentResolver.releasePersistableUriPermission(
+                Uri.parse(uriString),
+                Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
         }
 
-        val queuedIds = HashSet<Long>(c.mediaItemCount)
-        for (index in 0 until c.mediaItemCount) {
-            c.getMediaItemAt(index).mediaId.toLongOrNull()?.let {
-                queuedIds += it
-            }
-        }
+        selectedMusicFolders = updatedFolders
+        persistSelectedMusicFolders(updatedFolders)
+        scanMusic()
+    }
 
-        val missingSongs = refreshedSongs.filter { it.id !in queuedIds }
-        if (missingSongs.isNotEmpty()) {
-            c.addMediaItems(missingSongs.map(::mediaItemFor))
-        }
+    private fun folderDisplayName(uriString: String): String {
+        val treeUri = runCatching { Uri.parse(uriString) }.getOrNull()
+            ?: return "Folder musik"
+
+        val documentId = runCatching {
+            DocumentsContract.getTreeDocumentId(treeUri)
+        }.getOrNull().orEmpty()
+
+        val displayName = documentId
+            .substringAfterLast(':', documentId)
+            .substringAfterLast('/')
+            .takeIf { it.isNotBlank() }
+            ?.let(Uri::decode)
+
+        return displayName ?: "Folder musik"
     }
 
     private fun scanMusic() {
-        if (!permissionGranted || isScanningMusic) return
+        if (isScanningMusic) return
+        if (!permissionGranted && selectedMusicFolders.isEmpty()) {
+            return
+        }
 
         automaticMusicScanJob?.cancel()
         isScanningMusic = true
 
         lifecycleScope.launch {
-            val addedCount = refreshSongs()
+            val result = runCatching { refreshSongs() }
             isScanningMusic = false
 
-            val message = if (addedCount > 0) {
-                if (addedCount == 1) {
-                    "1 lagu baru ditemukan"
-                } else {
-                    "$addedCount lagu baru ditemukan"
+            val message = result.fold(
+                onSuccess = { addedCount ->
+                    if (addedCount > 0) {
+                        if (addedCount == 1) {
+                            "1 lagu baru ditemukan"
+                        } else {
+                            "$addedCount lagu baru ditemukan"
+                        }
+                    } else {
+                        "Perpustakaan musik sudah diperbarui"
+                    }
+                },
+                onFailure = {
+                    "Pemindaian musik gagal"
                 }
-            } else {
-                "Perpustakaan musik sudah diperbarui"
-            }
+            )
 
             android.widget.Toast.makeText(
                 this@MainActivity,
@@ -768,7 +848,10 @@ private fun NusaMusicApp(
     shuffleEnabled: Boolean,
     repeatMode: Int,
     isScanningMusic: Boolean,
+    selectedMusicFolders: List<String>,
     onScanMusic: () -> Unit,
+    onSelectMusicFolder: () -> Unit,
+    onRemoveMusicFolder: (String) -> Unit,
     onRequestPermission: () -> Unit
 ) {
     var isFavorite by remember { mutableStateOf(false) }
@@ -951,7 +1034,145 @@ private fun NusaMusicApp(
                 Spacer(Modifier.height(22.dp))
 
                 Text(
-                    "ABOUT NUSA MUSIC",
+                    "PERPUSTAKAAN MUSIK",
+                    fontSize = 11.sp,
+                    letterSpacing = 1.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(10.dp))
+
+                Surface(
+                    onClick = onSelectMusicFolder,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    tonalElevation = 0.dp
+                ) {
+                    Row(
+                        modifier = Modifier.padding(
+                            horizontal = 16.dp,
+                            vertical = 14.dp
+                        ),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.FolderOpen,
+                            contentDescription = "Pilih folder musik"
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column(
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                "Pilih folder musik",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                "Berikan akses ke folder lokal yang ingin dipindai.",
+                                fontSize = 12.sp,
+                                lineHeight = 17.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                if (selectedMusicFolders.isNotEmpty()) {
+                    Spacer(Modifier.height(10.dp))
+
+                    selectedMusicFolders.forEach { folderUri ->
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 6.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                            tonalElevation = 0.dp
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(
+                                    start = 14.dp,
+                                    end = 6.dp,
+                                    top = 8.dp,
+                                    bottom = 8.dp
+                                ),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Default.FolderOpen,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(Modifier.width(10.dp))
+                                Text(
+                                    folderDisplayName(folderUri),
+                                    modifier = Modifier.weight(1f),
+                                    fontSize = 13.sp,
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                )
+                                IconButton(
+                                    onClick = { onRemoveMusicFolder(folderUri) },
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Close,
+                                        contentDescription = "Hapus folder"
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Surface(
+                    onClick = if (isScanningMusic) ({}) else onScanMusic,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                    color = if (isScanningMusic) {
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                    } else {
+                        MaterialTheme.colorScheme.primary
+                    },
+                    contentColor = if (isScanningMusic) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        MaterialTheme.colorScheme.onPrimary
+                    },
+                    tonalElevation = 0.dp
+                ) {
+                    Row(
+                        modifier = Modifier.padding(
+                            horizontal = 16.dp,
+                            vertical = 14.dp
+                        ),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            Icons.Default.Refresh,
+                            contentDescription = "Scan musik"
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            if (isScanningMusic) {
+                                "Memindai musik…"
+                            } else {
+                                "Scan musik sekarang"
+                            },
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(22.dp))
+
+                Text(
+                    "ABOUT NUSA",
                     fontSize = 11.sp,
                     letterSpacing = 1.5.sp,
                     fontWeight = FontWeight.Bold,
@@ -1399,30 +1620,10 @@ private fun NusaMusicApp(
                                     color = Color.White
                                 )
 
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
+                                Box {
                                     IconButton(
-                                        onClick = {
-                                            if (permissionGranted) {
-                                                onScanMusic()
-                                            } else {
-                                                onRequestPermission()
-                                            }
-                                        },
-                                        enabled = !isScanningMusic
+                                        onClick = { sortMenuExpanded = true }
                                     ) {
-                                        Icon(
-                                            Icons.Default.Refresh,
-                                            contentDescription = "Scan musik",
-                                            tint = Color.White
-                                        )
-                                    }
-
-                                    Box {
-                                        IconButton(
-                                            onClick = { sortMenuExpanded = true }
-                                        ) {
                                             Icon(
                                                 Icons.Default.Sort,
                                                 contentDescription = "Urutkan lagu",
@@ -1475,7 +1676,7 @@ private fun NusaMusicApp(
                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                                 verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                if (permissionGranted && filtered.isNotEmpty()) {
+                                if ((permissionGranted || selectedMusicFolders.isNotEmpty()) && filtered.isNotEmpty()) {
                                     items(
                                         items = filtered,
                                         key = { song -> song.id },
@@ -1488,7 +1689,7 @@ private fun NusaMusicApp(
                                             onPlay = onPlay
                                         )
                                     }
-                                } else if (!permissionGranted) {
+                                } else if (!permissionGranted && selectedMusicFolders.isEmpty()) {
                                     item(span = { GridItemSpan(maxLineSpan) }) {
                                         Column(
                                             modifier = Modifier
@@ -2033,7 +2234,11 @@ private fun AudioQualityPill(song: Song?) {
                         .widthIn(min = 300.dp, max = 352.dp)
                         .padding(horizontal = 18.dp),
                     shape = RoundedCornerShape(28.dp),
-                    color = MaterialTheme.colorScheme.surface,
+                    color = if (isHiRes) {
+                        Color(0xFFDDD0A6)
+                    } else {
+                        MaterialTheme.colorScheme.surface
+                    },
                     tonalElevation = 8.dp,
                     shadowElevation = 18.dp
                 ) {
@@ -2049,7 +2254,11 @@ private fun AudioQualityPill(song: Song?) {
                             text = "Audio Info",
                             fontSize = 21.sp,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = if (isHiRes) {
+                                Color(0xFF3D3728)
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            }
                         )
 
                         Text(
@@ -2057,7 +2266,7 @@ private fun AudioQualityPill(song: Song?) {
                             fontSize = 14.sp,
                             maxLines = 1,
                             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = if (isHiRes) Color(0xFF5A4E2F) else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 3.dp)
                         )
 
@@ -2066,7 +2275,7 @@ private fun AudioQualityPill(song: Song?) {
                             fontSize = 12.sp,
                             maxLines = 1,
                             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f),
+                            color = if (isHiRes) Color(0xFF5A4E2F) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f),
                             modifier = Modifier.padding(top = 1.dp)
                         )
 
