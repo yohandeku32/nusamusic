@@ -90,7 +90,6 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.zIndex
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
@@ -744,7 +743,10 @@ private fun NusaMusicApp(
                                 
                                                                     TopAppBar(
                                                                         title = { },
-                                                                        modifier = Modifier.zIndex(3f),
+                                                                        modifier = Modifier.graphicsLayer {
+                                                                            // The reference immersive player has a clean artwork-only header.
+                                                                            alpha = if (immersiveArtwork) 0f else 1f
+                                                                        },
                                                                         colors = TopAppBarDefaults.topAppBarColors(
                                                                             containerColor = if (immersiveArtwork) {
                                                                                 Color.Transparent
@@ -1315,76 +1317,87 @@ private fun ImmersiveArtwork(
             .background(Color.Transparent)
     ) {
         val slotWidth = maxWidth
-        val slotHeight = maxHeight
-        val screenWidth = LocalConfiguration.current.screenWidthDp.dp
-        val horizontalBleed = (screenWidth - slotWidth) / 2f
 
-        // The artwork visually escapes the 88% player slot, while the slot
-        // itself stays square so the controls below keep their position.
-        val topBleed = 90.dp
-        val bottomBleed = 180.dp
-        val visualHeight = slotHeight + topBleed + bottomBleed
+        // NusaMusic places this slot inside a 22.dp horizontal content inset
+        // and gives it 88% of that available width. Reconstruct the true
+        // edge-to-edge player width from the measured slot instead of relying
+        // on LocalConfiguration, which can differ from the rendered surface
+        // on some Android devices/window modes.
+        val contentWidth = slotWidth / 0.88f
+        val fullArtworkWidth = contentWidth + 44.dp
+        val slotLeft = 22.dp + (contentWidth - slotWidth) / 2f
+
+        // The reference artwork is visibly taller than a plain square player
+        // slot. The extra height is purely visual; the control layout stays put.
+        val artworkHeight = fullArtworkWidth * 1.12f
+        val topBleed = 86.dp
+        val fadeDepth = 300.dp
+        val visualHeight = artworkHeight + topBleed + 40.dp
 
         Box(
             modifier = Modifier
-                .requiredWidth(screenWidth)
+                .requiredWidth(fullArtworkWidth)
                 .requiredHeight(visualHeight)
                 .offset(
-                    x = -horizontalBleed,
+                    x = -slotLeft,
                     y = -topBleed
                 )
                 .graphicsLayer { clip = false }
         ) {
-            // Keep the complete album cover visible, like the reference:
-            // full width, square source, no aggressive crop.
+            // Important: Crop, not Fit. The supplied reference is a close,
+            // edge-to-edge framing of the album artwork with the central
+            // subject larger and the side borders mostly removed.
             ArtworkView(
                 song = song,
                 maxSizePx = 1024,
-                contentScale = ContentScale.Fit,
+                contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .size(screenWidth)
+                    .size(
+                        width = fullArtworkWidth,
+                        height = artworkHeight
+                    )
             )
 
-            // A restrained blurred reflection continues the artwork below the
-            // square cover, producing the soft white shadow visible in the
-            // reference without creating a hard rectangular edge.
+            // Subtle continuation of the lower waves. This is intentionally
+            // faint; the main visual should remain the real cover image, not a
+            // duplicated rectangular reflection.
             ArtworkView(
                 song = song,
                 maxSizePx = 768,
-                contentScale = ContentScale.Fit,
+                contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = screenWidth - 38.dp)
+                    .padding(top = artworkHeight - 70.dp)
                     .fillMaxWidth()
-                    .height(bottomBleed + 48.dp)
+                    .height(fadeDepth)
                     .graphicsLayer {
-                        alpha = 0.17f
-                        scaleY = 1.10f
+                        alpha = 0.14f
+                        scaleY = 1.08f
                     }
-                    .blur(28.dp)
+                    .blur(24.dp)
             )
 
-            // Long feather from the lower artwork into the ivory player
-            // surface. The artwork remains readable before it dissolves.
+            // The white feather begins before the physical bottom of the cover
+            // and dissolves all traces of the reflection into the player surface.
             Box(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = screenWidth - 22.dp)
+                    .padding(top = artworkHeight - 150.dp)
                     .fillMaxWidth()
-                    .height(bottomBleed + 22.dp)
+                    .height(fadeDepth)
                     .background(
                         Brush.verticalGradient(
                             colorStops = arrayOf(
                                 0.00f to Color.Transparent,
-                                0.16f to Color.Transparent,
-                                0.30f to MaterialTheme.colorScheme.background.copy(alpha = 0.025f),
-                                0.44f to MaterialTheme.colorScheme.background.copy(alpha = 0.07f),
-                                0.56f to MaterialTheme.colorScheme.background.copy(alpha = 0.14f),
-                                0.68f to MaterialTheme.colorScheme.background.copy(alpha = 0.28f),
-                                0.79f to MaterialTheme.colorScheme.background.copy(alpha = 0.48f),
-                                0.88f to MaterialTheme.colorScheme.background.copy(alpha = 0.68f),
-                                0.95f to MaterialTheme.colorScheme.background.copy(alpha = 0.86f),
+                                0.15f to Color.Transparent,
+                                0.30f to MaterialTheme.colorScheme.background.copy(alpha = 0.035f),
+                                0.45f to MaterialTheme.colorScheme.background.copy(alpha = 0.08f),
+                                0.58f to MaterialTheme.colorScheme.background.copy(alpha = 0.18f),
+                                0.70f to MaterialTheme.colorScheme.background.copy(alpha = 0.34f),
+                                0.82f to MaterialTheme.colorScheme.background.copy(alpha = 0.56f),
+                                0.91f to MaterialTheme.colorScheme.background.copy(alpha = 0.75f),
+                                0.97f to MaterialTheme.colorScheme.background.copy(alpha = 0.92f),
                                 1.00f to MaterialTheme.colorScheme.background
                             )
                         )
