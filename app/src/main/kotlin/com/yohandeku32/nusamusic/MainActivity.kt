@@ -1064,8 +1064,8 @@ private fun NusaMusicApp(
                                                         translationX = with(density) {
                                                             horizontalShift.dp.toPx()
                                                         }
-                                                        rotationY = rotationY
-                                                        rotationZ = rotationZ
+                                                        this.rotationY = rotationY
+                                                        this.rotationZ = rotationZ
                                                         scaleX = scale
                                                         scaleY = scale
                                                         this.alpha = alpha
