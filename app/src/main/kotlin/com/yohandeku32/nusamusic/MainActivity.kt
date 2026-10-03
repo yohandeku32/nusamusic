@@ -2411,6 +2411,230 @@ private fun ArtworkView(
     }
 }
 
+private data class WornScratch(
+    val x1: Float,
+    val y1: Float,
+    val x2: Float,
+    val y2: Float,
+    val alpha: Float,
+    val width: Float
+)
+
+private data class WornScuff(
+    val x: Float,
+    val y: Float,
+    val radius: Float,
+    val alpha: Float
+)
+
+@Composable
+private fun WornCoverArtwork(
+    song: Song,
+    maxSizePx: Int,
+    modifier: Modifier = Modifier
+) {
+    val scratches = remember(song.id) {
+        val random = Random(song.id.hashCode())
+        List(18) {
+            val edge = random.nextInt(4)
+            when (edge) {
+                0 -> {
+                    val x = random.nextFloat()
+                    val y = random.nextFloat() * 0.18f
+                    WornScratch(
+                        x1 = x,
+                        y1 = y,
+                        x2 = (x + 0.02f + random.nextFloat() * 0.08f).coerceAtMost(1f),
+                        y2 = (y + 0.01f + random.nextFloat() * 0.025f).coerceAtMost(0.22f),
+                        alpha = 0.16f + random.nextFloat() * 0.18f,
+                        width = 0.45f + random.nextFloat() * 0.75f
+                    )
+                }
+                1 -> {
+                    val x = 0.82f + random.nextFloat() * 0.18f
+                    val y = random.nextFloat()
+                    WornScratch(
+                        x1 = x,
+                        y1 = y,
+                        x2 = (x - 0.01f - random.nextFloat() * 0.04f).coerceAtLeast(0f),
+                        y2 = (y + 0.02f + random.nextFloat() * 0.10f).coerceAtMost(1f),
+                        alpha = 0.14f + random.nextFloat() * 0.18f,
+                        width = 0.45f + random.nextFloat() * 0.75f
+                    )
+                }
+                2 -> {
+                    val x = random.nextFloat()
+                    val y = 0.82f + random.nextFloat() * 0.18f
+                    WornScratch(
+                        x1 = x,
+                        y1 = y,
+                        x2 = (x + 0.02f + random.nextFloat() * 0.08f).coerceAtMost(1f),
+                        y2 = (y - 0.01f - random.nextFloat() * 0.03f).coerceAtLeast(0f),
+                        alpha = 0.14f + random.nextFloat() * 0.17f,
+                        width = 0.45f + random.nextFloat() * 0.80f
+                    )
+                }
+                else -> {
+                    val x = random.nextFloat() * 0.18f
+                    val y = random.nextFloat()
+                    WornScratch(
+                        x1 = x,
+                        y1 = y,
+                        x2 = (x + 0.01f + random.nextFloat() * 0.035f).coerceAtMost(1f),
+                        y2 = (y + 0.02f + random.nextFloat() * 0.10f).coerceAtMost(1f),
+                        alpha = 0.14f + random.nextFloat() * 0.18f,
+                        width = 0.45f + random.nextFloat() * 0.80f
+                    )
+                }
+            }
+        }
+    }
+
+    val scuffs = remember(song.id) {
+        val random = Random(song.id.hashCode() xor 0x5A17)
+        List(22) {
+            WornScuff(
+                x = random.nextFloat(),
+                y = random.nextFloat(),
+                radius = 0.7f + random.nextFloat() * 2.2f,
+                alpha = 0.018f + random.nextFloat() * 0.045f
+            )
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(7.dp))
+            .background(Color(0xFF090909))
+            .border(
+                width = 1.dp,
+                color = Color(0xFFB7B7B7).copy(alpha = 0.24f),
+                shape = RoundedCornerShape(7.dp)
+            )
+    ) {
+        // The artwork sits inside a slightly raised black paper sleeve.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(4.dp)
+                .clip(RoundedCornerShape(4.dp))
+        ) {
+            ArtworkView(
+                song = song,
+                maxSizePx = maxSizePx,
+                modifier = Modifier.fillMaxSize()
+            )
+
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val edge = 2.5f
+
+                // Soft dirty-paper vignette.
+                drawRect(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            Color.Black.copy(alpha = 0.08f),
+                            Color.Black.copy(alpha = 0.34f)
+                        ),
+                        center = androidx.compose.ui.geometry.Offset(
+                            size.width * 0.50f,
+                            size.height * 0.48f
+                        ),
+                        radius = size.minDimension * 0.76f
+                    )
+                )
+
+                // Fine edge wear, similar to the scuffed corners of the reference.
+                scratches.forEach { mark ->
+                    drawLine(
+                        color = Color.White.copy(alpha = mark.alpha),
+                        start = androidx.compose.ui.geometry.Offset(
+                            size.width * mark.x1,
+                            size.height * mark.y1
+                        ),
+                        end = androidx.compose.ui.geometry.Offset(
+                            size.width * mark.x2,
+                            size.height * mark.y2
+                        ),
+                        strokeWidth = mark.width
+                    )
+                }
+
+                // Small paper dust/scuff points.
+                scuffs.forEach { dot ->
+                    drawCircle(
+                        color = Color.White.copy(alpha = dot.alpha),
+                        radius = dot.radius,
+                        center = androidx.compose.ui.geometry.Offset(
+                            size.width * dot.x,
+                            size.height * dot.y
+                        )
+                    )
+                }
+
+                // Worn highlights concentrated around the four edges.
+                drawLine(
+                    color = Color.White.copy(alpha = 0.18f),
+                    start = androidx.compose.ui.geometry.Offset(
+                        1f,
+                        edge + size.height * 0.12f
+                    ),
+                    end = androidx.compose.ui.geometry.Offset(
+                        1f,
+                        edge + size.height * 0.35f
+                    ),
+                    strokeWidth = 1.3f
+                )
+                drawLine(
+                    color = Color.White.copy(alpha = 0.15f),
+                    start = androidx.compose.ui.geometry.Offset(
+                        size.width - 1f,
+                        size.height * 0.54f
+                    ),
+                    end = androidx.compose.ui.geometry.Offset(
+                        size.width - 1f,
+                        size.height * 0.76f
+                    ),
+                    strokeWidth = 1.2f
+                )
+                drawLine(
+                    color = Color.White.copy(alpha = 0.16f),
+                    start = androidx.compose.ui.geometry.Offset(
+                        size.width * 0.44f,
+                        1f
+                    ),
+                    end = androidx.compose.ui.geometry.Offset(
+                        size.width * 0.70f,
+                        1f
+                    ),
+                    strokeWidth = 1.25f
+                )
+                drawLine(
+                    color = Color.White.copy(alpha = 0.14f),
+                    start = androidx.compose.ui.geometry.Offset(
+                        size.width * 0.15f,
+                        size.height - 1f
+                    ),
+                    end = androidx.compose.ui.geometry.Offset(
+                        size.width * 0.34f,
+                        size.height - 1f
+                    ),
+                    strokeWidth = 1.1f
+                )
+            }
+        }
+
+        // Slight paper rim: this is intentionally subtle, not a white border.
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(2.dp)
+                .align(Alignment.TopCenter)
+                .background(Color.White.copy(alpha = 0.10f))
+        )
+    }
+}
+
 @Composable
 private fun LibrarySongRow(
     song: Song,
@@ -2504,12 +2728,10 @@ private fun LibrarySongRow(
                         .background(Color(0xFF0A0A0A))
                         .padding(2.dp)
                 ) {
-                    ArtworkView(
+                    WornCoverArtwork(
                         song = song,
                         maxSizePx = 320,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(RoundedCornerShape(5.dp))
+                        modifier = Modifier.fillMaxSize()
                     )
                 }
             }
