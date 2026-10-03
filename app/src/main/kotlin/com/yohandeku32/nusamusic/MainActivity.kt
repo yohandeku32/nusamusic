@@ -514,6 +514,103 @@ private fun ChatGptStyleShareIcon(
     }
 }
 
+@Composable
+private fun BiographyArrowIcon(
+    modifier: Modifier = Modifier
+) {
+    val color = androidx.compose.material3.LocalContentColor.current
+
+    Canvas(modifier = modifier) {
+        val stroke = size.minDimension * 0.105f
+        val centerX = size.width / 2f
+        val centerY = size.height / 2f
+        val half = size.width * 0.22f
+
+        drawLine(
+            color = color,
+            start = androidx.compose.ui.geometry.Offset(centerX - half, centerY - half * 0.35f),
+            end = androidx.compose.ui.geometry.Offset(centerX, centerY + half * 0.65f),
+            strokeWidth = stroke,
+            cap = androidx.compose.ui.graphics.StrokeCap.Round
+        )
+        drawLine(
+            color = color,
+            start = androidx.compose.ui.geometry.Offset(centerX, centerY + half * 0.65f),
+            end = androidx.compose.ui.geometry.Offset(centerX + half, centerY - half * 0.35f),
+            strokeWidth = stroke,
+            cap = androidx.compose.ui.graphics.StrokeCap.Round
+        )
+    }
+}
+
+@Composable
+private fun NusaFavoriteIcon(
+    selected: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val color = if (selected) {
+        Color(0xFFFF4F6D)
+    } else {
+        androidx.compose.material3.LocalContentColor.current
+    }
+
+    Canvas(modifier = modifier) {
+        val path = androidx.compose.ui.graphics.Path().apply {
+            moveTo(size.width * 0.50f, size.height * 0.87f)
+            cubicTo(
+                size.width * 0.43f,
+                size.height * 0.80f,
+                size.width * 0.12f,
+                size.height * 0.61f,
+                size.width * 0.12f,
+                size.height * 0.35f
+            )
+            cubicTo(
+                size.width * 0.12f,
+                size.height * 0.15f,
+                size.width * 0.34f,
+                size.height * 0.08f,
+                size.width * 0.50f,
+                size.height * 0.28f
+            )
+            cubicTo(
+                size.width * 0.66f,
+                size.height * 0.08f,
+                size.width * 0.88f,
+                size.height * 0.15f,
+                size.width * 0.88f,
+                size.height * 0.35f
+            )
+            cubicTo(
+                size.width * 0.88f,
+                size.height * 0.61f,
+                size.width * 0.57f,
+                size.height * 0.80f,
+                size.width * 0.50f,
+                size.height * 0.87f
+            )
+            close()
+        }
+
+        if (selected) {
+            drawPath(
+                path = path,
+                color = color
+            )
+        } else {
+            drawPath(
+                path = path,
+                color = color,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(
+                    width = size.minDimension * 0.075f,
+                    cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                    join = androidx.compose.ui.graphics.StrokeJoin.Round
+                )
+            )
+        }
+    }
+}
+
 private enum class LibrarySortOption(val label: String) {
     TITLE_ASC("Judul A–Z"),
     TITLE_DESC("Judul Z–A"),
@@ -546,6 +643,7 @@ private fun NusaMusicApp(
 ) {
     var isFavorite by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
+    var biographyExpanded by remember { mutableStateOf(false) }
     var artistBiography by remember(currentSong?.artist) {
         mutableStateOf<com.yohandeku32.nusamusic.data.ArtistBiography?>(null)
     }
@@ -1024,22 +1122,30 @@ private fun NusaMusicApp(
                                             modifier = Modifier.fillMaxWidth(),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
+                                            val biographyArrowRotation by animateFloatAsState(
+                                                targetValue = if (biographyExpanded) 180f else 0f,
+                                                animationSpec = tween(220),
+                                                label = "biographyArrowRotation"
+                                            )
+
                                             IconButton(
                                                 onClick = {
+                                                    biographyExpanded = !biographyExpanded
                                                     scope.launch {
-                                                        // Open the artist biography section directly.
                                                         playerScrollState.animateScrollToItem(
-                                                            index = 1,
+                                                            index = if (biographyExpanded) 1 else 0,
                                                             scrollOffset = 0
                                                         )
                                                     }
                                                 },
                                                 modifier = Modifier.size(42.dp)
                                             ) {
-                                                Icon(
-                                                    Icons.Default.KeyboardArrowDown,
-                                                    contentDescription = "Expand artist biography",
-                                                    modifier = Modifier.size(28.dp)
+                                                BiographyArrowIcon(
+                                                    modifier = Modifier
+                                                        .size(25.dp)
+                                                        .graphicsLayer {
+                                                            rotationZ = biographyArrowRotation
+                                                        }
                                                 )
                                             }
 
@@ -1060,23 +1166,9 @@ private fun NusaMusicApp(
                                                 enabled = currentSong != null,
                                                 modifier = Modifier.size(42.dp)
                                             ) {
-                                                Icon(
-                                                    if (isFavorite) {
-                                                        Icons.Default.Favorite
-                                                    } else {
-                                                        Icons.Default.FavoriteBorder
-                                                    },
-                                                    contentDescription = if (isFavorite) {
-                                                        "Favorite"
-                                                    } else {
-                                                        "Add to favorites"
-                                                    },
-                                                    modifier = Modifier.size(22.dp),
-                                                    tint = if (isFavorite) {
-                                                        Color(0xFFC62828)
-                                                    } else {
-                                                        MaterialTheme.colorScheme.onBackground
-                                                    }
+                                                NusaFavoriteIcon(
+                                                    selected = isFavorite,
+                                                    modifier = Modifier.size(22.dp)
                                                 )
                                             }
                                         }
