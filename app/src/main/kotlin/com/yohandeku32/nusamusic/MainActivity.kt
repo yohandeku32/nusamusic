@@ -469,9 +469,6 @@ private fun NusaMusicApp(
     var titleFontSize by remember {
         mutableStateOf(uiPrefs.getFloat("title_font_size", 34f))
     }
-    var spectrumProgress by remember {
-        mutableStateOf(uiPrefs.getBoolean("spectrum_progress", false))
-    }
     val filtered = songs
 
     val pagerState = androidx.compose.foundation.pager.rememberPagerState(
@@ -576,41 +573,6 @@ private fun NusaMusicApp(
                     lineHeight = 18.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-
-                Spacer(Modifier.height(22.dp))
-
-                Text(
-                    "GAYA PROGRESS BAR",
-                    fontSize = 11.sp,
-                    letterSpacing = 1.5.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(8.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    ProgressStyleOption(
-                        title = "Garis",
-                        selected = !spectrumProgress,
-                        onClick = {
-                            spectrumProgress = false
-                            uiPrefs.edit().putBoolean("spectrum_progress", false).apply()
-                        },
-                        modifier = Modifier.weight(1f)
-                    )
-                    ProgressStyleOption(
-                        title = "Spectrum",
-                        selected = spectrumProgress,
-                        onClick = {
-                            spectrumProgress = true
-                            uiPrefs.edit().putBoolean("spectrum_progress", true).apply()
-                        },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
 
                 Spacer(Modifier.height(22.dp))
 
@@ -839,8 +801,6 @@ private fun NusaMusicApp(
                                             durationMs = durationMs,
                                             enabled = currentSong != null && durationMs > 0L,
                                             onSeek = onSeek,
-                                            spectrum = spectrumProgress,
-                                            isPlaying = isPlaying,
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .padding(horizontal = 12.dp)
@@ -1530,8 +1490,6 @@ private fun SimpleProgressBar(
     durationMs: Long,
     enabled: Boolean,
     onSeek: (Long) -> Unit,
-    spectrum: Boolean = false,
-    isPlaying: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val fraction = if (durationMs > 0L) {
@@ -1539,60 +1497,35 @@ private fun SimpleProgressBar(
     } else {
         0f
     }
-
-    if (spectrum) {
-        SpectrumProgressBar(
-            fraction = fraction,
-            phaseMs = positionMs,
-            enabled = enabled,
-            isPlaying = isPlaying,
-            onSeek = { seekFraction ->
-                onSeek((seekFraction * durationMs).toLong())
-            },
-            modifier = modifier
-        )
-    } else {
-        LineProgressBar(
-            fraction = fraction,
-            enabled = enabled,
-            onSeek = { seekFraction ->
-                onSeek((seekFraction * durationMs).toLong())
-            },
-            modifier = modifier
-        )
-    }
-}
-
-@Composable
-private fun LineProgressBar(
-    fraction: Float,
-    enabled: Boolean,
-    onSeek: (Float) -> Unit,
-    modifier: Modifier = Modifier
-) {
     val primary = MaterialTheme.colorScheme.primary
 
-    Canvas(
+    androidx.compose.foundation.Canvas(
         modifier = modifier
             .height(28.dp)
-            .pointerInput(enabled) {
-                if (enabled) {
+            .pointerInput(durationMs, enabled) {
+                if (enabled && durationMs > 0L) {
                     detectTapGestures { offset ->
-                        onSeek((offset.x / size.width.toFloat()).coerceIn(0f, 1f))
+                        val tappedFraction =
+                            (offset.x / size.width.toFloat()).coerceIn(0f, 1f)
+                        onSeek((tappedFraction * durationMs).toLong())
                     }
                 }
             }
-            .pointerInput(enabled) {
-                if (enabled) {
+            .pointerInput(durationMs, enabled) {
+                if (enabled && durationMs > 0L) {
                     detectDragGestures(
                         onDragStart = { offset ->
-                            onSeek((offset.x / size.width.toFloat()).coerceIn(0f, 1f))
+                            val fraction =
+                                (offset.x / size.width.toFloat()).coerceIn(0f, 1f)
+                            onSeek((fraction * durationMs).toLong())
                         },
                         onDragEnd = {},
                         onDragCancel = {},
                         onDrag = { change, _ ->
                             change.consume()
-                            onSeek((change.position.x / size.width.toFloat()).coerceIn(0f, 1f))
+                            val fraction =
+                                (change.position.x / size.width.toFloat()).coerceIn(0f, 1f)
+                            onSeek((fraction * durationMs).toLong())
                         }
                     )
                 }
@@ -1620,110 +1553,6 @@ private fun LineProgressBar(
             radius = 3.2.dp.toPx(),
             center = androidx.compose.ui.geometry.Offset(size.width * fraction, y)
         )
-    }
-}
-
-@Composable
-private fun SpectrumProgressBar(
-    fraction: Float,
-    phaseMs: Long,
-    enabled: Boolean,
-    isPlaying: Boolean,
-    onSeek: (Float) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    // Reference-inspired spectrum: a rounded dark-red capsule with fine,
-    // vertically varying bars. The played region turns bright while the
-    // remaining waveform stays muted. It is still a seek bar.
-    val amplitudes = remember {
-        floatArrayOf(
-            0.60f, 0.92f, 0.44f, 0.78f, 0.52f, 0.98f, 0.38f, 0.74f,
-            0.48f, 0.86f, 0.66f, 0.96f, 0.42f, 0.72f, 0.56f, 0.90f,
-            0.35f, 0.82f, 0.50f, 0.97f, 0.62f, 0.76f, 0.40f, 0.88f,
-            0.54f, 0.93f, 0.46f, 0.70f, 0.58f, 0.84f, 0.34f, 0.76f,
-            0.49f, 0.89f, 0.41f, 0.67f, 0.56f, 0.94f, 0.36f, 0.80f,
-            0.51f, 0.73f, 0.45f, 0.91f, 0.63f, 0.78f, 0.38f, 0.69f,
-            0.57f, 0.86f, 0.43f, 0.95f, 0.52f, 0.74f, 0.48f, 0.82f
-        )
-    }
-
-    fun seekFrom(x: Float, width: Float): Float =
-        (x / width).coerceIn(0f, 1f)
-
-    Canvas(
-        modifier = modifier
-            .height(44.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(Color(0xFF8E2217))
-            .pointerInput(enabled) {
-                if (enabled) {
-                    detectTapGestures { offset ->
-                        onSeek(seekFrom(offset.x, size.width.toFloat()))
-                    }
-                }
-            }
-            .pointerInput(enabled) {
-                if (enabled) {
-                    detectDragGestures(
-                        onDragStart = { offset ->
-                            onSeek(seekFrom(offset.x, size.width.toFloat()))
-                        },
-                        onDragEnd = {},
-                        onDragCancel = {},
-                        onDrag = { change, _ ->
-                            change.consume()
-                            onSeek(seekFrom(change.position.x, size.width.toFloat()))
-                        }
-                    )
-                }
-            }
-    ) {
-        val gap = 1.8.dp.toPx()
-        val usableWidth = size.width - gap * (amplitudes.size - 1)
-        val barWidth = (usableWidth / amplitudes.size).coerceAtLeast(1f)
-        val centerY = size.height / 2f
-        val maxHalfHeight = size.height * 0.40f
-
-        amplitudes.forEachIndexed { index, baseAmplitude ->
-            val position = index.toFloat() / (amplitudes.size - 1).toFloat()
-            val played = position <= fraction
-
-            // Small phase motion while playing. This gives the reference
-            // spectrum a live feel without requiring an audio FFT pipeline.
-            val pulse = if (isPlaying) {
-                val wave = kotlin.math.sin(
-                    index * 0.73f + phaseMs.toFloat() / 170f
-                ).toFloat()
-                0.90f + 0.10f * wave
-            } else {
-                0.96f
-            }
-
-            val halfHeight = (maxHalfHeight * baseAmplitude * pulse)
-                .coerceIn(3.dp.toPx(), maxHalfHeight)
-
-            val x = index * (barWidth + gap) + barWidth / 2f
-
-            drawRoundRect(
-                color = if (played) {
-                    Color.White.copy(alpha = if (enabled) 1f else 0.50f)
-                } else {
-                    Color(0xFFD98279).copy(alpha = 0.48f)
-                },
-                topLeft = androidx.compose.ui.geometry.Offset(
-                    x - barWidth / 2f,
-                    centerY - halfHeight
-                ),
-                size = androidx.compose.ui.geometry.Size(
-                    barWidth,
-                    halfHeight * 2f
-                ),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(
-                    barWidth / 2f,
-                    barWidth / 2f
-                )
-            )
-        }
     }
 }
 
