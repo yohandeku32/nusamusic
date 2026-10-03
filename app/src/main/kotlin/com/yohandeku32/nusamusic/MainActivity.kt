@@ -1182,8 +1182,8 @@ private fun NusaMusicApp(
                                     .fillMaxSize()
                                     .padding(top = 76.dp),
                                 contentPadding = PaddingValues(
-                                    top = 22.dp,
-                                    bottom = 150.dp
+                                    top = 34.dp,
+                                    bottom = 162.dp
                                 )
                             ) {
                                 if (permissionGranted && filtered.isNotEmpty()) {
@@ -1207,25 +1207,49 @@ private fun NusaMusicApp(
                                                 it.offset + it.size / 2f
                                             } ?: viewportCenter
 
-                                        val distance =
+                                        val distancePx =
                                             itemCenter - viewportCenter
-                                        val normalized =
-                                            (distance / 360f).coerceIn(-1f, 1f)
-                                        val distanceAbs = kotlin.math.abs(normalized)
+                                        val arcRadiusDp = 300f
+                                        val arcRadiusPx =
+                                            arcRadiusDp * density.density
+                                        val arcY =
+                                            distancePx.coerceIn(
+                                                -arcRadiusPx,
+                                                arcRadiusPx
+                                            )
 
-                                        // Curved "Explore" scroll: items move along a
-                                        // shallow arc as they approach/leave the center.
-                                        val curve =
-                                            kotlin.math.sin(normalized * Math.PI / 2.0)
+                                        // True semicircle profile:
+                                        // center item sits at the left-most point;
+                                        // items above/below travel around the same circle.
+                                        val insideCircle =
+                                            (arcRadiusPx * arcRadiusPx -
+                                                arcY * arcY)
+                                                .coerceAtLeast(0f)
+                                        val arcX =
+                                            arcRadiusPx - kotlin.math.sqrt(insideCircle)
+
+                                        val angleRadians =
+                                            kotlin.math.asin(
+                                                (arcY / arcRadiusPx)
+                                                    .coerceIn(-1f, 1f)
+                                            )
+                                        val angleDegrees =
+                                            Math.toDegrees(angleRadians.toDouble())
                                                 .toFloat()
-                                        val translationX = -curve * 34f
-                                        val rotationZ = -curve * 13f
+
+                                        val distanceAbs =
+                                            (distancePx / arcRadiusPx)
+                                                .coerceIn(-1f, 1f)
+                                                .let { kotlin.math.abs(it) }
+
+                                        val translationX = arcX
+                                        val rotationZ = -angleDegrees * 0.82f
                                         val scale =
-                                            (0.88f + (1f - distanceAbs) * 0.12f)
-                                                .coerceIn(0.88f, 1f)
+                                            (0.90f + (1f - distanceAbs) * 0.10f)
+                                                .coerceIn(0.90f, 1f)
                                         val alpha =
-                                            (0.58f + (1f - distanceAbs) * 0.42f)
-                                                .coerceIn(0.58f, 1f)
+                                            (0.62f + (1f - distanceAbs) * 0.38f)
+                                                .coerceIn(0.62f, 1f)
 
                                         Box(
                                             modifier = Modifier
@@ -2678,7 +2702,7 @@ private fun LibraryExploreRow(
     selected: Boolean,
     onPlay: (Song) -> Unit
 ) {
-    val artworkSize = if (selected) 82.dp else 72.dp
+    val artworkSize = if (selected) 86.dp else 74.dp
 
     Box(
         modifier = Modifier
