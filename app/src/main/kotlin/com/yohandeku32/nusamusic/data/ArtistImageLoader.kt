@@ -45,7 +45,7 @@ object ArtistImageLoader {
             ?.takeIf { it.isNotEmpty() }
             ?: return@withContext null
 
-        val queryArtist = leadArtistName(artist)
+        val queryArtist = ArtistNameUtils.firstArtist(artist)
         if (queryArtist.isBlank()) return@withContext null
 
         val cacheKey = normalize(queryArtist)
@@ -68,12 +68,6 @@ object ArtistImageLoader {
         }
 
         null
-    }
-
-    private fun leadArtistName(raw: String): String {
-        return raw
-            .replace(Regex("(?i)\\s+(feat\\.?|ft\\.?|featuring)\\s+.*$"), "")
-            .trim()
     }
 
     private fun normalize(value: String): String {
