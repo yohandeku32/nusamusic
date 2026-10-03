@@ -1053,7 +1053,9 @@ private fun NusaMusicApp(
                                                     scaleX = scale
                                                     scaleY = scale
                                                     this.alpha = alpha
-                                                    shadowElevation = (4f + centerProximity * 10f).dp.toPx()
+                                                    shadowElevation = with(density) {
+                                                        (4f + centerProximity * 10f).dp.toPx()
+                                                    }
                                                     cameraDistance = 26f * density.density
                                                 }
                                         ) {
