@@ -1343,23 +1343,25 @@ private fun ImmersiveArtwork(
                     }
             )
 
-            // Move the dissolve lower so more of the artwork remains visible
-            // before it softly transitions into the existing white background.
+            // Keep the artwork exactly where it is. The fade is a separate
+            // visual layer that extends below the artwork slot into the white
+            // area, so the artwork itself is never pushed downward.
             Box(
                 modifier = Modifier
-                    .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .fillMaxHeight(0.54f)
+                    .height(250.dp)
+                    .offset(y = maxHeight * 0.40f)
                     .background(
                         Brush.verticalGradient(
                             colorStops = arrayOf(
                                 0.00f to Color.Transparent,
-                                0.18f to Color.Transparent,
-                                0.34f to MaterialTheme.colorScheme.background.copy(alpha = 0.06f),
-                                0.50f to MaterialTheme.colorScheme.background.copy(alpha = 0.16f),
-                                0.66f to MaterialTheme.colorScheme.background.copy(alpha = 0.34f),
-                                0.80f to MaterialTheme.colorScheme.background.copy(alpha = 0.58f),
-                                0.92f to MaterialTheme.colorScheme.background.copy(alpha = 0.84f),
+                                0.16f to Color.Transparent,
+                                0.30f to MaterialTheme.colorScheme.background.copy(alpha = 0.035f),
+                                0.46f to MaterialTheme.colorScheme.background.copy(alpha = 0.10f),
+                                0.62f to MaterialTheme.colorScheme.background.copy(alpha = 0.22f),
+                                0.76f to MaterialTheme.colorScheme.background.copy(alpha = 0.42f),
+                                0.88f to MaterialTheme.colorScheme.background.copy(alpha = 0.72f),
+                                0.96f to MaterialTheme.colorScheme.background.copy(alpha = 0.92f),
                                 1.00f to MaterialTheme.colorScheme.background
                             )
                         )
