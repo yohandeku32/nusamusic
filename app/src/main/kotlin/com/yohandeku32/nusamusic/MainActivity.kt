@@ -975,7 +975,7 @@ private fun NusaMusicApp(
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(MaterialTheme.colorScheme.background)
+                                .background(Color.Black)
                         ) {
                             LazyColumn(
                                 state = libraryListState,
