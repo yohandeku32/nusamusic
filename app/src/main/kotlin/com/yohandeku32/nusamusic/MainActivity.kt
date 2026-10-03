@@ -509,23 +509,6 @@ class MainActivity : ComponentActivity() {
         scanMusic()
     }
 
-    private fun folderDisplayName(uriString: String): String {
-        val treeUri = runCatching { Uri.parse(uriString) }.getOrNull()
-            ?: return "Folder musik"
-
-        val documentId = runCatching {
-            DocumentsContract.getTreeDocumentId(treeUri)
-        }.getOrNull().orEmpty()
-
-        val displayName = documentId
-            .substringAfterLast(':', documentId)
-            .substringAfterLast('/')
-            .takeIf { it.isNotBlank() }
-            ?.let(Uri::decode)
-
-        return displayName ?: "Folder musik"
-    }
-
     private fun scanMusic() {
         if (isScanningMusic) return
         if (!permissionGranted && selectedMusicFolders.isEmpty()) {
@@ -648,6 +631,23 @@ class MainActivity : ComponentActivity() {
         controller = null
         super.onDestroy()
     }
+}
+
+private fun displayMusicFolderName(uriString: String): String {
+    val treeUri = runCatching { Uri.parse(uriString) }.getOrNull()
+        ?: return "Folder musik"
+
+    val documentId = runCatching {
+        DocumentsContract.getTreeDocumentId(treeUri)
+    }.getOrNull().orEmpty()
+
+    val displayName = documentId
+        .substringAfterLast(':', documentId)
+        .substringAfterLast('/')
+        .takeIf { it.isNotBlank() }
+        ?.let { Uri.decode(it) }
+
+    return displayName ?: "Folder musik"
 }
 
 @Composable
@@ -1108,7 +1108,7 @@ private fun NusaMusicApp(
                                 )
                                 Spacer(Modifier.width(10.dp))
                                 Text(
-                                    folderDisplayName(folderUri),
+                                    displayMusicFolderName(folderUri),
                                     modifier = Modifier.weight(1f),
                                     fontSize = 13.sp,
                                     maxLines = 1,
@@ -2281,13 +2281,29 @@ private fun AudioQualityPill(song: Song?) {
 
                         Spacer(Modifier.height(16.dp))
 
-                        MetadataRow("Codec", info.codecName)
-                        MetadataDivider()
-                        MetadataRow("Sample rate", formatSampleRate(info.sampleRateHz))
-                        MetadataDivider()
-                        MetadataRow("Bit depth", formatBitDepth(info.bitDepth))
-                        MetadataDivider()
-                        MetadataRow("Durasi", formatTime(song.durationMs))
+                        MetadataRow(
+                            label = "Codec",
+                            value = info.codecName,
+                            hiRes = isHiRes
+                        )
+                        MetadataDivider(hiRes = isHiRes)
+                        MetadataRow(
+                            label = "Sample rate",
+                            value = formatSampleRate(info.sampleRateHz),
+                            hiRes = isHiRes
+                        )
+                        MetadataDivider(hiRes = isHiRes)
+                        MetadataRow(
+                            label = "Bit depth",
+                            value = formatBitDepth(info.bitDepth),
+                            hiRes = isHiRes
+                        )
+                        MetadataDivider(hiRes = isHiRes)
+                        MetadataRow(
+                            label = "Durasi",
+                            value = formatTime(song.durationMs),
+                            hiRes = isHiRes
+                        )
 
                         Spacer(Modifier.height(12.dp))
 
@@ -2335,8 +2351,20 @@ private fun formatBitDepth(bitDepth: Int?): String {
 @Composable
 private fun MetadataRow(
     label: String,
-    value: String
+    value: String,
+    hiRes: Boolean = false
 ) {
+    val labelColor = if (hiRes) {
+        Color(0xFF6B5B38)
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    val valueColor = if (hiRes) {
+        Color(0xFF3D3728)
+    } else {
+        MaterialTheme.colorScheme.onSurface
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -2347,7 +2375,7 @@ private fun MetadataRow(
             text = label,
             fontSize = 12.sp,
             fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = labelColor,
             modifier = Modifier.weight(1f)
         )
 
@@ -2355,7 +2383,7 @@ private fun MetadataRow(
             text = value,
             fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = valueColor,
             textAlign = TextAlign.End,
             maxLines = 1,
             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
@@ -2365,9 +2393,13 @@ private fun MetadataRow(
 }
 
 @Composable
-private fun MetadataDivider() {
+private fun MetadataDivider(hiRes: Boolean = false) {
     androidx.compose.material3.HorizontalDivider(
-        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f),
+        color = if (hiRes) {
+            Color(0xFF3D3728).copy(alpha = 0.16f)
+        } else {
+            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f)
+        },
         thickness = 1.dp
     )
 }
