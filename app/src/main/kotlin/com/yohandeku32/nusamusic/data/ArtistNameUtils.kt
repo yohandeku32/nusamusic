@@ -3,8 +3,9 @@ package com.yohandeku32.nusamusic.data
 /**
  * Returns the first artist name from metadata that contains multiple artists.
  *
- * Common collaboration separators are handled while preserving normal artist
- * names that contain an ampersand, e.g. "Simon & Garfunkel".
+ * Common collaboration separators are handled. Ampersand is also treated as
+ * a collaboration separator because this project prioritizes resolving the
+ * first artist for biography and portrait lookup.
  */
 object ArtistNameUtils {
 
