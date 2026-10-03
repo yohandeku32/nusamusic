@@ -6,6 +6,10 @@ import android.provider.MediaStore
 import com.yohandeku32.nusamusic.model.Song
 
 class MusicRepository(private val context: Context) {
+    companion object {
+        private const val MIN_TRACK_DURATION_MS = 10_000L
+    }
+
     fun loadSongs(): List<Song> {
         val songs = mutableListOf<Song>()
         val collection = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
@@ -30,13 +34,20 @@ class MusicRepository(private val context: Context) {
 
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idCol)
+                val durationMs = cursor.getLong(durationCol)
+
+                // Nusa intentionally excludes clips under 10 seconds so
+                // notification sounds, UI effects and other short audio
+                // assets do not pollute the music library.
+                if (durationMs < MIN_TRACK_DURATION_MS) continue
+
                 songs += Song(
                     id = id,
                     title = cursor.getString(titleCol) ?: "Unknown title",
                     artist = cursor.getString(artistCol) ?: "Unknown artist",
                     album = cursor.getString(albumCol) ?: "Unknown album",
                     uri = ContentUris.withAppendedId(collection, id).toString(),
-                    durationMs = cursor.getLong(durationCol),
+                    durationMs = durationMs,
                     albumId = cursor.getLong(albumIdCol)
                 )
             }
