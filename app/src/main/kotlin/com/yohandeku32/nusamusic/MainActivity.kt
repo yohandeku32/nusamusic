@@ -2473,6 +2473,7 @@ private fun ArtworkView(
     monochrome: Boolean = false
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
+    val density = androidx.compose.ui.platform.LocalDensity.current
     var bitmap by remember { mutableStateOf<Bitmap?>(null) }
 
     LaunchedEffect(song?.uri, maxSizePx) {
@@ -2680,7 +2681,7 @@ private fun WornCoverArtwork(
         modifier = modifier
             .clip(RoundedCornerShape(8.dp))
             .graphicsLayer {
-                shadowElevation = with(androidx.compose.ui.platform.LocalDensity.current) {
+                shadowElevation = with(density) {
                     2.5.dp.toPx()
                 }
                 shape = RoundedCornerShape(8.dp)
