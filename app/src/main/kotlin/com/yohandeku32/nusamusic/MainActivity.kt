@@ -89,6 +89,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
@@ -742,6 +743,7 @@ private fun NusaMusicApp(
                                 
                                                                     TopAppBar(
                                                                         title = { },
+                                                                        modifier = Modifier.zIndex(2f),
                                                                         colors = TopAppBarDefaults.topAppBarColors(
                                                                             containerColor = if (immersiveArtwork) {
                                                                                 Color.Transparent
@@ -1313,21 +1315,27 @@ private fun ImmersiveArtwork(
         modifier = modifier
             .background(Color.Transparent)
     ) {
-        // The parent slot is intentionally still the same 88% square used by
-        // Vinyl. We derive the real full-bleed width from that measured slot so
-        // the artwork reaches both physical screen edges without leaving a side
-        // strip.
+        // Keep the measured slot identical to the Vinyl slot. The artwork is
+        // allowed to overflow visually so the layout below never moves.
         val slotWidth = maxWidth
         val innerPlayerWidth = slotWidth / 0.88f
         val fullBleedWidth = innerPlayerWidth + 44.dp
         val horizontalBleed = (fullBleedWidth - slotWidth) / 2f
-        val fadeOffset = maxHeight * 0.40f
+
+        // These are visual bleed values only. They do not change this
+        // composable's measured height.
+        val topBleed = 92.dp
+        val bottomBleed = 150.dp
+        val visualHeight = maxHeight + topBleed + bottomBleed
 
         Box(
             modifier = Modifier
                 .requiredWidth(fullBleedWidth)
-                .fillMaxHeight()
-                .offset(x = -horizontalBleed)
+                .requiredHeight(visualHeight)
+                .offset(
+                    x = -horizontalBleed,
+                    y = -topBleed
+                )
         ) {
             ArtworkView(
                 song = song,
@@ -1335,34 +1343,36 @@ private fun ImmersiveArtwork(
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
-                        // Zoom the cover in place while keeping the measured
-                        // height equal to the Vinyl slot.
-                        val immersiveScale = 1.45f
+                        // Gentle crop/zoom, similar to the immersive player
+                        // reference: the artwork fills the width while staying
+                        // visually close to the original album composition.
+                        val immersiveScale = 1.12f
                         scaleX = immersiveScale
                         scaleY = immersiveScale
-                        translationY = -(size.height * (immersiveScale - 1f))
+                        translationY = -(size.height * 0.055f)
                     }
             )
 
-            // Keep the artwork exactly where it is. The fade is a separate
-            // visual layer that extends below the artwork slot into the white
-            // area, so the artwork itself is never pushed downward.
+            // Long feathered fade over the artwork itself. Because the artwork
+            // extends below the slot, the image keeps fading naturally rather
+            // than ending in a hard horizontal edge.
             Box(
                 modifier = Modifier
+                    .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .height(250.dp)
-                    .offset(y = fadeOffset)
+                    .height(240.dp)
                     .background(
                         Brush.verticalGradient(
                             colorStops = arrayOf(
                                 0.00f to Color.Transparent,
-                                0.16f to Color.Transparent,
-                                0.30f to MaterialTheme.colorScheme.background.copy(alpha = 0.035f),
-                                0.46f to MaterialTheme.colorScheme.background.copy(alpha = 0.10f),
-                                0.62f to MaterialTheme.colorScheme.background.copy(alpha = 0.22f),
-                                0.76f to MaterialTheme.colorScheme.background.copy(alpha = 0.42f),
-                                0.88f to MaterialTheme.colorScheme.background.copy(alpha = 0.72f),
-                                0.96f to MaterialTheme.colorScheme.background.copy(alpha = 0.92f),
+                                0.14f to Color.Transparent,
+                                0.28f to MaterialTheme.colorScheme.background.copy(alpha = 0.035f),
+                                0.42f to MaterialTheme.colorScheme.background.copy(alpha = 0.08f),
+                                0.56f to MaterialTheme.colorScheme.background.copy(alpha = 0.18f),
+                                0.68f to MaterialTheme.colorScheme.background.copy(alpha = 0.34f),
+                                0.80f to MaterialTheme.colorScheme.background.copy(alpha = 0.54f),
+                                0.90f to MaterialTheme.colorScheme.background.copy(alpha = 0.74f),
+                                0.96f to MaterialTheme.colorScheme.background.copy(alpha = 0.90f),
                                 1.00f to MaterialTheme.colorScheme.background
                             )
                         )
