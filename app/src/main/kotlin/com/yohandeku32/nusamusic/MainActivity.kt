@@ -1321,6 +1321,7 @@ private fun ImmersiveArtwork(
         val innerPlayerWidth = slotWidth / 0.88f
         val fullBleedWidth = innerPlayerWidth + 44.dp
         val horizontalBleed = (fullBleedWidth - slotWidth) / 2f
+        val fadeOffset = maxHeight * 0.40f
 
         Box(
             modifier = Modifier
@@ -1350,7 +1351,7 @@ private fun ImmersiveArtwork(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(250.dp)
-                    .offset(y = maxHeight * 0.40f)
+                    .offset(y = fadeOffset)
                     .background(
                         Brush.verticalGradient(
                             colorStops = arrayOf(
