@@ -123,6 +123,7 @@ import com.yohandeku32.nusamusic.data.ArtistBiographyLoader
 import com.yohandeku32.nusamusic.data.MusicRepository
 import com.yohandeku32.nusamusic.model.Song
 import com.yohandeku32.nusamusic.playback.PlaybackService
+import com.decent.usbaudio.UsbAudioPermissionHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -154,6 +155,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Claim a connected USB DAC as early as possible so the dedicated
+        // Hi-Res USB audio engine can take control of the device.
+        UsbAudioPermissionHelper.handleIntent(applicationContext, intent)
 
         // Draw the white player surface underneath the hidden status-bar area,
         // while keeping the Android navigation bar visible.
@@ -269,6 +274,12 @@ class MainActivity : ComponentActivity() {
         }
 
         window.decorView.post { hideStatusBar() }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        UsbAudioPermissionHelper.handleIntent(applicationContext, intent)
     }
 
     private fun syncCurrentSong(c: MediaController) {
