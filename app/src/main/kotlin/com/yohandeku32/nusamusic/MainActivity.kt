@@ -140,6 +140,17 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+private fun nusaText(
+    indonesian: String,
+    english: String
+): String {
+    return if (Locale.getDefault().language.equals("id", ignoreCase = true)) {
+        indonesian
+    } else {
+        english
+    }
+}
+
 class MainActivity : ComponentActivity() {
     private var controller: MediaController? = null
     private var songs by mutableStateOf<List<Song>>(emptyList())
@@ -447,7 +458,9 @@ class MainActivity : ComponentActivity() {
             .toSet()
 
         val refreshedSongs = withContext(Dispatchers.IO) {
-            MusicRepository(this@MainActivity).loadSongs()
+            MusicRepository(this@MainActivity).loadSongs(
+                extraFolderUris = selectedMusicFolders.toSet()
+            )
         }
 
         songs = refreshedSongs
@@ -526,16 +539,16 @@ class MainActivity : ComponentActivity() {
                 onSuccess = { addedCount ->
                     if (addedCount > 0) {
                         if (addedCount == 1) {
-                            "1 lagu baru ditemukan"
+                            nusaText("1 lagu baru ditemukan", "1 new song found")
                         } else {
-                            "$addedCount lagu baru ditemukan"
+                            nusaText("$addedCount lagu baru ditemukan", "$addedCount new songs found")
                         }
                     } else {
-                        "Perpustakaan musik sudah diperbarui"
+                        nusaText("Perpustakaan musik sudah diperbarui", "Music library updated")
                     }
                 },
                 onFailure = {
-                    "Pemindaian musik gagal"
+                    nusaText("Pemindaian musik gagal", "Music scan failed")
                 }
             )
 
@@ -600,7 +613,10 @@ class MainActivity : ComponentActivity() {
             type = "text/plain"
             putExtra(Intent.EXTRA_TEXT, shareText)
         }
-        startActivity(Intent.createChooser(intent, "Share song"))
+        startActivity(Intent.createChooser(
+                intent,
+                nusaText("Bagikan lagu", "Share song")
+            ))
     }
 
     private fun hideStatusBar() {
@@ -819,13 +835,19 @@ private fun NusaFavoriteIcon(
     }
 }
 
-private enum class LibrarySortOption(val label: String) {
-    TITLE_ASC("Judul A–Z"),
-    TITLE_DESC("Judul Z–A"),
-    ARTIST_ASC("Artis A–Z"),
-    ALBUM_ASC("Album A–Z"),
-    DURATION_ASC("Durasi terpendek"),
-    DURATION_DESC("Durasi terpanjang")
+private enum class LibrarySortOption(
+    val indonesianLabel: String,
+    val englishLabel: String
+) {
+    TITLE_ASC("Judul A–Z", "Title A–Z"),
+    TITLE_DESC("Judul Z–A", "Title Z–A"),
+    ARTIST_ASC("Artis A–Z", "Artist A–Z"),
+    ALBUM_ASC("Album A–Z", "Album A–Z"),
+    DURATION_ASC("Durasi terpendek", "Shortest duration"),
+    DURATION_DESC("Durasi terpanjang", "Longest duration");
+
+    val label: String
+        get() = nusaText(indonesianLabel, englishLabel)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -985,14 +1007,14 @@ private fun NusaMusicApp(
                     .padding(bottom = 24.dp)
             ) {
                 Text(
-                    "Settings",
+                    nusaText("Pengaturan", "Settings"),
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(Modifier.height(18.dp))
 
                 Text(
-                    "UKURAN JUDUL LAGU",
+                    nusaText("UKURAN JUDUL LAGU", "SONG TITLE SIZE"),
                     fontSize = 11.sp,
                     letterSpacing = 1.5.sp,
                     fontWeight = FontWeight.Bold,
@@ -1025,7 +1047,7 @@ private fun NusaMusicApp(
                 )
 
                 Text(
-                    "Atur besar-kecil judul lagu.",
+                    nusaText("Atur besar-kecil judul lagu.", "Adjust the song title size."),
                     fontSize = 12.sp,
                     lineHeight = 18.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1034,7 +1056,7 @@ private fun NusaMusicApp(
                 Spacer(Modifier.height(22.dp))
 
                 Text(
-                    "PERPUSTAKAAN MUSIK",
+                    nusaText("PERPUSTAKAAN MUSIK", "MUSIC LIBRARY"),
                     fontSize = 11.sp,
                     letterSpacing = 1.5.sp,
                     fontWeight = FontWeight.Bold,
@@ -1058,19 +1080,19 @@ private fun NusaMusicApp(
                     ) {
                         Icon(
                             Icons.Default.FolderOpen,
-                            contentDescription = "Pilih folder musik"
+                            contentDescription = nusaText("Pilih folder musik", "Choose music folder")
                         )
                         Spacer(Modifier.width(12.dp))
                         Column(
                             modifier = Modifier.weight(1f)
                         ) {
                             Text(
-                                "Pilih folder musik",
+                                nusaText("Pilih folder musik", "Choose music folder"),
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
                             Text(
-                                "Berikan akses ke folder lokal yang ingin dipindai.",
+                                nusaText("Berikan akses ke folder lokal yang ingin dipindai.", "Grant access to a local folder to scan."),
                                 fontSize = 12.sp,
                                 lineHeight = 17.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1120,7 +1142,7 @@ private fun NusaMusicApp(
                                 ) {
                                     Icon(
                                         Icons.Default.Close,
-                                        contentDescription = "Hapus folder"
+                                        contentDescription = nusaText("Hapus folder", "Remove folder")
                                     )
                                 }
                             }
@@ -1160,9 +1182,9 @@ private fun NusaMusicApp(
                         Spacer(Modifier.width(8.dp))
                         Text(
                             if (isScanningMusic) {
-                                "Memindai musik…"
+                                nusaText("Memindai musik…", "Scanning music…")
                             } else {
-                                "Scan musik sekarang"
+                                nusaText("Scan musik sekarang", "Scan music now")
                             },
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold
@@ -1173,7 +1195,7 @@ private fun NusaMusicApp(
                 Spacer(Modifier.height(22.dp))
 
                 Text(
-                    "ABOUT NUSA",
+                    nusaText("TENTANG NUSA", "ABOUT NUSA"),
                     fontSize = 11.sp,
                     letterSpacing = 1.5.sp,
                     fontWeight = FontWeight.Bold,
@@ -1182,14 +1204,14 @@ private fun NusaMusicApp(
                 Spacer(Modifier.height(10.dp))
 
                 Text(
-                    "Nusa adalah pemutar musik lokal Android yang dirancang dengan fokus pada pengalaman mendengarkan musik yang bersih dan sederhana.",
+                    nusaText("Nusa adalah pemutar musik lokal Android yang dirancang dengan fokus pada pengalaman mendengarkan musik yang bersih dan sederhana.", "Nusa is a local Android music player focused on a clean and simple listening experience."),
                     fontSize = 14.sp,
                     lineHeight = 21.sp
                 )
                 Spacer(Modifier.height(18.dp))
 
                 Text(
-                    "Developer",
+                    nusaText("Pengembang", "Developer"),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1204,21 +1226,21 @@ private fun NusaMusicApp(
                 Spacer(Modifier.height(16.dp))
 
                 Text(
-                    "Project",
+                    nusaText("Proyek", "Project"),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "Nusa  •  Version 1.0",
+                    nusaText("Nusa  •  Versi 1.0", "Nusa  •  Version 1.0"),
                     fontSize = 15.sp
                 )
 
                 Spacer(Modifier.height(18.dp))
 
                 Text(
-                    "Technology",
+                    nusaText("Teknologi", "Technology"),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1233,7 +1255,7 @@ private fun NusaMusicApp(
                 Spacer(Modifier.height(22.dp))
 
                 Text(
-                    "Artist biographies are provided through Last.fm when configured.",
+                    nusaText("Biografi artis disediakan melalui Last.fm jika sudah dikonfigurasi.", "Artist biographies are provided through Last.fm when configured."),
                     fontSize = 12.sp,
                     lineHeight = 18.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1311,7 +1333,7 @@ private fun NusaMusicApp(
                                             IconButton(onClick = { showSettings = true }) {
                                                 Icon(
                                                     Icons.Default.Settings,
-                                                    contentDescription = "Settings"
+                                                    contentDescription = nusaText("Pengaturan", "Settings")
                                                 )
                                             }
                                         }
@@ -1342,7 +1364,7 @@ private fun NusaMusicApp(
                                             contentAlignment = Alignment.Center
                                         ) {
                                             val titleText =
-                                                currentSong?.title ?: "Choose a song"
+                                                currentSong?.title ?: nusaText("Pilih lagu", "Choose a song")
 
                                             val titleWordCount = remember(titleText) {
                                                 titleText.trim()
@@ -1382,7 +1404,7 @@ private fun NusaMusicApp(
                                         }
 
                                         Text(
-                                            currentSong?.artist ?: "Your local music library",
+                                            currentSong?.artist ?: nusaText("Perpustakaan musik lokal Anda", "Your local music library"),
                                             modifier = Modifier.fillMaxWidth(),
                                             fontSize = 14.sp,
                                             maxLines = 1,
@@ -1421,7 +1443,7 @@ private fun NusaMusicApp(
                                         ) {
                                             TransportPillButton(
                                                 icon = Icons.Default.FastRewind,
-                                                contentDescription = "Previous",
+                                                contentDescription = nusaText("Sebelumnya", "Previous"),
                                                 onClick = onPrevious,
                                                 enabled = currentSong != null
                                             )
@@ -1444,9 +1466,9 @@ private fun NusaMusicApp(
                                                         Icons.Default.PlayArrow
                                                     },
                                                     contentDescription = if (isPlaying) {
-                                                        "Pause"
+                                                        nusaText("Jeda", "Pause")
                                                     } else {
-                                                        "Play"
+                                                        nusaText("Putar", "Play")
                                                     },
                                                     modifier = Modifier.size(36.dp)
                                                 )
@@ -1456,7 +1478,7 @@ private fun NusaMusicApp(
 
                                             TransportPillButton(
                                                 icon = Icons.Default.FastForward,
-                                                contentDescription = "Next",
+                                                contentDescription = nusaText("Berikutnya", "Next"),
                                                 onClick = onNext,
                                                 enabled = currentSong != null
                                             )
@@ -1543,7 +1565,7 @@ private fun NusaMusicApp(
 
                                         if (!permissionGranted) {
                                             Text(
-                                                "Give Nusa access to your audio files.",
+                                                nusaText("Izinkan Nusa mengakses file audio Anda.", "Give Nusa access to your audio files."),
                                                 color = Color(0xFF9D9D9D),
                                                 fontSize = 14.sp
                                             )
@@ -1556,7 +1578,7 @@ private fun NusaMusicApp(
                                             }
                                         } else if (filtered.isEmpty()) {
                                             Text(
-                                                "No local music found",
+                                                nusaText("Tidak ada musik lokal", "No local music found"),
                                                 color = Color(0xFF9D9D9D),
                                                 fontSize = 14.sp
                                             )
@@ -1607,13 +1629,13 @@ private fun NusaMusicApp(
                                 ) {
                                     Icon(
                                         Icons.Default.ArrowBack,
-                                        contentDescription = "Back to player",
+                                        contentDescription = nusaText("Kembali ke pemutar", "Back to player"),
                                         tint = Color.White
                                     )
                                 }
 
                                 Text(
-                                    text = "Daftar Lagu",
+                                    text = nusaText("Daftar Lagu", "Songs"),
                                     modifier = Modifier.weight(1f),
                                     textAlign = TextAlign.Center,
                                     fontSize = 21.sp,
@@ -1627,7 +1649,7 @@ private fun NusaMusicApp(
                                     ) {
                                             Icon(
                                                 Icons.Default.Sort,
-                                                contentDescription = "Urutkan lagu",
+                                                contentDescription = nusaText("Urutkan lagu", "Sort songs"),
                                                 tint = Color.White
                                             )
                                         }
@@ -1699,7 +1721,7 @@ private fun NusaMusicApp(
                                             horizontalAlignment = Alignment.CenterHorizontally
                                         ) {
                                             Text(
-                                                "Give Nusa access to your audio files.",
+                                                nusaText("Izinkan Nusa mengakses file audio Anda.", "Give Nusa access to your audio files."),
                                                 color = Color(0xFF9D9D9D),
                                                 fontSize = 14.sp
                                             )
@@ -1721,7 +1743,7 @@ private fun NusaMusicApp(
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Text(
-                                                "No local music found",
+                                                nusaText("Tidak ada musik lokal", "No local music found"),
                                                 color = Color(0xFF9D9D9D),
                                                 fontSize = 14.sp
                                             )
@@ -1997,12 +2019,12 @@ private fun NusaMusicApp(
                                 ) {
                                     Icon(
                                         Icons.Default.KeyboardArrowDown,
-                                        contentDescription = "Back to player",
+                                        contentDescription = nusaText("Kembali ke pemutar", "Back to player"),
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                     Spacer(Modifier.width(4.dp))
                                     Text(
-                                        "Player",
+                                        nusaText("Pemutar", "Player"),
                                         fontSize = 12.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -2039,7 +2061,7 @@ private fun ArtistBiographySection(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    "Loading artist biography…",
+                    nusaText("Memuat biografi artis…", "Loading artist biography…"),
                     color = Color(0xFF9A9A9A),
                     fontSize = 14.sp
                 )
@@ -2061,7 +2083,7 @@ private fun ArtistBiographySection(
                 Spacer(Modifier.height(8.dp))
                 Text(
                     if (ArtistBiographyLoader.isConfigured()) {
-                        "Biography not available"
+                        nusaText("Biografi tidak tersedia", "Biography not available")
                     } else {
                         "Add LASTFM_API_KEY to local.properties"
                     },
@@ -2072,7 +2094,7 @@ private fun ArtistBiographySection(
             }
         } else {
             Text(
-                "ABOUT THE ARTIST",
+                nusaText("TENTANG ARTIS", "ABOUT THE ARTIST"),
                 color = Color(0xFF8E8E8E),
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
@@ -2110,7 +2132,7 @@ private fun ArtistBiographySection(
                 )
             }
             Text(
-                text = "Source: Last.fm (" + biography.sourceLanguage.uppercase() + ")",
+                text = nusaText("Sumber: Last.fm (", "Source: Last.fm (" + biography.sourceLanguage.uppercase() + ")",
                 color = Color(0xFF777777),
                 fontSize = 11.sp,
                 modifier = Modifier.padding(start = 4.dp, top = 8.dp)
@@ -2251,7 +2273,7 @@ private fun AudioQualityPill(song: Song?) {
                         )
                     ) {
                         Text(
-                            text = "Audio Info",
+                            text = nusaText("Info Audio", "Audio Info"),
                             fontSize = 21.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (isHiRes) {
@@ -2294,13 +2316,13 @@ private fun AudioQualityPill(song: Song?) {
                         )
                         MetadataDivider(hiRes = isHiRes)
                         MetadataRow(
-                            label = "Bit depth",
+                            label = nusaText("Kedalaman bit", "Bit depth"),
                             value = formatBitDepth(info.bitDepth),
                             hiRes = isHiRes
                         )
                         MetadataDivider(hiRes = isHiRes)
                         MetadataRow(
-                            label = "Durasi",
+                            label = nusaText("Durasi", "Duration"),
                             value = formatTime(song.durationMs),
                             hiRes = isHiRes
                         )
@@ -2321,7 +2343,7 @@ private fun AudioQualityPill(song: Song?) {
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "Tutup",
+                                text = nusaText("Tutup", "Close"),
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.primary
@@ -2341,11 +2363,11 @@ private fun formatSampleRate(sampleRateHz: Int?): String {
         } else {
             String.format(Locale.US, "%.1f kHz", rate / 1000f)
         }
-    } ?: "Tidak tersedia"
+    } ?: nusaText("Tidak tersedia", "Not available")
 }
 
 private fun formatBitDepth(bitDepth: Int?): String {
-    return bitDepth?.let { it.toString() + "-bit" } ?: "Tidak tersedia"
+    return bitDepth?.let { it.toString() + "-bit" } ?: nusaText("Tidak tersedia", "Not available")
 }
 
 @Composable
