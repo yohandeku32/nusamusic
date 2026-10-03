@@ -34,8 +34,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -2366,7 +2368,7 @@ private fun PlayingBars(isPlaying: Boolean) {
     val bar1 by transition.animateFloat(
         initialValue = 0.35f,
         targetValue = 1f,
-        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+        animationSpec = infiniteRepeatable(
             animation = tween(
                 durationMillis = 520,
                 easing = androidx.compose.animation.core.FastOutSlowInEasing
