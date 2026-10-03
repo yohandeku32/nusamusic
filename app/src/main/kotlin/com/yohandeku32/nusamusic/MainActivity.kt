@@ -1231,9 +1231,9 @@ private fun NusaMusicApp(
                                 .background(
                                     Brush.verticalGradient(
                                         colors = listOf(
-                                            Color(0xFF686A6D),
-                                            Color(0xFF4F5154),
-                                            Color(0xFF3B3D40)
+                                            Color(0xFF18191B),
+                                            Color(0xFF0D0E10),
+                                            Color(0xFF070708)
                                         )
                                     )
                                 )
@@ -1269,7 +1269,8 @@ private fun NusaMusicApp(
                                     color = Color.White
                                 )
 
-                                Box {                                    IconButton(
+                                Box {
+                                    IconButton(
                                         onClick = { sortMenuExpanded = true }
                                     ) {
                                         Icon(
