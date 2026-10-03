@@ -1129,7 +1129,8 @@ private fun NusaMusicApp(
                 }
 
                 Surface(
-                    onClick = if (isScanningMusic) ({}) else onScanMusic,
+                    onClick = onScanMusic,
+                    enabled = !isScanningMusic,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(18.dp),
                     color = if (isScanningMusic) {
