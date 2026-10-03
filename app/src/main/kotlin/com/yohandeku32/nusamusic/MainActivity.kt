@@ -1369,9 +1369,18 @@ private fun ImmersiveArtworkPlayer(
 
         TopAppBar(
             title = { },
+            modifier = Modifier.zIndex(2f),
             colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = MaterialTheme.colorScheme.background,
-                scrolledContainerColor = MaterialTheme.colorScheme.background
+                containerColor = if (immersiveArtwork) {
+                    Color.Transparent
+                } else {
+                    MaterialTheme.colorScheme.background
+                },
+                scrolledContainerColor = if (immersiveArtwork) {
+                    Color.Transparent
+                } else {
+                    MaterialTheme.colorScheme.background
+                }
             ),
             windowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
             navigationIcon = {
@@ -1591,48 +1600,58 @@ private fun ImmersiveArtwork(
     modifier: Modifier = Modifier
 ) {
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
-    val visualWidth = screenWidth + 2.dp
-    val vinylHeight = ((screenWidth - 44.dp) * 0.88f).coerceAtLeast(1.dp)
+
+    // Keep the exact vinyl slot size for layout. The artwork itself is allowed
+    // to draw outside that slot without pushing the title or controls down.
+    val artworkSlotWidth = ((screenWidth - 44.dp) * 0.88f).coerceAtLeast(1.dp)
+    val artworkSlotHeight = artworkSlotWidth
     val topExtension = 90.dp
 
     Box(
         modifier = modifier
-            .requiredWidth(visualWidth)
-            .height(vinylHeight + topExtension)
-            .offset(
-                x = -(screenWidth * 0.5f - visualWidth * 0.5f),
-                y = -topExtension
-            )
-            .zIndex(-1f)
+            .background(MaterialTheme.colorScheme.background)
     ) {
-        ArtworkView(
-            song = song,
-            maxSizePx = 1024,
-            modifier = Modifier
-                .fillMaxSize()
-                .graphicsLayer {
-                    scaleX = 1.10f
-                    scaleY = 1.10f
-                }
-        )
-
-        // Blend the lower artwork edge into the existing white player surface.
         Box(
             modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .fillMaxHeight(0.36f)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            MaterialTheme.colorScheme.background.copy(alpha = 0.16f),
-                            MaterialTheme.colorScheme.background.copy(alpha = 0.58f),
-                            MaterialTheme.colorScheme.background
+                .requiredWidth(screenWidth)
+                .height(artworkSlotHeight + topExtension)
+                .offset(
+                    x = -((screenWidth - artworkSlotWidth) / 2f),
+                    y = -topExtension
+                )
+        ) {
+            ArtworkView(
+                song = song,
+                maxSizePx = 1024,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        // Slight zoom for the full-bleed, Apple Music-like
+                        // immersive crop.
+                        scaleX = 1.10f
+                        scaleY = 1.10f
+                    }
+            )
+
+            // The lower edge dissolves into the existing white player surface
+            // so the artwork flows naturally into the title area.
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.40f)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                MaterialTheme.colorScheme.background.copy(alpha = 0.12f),
+                                MaterialTheme.colorScheme.background.copy(alpha = 0.62f),
+                                MaterialTheme.colorScheme.background
+                            )
                         )
                     )
-                )
-        )
+            )
+        }
     }
 }
 
