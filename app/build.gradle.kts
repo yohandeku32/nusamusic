@@ -70,7 +70,7 @@ android {
 
     defaultConfig {
         applicationId = "com.yohandeku32.nusamusic"
-        minSdk = 26
+        // The Decent USB Audio engine requires Android 10+ (API 29).\n        minSdk = 29
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
