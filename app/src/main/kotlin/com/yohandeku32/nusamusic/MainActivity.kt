@@ -89,6 +89,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
@@ -721,329 +722,307 @@ private fun NusaMusicApp(
                             contentPadding = PaddingValues(0.dp)
                         ) {
                             item {
-                                Crossfade(
-                                    targetState = immersiveArtwork,
-                                    animationSpec = tween(durationMillis = 260),
-                                    label = "playerStyleCrossfade"
-                                ) { immersive ->
-                                    if (immersive) {
-                                        ImmersiveArtworkPlayer(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .fillParentMaxHeight(),
-                                            song = currentSong,
-                                            isPlaying = isPlaying,
-                                            positionMs = positionMs,
-                                            durationMs = durationMs,
-                                            onTogglePlay = onTogglePlay,
-                                            onNext = onNext,
-                                            onPrevious = onPrevious,
-                                            onSeek = onSeek,
-                                            onShare = onShare,
-                                            isFavorite = isFavorite,
-                                            onToggleFavorite = { isFavorite = !isFavorite },
-                                            onExpandBiography = {
-                                                scope.launch {
-                                                    playerScrollState.animateScrollToItem(
-                                                        index = 1,
-                                                        scrollOffset = 0
-                                                    )
-                                                }
-                                            },
-                                            onOpenSettings = { showSettings = true },
-                                            permissionGranted = permissionGranted,
-                                            filteredEmpty = filtered.isEmpty(),
-                                            onRequestPermission = onRequestPermission
-                                        )
-                                    } else {
                                 Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .fillParentMaxHeight()
-                                        .clip(
-                                            RoundedCornerShape(
-                                                bottomStart = 34.dp,
-                                                bottomEnd = 34.dp
-                                            )
-                                        )
-                                        .background(MaterialTheme.colorScheme.background),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Spacer(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(24.dp)
-                                    )
-
-                                    TopAppBar(
-                                        title = { },
-                                        colors = TopAppBarDefaults.topAppBarColors(
-                                            containerColor = MaterialTheme.colorScheme.background,
-                                            scrolledContainerColor = MaterialTheme.colorScheme.background
-                                        ),
-                                        windowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
-                                        navigationIcon = {
-                                            ArtistAvatar(
-                                                song = currentSong,
-                                                modifier = Modifier
-                                                    .padding(start = 18.dp)
-                                                    .size(40.dp)
-                                                    .clip(CircleShape)
-                                            )
-                                        },
-                                        actions = {
-                                            IconButton(onClick = {}) {
-                                                Icon(
-                                                    Icons.Default.MoreHoriz,
-                                                    contentDescription = "More"
-                                                )
-                                            }
-                                            IconButton(onClick = { showSettings = true }) {
-                                                Icon(
-                                                    Icons.Default.Settings,
-                                                    contentDescription = "Settings"
-                                                )
-                                            }
-                                        }
-                                    )
-
-                                    Column(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(horizontal = 22.dp),
-                                        horizontalAlignment = Alignment.CenterHorizontally
-                                    ) {
-                                        Spacer(Modifier.height(2.dp))
-
-                                        VinylRecord(
-                                            song = currentSong,
-                                            isPlaying = isPlaying,
-                                            modifier = Modifier
-                                                .fillMaxWidth(0.88f)
-                                                .aspectRatio(1f)
-                                        )
-
-                                        Spacer(Modifier.height(24.dp))
-
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .height(82.dp),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            val titleText =
-                                                currentSong?.title ?: "Choose a song"
-
-                                            val titleWordCount = remember(titleText) {
-                                                titleText.trim()
-                                                    .split(Regex("\\s+"))
-                                                    .count { it.isNotBlank() }
-                                            }
-
-                                            val titleSize = remember(titleWordCount) {
-                                                when {
-                                                    titleWordCount <= 2 -> 37.sp
-                                                    titleWordCount == 3 -> 33.sp
-                                                    else -> 30.sp
-                                                }
-                                            }
-
-                                            val titleLineHeight = remember(titleWordCount) {
-                                                when {
-                                                    titleWordCount <= 2 -> 40.sp
-                                                    titleWordCount == 3 -> 36.sp
-                                                    else -> 33.sp
-                                                }
-                                            }
-
-                                            Text(
-                                                titleText,
-                                                fontFamily = FontFamily.Serif,
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = titleSize,
-                                                lineHeight = titleLineHeight,
-                                                maxLines = 3,
-                                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                                modifier = Modifier.padding(horizontal = 4.dp),
-                                                textAlign = TextAlign.Center
-                                            )
-                                        }
-
-                                        Text(
-                                            currentSong?.artist ?: "Your local music library",
-                                            modifier = Modifier.fillMaxWidth(),
-                                            fontSize = 14.sp,
-                                            maxLines = 1,
-                                            textAlign = TextAlign.Center,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-
-                                        Spacer(Modifier.height(16.dp))
-
-                                        SimpleProgressBar(
-                                            positionMs = positionMs,
-                                            durationMs = durationMs,
-                                            enabled = currentSong != null && durationMs > 0L,
-                                            onSeek = onSeek,
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(horizontal = 12.dp)
-                                        )
-
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(horizontal = 12.dp),
-                                            horizontalArrangement = Arrangement.SpaceBetween
-                                        ) {
-                                            Text(formatTime(positionMs), fontSize = 12.sp)
-                                            Text(formatTime(durationMs), fontSize = 12.sp)
-                                        }
-
-                                        Spacer(Modifier.height(5.dp))
-
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.Center
-                                        ) {
-                                            TransportPillButton(
-                                                icon = Icons.Default.FastRewind,
-                                                contentDescription = "Previous",
-                                                onClick = onPrevious,
-                                                enabled = currentSong != null
-                                            )
-
-                                            Spacer(Modifier.width(16.dp))
-
-                                            FilledIconButton(
-                                                onClick = if (currentSong == null) {
-                                                    onRequestPermission
-                                                } else {
-                                                    onTogglePlay
-                                                },
-                                                modifier = Modifier.size(84.dp),
-                                                shape = CircleShape
-                                            ) {
-                                                Icon(
-                                                    if (isPlaying) {
-                                                        Icons.Default.Pause
-                                                    } else {
-                                                        Icons.Default.PlayArrow
-                                                    },
-                                                    contentDescription = if (isPlaying) {
-                                                        "Pause"
-                                                    } else {
-                                                        "Play"
-                                                    },
-                                                    modifier = Modifier.size(36.dp)
-                                                )
-                                            }
-
-                                            Spacer(Modifier.width(16.dp))
-
-                                            TransportPillButton(
-                                                icon = Icons.Default.FastForward,
-                                                contentDescription = "Next",
-                                                onClick = onNext,
-                                                enabled = currentSong != null
-                                            )
-                                        }
-
-                                        Spacer(Modifier.height(10.dp))
-                                        Spacer(Modifier.height(12.dp))
-                                        Spacer(Modifier.height(18.dp))
-
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            IconButton(
-                                                onClick = {
-                                                    scope.launch {
-                                                        // Open the artist biography section directly.
-                                                        playerScrollState.animateScrollToItem(
-                                                            index = 1,
-                                                            scrollOffset = 0
-                                                        )
-                                                    }
-                                                },
-                                                modifier = Modifier.size(42.dp)
-                                            ) {
-                                                Icon(
-                                                    Icons.Default.KeyboardArrowDown,
-                                                    contentDescription = "Expand artist biography",
-                                                    modifier = Modifier.size(28.dp)
-                                                )
-                                            }
-
-                                            Spacer(Modifier.weight(1f))
-
-                                            IconButton(
-                                                onClick = { onShare(currentSong) },
-                                                enabled = currentSong != null,
-                                                modifier = Modifier.size(42.dp)
-                                            ) {
-                                                Icon(
-                                                    Icons.Default.Share,
-                                                    contentDescription = "Share song",
-                                                    modifier = Modifier.size(22.dp)
-                                                )
-                                            }
-
-                                            IconButton(
-                                                onClick = { isFavorite = !isFavorite },
-                                                enabled = currentSong != null,
-                                                modifier = Modifier.size(42.dp)
-                                            ) {
-                                                Icon(
-                                                    if (isFavorite) {
-                                                        Icons.Default.Favorite
-                                                    } else {
-                                                        Icons.Default.FavoriteBorder
-                                                    },
-                                                    contentDescription = if (isFavorite) {
-                                                        "Favorite"
-                                                    } else {
-                                                        "Add to favorites"
-                                                    },
-                                                    modifier = Modifier.size(22.dp),
-                                                    tint = if (isFavorite) {
-                                                        Color(0xFFC62828)
-                                                    } else {
-                                                        MaterialTheme.colorScheme.onBackground
-                                                    }
-                                                )
-                                            }
-                                        }
-
-                                        Spacer(Modifier.height(8.dp))
-                                        AudioQualityPill(song = currentSong)
-
-                                        if (!permissionGranted) {
-                                            Text(
-                                                "Give Nusa Music access to your audio files.",
-                                                color = Color(0xFF9D9D9D),
-                                                fontSize = 14.sp
-                                            )
-                                            Spacer(Modifier.height(12.dp))
-                                            FilledIconButton(onClick = onRequestPermission) {
-                                                Icon(
-                                                    Icons.Default.FolderOpen,
-                                                    contentDescription = "Allow music access"
-                                                )
-                                            }
-                                        } else if (filtered.isEmpty()) {
-                                            Text(
-                                                "No local music found",
-                                                color = Color(0xFF9D9D9D),
-                                                fontSize = 14.sp
-                                            )
-                                        }
-                                    }
-                                }
-                                    }
-                                }
+                                                                    modifier = Modifier
+                                                                        .fillMaxWidth()
+                                                                        .fillParentMaxHeight()
+                                                                        .clip(
+                                                                            RoundedCornerShape(
+                                                                                bottomStart = 34.dp,
+                                                                                bottomEnd = 34.dp
+                                                                            )
+                                                                        )
+                                                                        .background(MaterialTheme.colorScheme.background),
+                                                                    horizontalAlignment = Alignment.CenterHorizontally
+                                                                ) {
+                                                                    Spacer(
+                                                                        modifier = Modifier
+                                                                            .fillMaxWidth()
+                                                                            .height(24.dp)
+                                                                    )
+                                
+                                                                    TopAppBar(
+                                                                        title = { },
+                                                                        colors = TopAppBarDefaults.topAppBarColors(
+                                                                            containerColor = MaterialTheme.colorScheme.background,
+                                                                            scrolledContainerColor = MaterialTheme.colorScheme.background
+                                                                        ),
+                                                                        windowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
+                                                                        navigationIcon = {
+                                                                            ArtistAvatar(
+                                                                                song = currentSong,
+                                                                                modifier = Modifier
+                                                                                    .padding(start = 18.dp)
+                                                                                    .size(40.dp)
+                                                                                    .clip(CircleShape)
+                                                                            )
+                                                                        },
+                                                                        actions = {
+                                                                            IconButton(onClick = {}) {
+                                                                                Icon(
+                                                                                    Icons.Default.MoreHoriz,
+                                                                                    contentDescription = "More"
+                                                                                )
+                                                                            }
+                                                                            IconButton(onClick = { showSettings = true }) {
+                                                                                Icon(
+                                                                                    Icons.Default.Settings,
+                                                                                    contentDescription = "Settings"
+                                                                                )
+                                                                            }
+                                                                        }
+                                                                    )
+                                
+                                                                    Column(
+                                                                        modifier = Modifier
+                                                                            .fillMaxWidth()
+                                                                            .padding(horizontal = 22.dp),
+                                                                        horizontalAlignment = Alignment.CenterHorizontally
+                                                                    ) {
+                                                                        Spacer(Modifier.height(2.dp))
+                                
+                                                                        Crossfade(
+                                                                            targetState = immersiveArtwork,
+                                                                            animationSpec = tween(durationMillis = 260),
+                                                                            label = "playerArtworkModeCrossfade"
+                                                                        ) { immersive ->
+                                                                            if (immersive) {
+                                                                                ImmersiveArtwork(
+                                                                                    song = currentSong,
+                                                                                    modifier = Modifier
+                                                                                        .fillMaxWidth()
+                                                                                        .aspectRatio(1f)
+                                                                                )
+                                                                            } else {
+                                                                                VinylRecord(
+                                                                                    song = currentSong,
+                                                                                    isPlaying = isPlaying,
+                                                                                    modifier = Modifier
+                                                                                        .fillMaxWidth(0.88f)
+                                                                                        .aspectRatio(1f)
+                                                                                )
+                                                                            }
+                                                                        }
+                                
+                                                                        Spacer(Modifier.height(24.dp))
+                                
+                                                                        Box(
+                                                                            modifier = Modifier
+                                                                                .fillMaxWidth()
+                                                                                .height(82.dp),
+                                                                            contentAlignment = Alignment.Center
+                                                                        ) {
+                                                                            val titleText =
+                                                                                currentSong?.title ?: "Choose a song"
+                                
+                                                                            val titleWordCount = remember(titleText) {
+                                                                                titleText.trim()
+                                                                                    .split(Regex("\\s+"))
+                                                                                    .count { it.isNotBlank() }
+                                                                            }
+                                
+                                                                            val titleSize = remember(titleWordCount) {
+                                                                                when {
+                                                                                    titleWordCount <= 2 -> 37.sp
+                                                                                    titleWordCount == 3 -> 33.sp
+                                                                                    else -> 30.sp
+                                                                                }
+                                                                            }
+                                
+                                                                            val titleLineHeight = remember(titleWordCount) {
+                                                                                when {
+                                                                                    titleWordCount <= 2 -> 40.sp
+                                                                                    titleWordCount == 3 -> 36.sp
+                                                                                    else -> 33.sp
+                                                                                }
+                                                                            }
+                                
+                                                                            Text(
+                                                                                titleText,
+                                                                                fontFamily = FontFamily.Serif,
+                                                                                fontWeight = FontWeight.Bold,
+                                                                                fontSize = titleSize,
+                                                                                lineHeight = titleLineHeight,
+                                                                                maxLines = 3,
+                                                                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                                                                modifier = Modifier.padding(horizontal = 4.dp),
+                                                                                textAlign = TextAlign.Center
+                                                                            )
+                                                                        }
+                                
+                                                                        Text(
+                                                                            currentSong?.artist ?: "Your local music library",
+                                                                            modifier = Modifier.fillMaxWidth(),
+                                                                            fontSize = 14.sp,
+                                                                            maxLines = 1,
+                                                                            textAlign = TextAlign.Center,
+                                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                                        )
+                                
+                                                                        Spacer(Modifier.height(16.dp))
+                                
+                                                                        SimpleProgressBar(
+                                                                            positionMs = positionMs,
+                                                                            durationMs = durationMs,
+                                                                            enabled = currentSong != null && durationMs > 0L,
+                                                                            onSeek = onSeek,
+                                                                            modifier = Modifier
+                                                                                .fillMaxWidth()
+                                                                                .padding(horizontal = 12.dp)
+                                                                        )
+                                
+                                                                        Row(
+                                                                            modifier = Modifier
+                                                                                .fillMaxWidth()
+                                                                                .padding(horizontal = 12.dp),
+                                                                            horizontalArrangement = Arrangement.SpaceBetween
+                                                                        ) {
+                                                                            Text(formatTime(positionMs), fontSize = 12.sp)
+                                                                            Text(formatTime(durationMs), fontSize = 12.sp)
+                                                                        }
+                                
+                                                                        Spacer(Modifier.height(5.dp))
+                                
+                                                                        Row(
+                                                                            modifier = Modifier.fillMaxWidth(),
+                                                                            verticalAlignment = Alignment.CenterVertically,
+                                                                            horizontalArrangement = Arrangement.Center
+                                                                        ) {
+                                                                            TransportPillButton(
+                                                                                icon = Icons.Default.FastRewind,
+                                                                                contentDescription = "Previous",
+                                                                                onClick = onPrevious,
+                                                                                enabled = currentSong != null
+                                                                            )
+                                
+                                                                            Spacer(Modifier.width(16.dp))
+                                
+                                                                            FilledIconButton(
+                                                                                onClick = if (currentSong == null) {
+                                                                                    onRequestPermission
+                                                                                } else {
+                                                                                    onTogglePlay
+                                                                                },
+                                                                                modifier = Modifier.size(84.dp),
+                                                                                shape = CircleShape
+                                                                            ) {
+                                                                                Icon(
+                                                                                    if (isPlaying) {
+                                                                                        Icons.Default.Pause
+                                                                                    } else {
+                                                                                        Icons.Default.PlayArrow
+                                                                                    },
+                                                                                    contentDescription = if (isPlaying) {
+                                                                                        "Pause"
+                                                                                    } else {
+                                                                                        "Play"
+                                                                                    },
+                                                                                    modifier = Modifier.size(36.dp)
+                                                                                )
+                                                                            }
+                                
+                                                                            Spacer(Modifier.width(16.dp))
+                                
+                                                                            TransportPillButton(
+                                                                                icon = Icons.Default.FastForward,
+                                                                                contentDescription = "Next",
+                                                                                onClick = onNext,
+                                                                                enabled = currentSong != null
+                                                                            )
+                                                                        }
+                                
+                                                                        Spacer(Modifier.height(10.dp))
+                                                                        Spacer(Modifier.height(12.dp))
+                                                                        Spacer(Modifier.height(18.dp))
+                                
+                                                                        Row(
+                                                                            modifier = Modifier.fillMaxWidth(),
+                                                                            verticalAlignment = Alignment.CenterVertically
+                                                                        ) {
+                                                                            IconButton(
+                                                                                onClick = {
+                                                                                    scope.launch {
+                                                                                        // Open the artist biography section directly.
+                                                                                        playerScrollState.animateScrollToItem(
+                                                                                            index = 1,
+                                                                                            scrollOffset = 0
+                                                                                        )
+                                                                                    }
+                                                                                },
+                                                                                modifier = Modifier.size(42.dp)
+                                                                            ) {
+                                                                                Icon(
+                                                                                    Icons.Default.KeyboardArrowDown,
+                                                                                    contentDescription = "Expand artist biography",
+                                                                                    modifier = Modifier.size(28.dp)
+                                                                                )
+                                                                            }
+                                
+                                                                            Spacer(Modifier.weight(1f))
+                                
+                                                                            IconButton(
+                                                                                onClick = { onShare(currentSong) },
+                                                                                enabled = currentSong != null,
+                                                                                modifier = Modifier.size(42.dp)
+                                                                            ) {
+                                                                                Icon(
+                                                                                    Icons.Default.Share,
+                                                                                    contentDescription = "Share song",
+                                                                                    modifier = Modifier.size(22.dp)
+                                                                                )
+                                                                            }
+                                
+                                                                            IconButton(
+                                                                                onClick = { isFavorite = !isFavorite },
+                                                                                enabled = currentSong != null,
+                                                                                modifier = Modifier.size(42.dp)
+                                                                            ) {
+                                                                                Icon(
+                                                                                    if (isFavorite) {
+                                                                                        Icons.Default.Favorite
+                                                                                    } else {
+                                                                                        Icons.Default.FavoriteBorder
+                                                                                    },
+                                                                                    contentDescription = if (isFavorite) {
+                                                                                        "Favorite"
+                                                                                    } else {
+                                                                                        "Add to favorites"
+                                                                                    },
+                                                                                    modifier = Modifier.size(22.dp),
+                                                                                    tint = if (isFavorite) {
+                                                                                        Color(0xFFC62828)
+                                                                                    } else {
+                                                                                        MaterialTheme.colorScheme.onBackground
+                                                                                    }
+                                                                                )
+                                                                            }
+                                                                        }
+                                
+                                                                        Spacer(Modifier.height(8.dp))
+                                                                        AudioQualityPill(song = currentSong)
+                                
+                                                                        if (!permissionGranted) {
+                                                                            Text(
+                                                                                "Give Nusa Music access to your audio files.",
+                                                                                color = Color(0xFF9D9D9D),
+                                                                                fontSize = 14.sp
+                                                                            )
+                                                                            Spacer(Modifier.height(12.dp))
+                                                                            FilledIconButton(onClick = onRequestPermission) {
+                                                                                Icon(
+                                                                                    Icons.Default.FolderOpen,
+                                                                                    contentDescription = "Allow music access"
+                                                                                )
+                                                                            }
+                                                                        } else if (filtered.isEmpty()) {
+                                                                            Text(
+                                                                                "No local music found",
+                                                                                color = Color(0xFF9D9D9D),
+                                                                                fontSize = 14.sp
+                                                                            )
+                                                                        }
+                                                                    }
+                                                                }
                             }
 
                             // Artist biography section.
@@ -1631,6 +1610,57 @@ private fun ImmersiveArtwork(
                             Color.Transparent,
                             MaterialTheme.colorScheme.background.copy(alpha = 0.14f),
                             MaterialTheme.colorScheme.background.copy(alpha = 0.68f),
+                            MaterialTheme.colorScheme.background
+                        )
+                    )
+                )
+        )
+    }
+}
+
+@Composable
+private fun ImmersiveArtwork(
+    song: Song?,
+    modifier: Modifier = Modifier
+) {
+    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
+    val visualWidth = screenWidth + 2.dp
+    val vinylHeight = ((screenWidth - 44.dp) * 0.88f).coerceAtLeast(1.dp)
+    val topExtension = 90.dp
+
+    Box(
+        modifier = modifier
+            .requiredWidth(visualWidth)
+            .height(vinylHeight + topExtension)
+            .offset(
+                x = -(screenWidth * 0.5f - visualWidth * 0.5f),
+                y = -topExtension
+            )
+            .zIndex(-1f)
+    ) {
+        ArtworkView(
+            song = song,
+            maxSizePx = 1024,
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    scaleX = 1.10f
+                    scaleY = 1.10f
+                }
+        )
+
+        // Blend the lower artwork edge into the existing white player surface.
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .fillMaxHeight(0.36f)
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            MaterialTheme.colorScheme.background.copy(alpha = 0.16f),
+                            MaterialTheme.colorScheme.background.copy(alpha = 0.58f),
                             MaterialTheme.colorScheme.background
                         )
                     )
