@@ -46,6 +46,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
@@ -64,6 +65,8 @@ import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -440,6 +443,15 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+private enum class LibrarySortOption(val label: String) {
+    TITLE_ASC("Judul A–Z"),
+    TITLE_DESC("Judul Z–A"),
+    ARTIST_ASC("Artis A–Z"),
+    ALBUM_ASC("Album A–Z"),
+    DURATION_ASC("Durasi terpendek"),
+    DURATION_DESC("Durasi terpanjang")
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NusaMusicApp(
@@ -479,10 +491,16 @@ private fun NusaMusicApp(
     }
     var librarySearchVisible by remember { mutableStateOf(false) }
     var librarySearchQuery by remember { mutableStateOf("") }
+    var sortMenuExpanded by remember { mutableStateOf(false) }
+    var librarySortOption by remember { mutableStateOf(LibrarySortOption.TITLE_ASC) }
 
-    val filtered = remember(songs, librarySearchQuery) {
+    val filtered = remember(
+        songs,
+        librarySearchQuery,
+        librarySortOption
+    ) {
         val query = librarySearchQuery.trim()
-        if (query.isBlank()) {
+        val matchingSongs = if (query.isBlank()) {
             songs
         } else {
             songs.filter {
@@ -490,6 +508,30 @@ private fun NusaMusicApp(
                     it.artist.contains(query, ignoreCase = true) ||
                     it.album.contains(query, ignoreCase = true)
             }
+        }
+
+        when (librarySortOption) {
+            LibrarySortOption.TITLE_ASC ->
+                matchingSongs.sortedBy { it.title.lowercase(Locale.ROOT) }
+
+            LibrarySortOption.TITLE_DESC ->
+                matchingSongs.sortedByDescending { it.title.lowercase(Locale.ROOT) }
+
+            LibrarySortOption.ARTIST_ASC ->
+                matchingSongs.sortedBy {
+                    it.artist.lowercase(Locale.ROOT)
+                }
+
+            LibrarySortOption.ALBUM_ASC ->
+                matchingSongs.sortedBy {
+                    it.album.lowercase(Locale.ROOT)
+                }
+
+            LibrarySortOption.DURATION_ASC ->
+                matchingSongs.sortedBy { it.durationMs }
+
+            LibrarySortOption.DURATION_DESC ->
+                matchingSongs.sortedByDescending { it.durationMs }
         }
     }
 
@@ -1078,6 +1120,46 @@ private fun NusaMusicApp(
                                         fontWeight = FontWeight.Bold,
                                         color = Color.White
                                     )
+                                }
+
+                                Box {
+                                    IconButton(
+                                        onClick = { sortMenuExpanded = true }
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Sort,
+                                            contentDescription = "Urutkan lagu",
+                                            tint = Color.White
+                                        )
+                                    }
+
+                                    DropdownMenu(
+                                        expanded = sortMenuExpanded,
+                                        onDismissRequest = {
+                                            sortMenuExpanded = false
+                                        }
+                                    ) {
+                                        LibrarySortOption.entries.forEach { option ->
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Text(
+                                                        text = option.label,
+                                                        fontWeight = if (
+                                                            option == librarySortOption
+                                                        ) {
+                                                            FontWeight.Bold
+                                                        } else {
+                                                            FontWeight.Normal
+                                                        }
+                                                    )
+                                                },
+                                                onClick = {
+                                                    librarySortOption = option
+                                                    sortMenuExpanded = false
+                                                }
+                                            )
+                                        }
+                                    }
                                 }
 
                                 IconButton(
@@ -2242,7 +2324,7 @@ private fun ArtworkView(
             .drawWithCache {
                 val seed = (song?.id ?: song?.uri ?: "nusa").hashCode()
                 val random = Random(seed)
-                val speckles = List(180) {
+                val speckles = List(48) {
                     GrainDot(
                         x = random.nextFloat(),
                         y = random.nextFloat(),
@@ -2251,11 +2333,11 @@ private fun ArtworkView(
                         dark = random.nextBoolean()
                     )
                 }
-                val fibers = List(18) {
+                val fibers = List(6) {
                     GrainFiber(
                         x = random.nextFloat(),
                         y = random.nextFloat(),
-                        length = 8f + random.nextFloat() * 24f,
+                        length = 6f + random.nextFloat() * 16f,
                         alpha = 0.012f + random.nextFloat() * 0.022f,
                         dark = random.nextBoolean()
                     )
@@ -2421,7 +2503,7 @@ private fun LibrarySongRow(
                 ) {
                     ArtworkView(
                         song = song,
-                        maxSizePx = 384,
+                        maxSizePx = 256,
                         modifier = Modifier
                             .fillMaxSize()
                             .clip(RoundedCornerShape(4.dp))
@@ -2436,6 +2518,7 @@ private fun LibrarySongRow(
                 maxLines = 1,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 fontSize = if (selected) 12.5.sp else 11.5.sp,
+                lineHeight = 13.sp,
                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                 color = Color.White,
                 textAlign = TextAlign.Center,
@@ -2447,6 +2530,7 @@ private fun LibrarySongRow(
                 maxLines = 1,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 fontSize = 9.sp,
+                lineHeight = 10.sp,
                 color = if (selected) Color(0xFFD2D2D2) else Color(0xFFAAAAAA),
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp)
