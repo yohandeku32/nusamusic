@@ -2648,7 +2648,7 @@ private fun VinylSleeveCover(
 
     Box(
         modifier = Modifier
-            .coverSize(coverSize)
+            .size(coverSize)
             .clip(RoundedCornerShape(7.dp))
     ) {
         // Warm paper back of the sleeve.
@@ -2670,7 +2670,7 @@ private fun VinylSleeveCover(
         // mainly on the right side, like a real paper LP sleeve.
         Box(
             modifier = Modifier
-                .coverSize(coverSize * 0.82f)
+                .size(coverSize * 0.82f)
                 .align(Alignment.CenterEnd)
                 .offset(x = coverSize * 0.04f)
                 .clip(CircleShape)
@@ -2687,7 +2687,7 @@ private fun VinylSleeveCover(
             for (ring in 1..7) {
                 Box(
                     modifier = Modifier
-                        .coverSize((coverSize.value * (0.46f + ring * 0.045f)).dp)
+                        .size((coverSize.value * (0.46f + ring * 0.045f)).dp)
                         .align(Alignment.Center)
                         .clip(CircleShape)
                         .border(
@@ -2699,7 +2699,7 @@ private fun VinylSleeveCover(
 
             Box(
                 modifier = Modifier
-                    .coverSize(coverSize * 0.23f)
+                    .size(coverSize * 0.23f)
                     .align(Alignment.Center)
                     .clip(CircleShape)
                     .background(
@@ -2715,7 +2715,7 @@ private fun VinylSleeveCover(
 
             Box(
                 modifier = Modifier
-                    .coverSize(coverSize * 0.055f)
+                    .size(coverSize * 0.055f)
                     .align(Alignment.Center)
                     .clip(CircleShape)
                     .background(Color(0xFF141414))
