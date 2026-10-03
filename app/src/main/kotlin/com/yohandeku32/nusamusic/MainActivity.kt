@@ -1026,9 +1026,8 @@ private fun NusaMusicApp(
                                         val normalizedDistance =
                                             (distancePx / maxStackDistancePx).coerceIn(-1f, 1f)
 
-                                        // The nearest sleeve becomes the front record in the
-                                        // crate. Neighbors stay visible behind it with small
-                                        // perspective and rotation changes.
+                                        // The closest sleeve becomes the front record in the
+                                        // crate. Neighboring sleeves remain visible as a stack.
                                         val distanceFromCenter =
                                             kotlin.math.abs(normalizedDistance)
                                         val centerProximity =
@@ -2341,10 +2340,6 @@ private fun SongRow(
     }
 }
 
-/**
- * Physical record-store crate used by the library page.
- * The frame is intentionally static while the sleeves scroll inside it.
- */
 @Composable
 private fun RecordCrateBackdrop(modifier: Modifier = Modifier) {
     Box(modifier = modifier) {
@@ -2368,7 +2363,6 @@ private fun RecordCrateBackdrop(modifier: Modifier = Modifier) {
                 )
         )
 
-        // Dark inner well makes the records look recessed into the crate.
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -2385,13 +2379,17 @@ private fun RecordCrateBackdrop(modifier: Modifier = Modifier) {
                 )
         )
 
-        // Left and right wooden side rails.
         Box(
             modifier = Modifier
                 .width(16.dp)
                 .fillMaxHeight()
                 .align(Alignment.CenterStart)
-                .clip(RoundedCornerShape(topStart = 20.dp, bottomStart = 20.dp))
+                .clip(
+                    RoundedCornerShape(
+                        topStart = 20.dp,
+                        bottomStart = 20.dp
+                    )
+                )
                 .background(
                     Brush.horizontalGradient(
                         listOf(
@@ -2407,7 +2405,12 @@ private fun RecordCrateBackdrop(modifier: Modifier = Modifier) {
                 .width(16.dp)
                 .fillMaxHeight()
                 .align(Alignment.CenterEnd)
-                .clip(RoundedCornerShape(topEnd = 20.dp, bottomEnd = 20.dp))
+                .clip(
+                    RoundedCornerShape(
+                        topEnd = 20.dp,
+                        bottomEnd = 20.dp
+                    )
+                )
                 .background(
                     Brush.horizontalGradient(
                         listOf(
@@ -2419,13 +2422,17 @@ private fun RecordCrateBackdrop(modifier: Modifier = Modifier) {
                 )
         )
 
-        // Front plank anchors the bottom of the record crate.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(50.dp)
                 .align(Alignment.BottomCenter)
-                .clip(RoundedCornerShape(bottomStart = 22.dp, bottomEnd = 22.dp))
+                .clip(
+                    RoundedCornerShape(
+                        bottomStart = 22.dp,
+                        bottomEnd = 22.dp
+                    )
+                )
                 .background(
                     Brush.verticalGradient(
                         listOf(
@@ -2437,7 +2444,6 @@ private fun RecordCrateBackdrop(modifier: Modifier = Modifier) {
                 )
         )
 
-        // Small highlight on the top lip.
         Box(
             modifier = Modifier
                 .fillMaxWidth(0.88f)
@@ -2450,9 +2456,6 @@ private fun RecordCrateBackdrop(modifier: Modifier = Modifier) {
     }
 }
 
-/**
- * Large album sleeve that behaves like a physical LP pulled from a crate.
- */
 @Composable
 private fun CrateSongSleeve(
     song: Song,
@@ -2468,7 +2471,6 @@ private fun CrateSongSleeve(
             .height(230.dp),
         contentAlignment = Alignment.TopCenter
     ) {
-        // Vinyl disc peeking out behind the paper sleeve.
         Box(
             modifier = Modifier
                 .size(178.dp)
@@ -2505,7 +2507,6 @@ private fun CrateSongSleeve(
             )
         }
 
-        // Two rear paper sleeves produce the staggered stack.
         Box(
             modifier = Modifier
                 .size(205.dp)
@@ -2521,10 +2522,86 @@ private fun CrateSongSleeve(
                 .background(Color(0xFF2A211A))
         )
 
-        // Main album sleeve.
         Box(
             modifier = Modifier
                 .size(216.dp)
                 .clip(RoundedCornerShape(8.dp))
-                .then(
-                    Modifier.border(
+                .border(
+                    width = if (selected) 2.dp else 1.dp,
+                    color = if (selected) {
+                        Color.White.copy(alpha = 0.88f)
+                    } else {
+                        Color(0xFF6A4C35).copy(alpha = 0.70f)
+                    },
+                    shape = RoundedCornerShape(8.dp)
+                )
+                .background(
+                    Brush.linearGradient(
+                        colors = listOf(
+                            Color(0xFF080808),
+                            Color(0xFF141414),
+                            Color(0xFF050505)
+                        )
+                    )
+                )
+                .padding(5.dp)
+                .clickable { onPlay(song) }
+        ) {
+            ArtworkView(
+                song = song,
+                maxSizePx = 512,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(4.dp))
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(2.dp)
+                    .align(Alignment.TopCenter)
+                    .background(Color.White.copy(alpha = 0.18f))
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.linearGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.03f),
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.16f)
+                            )
+                        )
+                    )
+            )
+        }
+    }
+}
+
+private fun formatTime(ms: Long): String {
+    val totalSeconds = (ms / 1000L).coerceAtLeast(0L)
+    val minutes = totalSeconds / 60L
+    val seconds = totalSeconds % 60L
+    return "%d:%02d".format(minutes, seconds)
+}
+
+@Composable
+private fun NusaMusicTheme(content: @Composable () -> Unit) {
+    val dark = isSystemInDarkTheme()
+    val scheme = if (dark) {
+        darkColorScheme(
+            background = Color(0xFF050505),
+            surface = Color(0xFF101010),
+            surfaceVariant = Color(0xFF1C1C1C),
+            primary = Color(0xFFF4F1EA)
+        )
+    } else {
+        lightColorScheme(
+            background = Color(0xFFF2F0EB),
+            surface = Color(0xFFF7F5F0),
+            surfaceVariant = Color(0xFFE2E0DA),
+            primary = Color(0xFF111111)
+        )
+    }
+    MaterialTheme(colorScheme = scheme, content = content)
+}
