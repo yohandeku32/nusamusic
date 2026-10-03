@@ -1409,8 +1409,8 @@ private fun NusaMusicApp(
                                 .pointerInput(alphabetTargets, filtered) {
                                     var lastDragTarget = -1
 
-                                    androidx.compose.foundation.gestures.detectVerticalDragGestures(
-                                        onDragStart = { offset: androidx.compose.ui.geometry.Offset ->
+                                    detectDragGestures(
+                                        onDragStart = { offset ->
                                             val slotHeight =
                                                 size.height / alphabet.size.toFloat()
                                             val slot = (offset.y / slotHeight)
@@ -1424,10 +1424,7 @@ private fun NusaMusicApp(
                                                 requestAlphabetScroll(targetIndex)
                                             }
                                         },
-                                        onVerticalDrag = {
-                                            change: androidx.compose.ui.input.pointer.PointerInputChange,
-                                            _: Float
-                                            ->
+                                        onDrag = { change, _ ->
                                             change.consume()
 
                                             val slotHeight =
