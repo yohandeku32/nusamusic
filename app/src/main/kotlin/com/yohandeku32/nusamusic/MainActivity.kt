@@ -58,7 +58,6 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Shuffle
@@ -440,6 +439,78 @@ class MainActivity : ComponentActivity() {
         controller?.release()
         controller = null
         super.onDestroy()
+    }
+}
+
+@Composable
+private fun ChatGptStyleShareIcon(
+    modifier: Modifier = Modifier,
+    color: Color = Color.Unspecified
+) {
+    val resolvedColor =
+        if (color == Color.Unspecified) {
+            androidx.compose.material3.LocalContentColor.current
+        } else {
+            color
+        }
+
+    Canvas(modifier = modifier) {
+        val strokeWidth = size.minDimension * 0.095f
+        val left = size.width * 0.18f
+        val right = size.width * 0.82f
+        val trayY = size.height * 0.79f
+
+        // Open share tray.
+        drawLine(
+            color = resolvedColor,
+            start = androidx.compose.ui.geometry.Offset(left, trayY),
+            end = androidx.compose.ui.geometry.Offset(right, trayY),
+            strokeWidth = strokeWidth,
+            cap = androidx.compose.ui.graphics.StrokeCap.Round
+        )
+        drawLine(
+            color = resolvedColor,
+            start = androidx.compose.ui.geometry.Offset(left, trayY),
+            end = androidx.compose.ui.geometry.Offset(left, size.height * 0.61f),
+            strokeWidth = strokeWidth,
+            cap = androidx.compose.ui.graphics.StrokeCap.Round
+        )
+        drawLine(
+            color = resolvedColor,
+            start = androidx.compose.ui.geometry.Offset(right, trayY),
+            end = androidx.compose.ui.geometry.Offset(right, size.height * 0.61f),
+            strokeWidth = strokeWidth,
+            cap = androidx.compose.ui.graphics.StrokeCap.Round
+        )
+
+        // Upward arrow used in the current ChatGPT-style share control.
+        val centerX = size.width * 0.50f
+        val topY = size.height * 0.17f
+        val shaftBottomY = size.height * 0.61f
+        val arrowWingY = size.height * 0.35f
+        val wingX = size.width * 0.16f
+
+        drawLine(
+            color = resolvedColor,
+            start = androidx.compose.ui.geometry.Offset(centerX, shaftBottomY),
+            end = androidx.compose.ui.geometry.Offset(centerX, topY),
+            strokeWidth = strokeWidth,
+            cap = androidx.compose.ui.graphics.StrokeCap.Round
+        )
+        drawLine(
+            color = resolvedColor,
+            start = androidx.compose.ui.geometry.Offset(centerX, topY),
+            end = androidx.compose.ui.geometry.Offset(centerX - wingX, arrowWingY),
+            strokeWidth = strokeWidth,
+            cap = androidx.compose.ui.graphics.StrokeCap.Round
+        )
+        drawLine(
+            color = resolvedColor,
+            start = androidx.compose.ui.geometry.Offset(centerX, topY),
+            end = androidx.compose.ui.geometry.Offset(centerX + wingX, arrowWingY),
+            strokeWidth = strokeWidth,
+            cap = androidx.compose.ui.graphics.StrokeCap.Round
+        )
     }
 }
 
@@ -979,9 +1050,7 @@ private fun NusaMusicApp(
                                                 enabled = currentSong != null,
                                                 modifier = Modifier.size(42.dp)
                                             ) {
-                                                Icon(
-                                                    Icons.Default.Share,
-                                                    contentDescription = "Share song",
+                                                ChatGptStyleShareIcon(
                                                     modifier = Modifier.size(22.dp)
                                                 )
                                             }
