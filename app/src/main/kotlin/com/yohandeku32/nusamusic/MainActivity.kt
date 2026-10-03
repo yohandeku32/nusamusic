@@ -1,11 +1,15 @@
 package com.yohandeku32.nusamusic
 
 import android.Manifest
+import android.database.ContentObserver
 import android.content.ComponentName
 import android.content.pm.PackageManager
 import android.content.Intent
 import android.graphics.Bitmap
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.net.Uri
 import java.util.Locale
 import kotlin.random.Random
 import android.os.Bundle
@@ -65,6 +69,7 @@ import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -147,6 +152,26 @@ class MainActivity : ComponentActivity() {
         getSharedPreferences("playback_state", MODE_PRIVATE)
     }
     private var lastPersistedPosition = -1L
+    private var isScanningMusic by mutableStateOf(false)
+    private var automaticMusicScanJob: Job? = null
+
+    private val musicContentObserver = object : ContentObserver(
+        Handler(Looper.getMainLooper())
+    ) {
+        override fun onChange(selfChange: Boolean, uri: Uri?) {
+            super.onChange(selfChange, uri)
+
+            if (!permissionGranted) return
+
+            automaticMusicScanJob?.cancel()
+            automaticMusicScanJob = lifecycleScope.launch {
+                // Android may emit several MediaStore changes while a new
+                // file is being indexed. Debounce them into one refresh.
+                delay(900L)
+                refreshSongs()
+            }
+        }
+    }
 
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -192,6 +217,13 @@ class MainActivity : ComponentActivity() {
         }
 
         permissionGranted = checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
+
+        contentResolver.registerContentObserver(
+            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+            true,
+            musicContentObserver
+        )
+
         if (permissionGranted) loadSongs() else permissionLauncher.launch(permission)
 
         val token = SessionToken(this, ComponentName(this, PlaybackService::class.java))
@@ -269,6 +301,8 @@ class MainActivity : ComponentActivity() {
                     onToggleRepeat = ::toggleRepeat,
                     shuffleEnabled = shuffleEnabled,
                     repeatMode = repeatMode,
+                    isScanningMusic = isScanningMusic,
+                    onScanMusic = ::scanMusic,
                     onRequestPermission = { permissionLauncher.launch(permission) }
                 )
             }
@@ -365,14 +399,87 @@ class MainActivity : ComponentActivity() {
 
     private fun loadSongs() {
         lifecycleScope.launch {
-            songs = withContext(Dispatchers.IO) {
-                MusicRepository(this@MainActivity).loadSongs()
+            refreshSongs()
+        }
+    }
+
+    private suspend fun refreshSongs(): Int {
+        val previousIds = songs.asSequence()
+            .map { it.id }
+            .toSet()
+
+        val refreshedSongs = withContext(Dispatchers.IO) {
+            MusicRepository(this@MainActivity).loadSongs()
+        }
+
+        songs = refreshedSongs
+
+        val addedCount = refreshedSongs.count { it.id !in previousIds }
+
+        controller?.let { c ->
+            syncCurrentSong(c)
+            restorePlaybackStateIfNeeded(c)
+            reconcileControllerQueue(c, refreshedSongs)
+        }
+
+        return addedCount
+    }
+
+    private fun reconcileControllerQueue(
+        c: MediaController,
+        refreshedSongs: List<Song>
+    ) {
+        val validIds = refreshedSongs.asSequence()
+            .map { it.id }
+            .toSet()
+
+        // Remove stale/now-excluded queue items, including tracks that are
+        // below the 10-second library threshold after a fresh scan.
+        for (index in c.mediaItemCount - 1 downTo 0) {
+            val mediaId = c.getMediaItemAt(index).mediaId.toLongOrNull()
+            if (mediaId == null || mediaId !in validIds) {
+                c.removeMediaItem(index)
+            }
+        }
+
+        val queuedIds = HashSet<Long>(c.mediaItemCount)
+        for (index in 0 until c.mediaItemCount) {
+            c.getMediaItemAt(index).mediaId.toLongOrNull()?.let {
+                queuedIds += it
+            }
+        }
+
+        val missingSongs = refreshedSongs.filter { it.id !in queuedIds }
+        if (missingSongs.isNotEmpty()) {
+            c.addMediaItems(missingSongs.map(::mediaItemFor))
+        }
+    }
+
+    private fun scanMusic() {
+        if (!permissionGranted || isScanningMusic) return
+
+        automaticMusicScanJob?.cancel()
+        isScanningMusic = true
+
+        lifecycleScope.launch {
+            val addedCount = refreshSongs()
+            isScanningMusic = false
+
+            val message = if (addedCount > 0) {
+                if (addedCount == 1) {
+                    "1 lagu baru ditemukan"
+                } else {
+                    "$addedCount lagu baru ditemukan"
+                }
+            } else {
+                "Perpustakaan musik sudah diperbarui"
             }
 
-            controller?.let { c ->
-                syncCurrentSong(c)
-                restorePlaybackStateIfNeeded(c)
-            }
+            android.widget.Toast.makeText(
+                this@MainActivity,
+                message,
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
         }
     }
 
@@ -449,6 +556,12 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        automaticMusicScanJob?.cancel()
+        automaticMusicScanJob = null
+        runCatching {
+            contentResolver.unregisterContentObserver(musicContentObserver)
+        }
+
         controller?.let { persistPlaybackState(it, force = true) }
         controller?.release()
         controller = null
@@ -653,6 +766,8 @@ private fun NusaMusicApp(
     onToggleRepeat: () -> Unit,
     shuffleEnabled: Boolean,
     repeatMode: Int,
+    isScanningMusic: Boolean,
+    onScanMusic: () -> Unit,
     onRequestPermission: () -> Unit
 ) {
     var isFavorite by remember { mutableStateOf(false) }
@@ -844,7 +959,7 @@ private fun NusaMusicApp(
                 Spacer(Modifier.height(10.dp))
 
                 Text(
-                    "Nusa Music adalah pemutar musik lokal Android yang dirancang dengan fokus pada pengalaman mendengarkan musik yang bersih dan sederhana.",
+                    "Nusa adalah pemutar musik lokal Android yang dirancang dengan fokus pada pengalaman mendengarkan musik yang bersih dan sederhana.",
                     fontSize = 14.sp,
                     lineHeight = 21.sp
                 )
@@ -873,7 +988,7 @@ private fun NusaMusicApp(
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "Nusa Music  •  Version 1.0",
+                    "Nusa  •  Version 1.0",
                     fontSize = 15.sp
                 )
 
@@ -1205,7 +1320,7 @@ private fun NusaMusicApp(
 
                                         if (!permissionGranted) {
                                             Text(
-                                                "Give Nusa Music access to your audio files.",
+                                                "Give Nusa access to your audio files.",
                                                 color = Color(0xFF9D9D9D),
                                                 fontSize = 14.sp
                                             )
@@ -1283,18 +1398,38 @@ private fun NusaMusicApp(
                                     color = Color.White
                                 )
 
-                                Box {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
                                     IconButton(
-                                        onClick = { sortMenuExpanded = true }
+                                        onClick = {
+                                            if (permissionGranted) {
+                                                onScanMusic()
+                                            } else {
+                                                onRequestPermission()
+                                            }
+                                        },
+                                        enabled = !isScanningMusic
                                     ) {
                                         Icon(
-                                            Icons.Default.Sort,
-                                            contentDescription = "Urutkan lagu",
+                                            Icons.Default.Refresh,
+                                            contentDescription = "Scan musik",
                                             tint = Color.White
                                         )
                                     }
 
-                                    DropdownMenu(
+                                    Box {
+                                        IconButton(
+                                            onClick = { sortMenuExpanded = true }
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Sort,
+                                                contentDescription = "Urutkan lagu",
+                                                tint = Color.White
+                                            )
+                                        }
+
+                                        DropdownMenu(
                                         expanded = sortMenuExpanded,
                                         onDismissRequest = {
                                             sortMenuExpanded = false
@@ -1322,7 +1457,6 @@ private fun NusaMusicApp(
                                         }
                                     }
                                 }
-
                             }
 
                             LazyVerticalGrid(
@@ -1362,7 +1496,7 @@ private fun NusaMusicApp(
                                             horizontalAlignment = Alignment.CenterHorizontally
                                         ) {
                                             Text(
-                                                "Give Nusa Music access to your audio files.",
+                                                "Give Nusa access to your audio files.",
                                                 color = Color(0xFF9D9D9D),
                                                 fontSize = 14.sp
                                             )
