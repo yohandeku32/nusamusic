@@ -2015,7 +2015,6 @@ private fun NusaMusicApp(
             }
         }
     }
-    }
 }
 
 @Composable
