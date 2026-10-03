@@ -542,31 +542,37 @@ private fun NusaMusicApp(
     val playerScrollState =
         androidx.compose.foundation.lazy.rememberLazyListState()
     val libraryListState =
-        androidx.compose.foundation.lazy.rememberLazyListState()
+        androidx.compose.foundation.lazy.grid.rememberLazyGridState()
     val scope = rememberCoroutineScope()
     val density = androidx.compose.ui.platform.LocalDensity.current
 
 
 
     // Center the currently playing song only when entering the library.
-    // The list does not react to song changes after the page is already open.
+    // The grid uses the real item bounds, so entering the page centers the
+    // active cover without affecting normal song selection afterward.
     LaunchedEffect(pagerState.currentPage) {
         if (pagerState.currentPage == 1 && currentSong != null) {
             kotlinx.coroutines.yield()
-
             val index = filtered.indexOfFirst { it.id == currentSong.id }
-            if (index >= 0) {
-                libraryListState.scrollToItem(index)
-                kotlinx.coroutines.yield()
 
-                val item = libraryListState.layoutInfo.visibleItemsInfo
+            if (index >= 0) {
+                val visibleItem = libraryListState.layoutInfo.visibleItemsInfo
                     .firstOrNull { it.index == index }
 
-                if (item != null) {
-                    val viewportCenter =
-                        (libraryListState.layoutInfo.viewportStartOffset +
-                            libraryListState.layoutInfo.viewportEndOffset) / 2
-                    val itemCenter = item.offset + item.size / 2
+                if (visibleItem == null) {
+                    libraryListState.scrollToItem(index)
+                    kotlinx.coroutines.yield()
+                }
+
+                val centeredItem = libraryListState.layoutInfo.visibleItemsInfo
+                    .firstOrNull { it.index == index }
+
+                if (centeredItem != null) {
+                    val viewportStart = libraryListState.layoutInfo.viewportStartOffset
+                    val viewportEnd = libraryListState.layoutInfo.viewportEndOffset
+                    val viewportCenter = (viewportStart + viewportEnd) / 2
+                    val itemCenter = centeredItem.offset.y + centeredItem.size.height / 2
 
                     libraryListState.scroll {
                         scrollBy((itemCenter - viewportCenter).toFloat())
@@ -1176,103 +1182,36 @@ private fun NusaMusicApp(
                                 }
                             }
 
-                            LazyColumn(
+                            LazyVerticalGrid(
+                                columns = GridCells.Fixed(2),
                                 state = libraryListState,
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .padding(top = 76.dp),
                                 contentPadding = PaddingValues(
-                                    top = 34.dp,
-                                    bottom = 162.dp
-                                )
+                                    top = 10.dp,
+                                    start = 6.dp,
+                                    end = 6.dp,
+                                    bottom = 140.dp
+                                ),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 if (permissionGranted && filtered.isNotEmpty()) {
                                     items(
                                         items = filtered,
                                         key = { song -> song.id },
-                                        contentType = { "explore-song" }
+                                        span = { GridItemSpan(1) },
+                                        contentType = { "library-song" }
                                     ) { song ->
-                                        val itemInfo =
-                                            libraryListState.layoutInfo.visibleItemsInfo
-                                                .firstOrNull { it.key == song.id }
-
-                                        val viewportStart =
-                                            libraryListState.layoutInfo.viewportStartOffset
-                                        val viewportEnd =
-                                            libraryListState.layoutInfo.viewportEndOffset
-                                        val viewportCenter =
-                                            (viewportStart + viewportEnd) / 2f
-                                        val itemCenter =
-                                            itemInfo?.let {
-                                                it.offset + it.size / 2f
-                                            } ?: viewportCenter
-
-                                        val distancePx =
-                                            itemCenter - viewportCenter
-                                        val arcRadiusDp = 300f
-                                        val arcRadiusPx =
-                                            arcRadiusDp * density.density
-                                        val arcY =
-                                            distancePx.coerceIn(
-                                                -arcRadiusPx,
-                                                arcRadiusPx
-                                            )
-
-                                        // True semicircle profile:
-                                        // center item sits at the left-most point;
-                                        // items above/below travel around the same circle.
-                                        val insideCircle =
-                                            (arcRadiusPx * arcRadiusPx -
-                                                arcY * arcY)
-                                                .coerceAtLeast(0f)
-                                        val arcX =
-                                            arcRadiusPx - kotlin.math.sqrt(insideCircle)
-
-                                        val angleRadians =
-                                            kotlin.math.asin(
-                                                (arcY / arcRadiusPx)
-                                                    .coerceIn(-1f, 1f)
-                                            )
-                                        val angleDegrees =
-                                            Math.toDegrees(angleRadians.toDouble())
-                                                .toFloat()
-
-                                        val distanceAbs =
-                                            (distancePx / arcRadiusPx)
-                                                .coerceIn(-1f, 1f)
-                                                .let { kotlin.math.abs(it) }
-
-                                        val translationX = arcX
-                                        val rotationZ = -angleDegrees * 0.82f
-                                        val scale =
-                                            (0.90f + (1f - distanceAbs) * 0.10f)
-                                                .coerceIn(0.90f, 1f)
-                                        val alpha =
-                                            (0.62f + (1f - distanceAbs) * 0.38f)
-                                                .coerceIn(0.62f, 1f)
-
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .height(108.dp)
-                                                .graphicsLayer {
-                                                    this.translationX =
-                                                        translationX * density.density
-                                                    this.rotationZ = rotationZ
-                                                    this.scaleX = scale
-                                                    this.scaleY = scale
-                                                    this.alpha = alpha
-                                                }
-                                        ) {
-                                            LibraryExploreRow(
-                                                song = song,
-                                                selected = currentSong?.id == song.id,
-                                                onPlay = onPlay
-                                            )
-                                        }
+                                        LibrarySongRow(
+                                            song = song,
+                                            selected = currentSong?.id == song.id,
+                                            onPlay = onPlay
+                                        )
                                     }
                                 } else if (!permissionGranted) {
-                                    item {
+                                    item(span = { GridItemSpan(maxLineSpan) }) {
                                         Column(
                                             modifier = Modifier
                                                 .fillMaxWidth()
@@ -1294,7 +1233,7 @@ private fun NusaMusicApp(
                                         }
                                     }
                                 } else {
-                                    item {
+                                    item(span = { GridItemSpan(maxLineSpan) }) {
                                         Box(
                                             modifier = Modifier
                                                 .fillMaxWidth()
@@ -2697,123 +2636,135 @@ private fun WornCoverArtwork(
 }
 
 @Composable
-private fun LibraryExploreRow(
+private fun LibrarySongRow(
     song: Song,
     selected: Boolean,
     onPlay: (Song) -> Unit
 ) {
-    val artworkSize = if (selected) 86.dp else 74.dp
+    // Fixed height keeps grid rows stable when the active track changes.
+    val cardHeight = 194.dp
+    val artworkSize = if (selected) 160.dp else 148.dp
+    val vinylSize = if (selected) 152.dp else 140.dp
+    val artworkAreaHeight = 164.dp
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(108.dp)
-            .padding(horizontal = 20.dp, vertical = 4.dp)
-            .clip(RoundedCornerShape(28.dp))
+            .height(cardHeight)
+            .clip(RoundedCornerShape(16.dp))
             .then(
                 if (selected) {
-                    Modifier.background(
-                        Color.Black.copy(alpha = 0.40f),
-                        RoundedCornerShape(28.dp)
-                    )
+                    Modifier
+                        .background(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    Color(0xFF292B2E),
+                                    Color(0xFF151618)
+                                )
+                            ),
+                            shape = RoundedCornerShape(16.dp)
+                        )
+                        .graphicsLayer {
+                            scaleX = 1.012f
+                            scaleY = 1.012f
+                        }
                 } else {
                     Modifier
                 }
             )
             .clickable { onPlay(song) }
-            .padding(horizontal = 10.dp, vertical = 6.dp)
+            .padding(horizontal = 4.dp, vertical = 6.dp)
     ) {
-        Row(
+        Column(
             modifier = Modifier.fillMaxSize(),
-            verticalAlignment = Alignment.CenterVertically
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Box(
                 modifier = Modifier
-                    .width(92.dp)
-                    .fillMaxHeight()
+                    .height(artworkAreaHeight)
+                    .fillMaxWidth(),
+                contentAlignment = Alignment.Center
             ) {
-                // Circular artwork is the visual anchor of the Explore-style list.
+                Box(
+                    modifier = Modifier
+                        .size(vinylSize)
+                        .offset(x = if (selected) 18.dp else 16.dp)
+                        .clip(CircleShape)
+                        .background(
+                            Brush.radialGradient(
+                                colors = listOf(
+                                    Color(0xFF4D4D4D),
+                                    Color(0xFF1B1B1B),
+                                    Color(0xFF050505)
+                                )
+                            )
+                        )
+                ) {
+                    for (ring in 1..6) {
+                        Box(
+                            modifier = Modifier
+                                .size((76 + ring * 4).dp)
+                                .align(Alignment.Center)
+                                .clip(CircleShape)
+                                .border(
+                                    width = 0.55.dp,
+                                    color = Color.White.copy(alpha = 0.045f)
+                                )
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .align(Alignment.Center)
+                            .clip(CircleShape)
+                            .background(Color(0xFF090909))
+                    )
+                }
+
                 Box(
                     modifier = Modifier
                         .size(artworkSize)
-                        .align(Alignment.Center)
-                        .clip(CircleShape)
-                        .background(Color(0xFF111111))
+                        .clip(RoundedCornerShape(7.dp))
+                        .background(Color(0xFF0A0A0A))
+                        .padding(2.dp)
                 ) {
-                    ArtworkView(
+                    WornCoverArtwork(
                         song = song,
-                        maxSizePx = 256,
+                        maxSizePx = 320,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
             }
 
-            Spacer(Modifier.width(8.dp))
-
-            Column(
+            Text(
+                text = song.title,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                fontSize = if (selected) 13.sp else 12.sp,
+                lineHeight = 13.sp,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                color = Color.White,
+                textAlign = TextAlign.Center,
                 modifier = Modifier
-                    .weight(1f)
-                    .padding(end = 6.dp)
-            ) {
-                Text(
-                    text = song.title,
-                    maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                    fontSize = if (selected) 16.sp else 15.sp,
-                    lineHeight = if (selected) 18.sp else 17.sp,
-                    fontWeight = if (selected) {
-                        FontWeight.SemiBold
-                    } else {
-                        FontWeight.Medium
-                    },
-                    color = Color.White
-                )
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp)
+            )
 
-                Spacer(Modifier.height(1.dp))
-
-                Text(
-                    text = song.artist,
-                    maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                    fontSize = 11.sp,
-                    lineHeight = 12.sp,
-                    color = Color(0xFFBDBDBD)
-                )
-            }
-
-            if (selected) {
-                Surface(
-                    shape = RoundedCornerShape(24.dp),
-                    color = Color.White.copy(alpha = 0.16f),
-                    tonalElevation = 0.dp
-                ) {
-                    Row(
-                        modifier = Modifier.padding(
-                            horizontal = 14.dp,
-                            vertical = 8.dp
-                        ),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            Icons.Default.PlayArrow,
-                            contentDescription = "Play",
-                            tint = Color.White,
-                            modifier = Modifier.size(15.dp)
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            "Play",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color.White
-                        )
-                    }
-                }
-            }
+            Text(
+                text = song.artist,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                fontSize = 9.5.sp,
+                lineHeight = 10.sp,
+                color = if (selected) Color(0xFFD2D2D2) else Color(0xFFAAAAAA),
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp)
+            )
         }
     }
 }
-
 private fun formatTime(ms: Long): String {
     val totalSeconds = (ms / 1000L).coerceAtLeast(0L)
     val minutes = totalSeconds / 60L
