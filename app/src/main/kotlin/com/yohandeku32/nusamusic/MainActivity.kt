@@ -1861,49 +1861,119 @@ private fun AudioQualityPill(song: Song?) {
     }
 
     if (showMetadataDialog && song != null && info != null) {
-        androidx.compose.material3.AlertDialog(
+        androidx.compose.ui.window.Dialog(
             onDismissRequest = { showMetadataDialog = false },
-            title = {
-                Text(
-                    text = "Info Metadata",
-                    fontWeight = FontWeight.Bold
+            properties = androidx.compose.ui.window.DialogProperties(
+                dismissOnClickOutside = true,
+                dismissOnBackPress = true,
+                usePlatformDefaultWidth = false
+            )
+        ) {
+            androidx.compose.animation.AnimatedVisibility(
+                visible = true,
+                enter = androidx.compose.animation.fadeIn(
+                    animationSpec = tween(180)
+                ) + androidx.compose.animation.scaleIn(
+                    initialScale = 0.94f,
+                    animationSpec = tween(
+                        durationMillis = 220,
+                        easing = androidx.compose.animation.core.FastOutSlowInEasing
+                    )
                 )
-            },
-            text = {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Surface(
+                    modifier = Modifier
+                        .widthIn(min = 300.dp, max = 352.dp)
+                        .padding(horizontal = 18.dp),
+                    shape = RoundedCornerShape(28.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 8.dp,
+                    shadowElevation = 18.dp
                 ) {
-                    MetadataRow("Judul", song.title)
-                    MetadataRow("Artis", song.artist)
-                    MetadataRow("Album", song.album)
-                    MetadataRow("Codec", info.codecName)
-                    MetadataRow(
-                        "Sample rate",
-                        info.sampleRateHz?.let { rate ->
-                            if (rate % 1000 == 0) (rate / 1000).toString() + " kHz"
-                            else (rate / 1000f).toString() + " kHz"
-                        } ?: "Tidak tersedia"
-                    )
-                    MetadataRow(
-                        "Bit depth",
-                        info.bitDepth?.let { it.toString() + "-bit" }
-                            ?: "Tidak tersedia"
-                    )
-                    MetadataRow("Durasi", formatTime(song.durationMs))
+                    Column(
+                        modifier = Modifier.padding(
+                            start = 22.dp,
+                            end = 22.dp,
+                            top = 20.dp,
+                            bottom = 12.dp
+                        )
+                    ) {
+                        Text(
+                            text = "Audio Info",
+                            fontSize = 21.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+
+                        Text(
+                            text = song.title,
+                            fontSize = 14.sp,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 3.dp)
+                        )
+
+                        Text(
+                            text = ArtistNameUtils.firstArtist(song.artist),
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f),
+                            modifier = Modifier.padding(top = 1.dp)
+                        )
+
+                        Spacer(Modifier.height(16.dp))
+
+                        MetadataRow("Codec", info.codecName)
+                        MetadataDivider()
+                        MetadataRow("Sample rate", formatSampleRate(info.sampleRateHz))
+                        MetadataDivider()
+                        MetadataRow("Bit depth", formatBitDepth(info.bitDepth))
+                        MetadataDivider()
+                        MetadataRow("Durasi", formatTime(song.durationMs))
+
+                        Spacer(Modifier.height(12.dp))
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.055f)
+                                )
+                                .clickable {
+                                    showMetadataDialog = false
+                                }
+                                .padding(vertical = 11.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Tutup",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
                 }
-            },
-            confirmButton = {
-                androidx.compose.material3.TextButton(
-                    onClick = { showMetadataDialog = false }
-                ) {
-                    Text("Tutup")
-                }
-            },
-            containerColor = MaterialTheme.colorScheme.surface,
-            titleContentColor = MaterialTheme.colorScheme.onSurface,
-            textContentColor = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+            }
+        }
     }
+}
+
+private fun formatSampleRate(sampleRateHz: Int?): String {
+    return sampleRateHz?.let { rate ->
+        if (rate % 1000 == 0) {
+            (rate / 1000).toString() + " kHz"
+        } else {
+            String.format(Locale.US, "%.1f kHz", rate / 1000f)
+        }
+    } ?: "Tidak tersedia"
+}
+
+private fun formatBitDepth(bitDepth: Int?): String {
+    return bitDepth?.let { it.toString() + "-bit" } ?: "Tidak tersedia"
 }
 
 @Composable
@@ -1911,21 +1981,39 @@ private fun MetadataRow(
     label: String,
     value: String
 ) {
-    Column(
-        modifier = Modifier.fillMaxWidth()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = label,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f)
         )
+
         Text(
             text = value,
             fontSize = 14.sp,
-            color = MaterialTheme.colorScheme.onSurface
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.End,
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            modifier = Modifier.widthIn(max = 165.dp)
         )
     }
+}
+
+@Composable
+private fun MetadataDivider() {
+    androidx.compose.material3.HorizontalDivider(
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f),
+        thickness = 1.dp
+    )
 }
 
 @Composable
