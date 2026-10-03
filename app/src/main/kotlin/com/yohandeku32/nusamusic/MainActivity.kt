@@ -1602,7 +1602,6 @@ private fun ImmersiveArtwork(
 ) {
     Box(
         modifier = modifier
-            .clip(CircleShape)
             .background(MaterialTheme.colorScheme.background)
     ) {
         ArtworkView(
