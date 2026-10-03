@@ -1316,6 +1316,7 @@ private fun NusaMusicApp(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ImmersiveArtworkPlayer(
     modifier: Modifier = Modifier,
