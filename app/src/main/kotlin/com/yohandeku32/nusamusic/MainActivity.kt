@@ -744,8 +744,16 @@ private fun NusaMusicApp(
                                                                     TopAppBar(
                                                                         title = { },
                                                                         colors = TopAppBarDefaults.topAppBarColors(
-                                                                            containerColor = MaterialTheme.colorScheme.background,
-                                                                            scrolledContainerColor = MaterialTheme.colorScheme.background
+                                                                            containerColor = if (immersiveArtwork) {
+                                                                                Color.Transparent
+                                                                            } else {
+                                                                                MaterialTheme.colorScheme.background
+                                                                            },
+                                                                            scrolledContainerColor = if (immersiveArtwork) {
+                                                                                Color.Transparent
+                                                                            } else {
+                                                                                MaterialTheme.colorScheme.background
+                                                                            }
                                                                         ),
                                                                         windowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
                                                                         navigationIcon = {
@@ -761,13 +769,15 @@ private fun NusaMusicApp(
                                                                             IconButton(onClick = {}) {
                                                                                 Icon(
                                                                                     Icons.Default.MoreHoriz,
-                                                                                    contentDescription = "More"
+                                                                                    contentDescription = "More",
+                                                                                    tint = if (immersiveArtwork) Color.White else MaterialTheme.colorScheme.onBackground
                                                                                 )
                                                                             }
                                                                             IconButton(onClick = { showSettings = true }) {
                                                                                 Icon(
                                                                                     Icons.Default.Settings,
-                                                                                    contentDescription = "Settings"
+                                                                                    contentDescription = "Settings",
+                                                                                    tint = if (immersiveArtwork) Color.White else MaterialTheme.colorScheme.onBackground
                                                                                 )
                                                                             }
                                                                         }
