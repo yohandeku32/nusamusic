@@ -1309,57 +1309,48 @@ private fun ImmersiveArtwork(
     song: Song?,
     modifier: Modifier = Modifier
 ) {
-    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
-
-    // Keep this composable measured exactly like the Vinyl slot. Everything
-    // below stays in the same position; only the artwork is allowed to bleed
-    // outside its measured bounds.
-    val slotWidth = screenWidth * 0.88f
-    val artworkWidth = screenWidth
-    val artworkHeight = screenWidth * 1.62f
-    val topBleed = 90.dp
-    val fadeHeight = 300.dp
-
     Box(
         modifier = modifier
             .background(Color.Transparent)
     ) {
+        // This box is measured at the exact same size as the Vinyl slot.
+        // Only the artwork drawing is enlarged, so the rest of the player
+        // keeps its original vertical layout.
         Box(
-            modifier = Modifier
-                .requiredWidth(artworkWidth)
-                .height(artworkHeight)
-                .offset(
-                    x = -((artworkWidth - slotWidth) / 2f),
-                    y = -topBleed
-                )
+            modifier = Modifier.matchParentSize()
         ) {
             ArtworkView(
                 song = song,
                 maxSizePx = 1024,
                 modifier = Modifier
                     .fillMaxSize()
+                    .graphicsLayer {
+                        val immersiveScale = 1.45f
+                        scaleX = immersiveScale
+                        scaleY = immersiveScale
+
+                        // Align the enlarged artwork to the bottom of the
+                        // original Vinyl slot. This lets it grow upward into
+                        // the header/status-bar area without pushing content.
+                        translationY = -(size.height * (immersiveScale - 1f))
+                    }
             )
 
-            // Apple Music-like soft dissolve: the cover remains visible deep
-            // into the lower area and then gradually disappears into the same
-            // white surface used by the player. The fade is full-width, so no
-            // rectangular seam is visible at the artwork edges.
+            // Smoothly dissolve the artwork into the existing white player
+            // background at the exact point where the title begins below.
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .height(fadeHeight)
+                    .fillMaxHeight(0.62f)
                     .background(
                         Brush.verticalGradient(
-                            colorStops = arrayOf(
-                                0.00f to Color.Transparent,
-                                0.18f to Color.Transparent,
-                                0.36f to MaterialTheme.colorScheme.background.copy(alpha = 0.08f),
-                                0.54f to MaterialTheme.colorScheme.background.copy(alpha = 0.24f),
-                                0.70f to MaterialTheme.colorScheme.background.copy(alpha = 0.48f),
-                                0.84f to MaterialTheme.colorScheme.background.copy(alpha = 0.76f),
-                                0.94f to MaterialTheme.colorScheme.background.copy(alpha = 0.94f),
-                                1.00f to MaterialTheme.colorScheme.background
+                            colors = listOf(
+                                Color.Transparent,
+                                MaterialTheme.colorScheme.background.copy(alpha = 0.08f),
+                                MaterialTheme.colorScheme.background.copy(alpha = 0.32f),
+                                MaterialTheme.colorScheme.background.copy(alpha = 0.72f),
+                                MaterialTheme.colorScheme.background
                             )
                         )
                     )
