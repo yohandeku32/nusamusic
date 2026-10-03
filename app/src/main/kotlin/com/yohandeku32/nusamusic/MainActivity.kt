@@ -1336,21 +1336,26 @@ private fun ImmersiveArtwork(
                     }
             )
 
-            // Smoothly dissolve the artwork into the existing white player
-            // background at the exact point where the title begins below.
+            // Use a long, feathered fade so there is no visible horizontal
+            // seam where the artwork meets the white player background.
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .fillMaxHeight(0.62f)
+                    .fillMaxHeight(0.76f)
                     .background(
                         Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                MaterialTheme.colorScheme.background.copy(alpha = 0.08f),
-                                MaterialTheme.colorScheme.background.copy(alpha = 0.32f),
-                                MaterialTheme.colorScheme.background.copy(alpha = 0.72f),
-                                MaterialTheme.colorScheme.background
+                            colorStops = arrayOf(
+                                0.00f to Color.Transparent,
+                                0.10f to Color.Transparent,
+                                0.22f to MaterialTheme.colorScheme.background.copy(alpha = 0.035f),
+                                0.34f to MaterialTheme.colorScheme.background.copy(alpha = 0.075f),
+                                0.48f to MaterialTheme.colorScheme.background.copy(alpha = 0.15f),
+                                0.62f to MaterialTheme.colorScheme.background.copy(alpha = 0.28f),
+                                0.74f to MaterialTheme.colorScheme.background.copy(alpha = 0.48f),
+                                0.86f to MaterialTheme.colorScheme.background.copy(alpha = 0.72f),
+                                0.94f to MaterialTheme.colorScheme.background.copy(alpha = 0.90f),
+                                1.00f to MaterialTheme.colorScheme.background
                             )
                         )
                     )
