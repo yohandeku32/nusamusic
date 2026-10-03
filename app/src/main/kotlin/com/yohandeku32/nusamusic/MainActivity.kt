@@ -1371,16 +1371,8 @@ private fun ImmersiveArtworkPlayer(
             title = { },
             modifier = Modifier.zIndex(2f),
             colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = if (immersiveArtwork) {
-                    Color.Transparent
-                } else {
-                    MaterialTheme.colorScheme.background
-                },
-                scrolledContainerColor = if (immersiveArtwork) {
-                    Color.Transparent
-                } else {
-                    MaterialTheme.colorScheme.background
-                }
+                containerColor = Color.Transparent,
+                scrolledContainerColor = Color.Transparent
             ),
             windowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
             navigationIcon = {
