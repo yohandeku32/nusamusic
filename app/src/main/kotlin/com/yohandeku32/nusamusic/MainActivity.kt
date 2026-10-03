@@ -1837,7 +1837,7 @@ private fun AudioQualityPill(song: Song?) {
                     Spacer(Modifier.width(5.dp))
 
                     Text(
-                        text = if (hiRes) "Hi-Res Lossless" else "Lossless",
+                        text = if (hiRes) "Hi-Res" else "Lossless",
                         fontSize = 10.sp,
                         lineHeight = 12.sp,
                         fontWeight = FontWeight.Medium,
