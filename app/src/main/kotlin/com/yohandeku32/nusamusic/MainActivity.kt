@@ -2236,16 +2236,19 @@ private fun LibrarySongRow(
             .height(rowHeight)
             .padding(horizontal = 10.dp, vertical = 2.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(
+            .then(
                 if (selected) {
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color(0xFF25272A),
-                            Color(0xFF111214)
-                        )
+                    Modifier.background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                Color(0xFF25272A),
+                                Color(0xFF111214)
+                            )
+                        ),
+                        shape = RoundedCornerShape(12.dp)
                     )
                 } else {
-                    Color.Transparent
+                    Modifier
                 }
             )
             .then(
