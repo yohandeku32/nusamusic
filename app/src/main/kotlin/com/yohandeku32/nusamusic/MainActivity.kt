@@ -726,13 +726,16 @@ private fun NusaMusicApp(
                                                                     modifier = Modifier
                                                                         .fillMaxWidth()
                                                                         .fillParentMaxHeight()
-                                                                        .clip(
-                                                                            RoundedCornerShape(
+                                                                        // Draw the rounded player surface without clipping its children.
+                                                                        // The immersive artwork must be allowed to bleed outside the
+                                                                        // square artwork slot, all the way to the screen edges.
+                                                                        .background(
+                                                                            color = MaterialTheme.colorScheme.background,
+                                                                            shape = RoundedCornerShape(
                                                                                 bottomStart = 34.dp,
                                                                                 bottomEnd = 34.dp
                                                                             )
-                                                                        )
-                                                                        .background(MaterialTheme.colorScheme.background),
+                                                                        ),
                                                                     horizontalAlignment = Alignment.CenterHorizontally
                                                                 ) {
                                                                     Spacer(
