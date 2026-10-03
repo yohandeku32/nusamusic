@@ -12,7 +12,7 @@
 
     <application
         android:allowBackup="true"
-        android:label="Nusa Music"
+        android:label="Nusa"
         android:supportsRtl="true"
         android:theme="@style/Theme.NusaMusic"
         android:hardwareAccelerated="true">
