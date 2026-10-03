@@ -475,6 +475,7 @@ class MainActivity : ComponentActivity() {
             if (cachedSongs == null &&
                 (permissionGranted || selectedMusicFolders.isNotEmpty())
             ) {
+                scanAfterCacheLoad = false
                 scanMusic()
             } else if (scanAfterCacheLoad && permissionGranted && cachedSongs == null) {
                 scanAfterCacheLoad = false
@@ -1067,7 +1068,8 @@ private fun NusaMusicApp(
 
     LaunchedEffect(currentSong?.artist) {
         artistBiography = null
-        biographyLoading = currentSong?.artist?.isNotBlank() == true
+        biographyLoading =
+            ArtistNameUtils.firstArtist(currentSong?.artist).isNotBlank()
         artistBiography = currentSong?.let {
             ArtistBiographyLoader.load(it)
         }
@@ -2128,7 +2130,7 @@ private fun ArtistBiographySection(
     biography: com.yohandeku32.nusamusic.data.ArtistBiography?,
     loading: Boolean
 ) {
-    val displayArtist = artistName?.trim().orEmpty().ifBlank { "Unknown artist" }
+    val displayArtist = ArtistNameUtils.firstArtist(artistName).ifBlank { "Unknown artist" }
 
     Column(
         modifier = Modifier
