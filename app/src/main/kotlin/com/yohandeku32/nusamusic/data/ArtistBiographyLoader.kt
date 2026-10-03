@@ -44,9 +44,12 @@ object ArtistBiographyLoader {
         val cacheKey = artist.lowercase()
         cache[cacheKey]?.let { return@withContext it }
 
-        // Keep artist biographies Indonesian-only. We intentionally
-        // do not fall back to English when Last.fm has no Indonesian bio.
+        // Request Indonesian first. Last.fm supports localized biographies
+        // when a translation exists, but not every artist has an Indonesian
+        // biography. Fall back to English so the section never disappears
+        // merely because an Indonesian translation is unavailable.
         val result = loadFromLastFm(artist, "id")
+            ?: loadFromLastFm(artist, "en")
 
         result?.let { cache[cacheKey] = it }
         result
