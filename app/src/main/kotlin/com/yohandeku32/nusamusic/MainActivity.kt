@@ -1479,15 +1479,19 @@ private fun ImmersiveArtworkPlayer(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(1f)
+                .weight(1f)
         ) {
             ArtworkView(
                 song = song,
                 maxSizePx = 1024,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(14.dp)
-                    .clip(RoundedCornerShape(28.dp))
+                    .graphicsLayer {
+                        // Zoom the artwork beyond its bounds so it behaves like
+                        // a full-bleed player image rather than a square cover.
+                        scaleX = 1.18f
+                        scaleY = 1.18f
+                    }
             )
 
             // Soft color bloom around the artwork, inspired by Apple Music's
