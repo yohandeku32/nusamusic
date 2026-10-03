@@ -36,7 +36,7 @@ The remaining work is mainly **hardware validation and refinement of the Hi-Res 
 | Shuffle / Repeat | ✅ Implemented | Media3 playback modes |
 | Playback state restore | ✅ Implemented | Song, position, shuffle and repeat |
 | Title font-size setting | ✅ Implemented | Stored in SharedPreferences |
-| Hi-Res metadata badge | ✅ Implemented | Lossless / Hi-Res Lossless indicator |
+| Hi-Res metadata badge | ✅ Implemented | Lossless / Hi-Res indicator |
 | Dedicated USB Hi-Res engine | 🟡 Integrated | Decent USB Audio engine is wired into PlaybackService |
 | USB DAC permission flow | 🟡 Integrated | USB Audio device detection and permission handling added |
 | Bit-perfect hardware validation | ⏳ Pending | Requires real USB DAC testing |
@@ -55,7 +55,7 @@ The player currently includes:
 - Playback controls
 - Shuffle and repeat
 - Share and favorite controls
-- Lossless / Hi-Res Lossless badge
+- Lossless / Hi-Res badge
 - Artist portrait
 - Artist biography area
 - Swipe navigation between player and library
@@ -159,15 +159,15 @@ Nusa Music reads local media metadata to identify codec and bit depth.
 Examples:
 
 ```text
-Apple Lossless → Lossless / Hi-Res Lossless
-FLAC           → Lossless / Hi-Res Lossless
+Apple Lossless → Lossless / Hi-Res
+FLAC           → Lossless / Hi-Res
 ```
 
 Current UI tier:
 
 ```text
 < 24-bit  → Lossless
->= 24-bit → Hi-Res Lossless
+>= 24-bit → Hi-Res
 ```
 
 This badge is a **metadata classification**, not proof that the Android output path is bit-perfect.
