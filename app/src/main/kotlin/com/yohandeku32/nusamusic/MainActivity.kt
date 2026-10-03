@@ -46,7 +46,6 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.FastForward
@@ -659,49 +658,49 @@ private fun NusaMusicApp(
     var titleFontSize by remember {
         mutableStateOf(uiPrefs.getFloat("title_font_size", 34f))
     }
-    var librarySearchVisible by remember { mutableStateOf(false) }
-    var librarySearchQuery by remember { mutableStateOf("") }
     var sortMenuExpanded by remember { mutableStateOf(false) }
     var librarySortOption by remember { mutableStateOf(LibrarySortOption.TITLE_ASC) }
 
     val filtered = remember(
         songs,
-        librarySearchQuery,
         librarySortOption
     ) {
-        val query = librarySearchQuery.trim()
-        val matchingSongs = if (query.isBlank()) {
-            songs
-        } else {
-            songs.filter {
-                it.title.contains(query, ignoreCase = true) ||
-                    it.artist.contains(query, ignoreCase = true) ||
-                    it.album.contains(query, ignoreCase = true)
-            }
-        }
-
         when (librarySortOption) {
             LibrarySortOption.TITLE_ASC ->
-                matchingSongs.sortedBy { it.title.lowercase(Locale.ROOT) }
+                songs.sortedBy { it.title.lowercase(Locale.ROOT) }
 
             LibrarySortOption.TITLE_DESC ->
-                matchingSongs.sortedByDescending { it.title.lowercase(Locale.ROOT) }
+                songs.sortedByDescending { it.title.lowercase(Locale.ROOT) }
 
             LibrarySortOption.ARTIST_ASC ->
-                matchingSongs.sortedBy {
+                songs.sortedBy {
                     it.artist.lowercase(Locale.ROOT)
                 }
 
             LibrarySortOption.ALBUM_ASC ->
-                matchingSongs.sortedBy {
+                songs.sortedBy {
                     it.album.lowercase(Locale.ROOT)
                 }
 
             LibrarySortOption.DURATION_ASC ->
-                matchingSongs.sortedBy { it.durationMs }
+                songs.sortedBy { it.durationMs }
 
             LibrarySortOption.DURATION_DESC ->
-                matchingSongs.sortedByDescending { it.durationMs }
+                songs.sortedByDescending { it.durationMs }
+        }
+    }
+
+    val alphabet = remember {
+        ('A'..'Z').toList()
+    }
+
+    val alphabetTargets = remember(filtered) {
+        alphabet.associateWith { letter ->
+            filtered.indexOfFirst { song ->
+                song.title.trim()
+                    .firstOrNull()
+                    ?.uppercaseChar() == letter
+            }
         }
     }
 
@@ -1261,44 +1260,16 @@ private fun NusaMusicApp(
                                     )
                                 }
 
-                                if (librarySearchVisible) {
-                                    androidx.compose.material3.OutlinedTextField(
-                                        value = librarySearchQuery,
-                                        onValueChange = { librarySearchQuery = it },
-                                        singleLine = true,
-                                        placeholder = {
-                                            Text(
-                                                "Cari lagu, artis, atau album",
-                                                color = Color(0xFF7F7F7F)
-                                            )
-                                        },
-                                        modifier = Modifier.weight(1f),
-                                        shape = RoundedCornerShape(24.dp),
-                                        colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
-                                            focusedContainerColor = Color(0xFF151515),
-                                            unfocusedContainerColor = Color(0xFF151515),
-                                            focusedBorderColor = Color.White.copy(alpha = 0.65f),
-                                            unfocusedBorderColor = Color.White.copy(alpha = 0.16f),
-                                            focusedTextColor = Color.White,
-                                            unfocusedTextColor = Color.White,
-                                            cursorColor = Color.White,
-                                            focusedPlaceholderColor = Color(0xFF7F7F7F),
-                                            unfocusedPlaceholderColor = Color(0xFF7F7F7F)
-                                        )
-                                    )
-                                } else {
-                                    Text(
-                                        text = "Daftar Lagu",
-                                        modifier = Modifier.weight(1f),
-                                        textAlign = TextAlign.Center,
-                                        fontSize = 21.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White
-                                    )
-                                }
+                                Text(
+                                    text = "Daftar Lagu",
+                                    modifier = Modifier.weight(1f),
+                                    textAlign = TextAlign.Center,
+                                    fontSize = 21.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
 
-                                Box {
-                                    IconButton(
+                                Box {                                    IconButton(
                                         onClick = { sortMenuExpanded = true }
                                     ) {
                                         Icon(
@@ -1337,24 +1308,6 @@ private fun NusaMusicApp(
                                     }
                                 }
 
-                                IconButton(
-                                    onClick = {
-                                        librarySearchVisible = !librarySearchVisible
-                                        if (!librarySearchVisible) {
-                                            librarySearchQuery = ""
-                                        }
-                                    }
-                                ) {
-                                    Icon(
-                                        Icons.Default.Search,
-                                        contentDescription = if (librarySearchVisible) {
-                                            "Tutup pencarian"
-                                        } else {
-                                            "Cari lagu"
-                                        },
-                                        tint = Color.White
-                                    )
-                                }
                             }
 
                             LazyVerticalGrid(
@@ -1416,15 +1369,59 @@ private fun NusaMusicApp(
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Text(
-                                                if (librarySearchQuery.isBlank()) {
-                                                    "No local music found"
-                                                } else {
-                                                    "Tidak ada lagu yang cocok"
-                                                },
+                                                "No local music found",
                                                 color = Color(0xFF9D9D9D),
                                                 fontSize = 14.sp
                                             )
                                         }
+                                    }
+                                }
+                            }
+
+                            Column(
+                                modifier = Modifier
+                                    .align(Alignment.CenterEnd)
+                                    .fillMaxHeight()
+                                    .padding(
+                                        top = 88.dp,
+                                        bottom = 122.dp,
+                                        end = 2.dp
+                                    )
+                                    .width(22.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.SpaceEvenly
+                            ) {
+                                alphabet.forEach { letter ->
+                                    val targetIndex = alphabetTargets[letter] ?: -1
+                                    val available = targetIndex >= 0
+
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .weight(1f)
+                                            .clickable(enabled = available) {
+                                                scope.launch {
+                                                    libraryListState.animateScrollToItem(
+                                                        index = targetIndex
+                                                    )
+                                                }
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = letter.toString(),
+                                            fontSize = 9.sp,
+                                            fontWeight = if (available) {
+                                                FontWeight.Bold
+                                            } else {
+                                                FontWeight.Normal
+                                            },
+                                            color = if (available) {
+                                                Color.White.copy(alpha = 0.78f)
+                                            } else {
+                                                Color.White.copy(alpha = 0.18f)
+                                            }
+                                        )
                                     }
                                 }
                             }
@@ -1956,8 +1953,48 @@ private fun TransportPillButton(
 
 @Composable
 private fun VinylRecord(song: Song?, isPlaying: Boolean, modifier: Modifier = Modifier) {
-    // Preserve the physical angle when pausing and resuming playback.
+    // Keep the physical angle continuous while changing rotation speed.
+    // Playback starts and stops with a gentle acceleration/deceleration instead
+    // of an abrupt jump.
     val rotation = remember { Animatable(0f) }
+    val rotationSpeed = remember { Animatable(0f) }
+
+    LaunchedEffect(isPlaying) {
+        val targetSpeed = if (isPlaying) {
+            360f / 6.5f
+        } else {
+            0f
+        }
+
+        rotationSpeed.animateTo(
+            targetValue = targetSpeed,
+            animationSpec = tween(
+                durationMillis = 560,
+                easing = androidx.compose.animation.core.FastOutSlowInEasing
+            )
+        )
+    }
+
+    LaunchedEffect(Unit) {
+        var lastFrameNanos = 0L
+
+        while (isActive) {
+            androidx.compose.runtime.withFrameNanos { frameNanos ->
+                if (lastFrameNanos != 0L) {
+                    val deltaSeconds =
+                        ((frameNanos - lastFrameNanos).coerceAtMost(100_000_000L)) /
+                            1_000_000_000f
+
+                    val nextRotation =
+                        (rotation.value + rotationSpeed.value * deltaSeconds) % 360f
+
+                    rotation.snapTo(nextRotation)
+                }
+
+                lastFrameNanos = frameNanos
+            }
+        }
+    }
 
     // Deterministic surface texture so the disc keeps the same physical
     // micro-detail while it rotates.
@@ -1985,20 +2022,6 @@ private fun VinylRecord(song: Song?, isPlaying: Boolean, modifier: Modifier = Mo
                 0.15f + random.nextFloat() * 0.75f,
                 0.30f + random.nextFloat() * 1.8f
             )
-        }
-    }
-
-    LaunchedEffect(isPlaying) {
-        if (isPlaying) {
-            while (isActive) {
-                rotation.animateTo(
-                    targetValue = rotation.value + 360f,
-                    animationSpec = tween(
-                        durationMillis = 6_500,
-                        easing = LinearEasing
-                    )
-                )
-            }
         }
     }
 
