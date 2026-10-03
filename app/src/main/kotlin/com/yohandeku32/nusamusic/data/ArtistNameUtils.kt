@@ -16,7 +16,7 @@ object ArtistNameUtils {
         return value
             .split(
                 Regex(
-                    "(?i)\\s+(?:feat\\.?|ft\\.?|featuring)\\s+|\\s*;\\s*|\\s*,\\s*"
+                    "(?i)\\s+(?:feat\\.?|ft\\.?|featuring)\\s+|\\s*&\\s*|\\s*;\\s*|\\s*,\\s*"
                 )
             )
             .firstOrNull { it.isNotBlank() }
