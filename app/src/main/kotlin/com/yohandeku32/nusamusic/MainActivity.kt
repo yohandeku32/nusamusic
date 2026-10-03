@@ -3419,32 +3419,32 @@ private fun VinylTonearm(
         // pivot -> bearing block -> straight tonearm -> cartridge -> stylus.
         val bearing = rotatePoint(
             androidx.compose.ui.geometry.Offset(
-                x = size.width * 0.835f,
-                y = size.height * 0.255f
+                x = size.width * 0.875f,
+                y = size.height * 0.285f
             ),
             armAngle
         )
 
         val armEnd = rotatePoint(
             androidx.compose.ui.geometry.Offset(
-                x = size.width * 0.875f,
-                y = size.height * 0.445f
+                x = size.width * 0.930f,
+                y = size.height * 0.545f
             ),
             armAngle
         )
 
         val cartridgeBody = rotatePoint(
             androidx.compose.ui.geometry.Offset(
-                x = size.width * 0.895f,
-                y = size.height * 0.505f
+                x = size.width * 0.958f,
+                y = size.height * 0.650f
             ),
             armAngle
         )
 
         val stylusBase = rotatePoint(
             androidx.compose.ui.geometry.Offset(
-                x = size.width * 0.910f,
-                y = size.height * 0.540f
+                x = size.width * 0.975f,
+                y = size.height * 0.705f
             ),
             armAngle
         )
