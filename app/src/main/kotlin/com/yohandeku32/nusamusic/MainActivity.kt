@@ -799,13 +799,15 @@ private fun NusaMusicApp(
                                                                         Spacer(Modifier.height(2.dp))
                                 
                                                                         val immersiveExtraHeight = if (immersiveArtwork) 120.dp else 0.dp
+                                                                        val immersiveSlotWidth =
+                                                                            (LocalConfiguration.current.screenWidthDp.dp - 44.dp) * 0.88f
 
                                                                         BoxWithConstraints(
                                                                             modifier = Modifier
                                                                                 .fillMaxWidth(0.88f)
                                                                                 .then(
                                                                                     if (immersiveArtwork) {
-                                                                                        Modifier.height(maxWidth + immersiveExtraHeight)
+                                                                                        Modifier.height(immersiveSlotWidth + immersiveExtraHeight)
                                                                                     } else {
                                                                                         Modifier.aspectRatio(1f)
                                                                                     }
