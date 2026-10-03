@@ -89,7 +89,6 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.zIndex
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
@@ -743,7 +742,6 @@ private fun NusaMusicApp(
                                 
                                                                     TopAppBar(
                                                                         title = { },
-                                                                        modifier = Modifier.zIndex(2f),
                                                                         colors = TopAppBarDefaults.topAppBarColors(
                                                                             containerColor = if (immersiveArtwork) {
                                                                                 Color.Transparent
@@ -1311,58 +1309,56 @@ private fun ImmersiveArtwork(
     song: Song?,
     modifier: Modifier = Modifier
 ) {
-    BoxWithConstraints(
+    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
+
+    // Keep this composable measured exactly like the Vinyl slot. Everything
+    // below stays in the same position; only the artwork is allowed to bleed
+    // outside its measured bounds.
+    val slotWidth = screenWidth * 0.88f
+    val artworkWidth = screenWidth
+    val artworkHeight = screenWidth * 1.62f
+    val topBleed = 90.dp
+    val fadeHeight = 300.dp
+
+    Box(
         modifier = modifier
             .background(Color.Transparent)
     ) {
-        val slotWidth = maxWidth
-        val screenWidth = LocalConfiguration.current.screenWidthDp.dp
-        val topBleed = 92.dp
-        val bottomFade = 300.dp
-        val horizontalBleed = (screenWidth - slotWidth) / 2f
-
         Box(
             modifier = Modifier
-                .requiredWidth(screenWidth)
-                .height(screenWidth + topBleed + bottomFade)
+                .requiredWidth(artworkWidth)
+                .height(artworkHeight)
                 .offset(
-                    x = -horizontalBleed,
+                    x = -((artworkWidth - slotWidth) / 2f),
                     y = -topBleed
                 )
         ) {
-            // Render the original square artwork at full screen width. Because
-            // the image itself is square, the full cover remains visible instead
-            // of being cropped by a tall portrait container.
             ArtworkView(
                 song = song,
                 maxSizePx = 1024,
-                contentScale = ContentScale.Fit,
                 modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .size(screenWidth)
+                    .fillMaxSize()
             )
 
-            // The fade begins at the lower portion of the square artwork and
-            // continues well into the white player area. This keeps the artwork
-            // intact while making its bottom edge disappear naturally.
+            // Apple Music-like soft dissolve: the cover remains visible deep
+            // into the lower area and then gradually disappears into the same
+            // white surface used by the player. The fade is full-width, so no
+            // rectangular seam is visible at the artwork edges.
             Box(
                 modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = screenWidth - 24.dp)
+                    .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .height(bottomFade + 24.dp)
+                    .height(fadeHeight)
                     .background(
                         Brush.verticalGradient(
                             colorStops = arrayOf(
                                 0.00f to Color.Transparent,
-                                0.08f to Color.Transparent,
-                                0.22f to MaterialTheme.colorScheme.background.copy(alpha = 0.04f),
-                                0.38f to MaterialTheme.colorScheme.background.copy(alpha = 0.10f),
-                                0.54f to MaterialTheme.colorScheme.background.copy(alpha = 0.22f),
-                                0.68f to MaterialTheme.colorScheme.background.copy(alpha = 0.40f),
-                                0.80f to MaterialTheme.colorScheme.background.copy(alpha = 0.62f),
-                                0.90f to MaterialTheme.colorScheme.background.copy(alpha = 0.80f),
-                                0.97f to MaterialTheme.colorScheme.background.copy(alpha = 0.95f),
+                                0.18f to Color.Transparent,
+                                0.36f to MaterialTheme.colorScheme.background.copy(alpha = 0.08f),
+                                0.54f to MaterialTheme.colorScheme.background.copy(alpha = 0.24f),
+                                0.70f to MaterialTheme.colorScheme.background.copy(alpha = 0.48f),
+                                0.84f to MaterialTheme.colorScheme.background.copy(alpha = 0.76f),
+                                0.94f to MaterialTheme.colorScheme.background.copy(alpha = 0.94f),
                                 1.00f to MaterialTheme.colorScheme.background
                             )
                         )
@@ -2025,8 +2021,7 @@ private fun ArtworkView(
     song: Song?,
     maxSizePx: Int = 512,
     modifier: Modifier = Modifier,
-    monochrome: Boolean = false,
-    contentScale: ContentScale = ContentScale.Crop
+    monochrome: Boolean = false
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var bitmap by remember { mutableStateOf<Bitmap?>(null) }
@@ -2061,7 +2056,7 @@ private fun ArtworkView(
                 androidx.compose.foundation.Image(
                     bitmap = targetBitmap.asImageBitmap(),
                     contentDescription = song?.title,
-                    contentScale = contentScale,
+                    contentScale = ContentScale.Crop,
                     colorFilter = if (monochrome) {
                         ColorFilter.colorMatrix(
                             ColorMatrix().apply { setToSaturation(0f) }
