@@ -11,7 +11,7 @@ import kotlinx.coroutines.withContext
 
 object ArtworkLoader {
     // Keep a bounded memory cache instead of retaining dozens of large album covers.
-    private val cache = object : LruCache<String, Bitmap>(12 * 1024) {
+    private val cache = object : LruCache<String, Bitmap>(24 * 1024) {
         override fun sizeOf(key: String, value: Bitmap): Int {
             return value.byteCount / 1024
         }
@@ -20,10 +20,11 @@ object ArtworkLoader {
     suspend fun load(
         context: Context,
         uriString: String,
-        maxSize: Int = 512
+        maxSize: Int = 512,
+        cacheKey: String? = null
     ): Bitmap? = withContext(Dispatchers.IO) {
-        val cacheKey = "$uriString@$maxSize"
-        cache.get(cacheKey)?.let { return@withContext it }
+        val resolvedCacheKey = (cacheKey ?: uriString) + "@" + maxSize
+        cache.get(resolvedCacheKey)?.let { return@withContext it }
 
         val retriever = MediaMetadataRetriever()
         try {
@@ -60,7 +61,7 @@ object ArtworkLoader {
                 decoded.recycle()
             }
 
-            cache.put(cacheKey, bitmap)
+            cache.put(resolvedCacheKey, bitmap)
             bitmap
         } catch (_: Exception) {
             null
