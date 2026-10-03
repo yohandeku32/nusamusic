@@ -37,6 +37,7 @@ class MusicRepository(private val context: Context) {
      */
     fun loadSongs(extraFolderUris: Set<String> = emptySet()): List<Song> {
         val songs = loadMediaStoreSongs().toMutableList()
+        val existingUris = songs.mapTo(HashSet()) { it.uri }
 
         val existingKeys = songs
             .mapTo(HashSet()) { songFingerprint(it.title, it.artist, it.album, it.durationMs) }
@@ -54,9 +55,7 @@ class MusicRepository(private val context: Context) {
                     song.durationMs
                 )
 
-                if (song.uri !in songs.asSequence().map { it.uri }.toSet() &&
-                    existingKeys.add(key)
-                ) {
+                if (existingUris.add(song.uri) && existingKeys.add(key)) {
                     songs += song
                 }
             }
@@ -82,35 +81,37 @@ class MusicRepository(private val context: Context) {
         val selectionArgs = arrayOf(MIN_TRACK_DURATION_MS.toString())
         val sort = MediaStore.Audio.Media.TITLE + " COLLATE NOCASE ASC"
 
-        context.contentResolver.query(
-            collection,
-            projection,
-            selection,
-            selectionArgs,
-            sort
-        )?.use { cursor ->
-            val idCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
-            val titleCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
-            val artistCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
-            val albumCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
-            val durationCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
-            val albumIdCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
+        runCatching {
+            context.contentResolver.query(
+                collection,
+                projection,
+                selection,
+                selectionArgs,
+                sort
+            )?.use { cursor ->
+                val idCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+                val titleCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
+                val artistCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
+                val albumCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
+                val durationCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+                val albumIdCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
 
-            while (cursor.moveToNext()) {
-                val id = cursor.getLong(idCol)
-                val durationMs = cursor.getLong(durationCol)
+                while (cursor.moveToNext()) {
+                    val id = cursor.getLong(idCol)
+                    val durationMs = cursor.getLong(durationCol)
 
-                if (durationMs < MIN_TRACK_DURATION_MS) continue
+                    if (durationMs < MIN_TRACK_DURATION_MS) continue
 
-                songs += Song(
-                    id = id,
-                    title = cursor.getString(titleCol) ?: "Unknown title",
-                    artist = cursor.getString(artistCol) ?: "Unknown artist",
-                    album = cursor.getString(albumCol) ?: "Unknown album",
-                    uri = ContentUris.withAppendedId(collection, id).toString(),
-                    durationMs = durationMs,
-                    albumId = cursor.getLong(albumIdCol)
-                )
+                    songs += Song(
+                        id = id,
+                        title = cursor.getString(titleCol) ?: "Unknown title",
+                        artist = cursor.getString(artistCol) ?: "Unknown artist",
+                        album = cursor.getString(albumCol) ?: "Unknown album",
+                        uri = ContentUris.withAppendedId(collection, id).toString(),
+                        durationMs = durationMs,
+                        albumId = cursor.getLong(albumIdCol)
+                    )
+                }
             }
         }
 
