@@ -1315,55 +1315,54 @@ private fun ImmersiveArtwork(
         modifier = modifier
             .background(Color.Transparent)
     ) {
-        // The composable itself keeps exactly the same measured square as the
-        // Vinyl slot. Only the artwork layer overflows visually.
         val slotWidth = maxWidth
-        val slotHeight = maxHeight
         val screenWidth = LocalConfiguration.current.screenWidthDp.dp
-
         val topBleed = 92.dp
-        val bottomBleed = 180.dp
-        val visualHeight = slotHeight + topBleed + bottomBleed
+        val bottomFade = 300.dp
         val horizontalBleed = (screenWidth - slotWidth) / 2f
 
         Box(
             modifier = Modifier
                 .requiredWidth(screenWidth)
-                .requiredHeight(visualHeight)
+                .height(screenWidth + topBleed + bottomFade)
                 .offset(
                     x = -horizontalBleed,
                     y = -topBleed
                 )
         ) {
-            // The source artwork stays undistorted. ContentScale.Crop gives the
-            // close, full-bleed immersive framing seen in the reference player.
+            // Render the original square artwork at full screen width. Because
+            // the image itself is square, the full cover remains visible instead
+            // of being cropped by a tall portrait container.
             ArtworkView(
                 song = song,
                 maxSizePx = 1024,
-                modifier = Modifier.fillMaxSize()
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .size(screenWidth)
             )
 
-            // A long, almost imperceptible feather starts near the bottom of the
-            // artwork and continues into the white space. There is no hard image
-            // edge or rectangular "sticker" boundary.
+            // The fade begins at the lower portion of the square artwork and
+            // continues well into the white player area. This keeps the artwork
+            // intact while making its bottom edge disappear naturally.
             Box(
                 modifier = Modifier
-                    .align(Alignment.BottomCenter)
+                    .align(Alignment.TopCenter)
+                    .padding(top = screenWidth - 24.dp)
                     .fillMaxWidth()
-                    .height(300.dp)
+                    .height(bottomFade + 24.dp)
                     .background(
                         Brush.verticalGradient(
                             colorStops = arrayOf(
                                 0.00f to Color.Transparent,
-                                0.12f to Color.Transparent,
-                                0.26f to MaterialTheme.colorScheme.background.copy(alpha = 0.025f),
-                                0.40f to MaterialTheme.colorScheme.background.copy(alpha = 0.07f),
-                                0.54f to MaterialTheme.colorScheme.background.copy(alpha = 0.15f),
-                                0.66f to MaterialTheme.colorScheme.background.copy(alpha = 0.28f),
-                                0.77f to MaterialTheme.colorScheme.background.copy(alpha = 0.44f),
-                                0.87f to MaterialTheme.colorScheme.background.copy(alpha = 0.64f),
-                                0.94f to MaterialTheme.colorScheme.background.copy(alpha = 0.82f),
-                                0.98f to MaterialTheme.colorScheme.background.copy(alpha = 0.94f),
+                                0.08f to Color.Transparent,
+                                0.22f to MaterialTheme.colorScheme.background.copy(alpha = 0.04f),
+                                0.38f to MaterialTheme.colorScheme.background.copy(alpha = 0.10f),
+                                0.54f to MaterialTheme.colorScheme.background.copy(alpha = 0.22f),
+                                0.68f to MaterialTheme.colorScheme.background.copy(alpha = 0.40f),
+                                0.80f to MaterialTheme.colorScheme.background.copy(alpha = 0.62f),
+                                0.90f to MaterialTheme.colorScheme.background.copy(alpha = 0.80f),
+                                0.97f to MaterialTheme.colorScheme.background.copy(alpha = 0.95f),
                                 1.00f to MaterialTheme.colorScheme.background
                             )
                         )
@@ -2026,7 +2025,8 @@ private fun ArtworkView(
     song: Song?,
     maxSizePx: Int = 512,
     modifier: Modifier = Modifier,
-    monochrome: Boolean = false
+    monochrome: Boolean = false,
+    contentScale: ContentScale = ContentScale.Crop
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var bitmap by remember { mutableStateOf<Bitmap?>(null) }
@@ -2061,7 +2061,7 @@ private fun ArtworkView(
                 androidx.compose.foundation.Image(
                     bitmap = targetBitmap.asImageBitmap(),
                     contentDescription = song?.title,
-                    contentScale = ContentScale.Crop,
+                    contentScale = contentScale,
                     colorFilter = if (monochrome) {
                         ColorFilter.colorMatrix(
                             ColorMatrix().apply { setToSaturation(0f) }
