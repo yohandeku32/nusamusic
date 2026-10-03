@@ -469,7 +469,23 @@ private fun NusaMusicApp(
     var titleFontSize by remember {
         mutableStateOf(uiPrefs.getFloat("title_font_size", 34f))
     }
+    var libraryTab by remember { mutableIntStateOf(0) }
+
     val filtered = songs
+    val artistGroups = remember(songs) {
+        songs
+            .filter { it.artist.isNotBlank() }
+            .groupBy { it.artist.trim() }
+            .entries
+            .sortedBy { it.key.lowercase(Locale.getDefault()) }
+    }
+    val albumGroups = remember(songs) {
+        songs
+            .filter { it.album.isNotBlank() }
+            .groupBy { it.album.trim() }
+            .entries
+            .sortedBy { it.key.lowercase(Locale.getDefault()) }
+    }
 
     val pagerState = androidx.compose.foundation.pager.rememberPagerState(
         initialPage = 0,
@@ -977,31 +993,35 @@ private fun NusaMusicApp(
                                 .fillMaxSize()
                                 .background(Color.Black)
                         ) {
-                            LazyColumn(
-                                state = libraryListState,
-                                modifier = Modifier.fillMaxSize(),
-                                contentPadding = PaddingValues(top = 10.dp, bottom = 120.dp)
-                            ) {
-                                if (permissionGranted && filtered.isNotEmpty()) {
-                                    items(
-                                        items = filtered,
-                                        key = { it.id },
-                                        contentType = { "song" }
-                                    ) { song ->
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(horizontal = 22.dp)
-                                        ) {
-                                            SongRow(
-                                                song = song,
-                                                selected = currentSong?.id == song.id,
-                                                onPlay = onPlay,
-                                                darkSurface = true
-                                            )
-                                        }
-                                    }
-                                } else if (!permissionGranted) {
+                            Column(modifier = Modifier.fillMaxSize()) {
+                                TabRow(
+                                    selectedTabIndex = libraryTab,
+                                    containerColor = Color.Black,
+                                    contentColor = Color.White
+                                ) {
+                                    Tab(
+                                        selected = libraryTab == 0,
+                                        onClick = { libraryTab = 0 },
+                                        text = { Text("Lagu") }
+                                    )
+                                    Tab(
+                                        selected = libraryTab == 1,
+                                        onClick = { libraryTab = 1 },
+                                        text = { Text("Artis") }
+                                    )
+                                    Tab(
+                                        selected = libraryTab == 2,
+                                        onClick = { libraryTab = 2 },
+                                        text = { Text("Album") }
+                                    )
+                                }
+
+                                LazyColumn(
+                                    state = libraryListState,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentPadding = PaddingValues(top = 10.dp, bottom = 120.dp)
+                                ) {
+                                if (!permissionGranted) {
                                     item {
                                         Column(
                                             modifier = Modifier
@@ -1024,20 +1044,75 @@ private fun NusaMusicApp(
                                         }
                                     }
                                 } else {
-                                    item {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(top = 80.dp),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Text(
-                                                "No local music found",
-                                                color = Color(0xFF9D9D9D),
-                                                fontSize = 14.sp
-                                            )
+                                    when {
+                                        libraryTab == 0 && filtered.isNotEmpty() -> {
+                                            items(
+                                                items = filtered,
+                                                key = { it.id },
+                                                contentType = { "song" }
+                                            ) { song ->
+                                                Box(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .padding(horizontal = 22.dp)
+                                                ) {
+                                                    SongRow(
+                                                        song = song,
+                                                        selected = currentSong?.id == song.id,
+                                                        onPlay = onPlay,
+                                                        darkSurface = true
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        libraryTab == 1 && artistGroups.isNotEmpty() -> {
+                                            items(
+                                                items = artistGroups,
+                                                key = { it.key },
+                                                contentType = { "artist" }
+                                            ) { entry ->
+                                                ArtistLibraryRow(
+                                                    artist = entry.key,
+                                                    songs = entry.value,
+                                                    darkSurface = true
+                                                )
+                                            }
+                                        }
+                                        libraryTab == 2 && albumGroups.isNotEmpty() -> {
+                                            items(
+                                                items = albumGroups,
+                                                key = { it.key },
+                                                contentType = { "album" }
+                                            ) { entry ->
+                                                AlbumLibraryRow(
+                                                    album = entry.key,
+                                                    songs = entry.value,
+                                                    darkSurface = true
+                                                )
+                                            }
+                                        }
+                                        else -> {
+                                            item {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .padding(top = 80.dp),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Text(
+                                                        when (libraryTab) {
+                                                            1 -> "No artists found"
+                                                            2 -> "No albums found"
+                                                            else -> "No local music found"
+                                                        },
+                                                        color = Color(0xFF9D9D9D),
+                                                        fontSize = 14.sp
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
+                                }
                                 }
                             }
 
@@ -1226,6 +1301,101 @@ private fun NusaMusicApp(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun ArtistLibraryRow(
+    artist: String,
+    songs: List<Song>,
+    darkSurface: Boolean
+) {
+    val representative = songs.firstOrNull()
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 22.dp, vertical = 6.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(if (darkSurface) Color(0xFF111111) else MaterialTheme.colorScheme.surfaceVariant)
+            .padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (representative != null) {
+            ArtworkView(
+                song = representative,
+                maxSizePx = 160,
+                modifier = Modifier
+                    .size(58.dp)
+                    .clip(CircleShape)
+            )
+        }
+        Spacer(Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                artist,
+                color = Color.White,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
+            Spacer(Modifier.height(3.dp))
+            Text(
+                songs.size.toString() + " lagu",
+                color = Color(0xFF8A8A8A),
+                fontSize = 13.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun AlbumLibraryRow(
+    album: String,
+    songs: List<Song>,
+    darkSurface: Boolean
+) {
+    val representative = songs.firstOrNull()
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 22.dp, vertical = 6.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(if (darkSurface) Color(0xFF111111) else MaterialTheme.colorScheme.surfaceVariant)
+            .padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (representative != null) {
+            ArtworkView(
+                song = representative,
+                maxSizePx = 160,
+                modifier = Modifier
+                    .size(58.dp)
+                    .clip(RoundedCornerShape(12.dp))
+            )
+        }
+        Spacer(Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                album,
+                color = Color.White,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
+            Spacer(Modifier.height(3.dp))
+            Text(
+                songs.size.toString() + " lagu • " +
+                    (representative?.artist ?: "Unknown artist"),
+                color = Color(0xFF8A8A8A),
+                fontSize = 13.sp,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
         }
     }
 }
