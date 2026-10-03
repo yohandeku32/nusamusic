@@ -87,6 +87,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -502,24 +503,37 @@ private fun NusaMusicApp(
 
 
     // Center the currently playing song only when entering the library.
-    // Selecting another song inside the library never changes the scroll position.
+    // Use the real LazyColumn item bounds instead of a guessed row height.
     LaunchedEffect(pagerState.currentPage) {
         if (pagerState.currentPage == 1 && currentSong != null) {
+            kotlinx.coroutines.yield()
+
             val index = filtered.indexOfFirst { it.id == currentSong.id }
             if (index >= 0) {
-                kotlinx.coroutines.yield()
+                val visibleItem = libraryListState.layoutInfo.visibleItemsInfo
+                    .firstOrNull { it.index == index }
 
-                val itemHeightPx = with(density) { 108.dp.roundToPx() }
-                val viewportHeightPx =
-                    libraryListState.layoutInfo.viewportEndOffset -
+                if (visibleItem == null) {
+                    libraryListState.scrollToItem(index)
+                    kotlinx.coroutines.yield()
+                }
+
+                val centeredItem = libraryListState.layoutInfo.visibleItemsInfo
+                    .firstOrNull { it.index == index }
+
+                if (centeredItem != null) {
+                    val viewportStart =
                         libraryListState.layoutInfo.viewportStartOffset
-                val centerOffset =
-                    -((viewportHeightPx - itemHeightPx) / 2).coerceAtLeast(0)
+                    val viewportEnd =
+                        libraryListState.layoutInfo.viewportEndOffset
+                    val viewportCenter = (viewportStart + viewportEnd) / 2
+                    val itemCenter =
+                        centeredItem.offset + centeredItem.size / 2
 
-                libraryListState.scrollToItem(
-                    index = index,
-                    scrollOffset = centerOffset
-                )
+                    libraryListState.scroll {
+                        scrollBy((itemCenter - viewportCenter).toFloat())
+                    }
+                }
             }
         }
     }
@@ -679,7 +693,7 @@ private fun NusaMusicApp(
             androidx.compose.foundation.pager.HorizontalPager(
                 state = pagerState,
                 modifier = Modifier.fillMaxSize(),
-                beyondViewportPageCount = 0
+                beyondViewportPageCount = 1
             ) { page ->
                 when (page) {
                     0 -> {
@@ -2171,6 +2185,22 @@ private fun VinylRecord(song: Song?, isPlaying: Boolean, modifier: Modifier = Mo
     }
 }
 
+private data class GrainDot(
+    val x: Float,
+    val y: Float,
+    val radius: Float,
+    val alpha: Float,
+    val dark: Boolean
+)
+
+private data class GrainFiber(
+    val x: Float,
+    val y: Float,
+    val length: Float,
+    val alpha: Float,
+    val dark: Boolean
+)
+
 @Composable
 private fun ArtworkView(
     song: Song?,
@@ -2192,14 +2222,77 @@ private fun ArtworkView(
     }
 
     Box(
-        modifier = modifier.background(
-            Brush.linearGradient(
-                listOf(
-                    MaterialTheme.colorScheme.surfaceVariant,
-                    MaterialTheme.colorScheme.surface
+        modifier = modifier
+            .background(
+                Brush.linearGradient(
+                    listOf(
+                        MaterialTheme.colorScheme.surfaceVariant,
+                        MaterialTheme.colorScheme.surface
+                    )
                 )
             )
-        ),
+            .drawWithCache {
+                val seed = (song?.id ?: song?.uri ?: "nusa").hashCode()
+                val random = Random(seed)
+                val speckles = List(180) {
+                    GrainDot(
+                        x = random.nextFloat(),
+                        y = random.nextFloat(),
+                        radius = 0.35f + random.nextFloat() * 1.15f,
+                        alpha = 0.018f + random.nextFloat() * 0.045f,
+                        dark = random.nextBoolean()
+                    )
+                }
+                val fibers = List(18) {
+                    GrainFiber(
+                        x = random.nextFloat(),
+                        y = random.nextFloat(),
+                        length = 8f + random.nextFloat() * 24f,
+                        alpha = 0.012f + random.nextFloat() * 0.022f,
+                        dark = random.nextBoolean()
+                    )
+                }
+
+                onDrawWithContent {
+                    drawContent()
+
+                    val minSide = size.minDimension
+                    speckles.forEach { dot ->
+                        drawCircle(
+                            color = if (dot.dark) {
+                                Color.Black.copy(alpha = dot.alpha)
+                            } else {
+                                Color.White.copy(alpha = dot.alpha)
+                            },
+                            radius = dot.radius * (minSide / 180f),
+                            center = androidx.compose.ui.geometry.Offset(
+                                x = size.width * dot.x,
+                                y = size.height * dot.y
+                            )
+                        )
+                    }
+
+                    fibers.forEach { fiber ->
+                        val start = androidx.compose.ui.geometry.Offset(
+                            x = size.width * fiber.x,
+                            y = size.height * fiber.y
+                        )
+                        drawLine(
+                            color = if (fiber.dark) {
+                                Color.Black.copy(alpha = fiber.alpha)
+                            } else {
+                                Color.White.copy(alpha = fiber.alpha)
+                            },
+                            start = start,
+                            end = androidx.compose.ui.geometry.Offset(
+                                x = start.x + fiber.length,
+                                y = start.y + fiber.length * 0.12f
+                            ),
+                            strokeWidth = 0.65f
+                        )
+                    }
+                }
+            },
         contentAlignment = Alignment.Center
     ) {
         Crossfade(
@@ -2238,87 +2331,87 @@ private fun LibrarySongRow(
     selected: Boolean,
     onPlay: (Song) -> Unit
 ) {
-    val rowHeight = if (selected) 108.dp else 82.dp
-    val artworkSize = if (selected) 90.dp else 66.dp
-    val vinylSize = if (selected) 84.dp else 62.dp
+    val rowHeight = if (selected) 198.dp else 178.dp
+    val artworkSize = if (selected) 142.dp else 122.dp
+    val vinylSize = if (selected) 136.dp else 116.dp
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(rowHeight)
-            .padding(horizontal = 10.dp, vertical = 2.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .padding(horizontal = 14.dp, vertical = 4.dp)
+            .clip(RoundedCornerShape(18.dp))
             .then(
                 if (selected) {
                     Modifier
                         .background(
                             brush = Brush.verticalGradient(
                                 colors = listOf(
-                                    Color(0xFF25272A),
-                                    Color(0xFF111214)
+                                    Color(0xFF292B2E),
+                                    Color(0xFF151618)
                                 )
                             ),
-                            shape = RoundedCornerShape(12.dp)
+                            shape = RoundedCornerShape(18.dp)
                         )
                         .graphicsLayer {
-                            scaleX = 1.015f
-                            scaleY = 1.015f
+                            scaleX = 1.01f
+                            scaleY = 1.01f
                         }
                 } else {
                     Modifier
                 }
             )
             .clickable { onPlay(song) }
-            .padding(horizontal = 8.dp, vertical = 6.dp)
+            .padding(horizontal = 8.dp, vertical = 7.dp)
     ) {
-        Row(
+        Column(
             modifier = Modifier.fillMaxSize(),
-            verticalAlignment = Alignment.CenterVertically
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Box(
                 modifier = Modifier
-                    .width(if (selected) 92.dp else 78.dp)
-                    .fillMaxHeight()
+                    .height(if (selected) 146.dp else 126.dp)
+                    .fillMaxWidth(),
+                contentAlignment = Alignment.Center
             ) {
                 Box(
                     modifier = Modifier
                         .size(vinylSize)
-                        .align(Alignment.CenterEnd)
-                        .offset(x = if (selected) 10.dp else 7.dp)
+                        .offset(x = if (selected) 18.dp else 15.dp)
                         .clip(CircleShape)
                         .background(
                             Brush.radialGradient(
                                 colors = if (selected) {
                                     listOf(
-                                        Color(0xFF606060),
-                                        Color(0xFF202020),
+                                        Color(0xFF686868),
+                                        Color(0xFF222222),
                                         Color(0xFF050505)
                                     )
                                 } else {
                                     listOf(
-                                        Color(0xFF434343),
-                                        Color(0xFF191919),
+                                        Color(0xFF4A4A4A),
+                                        Color(0xFF1A1A1A),
                                         Color(0xFF050505)
                                     )
                                 }
                             )
                         )
                 ) {
-                    for (ring in 1..6) {
+                    for (ring in 1..7) {
                         Box(
                             modifier = Modifier
-                                .size((46 + ring * 4).dp)
+                                .size((62 + ring * 4).dp)
                                 .align(Alignment.Center)
                                 .clip(CircleShape)
                                 .border(
-                                    width = 0.65.dp,
+                                    width = 0.7.dp,
                                     color = Color.White.copy(alpha = 0.045f)
                                 )
                         )
                     }
                     Box(
                         modifier = Modifier
-                            .size(10.dp)
+                            .size(9.dp)
                             .align(Alignment.Center)
                             .clip(CircleShape)
                             .background(Color(0xFF090909))
@@ -2328,52 +2421,48 @@ private fun LibrarySongRow(
                 Box(
                     modifier = Modifier
                         .size(artworkSize)
-                        .align(Alignment.CenterStart)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(Color(0xFF090909))
+                        .clip(RoundedCornerShape(7.dp))
+                        .background(Color(0xFF0A0A0A))
                         .padding(2.dp)
                 ) {
                     ArtworkView(
                         song = song,
-                        maxSizePx = 256,
+                        maxSizePx = 384,
                         modifier = Modifier
                             .fillMaxSize()
-                            .clip(RoundedCornerShape(4.dp))
+                            .clip(RoundedCornerShape(5.dp))
                     )
                 }
             }
 
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.height(if (selected) 2.dp else 1.dp))
 
-            Column(
+            Text(
+                text = song.title,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                fontSize = if (selected) 15.sp else 13.sp,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                color = Color.White,
+                textAlign = TextAlign.Center,
                 modifier = Modifier
-                    .weight(1f)
-                    .padding(end = 4.dp)
-            ) {
-                Text(
-                    text = song.title,
-                    maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                    fontSize = if (selected) 17.sp else 14.5.sp,
-                    fontWeight = if (selected) FontWeight.ExtraBold else FontWeight.Medium,
-                    color = Color.White
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = song.artist,
-                    maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                    fontSize = 12.sp,
-                    color = Color(0xFFB0B0B0)
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = formatTime(song.durationMs),
-                    maxLines = 1,
-                    fontSize = 11.sp,
-                    color = Color(0xFF777777)
-                )
-            }
+                    .fillMaxWidth()
+                    .padding(horizontal = 18.dp)
+            )
+
+            Spacer(Modifier.height(1.dp))
+
+            Text(
+                text = song.artist + "  •  " + formatTime(song.durationMs),
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                fontSize = 10.5.sp,
+                color = if (selected) Color(0xFFD2D2D2) else Color(0xFFB2B2B2),
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+            )
         }
     }
 }
