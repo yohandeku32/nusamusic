@@ -463,6 +463,12 @@ private fun NusaMusicApp(
     }
 
     val context = androidx.compose.ui.platform.LocalContext.current
+    val uiPrefs = remember(context) {
+        context.getSharedPreferences("ui_preferences", android.content.Context.MODE_PRIVATE)
+    }
+    var titleFontSize by remember {
+        mutableStateOf(uiPrefs.getFloat("title_font_size", 34f))
+    }
     val filtered = songs
 
     val pagerState = androidx.compose.foundation.pager.rememberPagerState(
@@ -527,6 +533,48 @@ private fun NusaMusicApp(
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(Modifier.height(18.dp))
+
+                Text(
+                    "UKURAN JUDUL LAGU",
+                    fontSize = 11.sp,
+                    letterSpacing = 1.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "${titleFontSize.toInt()} sp",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+
+                androidx.compose.material3.Slider(
+                    value = titleFontSize,
+                    onValueChange = { titleFontSize = it },
+                    onValueChangeFinished = {
+                        uiPrefs.edit()
+                            .putFloat("title_font_size", titleFontSize)
+                            .apply()
+                    },
+                    valueRange = 24f..44f,
+                    steps = 19
+                )
+
+                Text(
+                    "Atur besar-kecil judul lagu.",
+                    fontSize = 12.sp,
+                    lineHeight = 18.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(Modifier.height(22.dp))
 
                 Text(
                     "ABOUT NUSA MUSIC",
@@ -706,19 +754,21 @@ private fun NusaMusicApp(
                                                     .count { it.isNotBlank() }
                                             }
 
-                                            val titleSize = remember(titleWordCount) {
+                                            val titleSize = remember(titleWordCount, titleFontSize) {
+                                                val scale = titleFontSize / 34f
                                                 when {
-                                                    titleWordCount <= 2 -> 34.sp
-                                                    titleWordCount == 3 -> 31.sp
-                                                    else -> 28.sp
+                                                    titleWordCount <= 2 -> titleFontSize.sp
+                                                    titleWordCount == 3 -> (31f * scale).sp
+                                                    else -> (28f * scale).sp
                                                 }
                                             }
 
-                                            val titleLineHeight = remember(titleWordCount) {
+                                            val titleLineHeight = remember(titleWordCount, titleFontSize) {
+                                                val scale = titleFontSize / 34f
                                                 when {
-                                                    titleWordCount <= 2 -> 37.sp
-                                                    titleWordCount == 3 -> 34.sp
-                                                    else -> 31.sp
+                                                    titleWordCount <= 2 -> (37f * scale).sp
+                                                    titleWordCount == 3 -> (34f * scale).sp
+                                                    else -> (31f * scale).sp
                                                 }
                                             }
 
