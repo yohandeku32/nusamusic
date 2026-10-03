@@ -2,15 +2,70 @@ package com.yohandeku32.nusamusic.data
 
 import android.content.ContentUris
 import android.content.Context
+import android.media.MediaMetadataRetriever
+import android.net.Uri
+import android.provider.DocumentsContract
 import android.provider.MediaStore
 import com.yohandeku32.nusamusic.model.Song
+import java.util.ArrayDeque
+import java.util.Locale
 
 class MusicRepository(private val context: Context) {
     companion object {
         private const val MIN_TRACK_DURATION_MS = 10_000L
+
+        private val SUPPORTED_AUDIO_EXTENSIONS = setOf(
+            "aac",
+            "alac",
+            "flac",
+            "m4a",
+            "mp3",
+            "ogg",
+            "opus",
+            "wav",
+            "wma"
+        )
     }
 
-    fun loadSongs(): List<Song> {
+    /**
+     * Loads music indexed by MediaStore and augments it with any SAF folders
+     * the user explicitly granted to Nusa.
+     *
+     * The normal MediaStore collection remains the primary source so existing
+     * local-library behavior is preserved. Manually selected folders are an
+     * additional source and are recursively scanned.
+     */
+    fun loadSongs(extraFolderUris: Set<String> = emptySet()): List<Song> {
+        val songs = loadMediaStoreSongs().toMutableList()
+
+        val existingKeys = songs
+            .mapTo(HashSet()) { songFingerprint(it.title, it.artist, it.album, it.durationMs) }
+
+        extraFolderUris.forEach { folderUriString ->
+            val folderSongs = runCatching {
+                loadFolderSongs(Uri.parse(folderUriString))
+            }.getOrElse { emptyList() }
+
+            for (song in folderSongs) {
+                val key = songFingerprint(
+                    song.title,
+                    song.artist,
+                    song.album,
+                    song.durationMs
+                )
+
+                if (song.uri !in songs.asSequence().map { it.uri }.toSet() &&
+                    existingKeys.add(key)
+                ) {
+                    songs += song
+                }
+            }
+        }
+
+        return songs.sortedBy { it.title.lowercase(Locale.ROOT) }
+    }
+
+    private fun loadMediaStoreSongs(): List<Song> {
         val songs = mutableListOf<Song>()
         val collection = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
         val projection = arrayOf(
@@ -21,10 +76,19 @@ class MusicRepository(private val context: Context) {
             MediaStore.Audio.Media.DURATION,
             MediaStore.Audio.Media.ALBUM_ID
         )
-        val selection = MediaStore.Audio.Media.IS_MUSIC + " != 0"
+        val selection =
+            MediaStore.Audio.Media.IS_MUSIC + " != 0 AND " +
+                MediaStore.Audio.Media.DURATION + " >= ?"
+        val selectionArgs = arrayOf(MIN_TRACK_DURATION_MS.toString())
         val sort = MediaStore.Audio.Media.TITLE + " COLLATE NOCASE ASC"
 
-        context.contentResolver.query(collection, projection, selection, null, sort)?.use { cursor ->
+        context.contentResolver.query(
+            collection,
+            projection,
+            selection,
+            selectionArgs,
+            sort
+        )?.use { cursor ->
             val idCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
             val titleCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
             val artistCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
@@ -36,9 +100,6 @@ class MusicRepository(private val context: Context) {
                 val id = cursor.getLong(idCol)
                 val durationMs = cursor.getLong(durationCol)
 
-                // Nusa intentionally excludes clips under 10 seconds so
-                // notification sounds, UI effects and other short audio
-                // assets do not pollute the music library.
                 if (durationMs < MIN_TRACK_DURATION_MS) continue
 
                 songs += Song(
@@ -52,6 +113,170 @@ class MusicRepository(private val context: Context) {
                 )
             }
         }
+
         return songs
+    }
+
+    private fun loadFolderSongs(treeUri: Uri): List<Song> {
+        val resolver = context.contentResolver
+        val rootDocumentId = DocumentsContract.getTreeDocumentId(treeUri)
+        val pendingDocumentIds = ArrayDeque<String>()
+        val visitedDocumentIds = HashSet<String>()
+        val songs = mutableListOf<Song>()
+
+        pendingDocumentIds.add(rootDocumentId)
+
+        while (pendingDocumentIds.isNotEmpty()) {
+            val parentDocumentId = pendingDocumentIds.removeFirst()
+
+            if (!visitedDocumentIds.add(parentDocumentId)) continue
+
+            val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(
+                treeUri,
+                parentDocumentId
+            )
+
+            val projection = arrayOf(
+                DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+                DocumentsContract.Document.COLUMN_MIME_TYPE
+            )
+
+            resolver.query(
+                childrenUri,
+                projection,
+                null,
+                null,
+                DocumentsContract.Document.COLUMN_DISPLAY_NAME + " COLLATE NOCASE ASC"
+            )?.use { cursor ->
+                val idCol = cursor.getColumnIndexOrThrow(
+                    DocumentsContract.Document.COLUMN_DOCUMENT_ID
+                )
+                val nameCol = cursor.getColumnIndexOrThrow(
+                    DocumentsContract.Document.COLUMN_DISPLAY_NAME
+                )
+                val mimeCol = cursor.getColumnIndexOrThrow(
+                    DocumentsContract.Document.COLUMN_MIME_TYPE
+                )
+
+                while (cursor.moveToNext()) {
+                    val documentId = cursor.getString(idCol)
+                    val displayName =
+                        cursor.getString(nameCol)?.trim().orEmpty()
+                    val mimeType =
+                        cursor.getString(mimeCol)?.lowercase(Locale.ROOT).orEmpty()
+
+                    if (mimeType == DocumentsContract.Document.MIME_TYPE_DIR) {
+                        pendingDocumentIds.addLast(documentId)
+                        continue
+                    }
+
+                    if (!isSupportedAudio(displayName, mimeType)) continue
+
+                    val documentUri = DocumentsContract.buildDocumentUriUsingTree(
+                        treeUri,
+                        documentId
+                    )
+
+                    readSongFromDocument(
+                        documentUri = documentUri,
+                        displayName = displayName
+                    )?.let { song ->
+                        songs += song
+                    }
+                }
+            }
+        }
+
+        return songs
+    }
+
+    private fun readSongFromDocument(
+        documentUri: Uri,
+        displayName: String
+    ): Song? {
+        val retriever = MediaMetadataRetriever()
+
+        return try {
+            retriever.setDataSource(context, documentUri)
+
+            val durationMs = retriever
+                .extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                ?.toLongOrNull()
+                ?: 0L
+
+            if (durationMs < MIN_TRACK_DURATION_MS) return null
+
+            val title = retriever
+                .extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+                ?: displayName.substringBeforeLast('.', displayName)
+
+            val artist = retriever
+                .extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+                ?: "Unknown artist"
+
+            val album = retriever
+                .extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+                ?: "Unknown album"
+
+            val uriString = documentUri.toString()
+
+            Song(
+                id = stableDocumentId(uriString),
+                title = title,
+                artist = artist,
+                album = album,
+                uri = uriString,
+                durationMs = durationMs,
+                albumId = stableDocumentId("$uriString#album")
+            )
+        } catch (_: Exception) {
+            null
+        } finally {
+            retriever.release()
+        }
+    }
+
+    private fun isSupportedAudio(
+        displayName: String,
+        mimeType: String
+    ): Boolean {
+        if (mimeType.startsWith("audio/")) return true
+
+        val extension = displayName
+            .substringAfterLast('.', "")
+            .lowercase(Locale.ROOT)
+
+        return extension in SUPPORTED_AUDIO_EXTENSIONS
+    }
+
+    private fun songFingerprint(
+        title: String,
+        artist: String,
+        album: String,
+        durationMs: Long
+    ): String {
+        return listOf(
+            title.trim().lowercase(Locale.ROOT),
+            artist.trim().lowercase(Locale.ROOT),
+            album.trim().lowercase(Locale.ROOT),
+            durationMs.toString()
+        ).joinToString("|")
+    }
+
+    private fun stableDocumentId(value: String): Long {
+        var hash = 1125899906842597L
+
+        for (character in value) {
+            hash = hash * 31L + character.code
+        }
+
+        return -(hash and Long.MAX_VALUE).coerceAtLeast(1L)
     }
 }
