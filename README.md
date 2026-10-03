@@ -1,6 +1,6 @@
-# Nusa Music
+# Nusa
 
-Nusa Music is a modern Android music player focused on local/offline playback, a realistic vinyl-style player, and a future-ready Hi-Res / USB DAC audio path.
+Nusa is a modern Android music player focused on local/offline playback, a realistic vinyl-style player, and a future-ready Hi-Res / USB DAC audio path.
 
 > **Project status:** Active development  
 > **Status snapshot:** 3 October 2026  
@@ -19,7 +19,7 @@ The remaining work is mainly **hardware validation and refinement of the Hi-Res 
 | Local music scanning | ✅ Implemented | Reads local audio through Android MediaStore |
 | Normal playback | ✅ Implemented | Media3 / ExoPlayer |
 | Background playback | ✅ Implemented | MediaSession + PlaybackService |
-| Lock-screen / notification control | ✅ Implemented | Media session controls are tied to Nusa Music |
+| Lock-screen / notification control | ✅ Implemented | Media session controls are tied to Nusa |
 | Player UI | ✅ Implemented | Full-screen player with swipe navigation |
 | Realistic vinyl | ✅ Implemented | Physical thickness, grooves, grain and subtle wear |
 | Smooth vinyl rotation | ✅ Implemented | Gradual acceleration/deceleration on Play/Pause |
@@ -31,7 +31,7 @@ The remaining work is mainly **hardware validation and refinement of the Hi-Res 
 | Artist portrait | ✅ Implemented | Deezer lookup with local caching |
 | Artist biography | ✅ Implemented | Last.fm `artist.getInfo` |
 | Biography internal scrolling | ✅ Implemented | Long text scrolls inside the biography box |
-| Share | ✅ Implemented | Custom Nusa Music share icon |
+| Share | ✅ Implemented | Custom Nusa share icon |
 | Favorite | ✅ Implemented | Custom favorite icon |
 | Shuffle / Repeat | ✅ Implemented | Media3 playback modes |
 | Playback state restore | ✅ Implemented | Song, position, shuffle and repeat |
@@ -117,7 +117,7 @@ The player-to-library swipe was also optimized so the library does not repeatedl
 
 The old lyrics area was replaced with artist biography.
 
-Nusa Music uses the Last.fm `artist.getInfo` API.
+Nusa uses the Last.fm `artist.getInfo` API.
 
 The lookup strategy is:
 
@@ -154,7 +154,7 @@ Portraits are displayed in monochrome in the player.
 
 ## Audio Quality Detection
 
-Nusa Music reads local media metadata to identify codec and bit depth.
+Nusa reads local media metadata to identify codec and bit depth.
 
 Examples:
 
@@ -194,7 +194,7 @@ The upstream project describes these components as MIT-licensed original work. I
 ### Current architecture
 
 ```text
-Nusa Music UI
+Nusa UI
       ↓
 MediaSession / Media3
       ↓
@@ -228,7 +228,7 @@ Implemented in the codebase:
 
 ### Important current limitation
 
-The Hi-Res engine integration is **code-complete enough for the next validation stage, but it has not yet been declared hardware-verified for Nusa Music**.
+The Hi-Res engine integration is **code-complete enough for the next validation stage, but it has not yet been declared hardware-verified for Nusa**.
 
 The following still need to be tested on a real device + DAC combination:
 
@@ -246,7 +246,7 @@ The project's normal Android audio path should remain available as a fallback wh
 
 ## Media Notification
 
-Nusa Music uses AndroidX Media3 `MediaSession` through `PlaybackService`.
+Nusa uses AndroidX Media3 `MediaSession` through `PlaybackService`.
 
 The session explicitly defines a `sessionActivity` pointing to:
 
@@ -254,7 +254,7 @@ The session explicitly defines a `sessionActivity` pointing to:
 MainActivity
 ```
 
-This means tapping the Nusa Music media notification can return to Nusa Music rather than leaving the user in another media application.
+This means tapping the Nusa media notification can return to Nusa rather than leaving the user in another media application.
 
 Android may still display multiple media sessions from different applications; a control belonging to another application's session will continue to control that application's player.
 
@@ -335,7 +335,7 @@ for the current attribution and licensing notes for the integrated Decent USB Au
 
 ## Current Development Stage
 
-Nusa Music is currently at the stage of:
+Nusa is currently at the stage of:
 
 ```text
 UI/UX            → Advanced / stable iteration
