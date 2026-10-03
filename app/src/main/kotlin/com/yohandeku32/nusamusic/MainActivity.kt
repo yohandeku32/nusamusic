@@ -1580,49 +1580,6 @@ private fun ImmersiveArtwork(
     song: Song?,
     modifier: Modifier = Modifier
 ) {
-    Box(
-        modifier = modifier
-            .background(MaterialTheme.colorScheme.background)
-    ) {
-        ArtworkView(
-            song = song,
-            maxSizePx = 1024,
-            modifier = Modifier
-                .fillMaxSize()
-                .graphicsLayer {
-                    // Keep the artwork in the vinyl slot, but crop in slightly
-                    // to create the immersive Apple Music-like close-up.
-                    scaleX = 1.18f
-                    scaleY = 1.18f
-                }
-        )
-
-        // Fade only the lower edge of the artwork into the existing white player
-        // background, without changing the surrounding layout.
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .fillMaxHeight(0.38f)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            MaterialTheme.colorScheme.background.copy(alpha = 0.14f),
-                            MaterialTheme.colorScheme.background.copy(alpha = 0.68f),
-                            MaterialTheme.colorScheme.background
-                        )
-                    )
-                )
-        )
-    }
-}
-
-@Composable
-private fun ImmersiveArtwork(
-    song: Song?,
-    modifier: Modifier = Modifier
-) {
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
     val visualWidth = screenWidth + 2.dp
     val vinylHeight = ((screenWidth - 44.dp) * 0.88f).coerceAtLeast(1.dp)
