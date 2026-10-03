@@ -2640,7 +2640,7 @@ private fun VinylSleeveCover(
     song: Song,
     selected: Boolean,
     maxSizePx: Int,
-    size: androidx.compose.ui.unit.Dp
+    coverSize: androidx.compose.ui.unit.Dp
 ) {
     val artworkScale = if (selected) 1.055f else 1f
     val paperColor = Color(0xFFB59A73)
@@ -2648,7 +2648,7 @@ private fun VinylSleeveCover(
 
     Box(
         modifier = Modifier
-            .size(size)
+            .coverSize(coverSize)
             .clip(RoundedCornerShape(7.dp))
     ) {
         // Warm paper back of the sleeve.
@@ -2670,9 +2670,9 @@ private fun VinylSleeveCover(
         // mainly on the right side, like a real paper LP sleeve.
         Box(
             modifier = Modifier
-                .size(size * 0.82f)
+                .coverSize(coverSize * 0.82f)
                 .align(Alignment.CenterEnd)
-                .offset(x = size * 0.04f)
+                .offset(x = coverSize * 0.04f)
                 .clip(CircleShape)
                 .background(
                     Brush.radialGradient(
@@ -2687,7 +2687,7 @@ private fun VinylSleeveCover(
             for (ring in 1..7) {
                 Box(
                     modifier = Modifier
-                        .size((size.value * (0.46f + ring * 0.045f)).dp)
+                        .coverSize((coverSize.value * (0.46f + ring * 0.045f)).dp)
                         .align(Alignment.Center)
                         .clip(CircleShape)
                         .border(
@@ -2699,7 +2699,7 @@ private fun VinylSleeveCover(
 
             Box(
                 modifier = Modifier
-                    .size(size * 0.23f)
+                    .coverSize(coverSize * 0.23f)
                     .align(Alignment.Center)
                     .clip(CircleShape)
                     .background(
@@ -2715,7 +2715,7 @@ private fun VinylSleeveCover(
 
             Box(
                 modifier = Modifier
-                    .size(size * 0.055f)
+                    .coverSize(coverSize * 0.055f)
                     .align(Alignment.Center)
                     .clip(CircleShape)
                     .background(Color(0xFF141414))
@@ -2902,7 +2902,7 @@ private fun LibrarySongRow(
                     song = song,
                     selected = selected,
                     maxSizePx = 320,
-                    size = artworkSize
+                    coverSize = artworkSize
                 )
             }
 
