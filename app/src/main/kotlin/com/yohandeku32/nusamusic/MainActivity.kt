@@ -1379,16 +1379,58 @@ private fun NusaMusicApp(
                                 }
                             }
 
-                            Column(
-                                modifier = Modifier
-                                    .align(Alignment.CenterEnd)
-                                    .fillMaxHeight()
-                                    .padding(
-                                        top = 88.dp,
-                                        bottom = 122.dp,
-                                        end = 2.dp
+                            val alphabetIndexModifier = Modifier
+                                .align(Alignment.CenterEnd)
+                                .fillMaxHeight()
+                                .padding(
+                                    top = 88.dp,
+                                    bottom = 122.dp,
+                                    end = 2.dp
+                                )
+                                .width(22.dp)
+                                .pointerInput(alphabetTargets, filtered) {
+                                    var lastDragTarget = -1
+
+                                    androidx.compose.foundation.gestures.detectVerticalDragGestures(
+                                        onDragStart = { offset ->
+                                            val slotHeight = size.height / alphabet.size.toFloat()
+                                            val slot = (offset.y / slotHeight)
+                                                .toInt()
+                                                .coerceIn(0, alphabet.lastIndex)
+                                            val targetIndex = alphabetTargets[alphabet[slot]] ?: -1
+
+                                            if (targetIndex >= 0) {
+                                                lastDragTarget = targetIndex
+                                                libraryListState.scrollToItem(targetIndex)
+                                            }
+                                        },
+                                        onVerticalDrag = { change, _ ->
+                                            change.consume()
+
+                                            val slotHeight = size.height / alphabet.size.toFloat()
+                                            val slot = (change.position.y / slotHeight)
+                                                .toInt()
+                                                .coerceIn(0, alphabet.lastIndex)
+                                            val targetIndex = alphabetTargets[alphabet[slot]] ?: -1
+
+                                            if (targetIndex >= 0 && targetIndex != lastDragTarget) {
+                                                lastDragTarget = targetIndex
+                                                scope.launch {
+                                                    libraryListState.scrollToItem(targetIndex)
+                                                }
+                                            }
+                                        },
+                                        onDragEnd = {
+                                            lastDragTarget = -1
+                                        },
+                                        onDragCancel = {
+                                            lastDragTarget = -1
+                                        }
                                     )
-                                    .width(22.dp),
+                                }
+
+                            Column(
+                                modifier = alphabetIndexModifier,
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.SpaceEvenly
                             ) {
@@ -1668,6 +1710,9 @@ private fun ArtistBiographySection(
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
             )
             Spacer(Modifier.height(16.dp))
+            val biographyScrollState =
+                androidx.compose.foundation.rememberScrollState()
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1675,15 +1720,14 @@ private fun ArtistBiographySection(
                     .clip(RoundedCornerShape(20.dp))
                     .background(Color(0xFF111111))
                     .padding(horizontal = 18.dp, vertical = 16.dp)
+                    .verticalScroll(biographyScrollState)
             ) {
                 Text(
                     text = biography.text,
                     color = Color(0xFFE7E7E7),
                     fontSize = 15.sp,
                     lineHeight = 23.sp,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 6,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    fontWeight = FontWeight.Medium
                 )
             }
             Text(
