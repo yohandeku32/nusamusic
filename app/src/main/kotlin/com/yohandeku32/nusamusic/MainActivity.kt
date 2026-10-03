@@ -20,6 +20,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.WindowCompat
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
@@ -2360,12 +2361,10 @@ private fun RecordCrateBackdrop(modifier: Modifier = Modifier) {
                         )
                     )
                 )
-                .then(
-                    Modifier.border(
-                        width = 1.5.dp,
-                        color = Color(0xFF8A603A).copy(alpha = 0.75f),
-                        shape = RoundedCornerShape(24.dp)
-                    )
+                .border(
+                    width = 1.5.dp,
+                    color = Color(0xFF8A603A).copy(alpha = 0.75f),
+                    shape = RoundedCornerShape(24.dp)
                 )
         )
 
@@ -2383,6 +2382,7 @@ private fun RecordCrateBackdrop(modifier: Modifier = Modifier) {
                             Color(0xFF1B120D)
                         )
                     )
+                )
         )
 
         // Left and right wooden side rails.
@@ -2528,86 +2528,3 @@ private fun CrateSongSleeve(
                 .clip(RoundedCornerShape(8.dp))
                 .then(
                     Modifier.border(
-                        width = if (selected) 2.dp else 1.dp,
-                        color = if (selected) {
-                            Color.White.copy(alpha = 0.88f)
-                        } else {
-                            Color(0xFF6A4C35).copy(alpha = 0.70f)
-                        },
-                        shape = RoundedCornerShape(8.dp)
-                    )
-                )
-                .background(
-                    Brush.linearGradient(
-                        colors = listOf(
-                            Color(0xFF080808),
-                            Color(0xFF141414),
-                            Color(0xFF050505)
-                        )
-                    )
-                )
-                .padding(5.dp)
-                .clickable { onPlay(song) }
-        ) {
-            ArtworkView(
-                song = song,
-                maxSizePx = 512,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(RoundedCornerShape(4.dp))
-            )
-
-            // Paper edge and glossy catch-light.
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(2.dp)
-                    .align(Alignment.TopCenter)
-                    .background(Color.White.copy(alpha = 0.18f))
-            )
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .fillMaxHeight()
-                    .background(
-                        Brush.linearGradient(
-                            colors = listOf(
-                                Color.White.copy(alpha = 0.03f),
-                                Color.Transparent,
-                                Color.Black.copy(alpha = 0.16f)
-                            )
-                        )
-                    )
-            )
-        }
-    }
-}
-
-private fun formatTime(ms: Long): String {
-    val totalSeconds = (ms / 1000L).coerceAtLeast(0L)
-    val minutes = totalSeconds / 60L
-    val seconds = totalSeconds % 60L
-    return "%d:%02d".format(minutes, seconds)
-}
-
-@Composable
-private fun NusaMusicTheme(content: @Composable () -> Unit) {
-    val dark = isSystemInDarkTheme()
-    val scheme = if (dark) {
-        darkColorScheme(
-            background = Color(0xFF050505),
-            surface = Color(0xFF101010),
-            surfaceVariant = Color(0xFF1C1C1C),
-            primary = Color(0xFFF4F1EA)
-        )
-    } else {
-        lightColorScheme(
-            background = Color(0xFFF2F0EB),
-            surface = Color(0xFFF7F5F0),
-            surfaceVariant = Color(0xFFE2E0DA),
-            primary = Color(0xFF111111)
-        )
-    }
-    MaterialTheme(colorScheme = scheme, content = content)
-}
