@@ -46,7 +46,12 @@ val downloadDecentAudioEngine by tasks.registering {
             val artifactUrl = "$DECENT_AUDIO_ENGINE_BASE_URL/$artifactName"
             logger.lifecycle("Decent Audio Engine: downloading $artifactName")
 
-            java.net.URI(artifactUrl).toURL().openStream().use { input ->
+            val connection = java.net.URI(artifactUrl).toURL().openConnection().apply {
+                connectTimeout = 15_000
+                readTimeout = 60_000
+            }
+
+            connection.getInputStream().use { input ->
                 destination.outputStream().use { output ->
                     input.copyTo(output)
                 }
