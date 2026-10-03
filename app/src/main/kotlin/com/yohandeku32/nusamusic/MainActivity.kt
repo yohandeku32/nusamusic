@@ -1545,7 +1545,6 @@ private fun NusaMusicApp(
                             }
 
                             val alphabetIndexModifier = Modifier
-                                .align(Alignment.CenterEnd)
                                 .fillMaxHeight()
                                 .padding(
                                     top = 88.dp,
@@ -1599,12 +1598,15 @@ private fun NusaMusicApp(
                                     )
                                 }
 
-                            Column(
-                                modifier = alphabetIndexModifier,
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.SpaceEvenly
+                            Box(
+                                modifier = Modifier.fillMaxSize()
                             ) {
-                                alphabet.forEach { letter ->
+                                Column(
+                                    modifier = alphabetIndexModifier.align(Alignment.CenterEnd),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.SpaceEvenly
+                                ) {
+                                    alphabet.forEach { letter ->
                                     val targetIndex = alphabetTargets[letter] ?: -1
                                     val available = targetIndex >= 0
 
@@ -1632,6 +1634,7 @@ private fun NusaMusicApp(
                                             }
                                         )
                                     }
+                                    }
                                 }
                             }
 
@@ -1657,18 +1660,21 @@ private fun NusaMusicApp(
                                 label = "libraryFloatingOffset"
                             )
 
-                            Surface(
-                                shape = RoundedCornerShape(50),
-                                color = MaterialTheme.colorScheme.surfaceVariant,
-                                tonalElevation = 3.dp,
-                                modifier = Modifier
-                                    .align(Alignment.BottomCenter)
-                                    .padding(bottom = 18.dp)
-                                    .graphicsLayer {
-                                        alpha = floatingAlpha
-                                        translationY = floatingOffset
-                                    }
+                            Box(
+                                modifier = Modifier.fillMaxSize()
                             ) {
+                                Surface(
+                                    shape = RoundedCornerShape(50),
+                                    color = MaterialTheme.colorScheme.surfaceVariant,
+                                    tonalElevation = 3.dp,
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .padding(bottom = 18.dp)
+                                        .graphicsLayer {
+                                            alpha = floatingAlpha
+                                            translationY = floatingOffset
+                                        }
+                                ) {
                                 Row(
                                     modifier = Modifier.padding(3.dp),
                                     verticalAlignment = Alignment.CenterVertically
@@ -1747,6 +1753,7 @@ private fun NusaMusicApp(
                                     }
                                 }
                             }
+                            }
 
                             val backAlpha by animateFloatAsState(
                                 targetValue = if (showBackToPlayer) 1f else 0f,
@@ -1759,23 +1766,26 @@ private fun NusaMusicApp(
                                 label = "backPlayerOffset"
                             )
 
-                            Surface(
-                                shape = RoundedCornerShape(50),
-                                color = MaterialTheme.colorScheme.surfaceVariant,
-                                tonalElevation = 3.dp,
-                                modifier = Modifier
-                                    .align(Alignment.TopEnd)
-                                    .padding(top = 82.dp, end = 14.dp)
-                                    .graphicsLayer {
-                                        alpha = backAlpha
-                                        translationY = backOffset
-                                    }
-                                    .clickable {
-                                        scope.launch {
-                                            pagerState.animateScrollToPage(0)
-                                        }
-                                    }
+                            Box(
+                                modifier = Modifier.fillMaxSize()
                             ) {
+                                Surface(
+                                    shape = RoundedCornerShape(50),
+                                    color = MaterialTheme.colorScheme.surfaceVariant,
+                                    tonalElevation = 3.dp,
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(top = 82.dp, end = 14.dp)
+                                        .graphicsLayer {
+                                            alpha = backAlpha
+                                            translationY = backOffset
+                                        }
+                                        .clickable {
+                                            scope.launch {
+                                                pagerState.animateScrollToPage(0)
+                                            }
+                                        }
+                                ) {
                                 Row(
                                     modifier = Modifier.padding(
                                         horizontal = 12.dp,
@@ -1795,6 +1805,7 @@ private fun NusaMusicApp(
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
+                            }
                             }
                         }
                     }
