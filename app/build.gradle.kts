@@ -14,6 +14,53 @@ if (localPropertiesFile.exists()) {
 }
 
 val lastFmApiKey = localProperties.getProperty("LASTFM_API_KEY", "")
+
+private const val DECENT_AUDIO_ENGINE_VERSION = "v0.1.0-libs"
+private const val DECENT_AUDIO_ENGINE_BASE_URL =
+    "https://github.com/Ma145/decent-player/releases/download/$DECENT_AUDIO_ENGINE_VERSION"
+
+private val decentAudioEngineArtifacts = listOf(
+    "decent-usb-audio-driver-release.aar",
+    "decent-usb-audio-wrapper-media3-release.aar"
+)
+
+val decentAudioEngineDir = layout.buildDirectory.dir("decent-audio-engine").get().asFile
+
+val downloadDecentAudioEngine by tasks.registering {
+    outputs.files(
+        decentAudioEngineArtifacts.map { File(decentAudioEngineDir, it) }
+    )
+
+    doLast {
+        decentAudioEngineDir.mkdirs()
+
+        decentAudioEngineArtifacts.forEach { artifactName ->
+            val destination = File(decentAudioEngineDir, artifactName)
+            if (destination.exists() && destination.length() > 0L) {
+                logger.lifecycle("Decent Audio Engine: using cached $artifactName")
+                return@forEach
+            }
+
+            val artifactUrl = "$DECENT_AUDIO_ENGINE_BASE_URL/$artifactName"
+            logger.lifecycle("Decent Audio Engine: downloading $artifactName")
+
+            java.net.URI(artifactUrl).toURL().openStream().use { input ->
+                destination.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+
+            check(destination.length() > 0L) {
+                "Downloaded Decent Audio Engine artifact is empty: $artifactName"
+            }
+        }
+    }
+}
+
+tasks.named("preBuild") {
+    dependsOn(downloadDecentAudioEngine)
+}
+
     .replace("\\", "\\\\")
     .replace("\"", "\\\"")
 
@@ -49,6 +96,14 @@ android {
 }
 
 dependencies {
+    implementation(
+        files(
+            File(decentAudioEngineDir, "decent-usb-audio-driver-release.aar"),
+            File(decentAudioEngineDir, "decent-usb-audio-wrapper-media3-release.aar")
+        )
+    )
+    implementation("androidx.core:core-ktx:1.18.0")
+    implementation("com.github.mwiede:jsch:0.2.23")
     implementation(platform("androidx.compose:compose-bom:2025.10.01"))
     implementation("androidx.activity:activity-compose:1.11.0")
     implementation("androidx.compose.ui:ui")
