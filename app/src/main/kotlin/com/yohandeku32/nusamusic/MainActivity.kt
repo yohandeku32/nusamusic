@@ -1802,6 +1802,7 @@ private fun NusaMusicApp(
             }
         }
     }
+    }
 }
 
 @Composable
