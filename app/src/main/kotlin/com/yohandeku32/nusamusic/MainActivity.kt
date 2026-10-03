@@ -790,25 +790,21 @@ private fun NusaMusicApp(
                                                                     ) {
                                                                         Spacer(Modifier.height(2.dp))
                                 
-                                                                        Crossfade(
-                                                                            targetState = immersiveArtwork,
-                                                                            animationSpec = tween(durationMillis = 260),
-                                                                            label = "playerArtworkModeCrossfade"
-                                                                        ) { immersive ->
-                                                                            if (immersive) {
+                                                                        Box(
+                                                                            modifier = Modifier
+                                                                                .fillMaxWidth(0.88f)
+                                                                                .aspectRatio(1f)
+                                                                        ) {
+                                                                            if (immersiveArtwork) {
                                                                                 ImmersiveArtwork(
                                                                                     song = currentSong,
-                                                                                    modifier = Modifier
-                                                                                        .fillMaxWidth(0.88f)
-                                                                                        .aspectRatio(1f)
+                                                                                    modifier = Modifier.matchParentSize()
                                                                                 )
                                                                             } else {
                                                                                 VinylRecord(
                                                                                     song = currentSong,
                                                                                     isPlaying = isPlaying,
-                                                                                    modifier = Modifier
-                                                                                        .fillMaxWidth(0.88f)
-                                                                                        .aspectRatio(1f)
+                                                                                    modifier = Modifier.matchParentSize()
                                                                                 )
                                                                             }
                                                                         }
@@ -1309,48 +1305,78 @@ private fun ImmersiveArtwork(
     song: Song?,
     modifier: Modifier = Modifier
 ) {
-    Box(
+    BoxWithConstraints(
         modifier = modifier
+            .graphicsLayer { clip = false }
             .background(Color.Transparent)
     ) {
-        // This box is measured at the exact same size as the Vinyl slot.
-        // Only the artwork drawing is enlarged, so the rest of the player
-        // keeps its original vertical layout.
+        val slotWidth = maxWidth
+        val screenWidth = LocalConfiguration.current.screenWidthDp.dp
+        val horizontalBleed = (screenWidth - slotWidth) / 2f
+
+        // The parent remains the original Vinyl-sized square. The visual layer
+        // below is deliberately larger and overflows without affecting layout.
+        val topBleed = 92.dp
+        val bottomExtension = 190.dp
+        val visualArtworkHeight = screenWidth + bottomExtension
+
         Box(
-            modifier = Modifier.matchParentSize()
+            modifier = Modifier
+                .requiredWidth(screenWidth)
+                .height(visualArtworkHeight)
+                .offset(
+                    x = -horizontalBleed,
+                    y = -topBleed
+                )
+                .graphicsLayer { clip = false }
         ) {
+            // Main album artwork: full-width, undistorted square composition.
             ArtworkView(
                 song = song,
                 maxSizePx = 1024,
                 modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        val immersiveScale = 1.45f
-                        scaleX = immersiveScale
-                        scaleY = immersiveScale
-
-                        // Align the enlarged artwork to the bottom of the
-                        // original Vinyl slot. This lets it grow upward into
-                        // the header/status-bar area without pushing content.
-                        translationY = -(size.height * (immersiveScale - 1f))
-                    }
+                    .align(Alignment.TopCenter)
+                    .size(screenWidth)
             )
 
-            // Smoothly dissolve the artwork into the existing white player
-            // background at the exact point where the title begins below.
+            // Continue the lower ambience into the white area using a very soft
+            // blurred reflection of the same artwork. This removes the hard
+            // square boundary seen in the previous version.
+            ArtworkView(
+                song = song,
+                maxSizePx = 768,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = screenWidth - 70.dp)
+                    .fillMaxWidth()
+                    .height(bottomExtension + 70.dp)
+                    .graphicsLayer {
+                        alpha = 0.36f
+                        scaleY = 1.08f
+                    }
+                    .blur(24.dp)
+            )
+
+            // Long white feather over the reflected area, matching the white
+            // player surface rather than introducing a separate background.
             Box(
                 modifier = Modifier
-                    .align(Alignment.BottomCenter)
+                    .align(Alignment.TopCenter)
+                    .padding(top = screenWidth - 20.dp)
                     .fillMaxWidth()
-                    .fillMaxHeight(0.62f)
+                    .height(bottomExtension + 20.dp)
                     .background(
                         Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                MaterialTheme.colorScheme.background.copy(alpha = 0.08f),
-                                MaterialTheme.colorScheme.background.copy(alpha = 0.32f),
-                                MaterialTheme.colorScheme.background.copy(alpha = 0.72f),
-                                MaterialTheme.colorScheme.background
+                            colorStops = arrayOf(
+                                0.00f to Color.Transparent,
+                                0.16f to Color.Transparent,
+                                0.32f to MaterialTheme.colorScheme.background.copy(alpha = 0.10f),
+                                0.50f to MaterialTheme.colorScheme.background.copy(alpha = 0.28f),
+                                0.66f to MaterialTheme.colorScheme.background.copy(alpha = 0.48f),
+                                0.80f to MaterialTheme.colorScheme.background.copy(alpha = 0.68f),
+                                0.91f to MaterialTheme.colorScheme.background.copy(alpha = 0.84f),
+                                0.97f to MaterialTheme.colorScheme.background.copy(alpha = 0.96f),
+                                1.00f to MaterialTheme.colorScheme.background
                             )
                         )
                     )
