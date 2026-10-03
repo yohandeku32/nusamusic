@@ -82,7 +82,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -129,7 +128,6 @@ class MainActivity : ComponentActivity() {
     private var permissionGranted by mutableStateOf(false)
     private var shuffleEnabled by mutableStateOf(false)
     private var repeatMode by mutableIntStateOf(Player.REPEAT_MODE_OFF)
-    private var immersiveArtwork by mutableStateOf(false)
 
     private val playbackPrefs: SharedPreferences by lazy {
         getSharedPreferences("playback_state", MODE_PRIVATE)
@@ -177,8 +175,6 @@ class MainActivity : ComponentActivity() {
 
         permissionGranted = checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
         if (permissionGranted) loadSongs() else permissionLauncher.launch(permission)
-
-        immersiveArtwork = playbackPrefs.getBoolean("immersive_artwork", false)
 
         val token = SessionToken(this, ComponentName(this, PlaybackService::class.java))
         val future = MediaController.Builder(this, token).buildAsync()
@@ -255,8 +251,6 @@ class MainActivity : ComponentActivity() {
                     onToggleRepeat = ::toggleRepeat,
                     shuffleEnabled = shuffleEnabled,
                     repeatMode = repeatMode,
-                    immersiveArtwork = immersiveArtwork,
-                    onSetImmersiveArtwork = ::updateImmersiveArtwork,
                     onRequestPermission = { permissionLauncher.launch(permission) }
                 )
             }
@@ -322,13 +316,6 @@ class MainActivity : ComponentActivity() {
         } else {
             isPlaying = false
         }
-    }
-
-    private fun updateImmersiveArtwork(enabled: Boolean) {
-        immersiveArtwork = enabled
-        playbackPrefs.edit()
-            .putBoolean("immersive_artwork", enabled)
-            .apply()
     }
 
     private fun toggleShuffle() {
@@ -464,8 +451,6 @@ private fun NusaMusicApp(
     onToggleRepeat: () -> Unit,
     shuffleEnabled: Boolean,
     repeatMode: Int,
-    immersiveArtwork: Boolean,
-    onSetImmersiveArtwork: (Boolean) -> Unit,
     onRequestPermission: () -> Unit
 ) {
     var isFavorite by remember { mutableStateOf(false) }
@@ -542,91 +527,6 @@ private fun NusaMusicApp(
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(Modifier.height(18.dp))
-
-                Text(
-                    "PLAYER STYLE",
-                    fontSize = 11.sp,
-                    letterSpacing = 1.5.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(10.dp))
-
-                Surface(
-                    onClick = { onSetImmersiveArtwork(false) },
-                    shape = RoundedCornerShape(16.dp),
-                    color = if (!immersiveArtwork) {
-                        MaterialTheme.colorScheme.surfaceVariant
-                    } else {
-                        Color.Transparent
-                    },
-                    tonalElevation = 0.dp,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                "Vinyl",
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Spacer(Modifier.height(2.dp))
-                            Text(
-                                "Classic rotating vinyl player",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Text(
-                            if (!immersiveArtwork) "✓" else "",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(6.dp))
-
-                Surface(
-                    onClick = { onSetImmersiveArtwork(true) },
-                    shape = RoundedCornerShape(16.dp),
-                    color = if (immersiveArtwork) {
-                        MaterialTheme.colorScheme.surfaceVariant
-                    } else {
-                        Color.Transparent
-                    },
-                    tonalElevation = 0.dp,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                "Immersive Artwork",
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Spacer(Modifier.height(2.dp))
-                            Text(
-                                "Album artwork as the main player surface",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Text(
-                            if (immersiveArtwork) "✓" else "",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(22.dp))
 
                 Text(
                     "ABOUT NUSA MUSIC",
@@ -723,345 +623,291 @@ private fun NusaMusicApp(
                         ) {
                             item {
                                 Column(
-                                                                    modifier = Modifier
-                                                                        .fillMaxWidth()
-                                                                        .fillParentMaxHeight()
-                                                                        // Draw the rounded player surface without clipping its children.
-                                                                        // The immersive artwork must be allowed to bleed outside the
-                                                                        // square artwork slot, all the way to the screen edges.
-                                                                        .background(
-                                                                            color = MaterialTheme.colorScheme.background,
-                                                                            shape = RoundedCornerShape(
-                                                                                bottomStart = 34.dp,
-                                                                                bottomEnd = 34.dp
-                                                                            )
-                                                                        ),
-                                                                    horizontalAlignment = Alignment.CenterHorizontally
-                                                                ) {
-                                                                    Spacer(
-                                                                        modifier = Modifier
-                                                                            .fillMaxWidth()
-                                                                            .height(24.dp)
-                                                                    )
-                                
-                                                                    TopAppBar(
-                                                                        title = { },
-                                                                        modifier = Modifier.graphicsLayer {
-                                                                            // The reference immersive player has a clean artwork-only header.
-                                                                            alpha = if (immersiveArtwork) 0f else 1f
-                                                                        },
-                                                                        colors = TopAppBarDefaults.topAppBarColors(
-                                                                            containerColor = if (immersiveArtwork) {
-                                                                                Color.Transparent
-                                                                            } else {
-                                                                                MaterialTheme.colorScheme.background
-                                                                            },
-                                                                            scrolledContainerColor = if (immersiveArtwork) {
-                                                                                Color.Transparent
-                                                                            } else {
-                                                                                MaterialTheme.colorScheme.background
-                                                                            }
-                                                                        ),
-                                                                        windowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
-                                                                        navigationIcon = {
-                                                                            ArtistAvatar(
-                                                                                song = currentSong,
-                                                                                modifier = Modifier
-                                                                                    .padding(start = 18.dp)
-                                                                                    .size(40.dp)
-                                                                                    .clip(CircleShape)
-                                                                            )
-                                                                        },
-                                                                        actions = {
-                                                                            IconButton(onClick = {}) {
-                                                                                Icon(
-                                                                                    Icons.Default.MoreHoriz,
-                                                                                    contentDescription = "More",
-                                                                                    tint = if (immersiveArtwork) Color.White else MaterialTheme.colorScheme.onBackground
-                                                                                )
-                                                                            }
-                                                                            IconButton(onClick = { showSettings = true }) {
-                                                                                Icon(
-                                                                                    Icons.Default.Settings,
-                                                                                    contentDescription = "Settings",
-                                                                                    tint = if (immersiveArtwork) Color.White else MaterialTheme.colorScheme.onBackground
-                                                                                )
-                                                                            }
-                                                                        }
-                                                                    )
-                                
-                                                                    Column(
-                                                                        modifier = Modifier
-                                                                            .fillMaxWidth()
-                                                                            .padding(horizontal = 22.dp),
-                                                                        horizontalAlignment = Alignment.CenterHorizontally
-                                                                    ) {
-                                                                        Spacer(Modifier.height(2.dp))
-                                
-                                                                        val immersiveExtraHeight = if (immersiveArtwork) 120.dp else 0.dp
-                                                                        val immersiveSlotWidth =
-                                                                            (LocalConfiguration.current.screenWidthDp.dp - 44.dp) * 0.88f
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .fillParentMaxHeight()
+                                        .clip(
+                                            RoundedCornerShape(
+                                                bottomStart = 34.dp,
+                                                bottomEnd = 34.dp
+                                            )
+                                        )
+                                        .background(MaterialTheme.colorScheme.background),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Spacer(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(24.dp)
+                                    )
 
-                                                                        BoxWithConstraints(
-                                                                            modifier = Modifier
-                                                                                .fillMaxWidth(0.88f)
-                                                                                .then(
-                                                                                    if (immersiveArtwork) {
-                                                                                        Modifier.height(immersiveSlotWidth + immersiveExtraHeight)
-                                                                                    } else {
-                                                                                        Modifier.aspectRatio(1f)
-                                                                                    }
-                                                                                )
-                                                                                .graphicsLayer { clip = false }
-                                                                        ) {
-                                                                            if (immersiveArtwork) {
-                                                                                ImmersiveArtwork(
-                                                                                    song = currentSong,
-                                                                                    modifier = Modifier.matchParentSize()
-                                                                                )
-                                                                            } else {
-                                                                                VinylRecord(
-                                                                                    song = currentSong,
-                                                                                    isPlaying = isPlaying,
-                                                                                    modifier = Modifier.matchParentSize()
-                                                                                )
-                                                                            }
-                                                                        }
+                                    TopAppBar(
+                                        title = { },
+                                        colors = TopAppBarDefaults.topAppBarColors(
+                                            containerColor = MaterialTheme.colorScheme.background,
+                                            scrolledContainerColor = MaterialTheme.colorScheme.background
+                                        ),
+                                        windowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
+                                        navigationIcon = {
+                                            ArtistAvatar(
+                                                song = currentSong,
+                                                modifier = Modifier
+                                                    .padding(start = 18.dp)
+                                                    .size(40.dp)
+                                                    .clip(CircleShape)
+                                            )
+                                        },
+                                        actions = {
+                                            IconButton(onClick = {}) {
+                                                Icon(
+                                                    Icons.Default.MoreHoriz,
+                                                    contentDescription = "More"
+                                                )
+                                            }
+                                            IconButton(onClick = { showSettings = true }) {
+                                                Icon(
+                                                    Icons.Default.Settings,
+                                                    contentDescription = "Settings"
+                                                )
+                                            }
+                                        }
+                                    )
 
-                                                                        Column(
-                                                                            modifier = Modifier
-                                                                                .fillMaxWidth()
-                                                                                .offset(y = -immersiveExtraHeight)
-                                                                        ) {
-                                                                            Spacer(Modifier.height(24.dp))
-                                
-                                                                        Box(
-                                                                            modifier = Modifier
-                                                                                .fillMaxWidth()
-                                                                                .height(82.dp),
-                                                                            contentAlignment = Alignment.Center
-                                                                        ) {
-                                                                            val rawTitle =
-                                                                                currentSong?.title?.trim().orEmpty()
-                                                                            val titleText = when {
-                                                                                rawTitle.contains("1685", ignoreCase = true) &&
-                                                                                    rawTitle.contains("Instrumental", ignoreCase = true) ->
-                                                                                    "1685 (Instrumental)"
-                                                                                rawTitle.isBlank() -> "Choose a song"
-                                                                                else -> rawTitle
-                                                                            }
-                                
-                                                                            val titleWordCount = remember(titleText) {
-                                                                                titleText.trim()
-                                                                                    .split(Regex("\\s+"))
-                                                                                    .count { it.isNotBlank() }
-                                                                            }
-                                
-                                                                            val titleSize = remember(titleText) {
-                                                                                when {
-                                                                                    titleText == "1685 (Instrumental)" -> 37.sp
-                                                                                    titleWordCount <= 2 -> 37.sp
-                                                                                    titleWordCount == 3 -> 33.sp
-                                                                                    else -> 28.sp
-                                                                                }
-                                                                            }
-                                
-                                                                            val titleLineHeight = remember(titleSize) {
-                                                                                when {
-                                                                                    titleText == "1685 (Instrumental)" -> 40.sp
-                                                                                    titleSize == 37.sp -> 40.sp
-                                                                                    titleSize == 33.sp -> 36.sp
-                                                                                    else -> 31.sp
-                                                                                }
-                                                                            }
-                                
-                                                                            Text(
-                                                                                titleText,
-                                                                                fontFamily = FontFamily.Serif,
-                                                                                fontWeight = FontWeight.Bold,
-                                                                                fontSize = titleSize,
-                                                                                lineHeight = titleLineHeight,
-                                                                                maxLines = 1,
-                                                                                overflow = androidx.compose.ui.text.style.TextOverflow.Clip,
-                                                                                modifier = Modifier.padding(horizontal = 4.dp),
-                                                                                textAlign = TextAlign.Center
-                                                                            )
-                                                                        }
-                                
-                                                                        Text(
-                                                                            currentSong?.artist ?: "Your local music library",
-                                                                            modifier = Modifier.fillMaxWidth(),
-                                                                            fontSize = 14.sp,
-                                                                            maxLines = 1,
-                                                                            textAlign = TextAlign.Center,
-                                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                                        )
-                                
-                                                                        Spacer(Modifier.height(16.dp))
-                                
-                                                                        SimpleProgressBar(
-                                                                            positionMs = positionMs,
-                                                                            durationMs = durationMs,
-                                                                            enabled = currentSong != null && durationMs > 0L,
-                                                                            onSeek = onSeek,
-                                                                            modifier = Modifier
-                                                                                .fillMaxWidth()
-                                                                                .padding(horizontal = 12.dp)
-                                                                        )
-                                
-                                                                        Row(
-                                                                            modifier = Modifier
-                                                                                .fillMaxWidth()
-                                                                                .padding(horizontal = 12.dp),
-                                                                            horizontalArrangement = Arrangement.SpaceBetween
-                                                                        ) {
-                                                                            Text(formatTime(positionMs), fontSize = 12.sp)
-                                                                            Text(formatTime(durationMs), fontSize = 12.sp)
-                                                                        }
-                                
-                                                                        Spacer(Modifier.height(5.dp))
-                                
-                                                                        Row(
-                                                                            modifier = Modifier.fillMaxWidth(),
-                                                                            verticalAlignment = Alignment.CenterVertically,
-                                                                            horizontalArrangement = Arrangement.Center
-                                                                        ) {
-                                                                            TransportPillButton(
-                                                                                icon = Icons.Default.FastRewind,
-                                                                                contentDescription = "Previous",
-                                                                                onClick = onPrevious,
-                                                                                enabled = currentSong != null
-                                                                            )
-                                
-                                                                            Spacer(Modifier.width(16.dp))
-                                
-                                                                            FilledIconButton(
-                                                                                onClick = if (currentSong == null) {
-                                                                                    onRequestPermission
-                                                                                } else {
-                                                                                    onTogglePlay
-                                                                                },
-                                                                                modifier = Modifier.size(84.dp),
-                                                                                shape = CircleShape
-                                                                            ) {
-                                                                                Icon(
-                                                                                    if (isPlaying) {
-                                                                                        Icons.Default.Pause
-                                                                                    } else {
-                                                                                        Icons.Default.PlayArrow
-                                                                                    },
-                                                                                    contentDescription = if (isPlaying) {
-                                                                                        "Pause"
-                                                                                    } else {
-                                                                                        "Play"
-                                                                                    },
-                                                                                    modifier = Modifier.size(36.dp)
-                                                                                )
-                                                                            }
-                                
-                                                                            Spacer(Modifier.width(16.dp))
-                                
-                                                                            TransportPillButton(
-                                                                                icon = Icons.Default.FastForward,
-                                                                                contentDescription = "Next",
-                                                                                onClick = onNext,
-                                                                                enabled = currentSong != null
-                                                                            )
-                                                                        }
-                                
-                                                                        Spacer(Modifier.height(10.dp))
-                                                                        Spacer(Modifier.height(12.dp))
-                                                                        Spacer(Modifier.height(18.dp))
-                                
-                                                                        Row(
-                                                                            modifier = Modifier.fillMaxWidth(),
-                                                                            verticalAlignment = Alignment.CenterVertically
-                                                                        ) {
-                                                                            IconButton(
-                                                                                onClick = {
-                                                                                    scope.launch {
-                                                                                        // Open the artist biography section directly.
-                                                                                        playerScrollState.animateScrollToItem(
-                                                                                            index = 1,
-                                                                                            scrollOffset = 0
-                                                                                        )
-                                                                                    }
-                                                                                },
-                                                                                modifier = Modifier.size(42.dp)
-                                                                            ) {
-                                                                                Icon(
-                                                                                    Icons.Default.KeyboardArrowDown,
-                                                                                    contentDescription = "Expand artist biography",
-                                                                                    modifier = Modifier.size(28.dp)
-                                                                                )
-                                                                            }
-                                
-                                                                            Spacer(Modifier.weight(1f))
-                                
-                                                                            IconButton(
-                                                                                onClick = { onShare(currentSong) },
-                                                                                enabled = currentSong != null,
-                                                                                modifier = Modifier.size(42.dp)
-                                                                            ) {
-                                                                                Icon(
-                                                                                    Icons.Default.Share,
-                                                                                    contentDescription = "Share song",
-                                                                                    modifier = Modifier.size(22.dp)
-                                                                                )
-                                                                            }
-                                
-                                                                            IconButton(
-                                                                                onClick = { isFavorite = !isFavorite },
-                                                                                enabled = currentSong != null,
-                                                                                modifier = Modifier.size(42.dp)
-                                                                            ) {
-                                                                                Icon(
-                                                                                    if (isFavorite) {
-                                                                                        Icons.Default.Favorite
-                                                                                    } else {
-                                                                                        Icons.Default.FavoriteBorder
-                                                                                    },
-                                                                                    contentDescription = if (isFavorite) {
-                                                                                        "Favorite"
-                                                                                    } else {
-                                                                                        "Add to favorites"
-                                                                                    },
-                                                                                    modifier = Modifier.size(22.dp),
-                                                                                    tint = if (isFavorite) {
-                                                                                        Color(0xFFC62828)
-                                                                                    } else {
-                                                                                        MaterialTheme.colorScheme.onBackground
-                                                                                    }
-                                                                                )
-                                                                            }
-                                                                        }
-                                
-                                                                        Spacer(Modifier.height(8.dp))
-                                                                        AudioQualityPill(song = currentSong)
-                                
-                                                                        if (!permissionGranted) {
-                                                                            Text(
-                                                                                "Give Nusa Music access to your audio files.",
-                                                                                color = Color(0xFF9D9D9D),
-                                                                                fontSize = 14.sp
-                                                                            )
-                                                                            Spacer(Modifier.height(12.dp))
-                                                                            FilledIconButton(onClick = onRequestPermission) {
-                                                                                Icon(
-                                                                                    Icons.Default.FolderOpen,
-                                                                                    contentDescription = "Allow music access"
-                                                                                )
-                                                                            }
-                                                                        } else if (filtered.isEmpty()) {
-                                                                            Text(
-                                                                                "No local music found",
-                                                                                color = Color(0xFF9D9D9D),
-                                                                                fontSize = 14.sp
-                                                                            )
-                                                                        }
-                                                                            }
-                                                                    }
-                                                                }
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 22.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Spacer(Modifier.height(2.dp))
+
+                                        VinylRecord(
+                                            song = currentSong,
+                                            isPlaying = isPlaying,
+                                            modifier = Modifier
+                                                .fillMaxWidth(0.88f)
+                                                .aspectRatio(1f)
+                                        )
+
+                                        Spacer(Modifier.height(24.dp))
+
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(82.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            val titleText =
+                                                currentSong?.title ?: "Choose a song"
+
+                                            val titleWordCount = remember(titleText) {
+                                                titleText.trim()
+                                                    .split(Regex("\\s+"))
+                                                    .count { it.isNotBlank() }
+                                            }
+
+                                            val titleSize = remember(titleWordCount) {
+                                                when {
+                                                    titleWordCount <= 2 -> 37.sp
+                                                    titleWordCount == 3 -> 33.sp
+                                                    else -> 30.sp
+                                                }
+                                            }
+
+                                            val titleLineHeight = remember(titleWordCount) {
+                                                when {
+                                                    titleWordCount <= 2 -> 40.sp
+                                                    titleWordCount == 3 -> 36.sp
+                                                    else -> 33.sp
+                                                }
+                                            }
+
+                                            Text(
+                                                titleText,
+                                                fontFamily = FontFamily.Serif,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = titleSize,
+                                                lineHeight = titleLineHeight,
+                                                maxLines = 3,
+                                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                                modifier = Modifier.padding(horizontal = 4.dp),
+                                                textAlign = TextAlign.Center
+                                            )
+                                        }
+
+                                        Text(
+                                            currentSong?.artist ?: "Your local music library",
+                                            modifier = Modifier.fillMaxWidth(),
+                                            fontSize = 14.sp,
+                                            maxLines = 1,
+                                            textAlign = TextAlign.Center,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+
+                                        Spacer(Modifier.height(16.dp))
+
+                                        SimpleProgressBar(
+                                            positionMs = positionMs,
+                                            durationMs = durationMs,
+                                            enabled = currentSong != null && durationMs > 0L,
+                                            onSeek = onSeek,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 12.dp)
+                                        )
+
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 12.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text(formatTime(positionMs), fontSize = 12.sp)
+                                            Text(formatTime(durationMs), fontSize = 12.sp)
+                                        }
+
+                                        Spacer(Modifier.height(5.dp))
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.Center
+                                        ) {
+                                            TransportPillButton(
+                                                icon = Icons.Default.FastRewind,
+                                                contentDescription = "Previous",
+                                                onClick = onPrevious,
+                                                enabled = currentSong != null
+                                            )
+
+                                            Spacer(Modifier.width(16.dp))
+
+                                            FilledIconButton(
+                                                onClick = if (currentSong == null) {
+                                                    onRequestPermission
+                                                } else {
+                                                    onTogglePlay
+                                                },
+                                                modifier = Modifier.size(84.dp),
+                                                shape = CircleShape
+                                            ) {
+                                                Icon(
+                                                    if (isPlaying) {
+                                                        Icons.Default.Pause
+                                                    } else {
+                                                        Icons.Default.PlayArrow
+                                                    },
+                                                    contentDescription = if (isPlaying) {
+                                                        "Pause"
+                                                    } else {
+                                                        "Play"
+                                                    },
+                                                    modifier = Modifier.size(36.dp)
+                                                )
+                                            }
+
+                                            Spacer(Modifier.width(16.dp))
+
+                                            TransportPillButton(
+                                                icon = Icons.Default.FastForward,
+                                                contentDescription = "Next",
+                                                onClick = onNext,
+                                                enabled = currentSong != null
+                                            )
+                                        }
+
+                                        Spacer(Modifier.height(10.dp))
+                                        Spacer(Modifier.height(12.dp))
+                                        Spacer(Modifier.height(18.dp))
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            IconButton(
+                                                onClick = {
+                                                    scope.launch {
+                                                        // Open the artist biography section directly.
+                                                        playerScrollState.animateScrollToItem(
+                                                            index = 1,
+                                                            scrollOffset = 0
+                                                        )
+                                                    }
+                                                },
+                                                modifier = Modifier.size(42.dp)
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.KeyboardArrowDown,
+                                                    contentDescription = "Expand artist biography",
+                                                    modifier = Modifier.size(28.dp)
+                                                )
+                                            }
+
+                                            Spacer(Modifier.weight(1f))
+
+                                            IconButton(
+                                                onClick = { onShare(currentSong) },
+                                                enabled = currentSong != null,
+                                                modifier = Modifier.size(42.dp)
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.Share,
+                                                    contentDescription = "Share song",
+                                                    modifier = Modifier.size(22.dp)
+                                                )
+                                            }
+
+                                            IconButton(
+                                                onClick = { isFavorite = !isFavorite },
+                                                enabled = currentSong != null,
+                                                modifier = Modifier.size(42.dp)
+                                            ) {
+                                                Icon(
+                                                    if (isFavorite) {
+                                                        Icons.Default.Favorite
+                                                    } else {
+                                                        Icons.Default.FavoriteBorder
+                                                    },
+                                                    contentDescription = if (isFavorite) {
+                                                        "Favorite"
+                                                    } else {
+                                                        "Add to favorites"
+                                                    },
+                                                    modifier = Modifier.size(22.dp),
+                                                    tint = if (isFavorite) {
+                                                        Color(0xFFC62828)
+                                                    } else {
+                                                        MaterialTheme.colorScheme.onBackground
+                                                    }
+                                                )
+                                            }
+                                        }
+
+                                        Spacer(Modifier.height(8.dp))
+                                        AudioQualityPill(song = currentSong)
+
+                                        if (!permissionGranted) {
+                                            Text(
+                                                "Give Nusa Music access to your audio files.",
+                                                color = Color(0xFF9D9D9D),
+                                                fontSize = 14.sp
+                                            )
+                                            Spacer(Modifier.height(12.dp))
+                                            FilledIconButton(onClick = onRequestPermission) {
+                                                Icon(
+                                                    Icons.Default.FolderOpen,
+                                                    contentDescription = "Allow music access"
+                                                )
+                                            }
+                                        } else if (filtered.isEmpty()) {
+                                            Text(
+                                                "No local music found",
+                                                color = Color(0xFF9D9D9D),
+                                                fontSize = 14.sp
+                                            )
+                                        }
+                                    }
+                                }
                             }
 
                             // Artist biography section.
@@ -1335,97 +1181,6 @@ private fun NusaMusicApp(
 }
 
 @Composable
-private fun ImmersiveArtwork(
-    song: Song?,
-    modifier: Modifier = Modifier
-) {
-    BoxWithConstraints(
-        modifier = modifier
-            .graphicsLayer { clip = false }
-            .background(Color.Transparent)
-    ) {
-        val screenWidth = LocalConfiguration.current.screenWidthDp.dp
-
-        // The player artwork begins behind the (hidden) top bar. Make the
-        // visual layer taller than the viewport and shift it upward so the
-        // cover starts exactly at y=0 and remains edge-to-edge.
-        val topBleed = 86.dp
-        val artworkWidth = screenWidth
-        val artworkHeight = screenWidth + topBleed
-        val fadeHeight = 280.dp
-
-        Box(
-            modifier = Modifier
-                .requiredWidth(artworkWidth)
-                .requiredHeight(artworkHeight + fadeHeight)
-                .offset(
-                    x = -((artworkWidth - maxWidth) / 2f),
-                    y = -topBleed
-                )
-                .graphicsLayer { clip = false }
-        ) {
-            // Main cover: edge-to-edge and strongly filled. The slightly taller
-            // visual frame compensates for the top-bar area so the artwork does
-            // not finish prematurely above the song title.
-            ArtworkView(
-                song = song,
-                maxSizePx = 1024,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .requiredWidth(artworkWidth)
-                    .requiredHeight(artworkHeight)
-            )
-
-            // Soft continuation below the cover. This is deliberately subtle:
-            // it should read as reflected light/haze rather than another image
-            // rectangle.
-            ArtworkView(
-                song = song,
-                maxSizePx = 768,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = artworkHeight - 55.dp)
-                    .fillMaxWidth()
-                    .height(fadeHeight)
-                    .graphicsLayer {
-                        alpha = 0.12f
-                        scaleY = 1.05f
-                    }
-                    .blur(26.dp)
-            )
-
-            // Long, smooth white feather. The fade is delayed so the blue
-            // waves remain visible much farther down, matching the reference.
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = artworkHeight - 105.dp)
-                    .fillMaxWidth()
-                    .height(fadeHeight + 35.dp)
-                    .background(
-                        Brush.verticalGradient(
-                            colorStops = arrayOf(
-                                0.00f to Color.Transparent,
-                                0.16f to Color.Transparent,
-                                0.30f to MaterialTheme.colorScheme.background.copy(alpha = 0.02f),
-                                0.46f to MaterialTheme.colorScheme.background.copy(alpha = 0.055f),
-                                0.60f to MaterialTheme.colorScheme.background.copy(alpha = 0.13f),
-                                0.72f to MaterialTheme.colorScheme.background.copy(alpha = 0.26f),
-                                0.84f to MaterialTheme.colorScheme.background.copy(alpha = 0.50f),
-                                0.93f to MaterialTheme.colorScheme.background.copy(alpha = 0.76f),
-                                0.98f to MaterialTheme.colorScheme.background.copy(alpha = 0.93f),
-                                1.00f to MaterialTheme.colorScheme.background
-                            )
-                        )
-                    )
-            )
-        }
-    }
-}
-
-@Composable
 private fun ArtistBiographySection(
     artistName: String?,
     biography: com.yohandeku32.nusamusic.data.ArtistBiography?,
@@ -1656,16 +1411,14 @@ private fun SimpleProgressBar(
     durationMs: Long,
     enabled: Boolean,
     onSeek: (Long) -> Unit,
-    modifier: Modifier = Modifier,
-    trackColor: Color = Color(0xFFD0CDC6),
-    progressColor: Color = MaterialTheme.colorScheme.primary
+    modifier: Modifier = Modifier
 ) {
     val fraction = if (durationMs > 0L) {
         (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
     } else {
         0f
     }
-    val primary = progressColor
+    val primary = MaterialTheme.colorScheme.primary
 
     androidx.compose.foundation.Canvas(
         modifier = modifier
@@ -1703,7 +1456,7 @@ private fun SimpleProgressBar(
         val stroke = 3.4.dp.toPx()
 
         drawLine(
-            color = trackColor,
+            color = Color(0xFFD0CDC6),
             start = androidx.compose.ui.geometry.Offset(0f, y),
             end = androidx.compose.ui.geometry.Offset(size.width, y),
             strokeWidth = stroke
@@ -1729,26 +1482,20 @@ private fun TransportPillButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     contentDescription: String,
     onClick: () -> Unit,
-    enabled: Boolean,
-    darkSurface: Boolean = false
+    enabled: Boolean
 ) {
     androidx.compose.material3.Surface(
         onClick = onClick,
         enabled = enabled,
         modifier = Modifier.size(width = 92.dp, height = 54.dp),
         shape = RoundedCornerShape(50),
-        color = if (darkSurface) {
-            Color.White.copy(alpha = 0.18f)
-        } else {
-            MaterialTheme.colorScheme.surfaceVariant
-        },
+        color = MaterialTheme.colorScheme.surfaceVariant,
         tonalElevation = 0.dp
     ) {
         Box(contentAlignment = Alignment.Center) {
             Icon(
                 icon,
                 contentDescription = contentDescription,
-                tint = if (darkSurface) Color.White else MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier
                     .size(28.dp)
                     .graphicsLayer {
@@ -2078,8 +1825,7 @@ private fun ArtworkView(
     song: Song?,
     maxSizePx: Int = 512,
     modifier: Modifier = Modifier,
-    monochrome: Boolean = false,
-    contentScale: ContentScale = ContentScale.Crop
+    monochrome: Boolean = false
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var bitmap by remember { mutableStateOf<Bitmap?>(null) }
@@ -2114,7 +1860,7 @@ private fun ArtworkView(
                 androidx.compose.foundation.Image(
                     bitmap = targetBitmap.asImageBitmap(),
                     contentDescription = song?.title,
-                    contentScale = contentScale,
+                    contentScale = ContentScale.Crop,
                     colorFilter = if (monochrome) {
                         ColorFilter.colorMatrix(
                             ColorMatrix().apply { setToSaturation(0f) }
@@ -2212,9 +1958,9 @@ private fun NusaMusicTheme(content: @Composable () -> Unit) {
         )
     } else {
         lightColorScheme(
-            background = Color(0xFFF8F7F2),
-            surface = Color(0xFFFAF9F5),
-            surfaceVariant = Color(0xFFE6E3DD),
+            background = Color(0xFFF2F0EB),
+            surface = Color(0xFFF7F5F0),
+            surfaceVariant = Color(0xFFE2E0DA),
             primary = Color(0xFF111111)
         )
     }
