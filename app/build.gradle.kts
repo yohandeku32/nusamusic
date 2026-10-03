@@ -1,3 +1,5 @@
+import java.io.File
+import java.net.URI
 import java.util.Properties
 
 plugins {
@@ -17,9 +19,9 @@ val lastFmApiKey = localProperties.getProperty("LASTFM_API_KEY", "")
     .replace("\\", "\\\\")
     .replace("\"", "\\\"")
 
-private const val DECENT_AUDIO_ENGINE_VERSION = "v0.1.0-libs"
-private const val DECENT_AUDIO_ENGINE_BASE_URL =
-    "https://github.com/Ma145/decent-player/releases/download/$DECENT_AUDIO_ENGINE_VERSION"
+val decentAudioEngineVersion = "v0.1.0-libs"
+val decentAudioEngineBaseUrl =
+    "https://github.com/Ma145/decent-player/releases/download/$decentAudioEngineVersion"
 
 private val decentAudioEngineArtifacts = listOf(
     "decent-usb-audio-driver-release.aar",
@@ -43,10 +45,10 @@ val downloadDecentAudioEngine by tasks.registering {
                 return@forEach
             }
 
-            val artifactUrl = "$DECENT_AUDIO_ENGINE_BASE_URL/$artifactName"
+            val artifactUrl = "$decentAudioEngineBaseUrl/$artifactName"
             logger.lifecycle("Decent Audio Engine: downloading $artifactName")
 
-            val connection = java.net.URI(artifactUrl).toURL().openConnection().apply {
+            val connection = URI(artifactUrl).toURL().openConnection().apply {
                 connectTimeout = 15_000
                 readTimeout = 60_000
             }
