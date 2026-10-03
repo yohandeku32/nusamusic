@@ -798,10 +798,18 @@ private fun NusaMusicApp(
                                                                     ) {
                                                                         Spacer(Modifier.height(2.dp))
                                 
+                                                                        val immersiveExtraHeight = if (immersiveArtwork) 120.dp else 0.dp
+
                                                                         BoxWithConstraints(
                                                                             modifier = Modifier
                                                                                 .fillMaxWidth(0.88f)
-                                                                                .aspectRatio(1f)
+                                                                                .then(
+                                                                                    if (immersiveArtwork) {
+                                                                                        Modifier.height(maxWidth + immersiveExtraHeight)
+                                                                                    } else {
+                                                                                        Modifier.aspectRatio(1f)
+                                                                                    }
+                                                                                )
                                                                                 .graphicsLayer { clip = false }
                                                                         ) {
                                                                             if (immersiveArtwork) {
@@ -817,8 +825,13 @@ private fun NusaMusicApp(
                                                                                 )
                                                                             }
                                                                         }
-                                
-                                                                        Spacer(Modifier.height(24.dp))
+
+                                                                        Column(
+                                                                            modifier = Modifier
+                                                                                .fillMaxWidth()
+                                                                                .offset(y = -immersiveExtraHeight)
+                                                                        ) {
+                                                                            Spacer(Modifier.height(24.dp))
                                 
                                                                         Box(
                                                                             modifier = Modifier
@@ -826,8 +839,15 @@ private fun NusaMusicApp(
                                                                                 .height(82.dp),
                                                                             contentAlignment = Alignment.Center
                                                                         ) {
-                                                                            val titleText =
-                                                                                currentSong?.title ?: "Choose a song"
+                                                                            val rawTitle =
+                                                                                currentSong?.title?.trim().orEmpty()
+                                                                            val titleText = when {
+                                                                                rawTitle.contains("1685", ignoreCase = true) &&
+                                                                                    rawTitle.contains("Instrumental", ignoreCase = true) ->
+                                                                                    "1685 (Instrumental)"
+                                                                                rawTitle.isBlank() -> "Choose a song"
+                                                                                else -> rawTitle
+                                                                            }
                                 
                                                                             val titleWordCount = remember(titleText) {
                                                                                 titleText.trim()
@@ -835,19 +855,21 @@ private fun NusaMusicApp(
                                                                                     .count { it.isNotBlank() }
                                                                             }
                                 
-                                                                            val titleSize = remember(titleWordCount) {
+                                                                            val titleSize = remember(titleText) {
                                                                                 when {
+                                                                                    titleText == "1685 (Instrumental)" -> 37.sp
                                                                                     titleWordCount <= 2 -> 37.sp
                                                                                     titleWordCount == 3 -> 33.sp
-                                                                                    else -> 30.sp
+                                                                                    else -> 28.sp
                                                                                 }
                                                                             }
                                 
-                                                                            val titleLineHeight = remember(titleWordCount) {
+                                                                            val titleLineHeight = remember(titleSize) {
                                                                                 when {
-                                                                                    titleWordCount <= 2 -> 40.sp
-                                                                                    titleWordCount == 3 -> 36.sp
-                                                                                    else -> 33.sp
+                                                                                    titleText == "1685 (Instrumental)" -> 40.sp
+                                                                                    titleSize == 37.sp -> 40.sp
+                                                                                    titleSize == 33.sp -> 36.sp
+                                                                                    else -> 31.sp
                                                                                 }
                                                                             }
                                 
@@ -857,8 +879,8 @@ private fun NusaMusicApp(
                                                                                 fontWeight = FontWeight.Bold,
                                                                                 fontSize = titleSize,
                                                                                 lineHeight = titleLineHeight,
-                                                                                maxLines = 3,
-                                                                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                                                                maxLines = 1,
+                                                                                overflow = androidx.compose.ui.text.style.TextOverflow.Clip,
                                                                                 modifier = Modifier.padding(horizontal = 4.dp),
                                                                                 textAlign = TextAlign.Center
                                                                             )
@@ -1035,6 +1057,7 @@ private fun NusaMusicApp(
                                                                                 fontSize = 14.sp
                                                                             )
                                                                         }
+                                                                            }
                                                                     }
                                                                 }
                             }
@@ -1376,9 +1399,9 @@ private fun ImmersiveArtwork(
             Box(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = artworkHeight - 95.dp)
+                    .padding(top = artworkHeight - 105.dp)
                     .fillMaxWidth()
-                    .height(fadeHeight + 20.dp)
+                    .height(fadeHeight + 35.dp)
                     .background(
                         Brush.verticalGradient(
                             colorStops = arrayOf(
