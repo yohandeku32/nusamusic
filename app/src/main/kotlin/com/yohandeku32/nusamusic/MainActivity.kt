@@ -120,6 +120,7 @@ import com.yohandeku32.nusamusic.data.AudioCodecInfo
 import com.yohandeku32.nusamusic.data.AudioCodecLoader
 import com.yohandeku32.nusamusic.data.ArtistImageLoader
 import com.yohandeku32.nusamusic.data.ArtistBiographyLoader
+import com.yohandeku32.nusamusic.data.ArtistNameUtils
 import com.yohandeku32.nusamusic.data.MusicRepository
 import com.yohandeku32.nusamusic.model.Song
 import com.yohandeku32.nusamusic.playback.PlaybackService
@@ -1787,7 +1788,7 @@ private fun AudioQualityPill(song: Song?) {
     val info = codecInfo
     val isLossless = info?.codecName == "Apple Lossless" || info?.codecName == "FLAC"
     val isHiRes = isLossless && (info?.bitDepth ?: 16) >= 24
-    val label = if (isHiRes) "Hi-Res Lossless" else "Lossless"
+    val label = if (isHiRes) "Hi-Res" else "Lossless"
 
     androidx.compose.animation.AnimatedVisibility(
         visible = isLossless,
@@ -1822,7 +1823,7 @@ private fun AudioQualityPill(song: Song?) {
                 ) {
                     androidx.compose.foundation.Image(
                         painter = painterResource(id = R.drawable.apple_lossless_logo),
-                        contentDescription = if (hiRes) "Hi-Res Lossless" else "Lossless",
+                        contentDescription = if (hiRes) "Hi-Res" else "Lossless",
                         contentScale = ContentScale.Fit,
                         colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(
                             if (hiRes) Color(0xFF3D3728) else MaterialTheme.colorScheme.onSurface
@@ -1870,7 +1871,7 @@ private fun ArtistAvatar(song: Song?, modifier: Modifier = Modifier) {
     LaunchedEffect(song?.artist) {
         artistBitmap = ArtistImageLoader.load(
             context = context,
-            artistName = song?.artist,
+            artistName = ArtistNameUtils.firstArtist(song?.artist),
             maxSize = 256
         )
     }
@@ -1878,7 +1879,7 @@ private fun ArtistAvatar(song: Song?, modifier: Modifier = Modifier) {
     if (artistBitmap != null) {
         androidx.compose.foundation.Image(
             bitmap = artistBitmap!!.asImageBitmap(),
-            contentDescription = song?.artist,
+            contentDescription = ArtistNameUtils.firstArtist(song?.artist),
             contentScale = ContentScale.Crop,
             colorFilter = grayscaleFilter,
             modifier = modifier
