@@ -3450,11 +3450,10 @@ private fun VinylTonearm(
         // Everything except the pivot housing rotates around the pivot.
         // This preserves the physical geometry while the stylus tracks
         // progressively inward during playback.
-        androidx.compose.ui.graphics.drawscope.DrawScope.let { _ ->
-            rotate(
-                degrees = armAngle,
-                pivot = pivot
-            ) {
+        rotate(
+            degrees = armAngle,
+            pivot = pivot
+        ) {
                 // Deep shadow under the whole arm.
                 drawPath(
                     path = armPath,
@@ -3648,7 +3647,6 @@ private fun VinylTonearm(
                     ),
                     strokeWidth = 1.1f
                 )
-            }
         }
 
         // Fixed pivot housing, rendered after the arm so it looks like the
