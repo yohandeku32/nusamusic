@@ -16,6 +16,7 @@ import java.util.Locale
 import kotlin.random.Random
 import android.os.Bundle
 import android.content.SharedPreferences
+import org.json.JSONArray
 import kotlin.math.abs
 import android.view.View
 import android.view.WindowInsets
@@ -172,6 +173,8 @@ class MainActivity : ComponentActivity() {
     private var selectedMusicFolders by mutableStateOf<List<String>>(emptyList())
     private var isScanningMusic by mutableStateOf(false)
     private var automaticMusicScanJob: Job? = null
+    private var libraryCacheLoaded = false
+    private var scanAfterCacheLoad = false
 
     private val musicContentObserver = object : ContentObserver(
         Handler(Looper.getMainLooper())
@@ -212,7 +215,15 @@ class MainActivity : ComponentActivity() {
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             permissionGranted = granted
-            if (granted) loadSongs()
+            if (granted) {
+                if (libraryCacheLoaded) {
+                    if (!libraryPrefs.contains("songs_cache_json")) {
+                        scanMusic()
+                    }
+                } else {
+                    scanAfterCacheLoad = true
+                }
+            }
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -265,9 +276,7 @@ class MainActivity : ComponentActivity() {
             musicContentObserver
         )
 
-        if (permissionGranted || selectedMusicFolders.isNotEmpty()) {
-            loadSongs()
-        }
+        loadCachedSongs()
         if (!permissionGranted) {
             permissionLauncher.launch(permission)
         }
@@ -446,10 +455,83 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun loadSongs() {
+    private fun loadCachedSongs() {
         lifecycleScope.launch {
-            refreshSongs()
+            val cachedSongs = withContext(Dispatchers.IO) {
+                readCachedSongs()
+            }
+
+            if (cachedSongs != null) {
+                songs = cachedSongs
+            }
+
+            libraryCacheLoaded = true
+
+            controller?.let { c ->
+                syncCurrentSong(c)
+                restorePlaybackStateIfNeeded(c)
+            }
+
+            if (cachedSongs == null &&
+                (permissionGranted || selectedMusicFolders.isNotEmpty())
+            ) {
+                scanMusic()
+            } else if (scanAfterCacheLoad && permissionGranted && cachedSongs == null) {
+                scanAfterCacheLoad = false
+                scanMusic()
+            } else {
+                scanAfterCacheLoad = false
+            }
         }
+    }
+
+    private fun readCachedSongs(): List<Song>? {
+        val raw = libraryPrefs.getString("songs_cache_json", null) ?: return null
+
+        return runCatching {
+            val array = JSONArray(raw)
+            buildList(array.length()) {
+                for (index in 0 until array.length()) {
+                    val item = array.getJSONObject(index)
+                    add(
+                        Song(
+                            id = item.getLong("id"),
+                            title = item.getString("title"),
+                            artist = item.getString("artist"),
+                            album = item.getString("album"),
+                            uri = item.getString("uri"),
+                            durationMs = item.getLong("durationMs"),
+                            albumId = item.getLong("albumId")
+                        )
+                    )
+                }
+            }
+        }.getOrElse {
+            libraryPrefs.edit().remove("songs_cache_json").apply()
+            null
+        }
+    }
+
+    private fun persistCachedSongs(songsToCache: List<Song>) {
+        val array = JSONArray()
+
+        songsToCache.forEach { song ->
+            array.put(
+                org.json.JSONObject().apply {
+                    put("id", song.id)
+                    put("title", song.title)
+                    put("artist", song.artist)
+                    put("album", song.album)
+                    put("uri", song.uri)
+                    put("durationMs", song.durationMs)
+                    put("albumId", song.albumId)
+                }
+            )
+        }
+
+        libraryPrefs.edit()
+            .putString("songs_cache_json", array.toString())
+            .apply()
     }
 
     private suspend fun refreshSongs(): Int {
@@ -464,6 +546,7 @@ class MainActivity : ComponentActivity() {
         }
 
         songs = refreshedSongs
+        persistCachedSongs(refreshedSongs)
 
         val newSongs = if (previousIds.isEmpty()) {
             emptyList()
