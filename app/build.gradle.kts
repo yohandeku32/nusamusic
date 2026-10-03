@@ -23,51 +23,42 @@ val decentAudioEngineVersion = "v0.1.0-libs"
 val decentAudioEngineBaseUrl =
     "https://github.com/Ma145/decent-player/releases/download/$decentAudioEngineVersion"
 
+val decentAudioEngineDir = File(projectDir, "libs")
+
 private val decentAudioEngineArtifacts = listOf(
     "decent-usb-audio-driver-release.aar",
     "decent-usb-audio-wrapper-media3-release.aar"
 )
 
-val decentAudioEngineDir = layout.buildDirectory.dir("decent-audio-engine").get().asFile
+// Gradle resolves local file dependencies during project sync/configuration.
+// The previous task-based download ran too late (preBuild), so Android Studio
+// could not extract the AARs during sync. Bootstrap the small pinned AARs
+// before the dependencies block is evaluated.
+decentAudioEngineDir.mkdirs()
 
-val downloadDecentAudioEngine by tasks.registering {
-    outputs.files(
-        decentAudioEngineArtifacts.map { File(decentAudioEngineDir, it) }
-    )
+decentAudioEngineArtifacts.forEach { artifactName ->
+    val destination = File(decentAudioEngineDir, artifactName)
 
-    doLast {
-        decentAudioEngineDir.mkdirs()
+    if (!destination.exists() || destination.length() == 0L) {
+        val artifactUrl = "$decentAudioEngineBaseUrl/$artifactName"
+        logger.lifecycle("NusaMusic: downloading $artifactName")
 
-        decentAudioEngineArtifacts.forEach { artifactName ->
-            val destination = File(decentAudioEngineDir, artifactName)
-            if (destination.exists() && destination.length() > 0L) {
-                logger.lifecycle("Decent Audio Engine: using cached $artifactName")
-                return@forEach
-            }
+        val connection = URI(artifactUrl).toURL().openConnection().apply {
+            connectTimeout = 15_000
+            readTimeout = 60_000
+            useCaches = true
+        }
 
-            val artifactUrl = "$decentAudioEngineBaseUrl/$artifactName"
-            logger.lifecycle("Decent Audio Engine: downloading $artifactName")
-
-            val connection = URI(artifactUrl).toURL().openConnection().apply {
-                connectTimeout = 15_000
-                readTimeout = 60_000
-            }
-
-            connection.getInputStream().use { input ->
-                destination.outputStream().use { output ->
-                    input.copyTo(output)
-                }
-            }
-
-            check(destination.length() > 0L) {
-                "Downloaded Decent Audio Engine artifact is empty: $artifactName"
+        connection.getInputStream().use { input ->
+            destination.outputStream().use { output ->
+                input.copyTo(output)
             }
         }
     }
-}
 
-tasks.named("preBuild") {
-    dependsOn(downloadDecentAudioEngine)
+    check(destination.exists() && destination.length() > 0L) {
+        "NusaMusic: Hi-Res engine artifact is missing or empty: $destination"
+    }
 }
 
 
@@ -104,12 +95,10 @@ android {
 }
 
 dependencies {
-    implementation(
-        files(
-            File(decentAudioEngineDir, "decent-usb-audio-driver-release.aar"),
-            File(decentAudioEngineDir, "decent-usb-audio-wrapper-media3-release.aar")
-        )
-    )
+    implementation(fileTree(mapOf(
+        "dir" to decentAudioEngineDir,
+        "include" to listOf("decent-usb-audio-*.aar")
+    )))
     implementation("androidx.core:core-ktx:1.18.0")
     implementation("com.github.mwiede:jsch:0.2.23")
     implementation(platform("androidx.compose:compose-bom:2025.10.01"))
