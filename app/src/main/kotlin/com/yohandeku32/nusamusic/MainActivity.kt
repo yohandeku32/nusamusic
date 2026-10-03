@@ -2636,183 +2636,6 @@ private fun WornCoverArtwork(
 }
 
 @Composable
-private fun VinylSleeveCover(
-    song: Song,
-    selected: Boolean,
-    maxSizePx: Int,
-    coverSize: androidx.compose.ui.unit.Dp
-) {
-    val artworkScale = if (selected) 1.055f else 1f
-    val paperColor = Color(0xFFB59A73)
-    val paperDark = Color(0xFF8D7453)
-
-    Box(
-        modifier = Modifier
-            .size(coverSize)
-            .clip(RoundedCornerShape(7.dp))
-    ) {
-        // Warm paper back of the sleeve.
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.linearGradient(
-                        colors = listOf(
-                            paperColor,
-                            Color(0xFFC5AA80),
-                            Color(0xFF9D835F)
-                        )
-                    )
-                )
-        )
-
-        // The record sits behind the sleeve and is intentionally exposed
-        // mainly on the right side, like a real paper LP sleeve.
-        Box(
-            modifier = Modifier
-                .size(coverSize * 0.82f)
-                .align(Alignment.CenterEnd)
-                .offset(x = coverSize * 0.04f)
-                .clip(CircleShape)
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(
-                            Color(0xFF444444),
-                            Color(0xFF1A1A1A),
-                            Color(0xFF050505)
-                        )
-                    )
-                )
-        ) {
-            for (ring in 1..7) {
-                Box(
-                    modifier = Modifier
-                        .size((coverSize.value * (0.46f + ring * 0.045f)).dp)
-                        .align(Alignment.Center)
-                        .clip(CircleShape)
-                        .border(
-                            width = 0.65.dp,
-                            color = Color.White.copy(alpha = 0.055f)
-                        )
-                )
-            }
-
-            Box(
-                modifier = Modifier
-                    .size(coverSize * 0.23f)
-                    .align(Alignment.Center)
-                    .clip(CircleShape)
-                    .background(
-                        Brush.radialGradient(
-                            colors = listOf(
-                                paperColor.copy(alpha = 0.92f),
-                                paperDark.copy(alpha = 0.88f),
-                                Color(0xFF2B241B)
-                            )
-                        )
-                    )
-            )
-
-            Box(
-                modifier = Modifier
-                    .size(coverSize * 0.055f)
-                    .align(Alignment.Center)
-                    .clip(CircleShape)
-                    .background(Color(0xFF141414))
-            )
-        }
-
-        // Front paper pocket. The album artwork sits on this pocket and is
-        // zoomed only by a graphics layer when selected, so the grid cell
-        // never changes measured size.
-        Box(
-            modifier = Modifier
-                .fillMaxHeight()
-                .fillMaxWidth(0.70f)
-                .align(Alignment.CenterStart)
-                .clip(
-                    RoundedCornerShape(
-                        topStart = 7.dp,
-                        bottomStart = 7.dp,
-                        topEnd = 3.dp,
-                        bottomEnd = 3.dp
-                    )
-                )
-                .background(
-                    Brush.horizontalGradient(
-                        colors = listOf(
-                            Color(0xFFC8AE84),
-                            Color(0xFFB49970),
-                            Color(0xFF9D835F)
-                        )
-                    )
-                )
-        ) {
-            // Artwork is inset like a printed sleeve front.
-            WornCoverArtwork(
-                song = song,
-                maxSizePx = maxSizePx,
-                modifier = Modifier
-                    .fillMaxHeight(0.84f)
-                    .fillMaxWidth(0.84f)
-                    .align(Alignment.Center)
-                    .graphicsLayer {
-                        scaleX = artworkScale
-                        scaleY = artworkScale
-                    }
-            )
-
-            // Fold seam / paper edge.
-            Box(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .width(1.5.dp)
-                    .align(Alignment.CenterEnd)
-                    .background(Color.Black.copy(alpha = 0.22f))
-            )
-
-            // A small worn crease near the top-left makes the sleeve read as
-            // aged paper rather than a generic colored rectangle.
-            Canvas(Modifier.fillMaxSize()) {
-                drawLine(
-                    color = Color.White.copy(alpha = 0.10f),
-                    start = androidx.compose.ui.geometry.Offset(
-                        x = size.width * 0.12f,
-                        y = size.height * 0.20f
-                    ),
-                    end = androidx.compose.ui.geometry.Offset(
-                        x = size.width * 0.72f,
-                        y = size.height * 0.12f
-                    ),
-                    strokeWidth = 1.1f
-                )
-                drawLine(
-                    color = Color.Black.copy(alpha = 0.10f),
-                    start = androidx.compose.ui.geometry.Offset(
-                        x = size.width * 0.14f,
-                        y = size.height * 0.76f
-                    ),
-                    end = androidx.compose.ui.geometry.Offset(
-                        x = size.width * 0.66f,
-                        y = size.height * 0.82f
-                    ),
-                    strokeWidth = 0.9f
-                )
-            }
-        }
-
-        // Top paper highlight.
-        Box(
-            modifier = Modifier
-                .fillMaxWidth(0.66f)
-                .height(2.dp)
-                .align(Alignment.TopStart)
-                .background(Color.White.copy(alpha = 0.16f))
-        )
-    }
-}
-
-@Composable
 private fun LibrarySongRow(
     song: Song,
     selected: Boolean,
@@ -2821,7 +2644,6 @@ private fun LibrarySongRow(
     // Fixed height keeps grid rows stable when the active track changes.
     val cardHeight = 194.dp
     val artworkSize = if (selected) 160.dp else 148.dp
-    val vinylSize = if (selected) 152.dp else 140.dp
     val artworkAreaHeight = 164.dp
 
     Box(
@@ -2862,48 +2684,21 @@ private fun LibrarySongRow(
                     .fillMaxWidth(),
                 contentAlignment = Alignment.Center
             ) {
+
+
                 Box(
                     modifier = Modifier
-                        .size(vinylSize)
-                        .offset(x = if (selected) 18.dp else 16.dp)
-                        .clip(CircleShape)
-                        .background(
-                            Brush.radialGradient(
-                                colors = listOf(
-                                    Color(0xFF4D4D4D),
-                                    Color(0xFF1B1B1B),
-                                    Color(0xFF050505)
-                                )
-                            )
-                        )
+                        .size(artworkSize)
+                        .clip(RoundedCornerShape(7.dp))
+                        .background(Color(0xFF0A0A0A))
+                        .padding(2.dp)
                 ) {
-                    for (ring in 1..6) {
-                        Box(
-                            modifier = Modifier
-                                .size((76 + ring * 4).dp)
-                                .align(Alignment.Center)
-                                .clip(CircleShape)
-                                .border(
-                                    width = 0.55.dp,
-                                    color = Color.White.copy(alpha = 0.045f)
-                                )
-                        )
-                    }
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .align(Alignment.Center)
-                            .clip(CircleShape)
-                            .background(Color(0xFF090909))
+                    WornCoverArtwork(
+                        song = song,
+                        maxSizePx = 320,
+                        modifier = Modifier.fillMaxSize()
                     )
                 }
-
-                VinylSleeveCover(
-                    song = song,
-                    selected = selected,
-                    maxSizePx = 320,
-                    coverSize = artworkSize
-                )
             }
 
             Text(
