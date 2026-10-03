@@ -34,11 +34,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.FastForward
@@ -1318,62 +1316,6 @@ private fun NusaMusicApp(
     }
 }
 
-private fun extractArtworkPalette(bitmap: Bitmap?): List<Color> {
-    if (bitmap == null || bitmap.width <= 0 || bitmap.height <= 0) {
-        return listOf(
-            Color(0xFFE7E3DC),
-            Color(0xFFF0ECE6),
-            Color(0xFFDAD3C9)
-        )
-    }
-
-    val width = bitmap.width
-    val height = bitmap.height
-    val points = arrayOf(
-        0.18f to 0.18f,
-        0.50f to 0.22f,
-        0.82f to 0.20f,
-        0.20f to 0.50f,
-        0.50f to 0.50f,
-        0.80f to 0.52f,
-        0.20f to 0.82f,
-        0.52f to 0.80f,
-        0.82f to 0.82f
-    )
-
-    val samples = points.map { (fx, fy) ->
-        val pixel = bitmap.getPixel(
-            (width * fx).toInt().coerceIn(0, width - 1),
-            (height * fy).toInt().coerceIn(0, height - 1)
-        )
-        val r = android.graphics.Color.red(pixel) / 255f
-        val g = android.graphics.Color.green(pixel) / 255f
-        val b = android.graphics.Color.blue(pixel) / 255f
-        Color(r, g, b)
-    }
-
-    fun average(group: List<Color>): Color {
-        val r = group.map { it.red }.average().toFloat()
-        val g = group.map { it.green }.average().toFloat()
-        val b = group.map { it.blue }.average().toFloat()
-
-        // Keep the palette soft and premium rather than producing a saturated
-        // neon background.
-        val lift = 0.18f
-        return Color(
-            r * (1f - lift) + lift,
-            g * (1f - lift) + lift,
-            b * (1f - lift) + lift
-        )
-    }
-
-    return listOf(
-        average(samples.take(3)),
-        average(samples.slice(3..5)),
-        average(samples.takeLast(3))
-    )
-}
-
 @Composable
 private fun ImmersiveArtworkPlayer(
     modifier: Modifier = Modifier,
@@ -1395,9 +1337,13 @@ private fun ImmersiveArtworkPlayer(
     onRequestPermission: () -> Unit
 ) {
     val titleText = song?.title ?: "Choose a song"
+
     val titleWordCount = remember(titleText) {
-        titleText.trim().split(Regex("\\s+")).count { it.isNotBlank() }
+        titleText.trim()
+            .split(Regex("\\s+"))
+            .count { it.isNotBlank() }
     }
+
     val titleSize = remember(titleWordCount) {
         when {
             titleWordCount <= 2 -> 37.sp
@@ -1406,64 +1352,13 @@ private fun ImmersiveArtworkPlayer(
         }
     }
 
-    val context = androidx.compose.ui.platform.LocalContext.current
-    var immersiveBitmap by remember { mutableStateOf<Bitmap?>(null) }
-
-    LaunchedEffect(song?.uri) {
-        immersiveBitmap = song?.let {
-            ArtworkLoader.load(
-                context = context,
-                uriString = it.uri,
-                maxSize = 256
-            )
+    val titleLineHeight = remember(titleWordCount) {
+        when {
+            titleWordCount <= 2 -> 40.sp
+            titleWordCount == 3 -> 36.sp
+            else -> 33.sp
         }
     }
-
-    val palette = remember(immersiveBitmap) {
-        extractArtworkPalette(immersiveBitmap)
-    }
-    val paletteStart = palette.getOrElse(0) { Color(0xFFE7E3DC) }
-    val paletteMid = palette.getOrElse(1) { Color(0xFFF0ECE6) }
-    val paletteEnd = palette.getOrElse(2) { Color(0xFFDAD3C9) }
-
-    val infiniteTransition = rememberInfiniteTransition(label = "immersiveArtworkMotion")
-    val gradientShift by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-            animation = tween(durationMillis = 9_000, easing = androidx.compose.animation.core.LinearEasing),
-            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
-        ),
-        label = "immersiveGradientShift"
-    )
-
-    val immersiveBackground = Brush.linearGradient(
-        colors = listOf(
-            Color(
-                paletteStart.red * 0.72f + 0.28f,
-                paletteStart.green * 0.72f + 0.28f,
-                paletteStart.blue * 0.72f + 0.28f
-            ),
-            Color(
-                paletteMid.red * 0.72f + 0.28f,
-                paletteMid.green * 0.72f + 0.28f,
-                paletteMid.blue * 0.72f + 0.28f
-            ),
-            Color(
-                paletteEnd.red * 0.72f + 0.28f,
-                paletteEnd.green * 0.72f + 0.28f,
-                paletteEnd.blue * 0.72f + 0.28f
-            )
-        ),
-        start = androidx.compose.ui.geometry.Offset(
-            x = -600f + 850f * gradientShift,
-            y = 0f
-        ),
-        end = androidx.compose.ui.geometry.Offset(
-            x = 850f + 850f * gradientShift,
-            y = 1300f
-        )
-    )
 
     Column(
         modifier = modifier
@@ -1473,137 +1368,104 @@ private fun ImmersiveArtworkPlayer(
                     bottomEnd = 34.dp
                 )
             )
-            .background(immersiveBackground),
+            .background(MaterialTheme.colorScheme.background),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Box(
+        Spacer(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f)
-        ) {
-            ArtworkView(
-                song = song,
-                maxSizePx = 1024,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        // Zoom the artwork beyond its bounds so it behaves like
-                        // a full-bleed player image rather than a square cover.
-                        scaleX = 1.18f
-                        scaleY = 1.18f
-                    }
-            )
+                .height(24.dp)
+        )
 
-            // Soft color bloom around the artwork, inspired by Apple Music's
-            // ambient artwork presentation. It uses the sampled artwork colors
-            // instead of a black background.
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.radialGradient(
-                            colors = listOf(
-                                paletteMid.copy(alpha = 0.18f),
-                                Color.Transparent
-                            ),
-                            center = androidx.compose.ui.geometry.Offset(
-                                x = 150f + gradientShift * 240f,
-                                y = 170f
-                            ),
-                            radius = 650f
-                        )
-                    )
-            )
-
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.White.copy(alpha = 0.05f),
-                                Color.Transparent,
-                                Color.White.copy(alpha = 0.10f)
-                            )
-                        )
-                    )
-            )
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 24.dp, start = 18.dp, end = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+        TopAppBar(
+            title = { },
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.background,
+                scrolledContainerColor = MaterialTheme.colorScheme.background
+            ),
+            windowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
+            navigationIcon = {
                 ArtistAvatar(
                     song = song,
                     modifier = Modifier
+                        .padding(start = 18.dp)
                         .size(40.dp)
                         .clip(CircleShape)
                 )
-
-                Spacer(Modifier.weight(1f))
-
+            },
+            actions = {
                 IconButton(onClick = {}) {
                     Icon(
                         Icons.Default.MoreHoriz,
-                        contentDescription = "More",
-                        tint = Color.White
+                        contentDescription = "More"
                     )
                 }
 
                 IconButton(onClick = onOpenSettings) {
                     Icon(
                         Icons.Default.Settings,
-                        contentDescription = "Settings",
-                        tint = Color.White
+                        contentDescription = "Settings"
                     )
                 }
             }
-
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 22.dp)
-            ) {
-                Text(
-                    titleText,
-                    color = Color.White,
-                    fontFamily = FontFamily.Serif,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = titleSize,
-                    lineHeight = titleSize,
-                    maxLines = 2,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                )
-                Spacer(Modifier.height(3.dp))
-                Text(
-                    song?.artist ?: "Your local music library",
-                    color = Color.White.copy(alpha = 0.82f),
-                    fontSize = 14.sp,
-                    maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                )
-            }
-        }
+        )
 
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(immersiveBackground)
-                .padding(horizontal = 22.dp)
+                .padding(horizontal = 22.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(2.dp))
+
+            // Immersive artwork occupies exactly the same slot as the vinyl.
+            ImmersiveArtwork(
+                song = song,
+                modifier = Modifier
+                    .fillMaxWidth(0.88f)
+                    .aspectRatio(1f)
+            )
+
+            Spacer(Modifier.height(24.dp))
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(82.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    titleText,
+                    fontFamily = FontFamily.Serif,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = titleSize,
+                    lineHeight = titleLineHeight,
+                    maxLines = 3,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 4.dp),
+                    textAlign = TextAlign.Center
+                )
+            }
+
+            Text(
+                song?.artist ?: "Your local music library",
+                modifier = Modifier.fillMaxWidth(),
+                fontSize = 14.sp,
+                maxLines = 1,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(Modifier.height(16.dp))
 
             SimpleProgressBar(
                 positionMs = positionMs,
                 durationMs = durationMs,
                 enabled = song != null && durationMs > 0L,
                 onSeek = onSeek,
-                modifier = Modifier.fillMaxWidth(),
-                trackColor = Color.White.copy(alpha = 0.25f),
-                progressColor = Color.White
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp)
             )
 
             Row(
@@ -1612,11 +1474,11 @@ private fun ImmersiveArtworkPlayer(
                     .padding(horizontal = 12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(formatTime(positionMs), color = Color.White.copy(alpha = 0.75f), fontSize = 12.sp)
-                Text(formatTime(durationMs), color = Color.White.copy(alpha = 0.75f), fontSize = 12.sp)
+                Text(formatTime(positionMs), fontSize = 12.sp)
+                Text(formatTime(durationMs), fontSize = 12.sp)
             }
 
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(5.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1627,52 +1489,49 @@ private fun ImmersiveArtworkPlayer(
                     icon = Icons.Default.FastRewind,
                     contentDescription = "Previous",
                     onClick = onPrevious,
-                    enabled = song != null,
-                    darkSurface = true
+                    enabled = song != null
                 )
 
-                Spacer(Modifier.width(14.dp))
+                Spacer(Modifier.width(16.dp))
 
-                Surface(
+                FilledIconButton(
                     onClick = onTogglePlay,
                     enabled = song != null,
-                    shape = CircleShape,
-                    color = Color.White,
-                    tonalElevation = 0.dp,
-                    modifier = Modifier.size(76.dp)
+                    modifier = Modifier.size(84.dp),
+                    shape = CircleShape
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = if (isPlaying) "Pause" else "Play",
-                            tint = Color.Black,
-                            modifier = Modifier.size(34.dp)
-                        )
-                    }
+                    Icon(
+                        if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = if (isPlaying) "Pause" else "Play",
+                        modifier = Modifier.size(36.dp)
+                    )
                 }
 
-                Spacer(Modifier.width(14.dp))
+                Spacer(Modifier.width(16.dp))
 
                 TransportPillButton(
                     icon = Icons.Default.FastForward,
                     contentDescription = "Next",
                     onClick = onNext,
-                    enabled = song != null,
-                    darkSurface = true
+                    enabled = song != null
                 )
             }
 
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(18.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onExpandBiography, modifier = Modifier.size(42.dp)) {
+                IconButton(
+                    onClick = onExpandBiography,
+                    modifier = Modifier.size(42.dp)
+                ) {
                     Icon(
                         Icons.Default.KeyboardArrowDown,
                         contentDescription = "Expand artist biography",
-                        tint = Color.White,
                         modifier = Modifier.size(28.dp)
                     )
                 }
@@ -1687,7 +1546,6 @@ private fun ImmersiveArtworkPlayer(
                     Icon(
                         Icons.Default.Share,
                         contentDescription = "Share song",
-                        tint = Color.White,
                         modifier = Modifier.size(22.dp)
                     )
                 }
@@ -1700,12 +1558,17 @@ private fun ImmersiveArtworkPlayer(
                     Icon(
                         if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                         contentDescription = if (isFavorite) "Favorite" else "Add to favorites",
-                        tint = if (isFavorite) Color(0xFFE57373) else Color.White,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(22.dp),
+                        tint = if (isFavorite) {
+                            Color(0xFFC62828)
+                        } else {
+                            MaterialTheme.colorScheme.onBackground
+                        }
                     )
                 }
             }
 
+            Spacer(Modifier.height(8.dp))
             AudioQualityPill(song = song)
 
             if (!permissionGranted) {
@@ -1729,6 +1592,50 @@ private fun ImmersiveArtworkPlayer(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun ImmersiveArtwork(
+    song: Song?,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        ArtworkView(
+            song = song,
+            maxSizePx = 1024,
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    // Keep the artwork in the vinyl slot, but crop in slightly
+                    // to create the immersive Apple Music-like close-up.
+                    scaleX = 1.18f
+                    scaleY = 1.18f
+                }
+        )
+
+        // Fade only the lower edge of the artwork into the existing white player
+        // background, without changing the surrounding layout.
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .fillMaxHeight(0.38f)
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            MaterialTheme.colorScheme.background.copy(alpha = 0.14f),
+                            MaterialTheme.colorScheme.background.copy(alpha = 0.68f),
+                            MaterialTheme.colorScheme.background
+                        )
+                    )
+                )
+        )
     }
 }
 
