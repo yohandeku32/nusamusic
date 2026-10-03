@@ -5,6 +5,7 @@ import android.text.Html
 import android.text.Spanned
 import com.yohandeku32.nusamusic.BuildConfig
 import com.yohandeku32.nusamusic.model.Song
+import com.yohandeku32.nusamusic.data.ArtistNameUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -32,7 +33,7 @@ object ArtistBiographyLoader {
     fun isConfigured(): Boolean = BuildConfig.LASTFM_API_KEY.isNotBlank()
 
     suspend fun load(song: Song): ArtistBiography? = withContext(Dispatchers.IO) {
-        val artist = song.artist.trim()
+        val artist = ArtistNameUtils.firstArtist(song.artist)
         if (artist.isBlank() ||
             artist.equals("Unknown artist", ignoreCase = true) ||
             !isConfigured()
