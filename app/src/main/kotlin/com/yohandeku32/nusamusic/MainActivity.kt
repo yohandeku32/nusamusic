@@ -2504,20 +2504,21 @@ private fun WornCoverArtwork(
 
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(7.dp))
-            .background(Color(0xFF090909))
+            .clip(RoundedCornerShape(8.dp))
+            // Clear plastic shell: transparent body with a very subtle edge.
+            .background(Color.White.copy(alpha = 0.025f))
             .border(
-                width = 1.dp,
-                color = Color(0xFFB7B7B7).copy(alpha = 0.24f),
-                shape = RoundedCornerShape(7.dp)
+                width = 1.15.dp,
+                color = Color.White.copy(alpha = 0.22f),
+                shape = RoundedCornerShape(8.dp)
             )
     ) {
         // The artwork sits inside a slightly raised black paper sleeve.
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(4.dp)
-                .clip(RoundedCornerShape(4.dp))
+                .padding(2.5.dp)
+                .clip(RoundedCornerShape(6.dp))
         ) {
             ArtworkView(
                 song = song,
@@ -2624,14 +2625,78 @@ private fun WornCoverArtwork(
             }
         }
 
-        // Slight paper rim: this is intentionally subtle, not a white border.
+        // Clear plastic/glass reflection over the whole sleeve.
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(2.dp)
-                .align(Alignment.TopCenter)
-                .background(Color.White.copy(alpha = 0.10f))
+                .fillMaxSize()
+                .clip(RoundedCornerShape(8.dp))
+                .background(
+                    Brush.linearGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.11f),
+                            Color.Transparent,
+                            Color.White.copy(alpha = 0.025f),
+                            Color.Transparent
+                        ),
+                        start = androidx.compose.ui.geometry.Offset(
+                            0f,
+                            0f
+                        ),
+                        end = androidx.compose.ui.geometry.Offset(
+                            3000f,
+                            3000f
+                        )
+                    )
+                )
         )
+
+        Canvas(
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(RoundedCornerShape(8.dp))
+        ) {
+            // Broad diagonal glass catch-light.
+            drawLine(
+                color = Color.White.copy(alpha = 0.10f),
+                start = androidx.compose.ui.geometry.Offset(
+                    x = size.width * 0.08f,
+                    y = size.height * 0.14f
+                ),
+                end = androidx.compose.ui.geometry.Offset(
+                    x = size.width * 0.46f,
+                    y = size.height * 0.02f
+                ),
+                strokeWidth = 2.2f
+            )
+
+            // Thin top-edge reflection.
+            drawLine(
+                color = Color.White.copy(alpha = 0.17f),
+                start = androidx.compose.ui.geometry.Offset(
+                    x = size.width * 0.14f,
+                    y = 1.2f
+                ),
+                end = androidx.compose.ui.geometry.Offset(
+                    x = size.width * 0.78f,
+                    y = 1.2f
+                ),
+                strokeWidth = 1.3f
+            )
+
+            // Small lower reflection makes the plastic feel dimensional.
+            drawLine(
+                color = Color.White.copy(alpha = 0.055f),
+                start = androidx.compose.ui.geometry.Offset(
+                    x = size.width * 0.32f,
+                    y = size.height - 1.5f
+                ),
+                end = androidx.compose.ui.geometry.Offset(
+                    x = size.width * 0.88f,
+                    y = size.height - 1.5f
+                ),
+                strokeWidth = 1.0f
+            )
+        }
     }
 }
 
