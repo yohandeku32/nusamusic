@@ -1005,58 +1005,70 @@ private fun NusaMusicApp(
                                         val maxArcDistancePx = with(density) { 260.dp.toPx() }
                                         val normalizedDistance =
                                             (distancePx / maxArcDistancePx).coerceIn(-1f, 1f)
-                                        // Right-facing circular arc: the center item
-                                        // sits furthest to the right, while items
-                                        // farther away recede toward the left.
-                                        val curveAngle =
-                                            normalizedDistance * (Math.PI / 2.0).toFloat()
-                                        val curveRadiusPx = with(density) { 118.dp.toPx() }
-                                        val horizontalShift =
-                                            kotlin.math.cos(curveAngle.toDouble()).toFloat() * curveRadiusPx
-                                        val distanceFromCenter =
-                                            kotlin.math.abs(normalizedDistance)
+                                        // Vinyl Sleeve Stack / Record Crate:
+                                        // the centered sleeve is pulled slightly out of
+                                        // the crate, while neighboring sleeves tilt and
+                                        // recede behind it.
+                                        val distanceFromCenter = kotlin.math.abs(normalizedDistance)
                                         val centerProximity = 1f - distanceFromCenter
                                         val selected = currentSong?.id == song.id
 
-                                        val scale =
-                                            (0.86f + centerProximity * 0.16f +
-                                                if (selected) 0.05f else 0f)
-                                                .coerceIn(0.82f, 1.07f)
-                                        val alpha =
-                                            (0.62f + centerProximity * 0.38f)
-                                                .coerceIn(0.58f, 1f)
-                                        val rotation = -normalizedDistance * 12f
+                                        val pullOut = centerProximity * 34f
+                                        val horizontalShift =
+                                            24f + pullOut - distanceFromCenter * 10f
+                                        val rotationY = -normalizedDistance * 18f
+                                        val rotationZ = -normalizedDistance * 5f
 
-                                        // Current track is visually dominant; distant
-                                        // rows progressively become smaller.
-                                        val titleSize =
-                                            (13.5f + centerProximity * 3.0f +
-                                                if (selected) 2.5f else 0f)
-                                                .coerceIn(12.5f, 19f)
-                                        val coverScale =
-                                            (0.88f + centerProximity * 0.14f +
+                                        // Stronger depth separation than the previous arc:
+                                        // a selected/center record reads as the sleeve being
+                                        // physically pulled forward from a crate.
+                                        val scale =
+                                            (0.84f + centerProximity * 0.15f +
                                                 if (selected) 0.04f else 0f)
-                                                .coerceIn(0.84f, 1.06f)
+                                                .coerceIn(0.80f, 1.03f)
+                                        val alpha =
+                                            (0.52f + centerProximity * 0.48f)
+                                                .coerceIn(0.50f, 1f)
+                                        val z =
+                                            centerProximity * 12f +
+                                                if (selected) 4f else 0f
+
+                                        val titleSize =
+                                            (12.5f + centerProximity * 3.5f +
+                                                if (selected) 2.5f else 0f)
+                                                .coerceIn(12f, 18.5f)
+                                        val coverScale =
+                                            (0.84f + centerProximity * 0.12f +
+                                                if (selected) 0.05f else 0f)
+                                                .coerceIn(0.82f, 1.05f)
 
                                         Box(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .padding(horizontal = 22.dp)
+                                                .padding(horizontal = 18.dp, vertical = 2.dp)
                                                 .graphicsLayer {
-                                                    translationX = horizontalShift
-                                                    rotationZ = rotation
+                                                    translationX = with(density) { horizontalShift.dp.toPx() }
+                                                    rotationY = rotationY
+                                                    rotationZ = rotationZ
                                                     scaleX = scale
                                                     scaleY = scale
                                                     this.alpha = alpha
+                                                    shadowElevation = (4f + centerProximity * 10f).dp.toPx()
+                                                    cameraDistance = 26f * density.density
                                                 }
                                         ) {
+                                            // Small vertical compression creates the visual
+                                            // overlap of sleeves without changing LazyColumn
+                                            // item hit-testing.
                                             SongRow(
                                                 song = song,
                                                 selected = selected,
                                                 onPlay = onPlay,
-                                                darkSurface = false,
+                                                darkSurface = true,
                                                 titleSize = titleSize,
-                                                coverScale = coverScale
+                                                coverScale = coverScale,
+                                                sleeveStack = true,
+                                                depth = z
                                             )
                                         }
                                     }
@@ -2209,54 +2221,76 @@ private fun SongRow(
     onPlay: (Song) -> Unit,
     darkSurface: Boolean = false,
     titleSize: Float = 14f,
-    coverScale: Float = 1f
+    coverScale: Float = 1f,
+    sleeveStack: Boolean = false,
+    depth: Float = 0f
 ) {
     val selectedBackground =
-        if (darkSurface) Color(0xFF191919) else MaterialTheme.colorScheme.surfaceVariant
+        if (darkSurface) Color(0xFF1B1B1B) else MaterialTheme.colorScheme.surfaceVariant
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 5.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(if (selected) selectedBackground else Color.Transparent)
+            .padding(vertical = 2.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(
+                if (selected) selectedBackground.copy(alpha = 0.96f)
+                else Color(0xFF0D0D0D).copy(alpha = 0.72f)
+            )
             .clickable { onPlay(song) }
-            .padding(horizontal = 8.dp, vertical = 8.dp),
+            .padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Album sleeve / vinyl-jacket treatment: a dark jacket edge,
-        // inset artwork, and a subtle offset backing make each cover read
-        // like a physical LP sleeve rather than a generic thumbnail.
         Box(
             modifier = Modifier
-                .size(62.dp * coverScale)
-                .padding(2.dp)
+                .width(78.dp * coverScale)
+                .height(74.dp * coverScale)
         ) {
+            // Two offset back sleeves create the depth of a physical record
+            // crate/stack behind the currently visible album.
             Box(
                 modifier = Modifier
-                    .matchParentSize()
-                    .offset(x = 2.dp, y = 2.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(Color(0xFF050505))
-            )
-
-            ArtworkView(
-                song = song,
-                maxSizePx = 160,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(RoundedCornerShape(8.dp))
-            )
-
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(
-                        Color.Black.copy(
-                            alpha = if (selected) 0.04f else 0.10f
-                        )
+                    .size(68.dp * coverScale)
+                    .offset(
+                        x = 6.dp + (depth * 0.22f).dp,
+                        y = 4.dp
                     )
+                    .clip(RoundedCornerShape(5.dp))
+                    .background(Color(0xFF242424))
+            )
+            Box(
+                modifier = Modifier
+                    .size(70.dp * coverScale)
+                    .offset(x = 3.dp, y = 2.dp)
+                    .clip(RoundedCornerShape(5.dp))
+                    .background(Color(0xFF0B0B0B))
+            )
+
+            // Front sleeve: white/black jacket edge with the actual artwork
+            // recessed inside it, like an LP pulled halfway out of a crate.
+            Box(
+                modifier = Modifier
+                    .size(70.dp * coverScale)
+                    .clip(RoundedCornerShape(5.dp))
+                    .background(Color(0xFF050505))
+                    .padding(3.dp)
+            ) {
+                ArtworkView(
+                    song = song,
+                    maxSizePx = 192,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(RoundedCornerShape(2.dp))
+                )
+            }
+
+            // Fine paper highlight along the sleeve's top edge.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .offset(y = 3.dp)
+                    .background(Color.White.copy(alpha = 0.18f))
             )
         }
 
