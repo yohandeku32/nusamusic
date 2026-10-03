@@ -124,6 +124,7 @@ import com.yohandeku32.nusamusic.data.MusicRepository
 import com.yohandeku32.nusamusic.model.Song
 import com.yohandeku32.nusamusic.playback.PlaybackService
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -1380,6 +1381,22 @@ private fun NusaMusicApp(
                                 }
                             }
 
+                            var alphabetScrollJob by remember {
+                                mutableStateOf<Job?>(null)
+                            }
+
+                            fun requestAlphabetScroll(targetIndex: Int) {
+                                if (targetIndex < 0) return
+
+                                alphabetScrollJob?.cancel()
+                                alphabetScrollJob = scope.launch {
+                                    libraryListState.animateScrollToItem(
+                                        index = targetIndex,
+                                        scrollOffset = 0
+                                    )
+                                }
+                            }
+
                             val alphabetIndexModifier = Modifier
                                 .align(Alignment.CenterEnd)
                                 .fillMaxHeight()
@@ -1393,30 +1410,40 @@ private fun NusaMusicApp(
                                     var lastDragTarget = -1
 
                                     androidx.compose.foundation.gestures.detectVerticalDragGestures(
-                                        onDragStart = { offset ->
-                                            val slotHeight = size.height / alphabet.size.toFloat()
+                                        onDragStart = { offset: androidx.compose.ui.geometry.Offset ->
+                                            val slotHeight =
+                                                size.height / alphabet.size.toFloat()
                                             val slot = (offset.y / slotHeight)
                                                 .toInt()
                                                 .coerceIn(0, alphabet.lastIndex)
-                                            val targetIndex = alphabetTargets[alphabet[slot]] ?: -1
+                                            val targetIndex =
+                                                alphabetTargets[alphabet[slot]] ?: -1
 
                                             if (targetIndex >= 0) {
                                                 lastDragTarget = targetIndex
-                                                libraryListState.scrollToItem(targetIndex)
+                                                requestAlphabetScroll(targetIndex)
                                             }
                                         },
-                                        onVerticalDrag = { change, _ ->
+                                        onVerticalDrag = {
+                                            change: androidx.compose.ui.input.pointer.PointerInputChange,
+                                            _: Float
+                                            ->
                                             change.consume()
 
-                                            val slotHeight = size.height / alphabet.size.toFloat()
+                                            val slotHeight =
+                                                size.height / alphabet.size.toFloat()
                                             val slot = (change.position.y / slotHeight)
                                                 .toInt()
                                                 .coerceIn(0, alphabet.lastIndex)
-                                            val targetIndex = alphabetTargets[alphabet[slot]] ?: -1
+                                            val targetIndex =
+                                                alphabetTargets[alphabet[slot]] ?: -1
 
-                                            if (targetIndex >= 0 && targetIndex != lastDragTarget) {
+                                            if (
+                                                targetIndex >= 0 &&
+                                                targetIndex != lastDragTarget
+                                            ) {
                                                 lastDragTarget = targetIndex
-                                                libraryListState.scrollToItem(targetIndex)
+                                                requestAlphabetScroll(targetIndex)
                                             }
                                         },
                                         onDragEnd = {
@@ -1442,11 +1469,7 @@ private fun NusaMusicApp(
                                             .fillMaxWidth()
                                             .weight(1f)
                                             .clickable(enabled = available) {
-                                                scope.launch {
-                                                    libraryListState.animateScrollToItem(
-                                                        index = targetIndex
-                                                    )
-                                                }
+                                                requestAlphabetScroll(targetIndex)
                                             },
                                         contentAlignment = Alignment.Center
                                     ) {
