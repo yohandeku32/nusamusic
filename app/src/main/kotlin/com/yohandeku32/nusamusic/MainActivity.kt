@@ -717,38 +717,34 @@ private fun NusaMusicApp(
 
 
 
-    // Center the currently playing song only when entering the library.
-    // The grid uses the real item bounds, so entering the page centers the
-    // active cover without affecting normal song selection afterward.
-    LaunchedEffect(pagerState.currentPage) {
-        if (pagerState.currentPage == 1 && currentSong != null) {
-            kotlinx.coroutines.yield()
-            val index = filtered.indexOfFirst { it.id == currentSong.id }
+    // Center the currently playing song only after the pager has settled.
+    // Because every grid card has a fixed height, the target offset is
+    // deterministic and can be applied in one operation without a second
+    // corrective scroll.
+    LaunchedEffect(pagerState) {
+        androidx.compose.runtime.snapshotFlow { pagerState.settledPage }
+            .collect { settledPage ->
+                if (settledPage == 1 && currentSong != null) {
+                    val index = filtered.indexOfFirst { it.id == currentSong.id }
 
-            if (index >= 0) {
-                val visibleItem = libraryListState.layoutInfo.visibleItemsInfo
-                    .firstOrNull { it.index == index }
+                    if (index >= 0) {
+                        kotlinx.coroutines.yield()
 
-                if (visibleItem == null) {
-                    libraryListState.scrollToItem(index)
-                    kotlinx.coroutines.yield()
-                }
+                        val viewportHeight =
+                            libraryListState.layoutInfo.viewportEndOffset -
+                                libraryListState.layoutInfo.viewportStartOffset
+                        val cardHeightPx =
+                            with(density) { 194.dp.roundToPx() }
+                        val centerOffset =
+                            -((viewportHeight - cardHeightPx) / 2).coerceAtLeast(0)
 
-                val centeredItem = libraryListState.layoutInfo.visibleItemsInfo
-                    .firstOrNull { it.index == index }
-
-                if (centeredItem != null) {
-                    val viewportStart = libraryListState.layoutInfo.viewportStartOffset
-                    val viewportEnd = libraryListState.layoutInfo.viewportEndOffset
-                    val viewportCenter = (viewportStart + viewportEnd) / 2
-                    val itemCenter = centeredItem.offset.y + centeredItem.size.height / 2
-
-                    libraryListState.scroll {
-                        scrollBy((itemCenter - viewportCenter).toFloat())
+                        libraryListState.scrollToItem(
+                            index = index,
+                            scrollOffset = centerOffset
+                        )
                     }
                 }
             }
-        }
     }
 
     LaunchedEffect(currentSong?.artist) {
@@ -1124,7 +1120,10 @@ private fun NusaMusicApp(
                                         ) {
                                             val biographyArrowRotation by animateFloatAsState(
                                                 targetValue = if (biographyExpanded) 180f else 0f,
-                                                animationSpec = tween(220),
+                                                animationSpec = tween(
+                                                    durationMillis = 380,
+                                                    easing = androidx.compose.animation.core.FastOutSlowInEasing
+                                                ),
                                                 label = "biographyArrowRotation"
                                             )
 
@@ -1132,10 +1131,24 @@ private fun NusaMusicApp(
                                                 onClick = {
                                                     biographyExpanded = !biographyExpanded
                                                     scope.launch {
-                                                        playerScrollState.animateScrollToItem(
-                                                            index = if (biographyExpanded) 1 else 0,
-                                                            scrollOffset = 0
-                                                        )
+                                                        if (biographyExpanded) {
+                                                            val viewportHeight =
+                                                                playerScrollState.layoutInfo.viewportEndOffset -
+                                                                    playerScrollState.layoutInfo.viewportStartOffset
+
+                                                            playerScrollState.animateScrollBy(
+                                                                value = viewportHeight.toFloat(),
+                                                                animationSpec = androidx.compose.animation.core.tween(
+                                                                    durationMillis = 520,
+                                                                    easing = androidx.compose.animation.core.FastOutSlowInEasing
+                                                                )
+                                                            )
+                                                        } else {
+                                                            playerScrollState.animateScrollToItem(
+                                                                index = 0,
+                                                                scrollOffset = 0
+                                                            )
+                                                        }
                                                     }
                                                 },
                                                 modifier = Modifier.size(42.dp)
@@ -2666,6 +2679,13 @@ private fun WornCoverArtwork(
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(8.dp))
+            .graphicsLayer {
+                shadowElevation = with(androidx.compose.ui.platform.LocalDensity.current) {
+                    2.5.dp.toPx()
+                }
+                shape = RoundedCornerShape(8.dp)
+                clip = false
+            }
             // Clear plastic shell: transparent body with a very subtle edge.
             .background(Color.White.copy(alpha = 0.025f))
             .border(
