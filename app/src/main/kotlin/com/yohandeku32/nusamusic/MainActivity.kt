@@ -982,12 +982,21 @@ private fun NusaMusicApp(
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(Color.Black)
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(
+                                            Color(0xFF686A6D),
+                                            Color(0xFF4F5154),
+                                            Color(0xFF3B3D40)
+                                        )
+                                    )
+                                )
                         ) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(76.dp)
+                                    .background(Color.Black.copy(alpha = 0.18f))
                                     .padding(horizontal = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -2217,9 +2226,9 @@ private fun LibrarySongRow(
     isPlaying: Boolean,
     onPlay: (Song) -> Unit
 ) {
-    val rowHeight = if (selected) 102.dp else 86.dp
-    val artworkSize = if (selected) 84.dp else 68.dp
-    val vinylSize = if (selected) 78.dp else 64.dp
+    val rowHeight = if (selected) 108.dp else 82.dp
+    val artworkSize = if (selected) 90.dp else 66.dp
+    val vinylSize = if (selected) 84.dp else 62.dp
 
     Box(
         modifier = Modifier
@@ -2228,15 +2237,29 @@ private fun LibrarySongRow(
             .padding(horizontal = 10.dp, vertical = 2.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(
-                if (selected) Color(0xFF121212) else Color.Transparent
+                if (selected) {
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color(0xFF25272A),
+                            Color(0xFF111214)
+                        )
+                    )
+                } else {
+                    Color.Transparent
+                }
             )
             .then(
                 if (selected) {
-                    Modifier.border(
-                        width = 1.5.dp,
-                        color = Color.White.copy(alpha = 0.86f),
-                        shape = RoundedCornerShape(12.dp)
-                    )
+                    Modifier
+                        .border(
+                            width = 2.dp,
+                            color = Color.White.copy(alpha = 0.92f),
+                            shape = RoundedCornerShape(14.dp)
+                        )
+                        .graphicsLayer {
+                            scaleX = 1.015f
+                            scaleY = 1.015f
+                        }
                 } else {
                     Modifier
                 }
@@ -2261,11 +2284,19 @@ private fun LibrarySongRow(
                         .clip(CircleShape)
                         .background(
                             Brush.radialGradient(
-                                colors = listOf(
-                                    Color(0xFF434343),
-                                    Color(0xFF191919),
-                                    Color(0xFF050505)
-                                )
+                                colors = if (selected) {
+                                    listOf(
+                                        Color(0xFF606060),
+                                        Color(0xFF202020),
+                                        Color(0xFF050505)
+                                    )
+                                } else {
+                                    listOf(
+                                        Color(0xFF434343),
+                                        Color(0xFF191919),
+                                        Color(0xFF050505)
+                                    )
+                                }
                             )
                         )
                 ) {
@@ -2331,8 +2362,8 @@ private fun LibrarySongRow(
                     text = song.title,
                     maxLines = 1,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                    fontSize = if (selected) 16.sp else 15.sp,
-                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                    fontSize = if (selected) 17.sp else 14.5.sp,
+                    fontWeight = if (selected) FontWeight.ExtraBold else FontWeight.Medium,
                     color = Color.White
                 )
                 Spacer(Modifier.height(2.dp))
@@ -2404,8 +2435,8 @@ private fun PlayingBars(isPlaying: Boolean) {
 
     Row(
         modifier = Modifier
-            .width(24.dp)
-            .height(34.dp),
+            .width(28.dp)
+            .height(36.dp),
         horizontalArrangement = Arrangement.spacedBy(3.dp),
         verticalAlignment = Alignment.Bottom
     ) {
@@ -2420,8 +2451,8 @@ private fun PlayingBars(isPlaying: Boolean) {
 private fun PlayingBar(value: Float) {
     Box(
         modifier = Modifier
-            .width(3.dp)
-            .height((8 + value * 23).dp)
+            .width(3.5.dp)
+            .height((9 + value * 24).dp)
             .clip(RoundedCornerShape(2.dp))
             .background(Color.White.copy(alpha = 0.80f))
     )
