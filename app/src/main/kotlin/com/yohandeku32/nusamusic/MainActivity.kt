@@ -1315,64 +1315,55 @@ private fun ImmersiveArtwork(
         modifier = modifier
             .background(Color.Transparent)
     ) {
-        // Keep the measured slot identical to the Vinyl slot. The artwork is
-        // allowed to overflow visually so the layout below never moves.
+        // The composable itself keeps exactly the same measured square as the
+        // Vinyl slot. Only the artwork layer overflows visually.
         val slotWidth = maxWidth
-        val innerPlayerWidth = slotWidth / 0.88f
-        val fullBleedWidth = innerPlayerWidth + 44.dp
-        val horizontalBleed = (fullBleedWidth - slotWidth) / 2f
+        val slotHeight = maxHeight
+        val screenWidth = LocalConfiguration.current.screenWidthDp.dp
 
-        // These are visual bleed values only. They do not change this
-        // composable's measured height.
         val topBleed = 92.dp
-        val bottomBleed = 150.dp
-        val visualHeight = maxHeight + topBleed + bottomBleed
+        val bottomBleed = 180.dp
+        val visualHeight = slotHeight + topBleed + bottomBleed
+        val horizontalBleed = (screenWidth - slotWidth) / 2f
 
         Box(
             modifier = Modifier
-                .requiredWidth(fullBleedWidth)
+                .requiredWidth(screenWidth)
                 .requiredHeight(visualHeight)
                 .offset(
                     x = -horizontalBleed,
                     y = -topBleed
                 )
         ) {
+            // The source artwork stays undistorted. ContentScale.Crop gives the
+            // close, full-bleed immersive framing seen in the reference player.
             ArtworkView(
                 song = song,
                 maxSizePx = 1024,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        // Gentle crop/zoom, similar to the immersive player
-                        // reference: the artwork fills the width while staying
-                        // visually close to the original album composition.
-                        val immersiveScale = 1.12f
-                        scaleX = immersiveScale
-                        scaleY = immersiveScale
-                        translationY = -(size.height * 0.055f)
-                    }
+                modifier = Modifier.fillMaxSize()
             )
 
-            // Long feathered fade over the artwork itself. Because the artwork
-            // extends below the slot, the image keeps fading naturally rather
-            // than ending in a hard horizontal edge.
+            // A long, almost imperceptible feather starts near the bottom of the
+            // artwork and continues into the white space. There is no hard image
+            // edge or rectangular "sticker" boundary.
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .height(240.dp)
+                    .height(300.dp)
                     .background(
                         Brush.verticalGradient(
                             colorStops = arrayOf(
                                 0.00f to Color.Transparent,
-                                0.14f to Color.Transparent,
-                                0.28f to MaterialTheme.colorScheme.background.copy(alpha = 0.035f),
-                                0.42f to MaterialTheme.colorScheme.background.copy(alpha = 0.08f),
-                                0.56f to MaterialTheme.colorScheme.background.copy(alpha = 0.18f),
-                                0.68f to MaterialTheme.colorScheme.background.copy(alpha = 0.34f),
-                                0.80f to MaterialTheme.colorScheme.background.copy(alpha = 0.54f),
-                                0.90f to MaterialTheme.colorScheme.background.copy(alpha = 0.74f),
-                                0.96f to MaterialTheme.colorScheme.background.copy(alpha = 0.90f),
+                                0.12f to Color.Transparent,
+                                0.26f to MaterialTheme.colorScheme.background.copy(alpha = 0.025f),
+                                0.40f to MaterialTheme.colorScheme.background.copy(alpha = 0.07f),
+                                0.54f to MaterialTheme.colorScheme.background.copy(alpha = 0.15f),
+                                0.66f to MaterialTheme.colorScheme.background.copy(alpha = 0.28f),
+                                0.77f to MaterialTheme.colorScheme.background.copy(alpha = 0.44f),
+                                0.87f to MaterialTheme.colorScheme.background.copy(alpha = 0.64f),
+                                0.94f to MaterialTheme.colorScheme.background.copy(alpha = 0.82f),
+                                0.98f to MaterialTheme.colorScheme.background.copy(alpha = 0.94f),
                                 1.00f to MaterialTheme.colorScheme.background
                             )
                         )
