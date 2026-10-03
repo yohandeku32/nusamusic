@@ -1775,6 +1775,7 @@ private fun ArtistBiographySection(
 private fun AudioQualityPill(song: Song?) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var codecInfo by remember { mutableStateOf<AudioCodecInfo?>(null) }
+    var showMetadataDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(song?.uri) {
         codecInfo = song?.let {
@@ -1815,6 +1816,9 @@ private fun AudioQualityPill(song: Song?) {
                             MaterialTheme.colorScheme.surfaceVariant
                         }
                     )
+                    .clickable(enabled = song != null && info != null) {
+                        showMetadataDialog = true
+                    }
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
@@ -1829,8 +1833,8 @@ private fun AudioQualityPill(song: Song?) {
                             if (hiRes) Color(0xFF3D3728) else MaterialTheme.colorScheme.onSurface
                         ),
                         modifier = Modifier.size(
-                            width = 24.dp,
-                            height = 13.dp
+                            width = 20.dp,
+                            height = 11.dp
                         )
                     )
 
@@ -1854,6 +1858,73 @@ private fun AudioQualityPill(song: Song?) {
 
     if (isLossless) {
         Spacer(Modifier.height(4.dp))
+    }
+
+    if (showMetadataDialog && song != null && info != null) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showMetadataDialog = false },
+            title = {
+                Text(
+                    text = "Info Metadata",
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    MetadataRow("Judul", song.title)
+                    MetadataRow("Artis", song.artist)
+                    MetadataRow("Album", song.album)
+                    MetadataRow("Codec", info.codecName)
+                    MetadataRow(
+                        "Sample rate",
+                        info.sampleRateHz?.let { rate ->
+                            if (rate % 1000 == 0) (rate / 1000).toString() + " kHz"
+                            else (rate / 1000f).toString() + " kHz"
+                        } ?: "Tidak tersedia"
+                    )
+                    MetadataRow(
+                        "Bit depth",
+                        info.bitDepth?.let { it.toString() + "-bit" }
+                            ?: "Tidak tersedia"
+                    )
+                    MetadataRow("Durasi", formatTime(song.durationMs))
+                }
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = { showMetadataDialog = false }
+                ) {
+                    Text("Tutup")
+                }
+            },
+            containerColor = MaterialTheme.colorScheme.surface,
+            titleContentColor = MaterialTheme.colorScheme.onSurface,
+            textContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun MetadataRow(
+    label: String,
+    value: String
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = value,
+            fontSize = 14.sp,
+            color = MaterialTheme.colorScheme.onSurface
+        )
     }
 }
 
