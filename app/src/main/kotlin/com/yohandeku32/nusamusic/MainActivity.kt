@@ -1319,88 +1319,78 @@ private fun ImmersiveArtwork(
             .graphicsLayer { clip = false }
             .background(Color.Transparent)
     ) {
-        val slotWidth = maxWidth
+        val screenWidth = LocalConfiguration.current.screenWidthDp.dp
 
-        // NusaMusic places this slot inside a 22.dp horizontal content inset
-        // and gives it 88% of that available width. Reconstruct the true
-        // edge-to-edge player width from the measured slot instead of relying
-        // on LocalConfiguration, which can differ from the rendered surface
-        // on some Android devices/window modes.
-        val contentWidth = slotWidth / 0.88f
-        val fullArtworkWidth = contentWidth + 44.dp
-        val slotLeft = 22.dp + (contentWidth - slotWidth) / 2f
-
-        // The reference artwork is visibly taller than a plain square player
-        // slot. The extra height is purely visual; the control layout stays put.
-        val artworkHeight = fullArtworkWidth * 1.12f
+        // The player artwork begins behind the (hidden) top bar. Make the
+        // visual layer taller than the viewport and shift it upward so the
+        // cover starts exactly at y=0 and remains edge-to-edge.
         val topBleed = 86.dp
-        val fadeDepth = 300.dp
-        val visualHeight = artworkHeight + topBleed + 40.dp
+        val artworkWidth = screenWidth
+        val artworkHeight = screenWidth + topBleed
+        val fadeHeight = 280.dp
 
         Box(
             modifier = Modifier
-                .requiredWidth(fullArtworkWidth)
-                .requiredHeight(visualHeight)
+                .requiredWidth(artworkWidth)
+                .requiredHeight(artworkHeight + fadeHeight)
                 .offset(
-                    x = -slotLeft,
+                    x = -((artworkWidth - maxWidth) / 2f),
                     y = -topBleed
                 )
                 .graphicsLayer { clip = false }
         ) {
-            // Important: Crop, not Fit. The supplied reference is a close,
-            // edge-to-edge framing of the album artwork with the central
-            // subject larger and the side borders mostly removed.
+            // Main cover: edge-to-edge and strongly filled. The slightly taller
+            // visual frame compensates for the top-bar area so the artwork does
+            // not finish prematurely above the song title.
             ArtworkView(
                 song = song,
                 maxSizePx = 1024,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .size(
-                        width = fullArtworkWidth,
-                        height = artworkHeight
-                    )
+                    .requiredWidth(artworkWidth)
+                    .requiredHeight(artworkHeight)
             )
 
-            // Subtle continuation of the lower waves. This is intentionally
-            // faint; the main visual should remain the real cover image, not a
-            // duplicated rectangular reflection.
+            // Soft continuation below the cover. This is deliberately subtle:
+            // it should read as reflected light/haze rather than another image
+            // rectangle.
             ArtworkView(
                 song = song,
                 maxSizePx = 768,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = artworkHeight - 70.dp)
+                    .padding(top = artworkHeight - 55.dp)
                     .fillMaxWidth()
-                    .height(fadeDepth)
+                    .height(fadeHeight)
                     .graphicsLayer {
-                        alpha = 0.14f
-                        scaleY = 1.08f
+                        alpha = 0.12f
+                        scaleY = 1.05f
                     }
-                    .blur(24.dp)
+                    .blur(26.dp)
             )
 
-            // The white feather begins before the physical bottom of the cover
-            // and dissolves all traces of the reflection into the player surface.
+            // Long, smooth white feather. The fade is delayed so the blue
+            // waves remain visible much farther down, matching the reference.
             Box(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = artworkHeight - 150.dp)
+                    .padding(top = artworkHeight - 95.dp)
                     .fillMaxWidth()
-                    .height(fadeDepth)
+                    .height(fadeHeight + 20.dp)
                     .background(
                         Brush.verticalGradient(
                             colorStops = arrayOf(
                                 0.00f to Color.Transparent,
-                                0.15f to Color.Transparent,
-                                0.30f to MaterialTheme.colorScheme.background.copy(alpha = 0.035f),
-                                0.45f to MaterialTheme.colorScheme.background.copy(alpha = 0.08f),
-                                0.58f to MaterialTheme.colorScheme.background.copy(alpha = 0.18f),
-                                0.70f to MaterialTheme.colorScheme.background.copy(alpha = 0.34f),
-                                0.82f to MaterialTheme.colorScheme.background.copy(alpha = 0.56f),
-                                0.91f to MaterialTheme.colorScheme.background.copy(alpha = 0.75f),
-                                0.97f to MaterialTheme.colorScheme.background.copy(alpha = 0.92f),
+                                0.16f to Color.Transparent,
+                                0.30f to MaterialTheme.colorScheme.background.copy(alpha = 0.02f),
+                                0.46f to MaterialTheme.colorScheme.background.copy(alpha = 0.055f),
+                                0.60f to MaterialTheme.colorScheme.background.copy(alpha = 0.13f),
+                                0.72f to MaterialTheme.colorScheme.background.copy(alpha = 0.26f),
+                                0.84f to MaterialTheme.colorScheme.background.copy(alpha = 0.50f),
+                                0.93f to MaterialTheme.colorScheme.background.copy(alpha = 0.76f),
+                                0.98f to MaterialTheme.colorScheme.background.copy(alpha = 0.93f),
                                 1.00f to MaterialTheme.colorScheme.background
                             )
                         )
