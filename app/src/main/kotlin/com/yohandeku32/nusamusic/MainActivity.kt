@@ -90,6 +90,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
@@ -743,6 +744,7 @@ private fun NusaMusicApp(
                                 
                                                                     TopAppBar(
                                                                         title = { },
+                                                                        modifier = Modifier.zIndex(3f),
                                                                         colors = TopAppBarDefaults.topAppBarColors(
                                                                             containerColor = if (immersiveArtwork) {
                                                                                 Color.Transparent
@@ -1313,14 +1315,15 @@ private fun ImmersiveArtwork(
             .background(Color.Transparent)
     ) {
         val slotWidth = maxWidth
+        val slotHeight = maxHeight
         val screenWidth = LocalConfiguration.current.screenWidthDp.dp
         val horizontalBleed = (screenWidth - slotWidth) / 2f
 
-        // The parent keeps the exact Vinyl slot. The artwork itself extends
-        // above and below that slot without affecting any measured layout.
-        val topBleed = 92.dp
-        val bottomArtwork = 150.dp
-        val visualHeight = maxHeight + topBleed + bottomArtwork
+        // The artwork visually escapes the 88% player slot, while the slot
+        // itself stays square so the controls below keep their position.
+        val topBleed = 90.dp
+        val bottomBleed = 180.dp
+        val visualHeight = slotHeight + topBleed + bottomBleed
 
         Box(
             modifier = Modifier
@@ -1332,59 +1335,56 @@ private fun ImmersiveArtwork(
                 )
                 .graphicsLayer { clip = false }
         ) {
+            // Keep the complete album cover visible, like the reference:
+            // full width, square source, no aggressive crop.
             ArtworkView(
                 song = song,
                 maxSizePx = 1024,
+                contentScale = ContentScale.Fit,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .size(screenWidth)
-                    .graphicsLayer {
-                        // Slight immersive enlargement while keeping the
-                        // original square aspect ratio.
-                        val scale = 1.08f
-                        scaleX = scale
-                        scaleY = scale
-                    }
             )
 
-            // Soft white "shadow" / bloom below the cover. This is an enlarged,
-            // blurred continuation of the artwork that naturally dissolves into
-            // the player background instead of ending at a hard edge.
+            // A restrained blurred reflection continues the artwork below the
+            // square cover, producing the soft white shadow visible in the
+            // reference without creating a hard rectangular edge.
             ArtworkView(
                 song = song,
                 maxSizePx = 768,
+                contentScale = ContentScale.Fit,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = screenWidth - 42.dp)
+                    .padding(top = screenWidth - 38.dp)
                     .fillMaxWidth()
-                    .height(bottomArtwork + 42.dp)
+                    .height(bottomBleed + 48.dp)
                     .graphicsLayer {
-                        alpha = 0.28f
-                        scaleY = 1.12f
+                        alpha = 0.17f
+                        scaleY = 1.10f
                     }
-                    .blur(30.dp)
+                    .blur(28.dp)
             )
 
-            // Very long feather over the lower bloom. The midpoint remains
-            // almost transparent so the artwork does not look like a grey box.
+            // Long feather from the lower artwork into the ivory player
+            // surface. The artwork remains readable before it dissolves.
             Box(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = screenWidth - 18.dp)
+                    .padding(top = screenWidth - 22.dp)
                     .fillMaxWidth()
-                    .height(bottomArtwork + 18.dp)
+                    .height(bottomBleed + 22.dp)
                     .background(
                         Brush.verticalGradient(
                             colorStops = arrayOf(
                                 0.00f to Color.Transparent,
-                                0.18f to Color.Transparent,
-                                0.34f to MaterialTheme.colorScheme.background.copy(alpha = 0.035f),
-                                0.48f to MaterialTheme.colorScheme.background.copy(alpha = 0.09f),
-                                0.60f to MaterialTheme.colorScheme.background.copy(alpha = 0.20f),
-                                0.72f to MaterialTheme.colorScheme.background.copy(alpha = 0.36f),
-                                0.84f to MaterialTheme.colorScheme.background.copy(alpha = 0.58f),
-                                0.92f to MaterialTheme.colorScheme.background.copy(alpha = 0.76f),
-                                0.97f to MaterialTheme.colorScheme.background.copy(alpha = 0.91f),
+                                0.16f to Color.Transparent,
+                                0.30f to MaterialTheme.colorScheme.background.copy(alpha = 0.025f),
+                                0.44f to MaterialTheme.colorScheme.background.copy(alpha = 0.07f),
+                                0.56f to MaterialTheme.colorScheme.background.copy(alpha = 0.14f),
+                                0.68f to MaterialTheme.colorScheme.background.copy(alpha = 0.28f),
+                                0.79f to MaterialTheme.colorScheme.background.copy(alpha = 0.48f),
+                                0.88f to MaterialTheme.colorScheme.background.copy(alpha = 0.68f),
+                                0.95f to MaterialTheme.colorScheme.background.copy(alpha = 0.86f),
                                 1.00f to MaterialTheme.colorScheme.background
                             )
                         )
@@ -2047,7 +2047,8 @@ private fun ArtworkView(
     song: Song?,
     maxSizePx: Int = 512,
     modifier: Modifier = Modifier,
-    monochrome: Boolean = false
+    monochrome: Boolean = false,
+    contentScale: ContentScale = ContentScale.Crop
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var bitmap by remember { mutableStateOf<Bitmap?>(null) }
@@ -2082,7 +2083,7 @@ private fun ArtworkView(
                 androidx.compose.foundation.Image(
                     bitmap = targetBitmap.asImageBitmap(),
                     contentDescription = song?.title,
-                    contentScale = ContentScale.Crop,
+                    contentScale = contentScale,
                     colorFilter = if (monochrome) {
                         ColorFilter.colorMatrix(
                             ColorMatrix().apply { setToSaturation(0f) }
@@ -2180,9 +2181,9 @@ private fun NusaMusicTheme(content: @Composable () -> Unit) {
         )
     } else {
         lightColorScheme(
-            background = Color(0xFFF2F0EB),
-            surface = Color(0xFFF7F5F0),
-            surfaceVariant = Color(0xFFE2E0DA),
+            background = Color(0xFFF8F7F2),
+            surface = Color(0xFFFAF9F5),
+            surfaceVariant = Color(0xFFE6E3DD),
             primary = Color(0xFF111111)
         )
     }
