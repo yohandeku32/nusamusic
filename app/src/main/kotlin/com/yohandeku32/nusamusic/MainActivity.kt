@@ -1183,7 +1183,7 @@ private fun NusaMusicApp(
                             }
 
                             LazyVerticalGrid(
-                                columns = GridCells.Fixed(3),
+                                columns = GridCells.Fixed(2),
                                 state = libraryListState,
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -2306,7 +2306,8 @@ private fun ArtworkView(
             ArtworkLoader.load(
                 context = context,
                 uriString = it.uri,
-                maxSize = maxSizePx
+                maxSize = maxSizePx,
+                cacheKey = it.albumId.takeIf { albumId -> albumId > 0L }?.toString()
             )
         }
     }
@@ -2324,7 +2325,7 @@ private fun ArtworkView(
             .drawWithCache {
                 val seed = (song?.id ?: song?.uri ?: "nusa").hashCode()
                 val random = Random(seed)
-                val speckles = List(48) {
+                val speckles = List(24) {
                     GrainDot(
                         x = random.nextFloat(),
                         y = random.nextFloat(),
@@ -2333,7 +2334,7 @@ private fun ArtworkView(
                         dark = random.nextBoolean()
                     )
                 }
-                val fibers = List(6) {
+                val fibers = List(3) {
                     GrainFiber(
                         x = random.nextFloat(),
                         y = random.nextFloat(),
@@ -2385,32 +2386,27 @@ private fun ArtworkView(
             },
         contentAlignment = Alignment.Center
     ) {
-        Crossfade(
-            targetState = bitmap,
-            animationSpec = tween(durationMillis = 220),
-            label = "artworkCrossfade"
-        ) { targetBitmap ->
-            if (targetBitmap != null) {
-                androidx.compose.foundation.Image(
-                    bitmap = targetBitmap.asImageBitmap(),
-                    contentDescription = song?.title,
-                    contentScale = ContentScale.Crop,
-                    colorFilter = if (monochrome) {
-                        ColorFilter.colorMatrix(
-                            ColorMatrix().apply { setToSaturation(0f) }
-                        )
-                    } else {
-                        null
-                    },
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                Icon(
-                    Icons.Default.MusicNote,
-                    contentDescription = null,
-                    modifier = Modifier.size(42.dp)
-                )
-            }
+        val targetBitmap = bitmap
+        if (targetBitmap != null) {
+            androidx.compose.foundation.Image(
+                bitmap = targetBitmap.asImageBitmap(),
+                contentDescription = song?.title,
+                contentScale = ContentScale.Crop,
+                colorFilter = if (monochrome) {
+                    ColorFilter.colorMatrix(
+                        ColorMatrix().apply { setToSaturation(0f) }
+                    )
+                } else {
+                    null
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            Icon(
+                Icons.Default.MusicNote,
+                contentDescription = null,
+                modifier = Modifier.size(42.dp)
+            )
         }
     }
 }
@@ -2421,32 +2417,39 @@ private fun LibrarySongRow(
     selected: Boolean,
     onPlay: (Song) -> Unit
 ) {
-    val cardHeight = if (selected) 166.dp else 156.dp
-    val artworkSize = if (selected) 112.dp else 100.dp
-    val vinylSize = if (selected) 106.dp else 94.dp
+    // Fixed height keeps grid rows stable when the active track changes.
+    val cardHeight = 194.dp
+    val artworkSize = if (selected) 160.dp else 148.dp
+    val vinylSize = if (selected) 152.dp else 140.dp
+    val artworkAreaHeight = 164.dp
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(cardHeight)
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(16.dp))
             .then(
                 if (selected) {
                     Modifier
                         .background(
                             brush = Brush.verticalGradient(
-                                colors = listOf(Color(0xFF292B2E), Color(0xFF151618))
+                                colors = listOf(
+                                    Color(0xFF292B2E),
+                                    Color(0xFF151618)
+                                )
                             ),
-                            shape = RoundedCornerShape(14.dp)
+                            shape = RoundedCornerShape(16.dp)
                         )
                         .graphicsLayer {
-                            scaleX = 1.015f
-                            scaleY = 1.015f
+                            scaleX = 1.012f
+                            scaleY = 1.012f
                         }
-                } else Modifier
+                } else {
+                    Modifier
+                }
             )
             .clickable { onPlay(song) }
-            .padding(horizontal = 4.dp, vertical = 5.dp)
+            .padding(horizontal = 4.dp, vertical = 6.dp)
     ) {
         Column(
             modifier = Modifier.fillMaxSize(),
@@ -2454,14 +2457,14 @@ private fun LibrarySongRow(
         ) {
             Box(
                 modifier = Modifier
-                    .height(if (selected) 116.dp else 104.dp)
+                    .height(artworkAreaHeight)
                     .fillMaxWidth(),
                 contentAlignment = Alignment.Center
             ) {
                 Box(
                     modifier = Modifier
                         .size(vinylSize)
-                        .offset(x = if (selected) 12.dp else 10.dp)
+                        .offset(x = if (selected) 18.dp else 16.dp)
                         .clip(CircleShape)
                         .background(
                             Brush.radialGradient(
@@ -2476,11 +2479,11 @@ private fun LibrarySongRow(
                     for (ring in 1..6) {
                         Box(
                             modifier = Modifier
-                                .size((54 + ring * 4).dp)
+                                .size((76 + ring * 4).dp)
                                 .align(Alignment.Center)
                                 .clip(CircleShape)
                                 .border(
-                                    width = 0.6.dp,
+                                    width = 0.55.dp,
                                     color = Color.White.copy(alpha = 0.045f)
                                 )
                         )
@@ -2497,48 +2500,49 @@ private fun LibrarySongRow(
                 Box(
                     modifier = Modifier
                         .size(artworkSize)
-                        .clip(RoundedCornerShape(6.dp))
+                        .clip(RoundedCornerShape(7.dp))
                         .background(Color(0xFF0A0A0A))
                         .padding(2.dp)
                 ) {
                     ArtworkView(
                         song = song,
-                        maxSizePx = 256,
+                        maxSizePx = 320,
                         modifier = Modifier
                             .fillMaxSize()
-                            .clip(RoundedCornerShape(4.dp))
+                            .clip(RoundedCornerShape(5.dp))
                     )
                 }
             }
-
-            Spacer(Modifier.height(2.dp))
 
             Text(
                 text = song.title,
                 maxLines = 1,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                fontSize = if (selected) 12.5.sp else 11.5.sp,
+                fontSize = if (selected) 13.sp else 12.sp,
                 lineHeight = 13.sp,
                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                 color = Color.White,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp)
             )
 
             Text(
                 text = song.artist,
                 maxLines = 1,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                fontSize = 9.sp,
+                fontSize = 9.5.sp,
                 lineHeight = 10.sp,
                 color = if (selected) Color(0xFFD2D2D2) else Color(0xFFAAAAAA),
                 textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp)
             )
         }
     }
 }
-
 private fun formatTime(ms: Long): String {
     val totalSeconds = (ms / 1000L).coerceAtLeast(0L)
     val minutes = totalSeconds / 60L
