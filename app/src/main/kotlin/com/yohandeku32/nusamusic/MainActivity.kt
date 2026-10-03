@@ -97,6 +97,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.platform.LocalDensity
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
@@ -485,7 +486,7 @@ private fun NusaMusicApp(
     val density = LocalDensity.current
     val libraryCenterOffset = remember(configuration.screenHeightDp, density) {
         with(density) {
-            -((configuration.screenHeightDp.dp - 82.dp) / 2f).roundToPx()
+            -((configuration.screenHeightDp.dp - 74.dp) / 2f).roundToPx()
         }
     }
 
@@ -977,12 +978,30 @@ private fun NusaMusicApp(
                                 .fillMaxSize()
                                 .background(Color.Black)
                         ) {
+                            RecordCrateBackdrop(
+                                modifier = Modifier
+                                    .align(Alignment.Center)
+                                    .fillMaxWidth(0.94f)
+                                    .fillMaxHeight(0.84f)
+                            )
+
+                            Text(
+                                text = "DAFTAR LAGU",
+                                modifier = Modifier
+                                    .align(Alignment.TopCenter)
+                                    .padding(top = 28.dp),
+                                fontSize = 21.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.8.sp,
+                                color = Color.White
+                            )
+
                             LazyColumn(
                                 state = libraryListState,
                                 modifier = Modifier.fillMaxSize(),
                                 contentPadding = PaddingValues(
-                                    top = 96.dp,
-                                    bottom = 140.dp
+                                    top = 112.dp,
+                                    bottom = 160.dp
                                 )
                             ) {
                                 if (permissionGranted && filtered.isNotEmpty()) {
@@ -1002,76 +1021,67 @@ private fun NusaMusicApp(
                                                 it.offset + it.size / 2f
                                             } ?: viewportCenter
                                         val distancePx = itemCenter - viewportCenter
-                                        val maxArcDistancePx = with(density) { 260.dp.toPx() }
+                                        val maxStackDistancePx = with(density) { 300.dp.toPx() }
                                         val normalizedDistance =
-                                            (distancePx / maxArcDistancePx).coerceIn(-1f, 1f)
-                                        // Vinyl Sleeve Stack / Record Crate:
-                                        // the centered sleeve is pulled slightly out of
-                                        // the crate, while neighboring sleeves tilt and
-                                        // recede behind it.
-                                        val distanceFromCenter = kotlin.math.abs(normalizedDistance)
-                                        val centerProximity = 1f - distanceFromCenter
+                                            (distancePx / maxStackDistancePx).coerceIn(-1f, 1f)
+
+                                        // The nearest sleeve becomes the front record in the
+                                        // crate. Neighbors stay visible behind it with small
+                                        // perspective and rotation changes.
+                                        val distanceFromCenter =
+                                            kotlin.math.abs(normalizedDistance)
+                                        val centerProximity =
+                                            1f - distanceFromCenter
                                         val selected = currentSong?.id == song.id
 
-                                        val pullOut = centerProximity * 34f
                                         val horizontalShift =
-                                            24f + pullOut - distanceFromCenter * 10f
-                                        val rotationY = -normalizedDistance * 18f
-                                        val rotationZ = -normalizedDistance * 5f
-
-                                        // Stronger depth separation than the previous arc:
-                                        // a selected/center record reads as the sleeve being
-                                        // physically pulled forward from a crate.
+                                            -normalizedDistance * 8f
+                                        val rotationY =
+                                            -normalizedDistance * 10f
+                                        val rotationZ =
+                                            -normalizedDistance * 2.5f
                                         val scale =
-                                            (0.84f + centerProximity * 0.15f +
+                                            (0.84f + centerProximity * 0.13f +
                                                 if (selected) 0.04f else 0f)
-                                                .coerceIn(0.80f, 1.03f)
+                                                .coerceIn(0.82f, 1.02f)
                                         val alpha =
-                                            (0.52f + centerProximity * 0.48f)
-                                                .coerceIn(0.50f, 1f)
+                                            (0.60f + centerProximity * 0.40f)
+                                                .coerceIn(0.55f, 1f)
                                         val z =
-                                            centerProximity * 12f +
-                                                if (selected) 4f else 0f
-
-                                        val titleSize =
-                                            (12.5f + centerProximity * 3.5f +
-                                                if (selected) 2.5f else 0f)
-                                                .coerceIn(12f, 18.5f)
-                                        val coverScale =
-                                            (0.84f + centerProximity * 0.12f +
-                                                if (selected) 0.05f else 0f)
-                                                .coerceIn(0.82f, 1.05f)
+                                            centerProximity * 20f +
+                                                if (selected) 10f else 0f
 
                                         Box(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .padding(horizontal = 18.dp, vertical = 2.dp)
-                                                .graphicsLayer {
-                                                    translationX = with(density) { horizontalShift.dp.toPx() }
-                                                    rotationY = rotationY
-                                                    rotationZ = rotationZ
-                                                    scaleX = scale
-                                                    scaleY = scale
-                                                    this.alpha = alpha
-                                                    shadowElevation = with(density) {
-                                                        (4f + centerProximity * 10f).dp.toPx()
-                                                    }
-                                                    cameraDistance = 26f * density.density
-                                                }
+                                                .height(74.dp)
                                         ) {
-                                            // Small vertical compression creates the visual
-                                            // overlap of sleeves without changing LazyColumn
-                                            // item hit-testing.
-                                            SongRow(
-                                                song = song,
-                                                selected = selected,
-                                                onPlay = onPlay,
-                                                darkSurface = true,
-                                                titleSize = titleSize,
-                                                coverScale = coverScale,
-                                                sleeveStack = true,
-                                                depth = z
-                                            )
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .height(230.dp)
+                                                    .graphicsLayer {
+                                                        translationX = with(density) {
+                                                            horizontalShift.dp.toPx()
+                                                        }
+                                                        rotationY = rotationY
+                                                        rotationZ = rotationZ
+                                                        scaleX = scale
+                                                        scaleY = scale
+                                                        this.alpha = alpha
+                                                        cameraDistance = 32f * density.density
+                                                    }
+                                                    .zIndex(z)
+                                            ) {
+                                                SongRow(
+                                                    song = song,
+                                                    selected = selected,
+                                                    onPlay = onPlay,
+                                                    darkSurface = true,
+                                                    sleeveStack = true,
+                                                    depth = z
+                                                )
+                                            }
                                         }
                                     }
                                 } else if (!permissionGranted) {
@@ -2227,6 +2237,16 @@ private fun SongRow(
     sleeveStack: Boolean = false,
     depth: Float = 0f
 ) {
+    if (sleeveStack) {
+        CrateSongSleeve(
+            song = song,
+            selected = selected,
+            onPlay = onPlay,
+            depth = depth
+        )
+        return
+    }
+
     val selectedBackground =
         if (darkSurface) Color(0xFF1B1B1B) else MaterialTheme.colorScheme.surfaceVariant
 
@@ -2248,8 +2268,6 @@ private fun SongRow(
                 .width(78.dp * coverScale)
                 .height(74.dp * coverScale)
         ) {
-            // Two offset back sleeves create the depth of a physical record
-            // crate/stack behind the currently visible album.
             Box(
                 modifier = Modifier
                     .size(68.dp * coverScale)
@@ -2267,9 +2285,6 @@ private fun SongRow(
                     .clip(RoundedCornerShape(5.dp))
                     .background(Color(0xFF0B0B0B))
             )
-
-            // Front sleeve: white/black jacket edge with the actual artwork
-            // recessed inside it, like an LP pulled halfway out of a crate.
             Box(
                 modifier = Modifier
                     .size(70.dp * coverScale)
@@ -2285,8 +2300,6 @@ private fun SongRow(
                         .clip(RoundedCornerShape(2.dp))
                 )
             }
-
-            // Fine paper highlight along the sleeve's top edge.
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -2322,6 +2335,250 @@ private fun SongRow(
                 if (selected) Icons.Default.Pause else Icons.Default.PlayArrow,
                 contentDescription = if (selected) "Pause" else "Play",
                 tint = if (darkSurface) Color.White else MaterialTheme.colorScheme.onBackground
+            )
+        }
+    }
+}
+
+/**
+ * Physical record-store crate used by the library page.
+ * The frame is intentionally static while the sleeves scroll inside it.
+ */
+@Composable
+private fun RecordCrateBackdrop(modifier: Modifier = Modifier) {
+    Box(modifier = modifier) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(RoundedCornerShape(24.dp))
+                .background(
+                    Brush.linearGradient(
+                        colors = listOf(
+                            Color(0xFF3A2418),
+                            Color(0xFF6A452B),
+                            Color(0xFF2A1A12)
+                        )
+                    )
+                )
+                .then(
+                    Modifier.border(
+                        width = 1.5.dp,
+                        color = Color(0xFF8A603A).copy(alpha = 0.75f),
+                        shape = RoundedCornerShape(24.dp)
+                    )
+                )
+        )
+
+        // Dark inner well makes the records look recessed into the crate.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            Color(0xFF17120F),
+                            Color(0xFF0A0908),
+                            Color(0xFF1B120D)
+                        )
+                    )
+        )
+
+        // Left and right wooden side rails.
+        Box(
+            modifier = Modifier
+                .width(16.dp)
+                .fillMaxHeight()
+                .align(Alignment.CenterStart)
+                .clip(RoundedCornerShape(topStart = 20.dp, bottomStart = 20.dp))
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(
+                            Color(0xFF7A5131),
+                            Color(0xFF3A2418),
+                            Color(0xFF1E140E)
+                        )
+                    )
+                )
+        )
+        Box(
+            modifier = Modifier
+                .width(16.dp)
+                .fillMaxHeight()
+                .align(Alignment.CenterEnd)
+                .clip(RoundedCornerShape(topEnd = 20.dp, bottomEnd = 20.dp))
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(
+                            Color(0xFF1E140E),
+                            Color(0xFF3A2418),
+                            Color(0xFF7A5131)
+                        )
+                    )
+                )
+        )
+
+        // Front plank anchors the bottom of the record crate.
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp)
+                .align(Alignment.BottomCenter)
+                .clip(RoundedCornerShape(bottomStart = 22.dp, bottomEnd = 22.dp))
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            Color(0xFF70482D),
+                            Color(0xFF422817),
+                            Color(0xFF24170F)
+                        )
+                    )
+                )
+        )
+
+        // Small highlight on the top lip.
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.88f)
+                .height(3.dp)
+                .align(Alignment.TopCenter)
+                .offset(y = 18.dp)
+                .clip(RoundedCornerShape(50))
+                .background(Color(0xFFC08A52).copy(alpha = 0.45f))
+        )
+    }
+}
+
+/**
+ * Large album sleeve that behaves like a physical LP pulled from a crate.
+ */
+@Composable
+private fun CrateSongSleeve(
+    song: Song,
+    selected: Boolean,
+    onPlay: (Song) -> Unit,
+    depth: Float
+) {
+    val rearOffset = (depth * 0.12f).coerceIn(0f, 3f).dp
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(230.dp),
+        contentAlignment = Alignment.TopCenter
+    ) {
+        // Vinyl disc peeking out behind the paper sleeve.
+        Box(
+            modifier = Modifier
+                .size(178.dp)
+                .offset(x = 92.dp, y = 28.dp)
+                .clip(CircleShape)
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(
+                            Color(0xFF3A3A3A),
+                            Color(0xFF161616),
+                            Color(0xFF030303)
+                        )
+                    )
+                )
+        ) {
+            for (ring in 1..7) {
+                Box(
+                    modifier = Modifier
+                        .size((92 + ring * 10).dp)
+                        .align(Alignment.Center)
+                        .clip(CircleShape)
+                        .border(
+                            width = 0.8.dp,
+                            color = Color.White.copy(alpha = 0.045f)
+                        )
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .size(22.dp)
+                    .align(Alignment.Center)
+                    .clip(CircleShape)
+                    .background(Color(0xFF090909))
+            )
+        }
+
+        // Two rear paper sleeves produce the staggered stack.
+        Box(
+            modifier = Modifier
+                .size(205.dp)
+                .offset(x = rearOffset, y = 8.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color(0xFF111111))
+        )
+        Box(
+            modifier = Modifier
+                .size(211.dp)
+                .offset(x = (-7).dp, y = 4.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color(0xFF2A211A))
+        )
+
+        // Main album sleeve.
+        Box(
+            modifier = Modifier
+                .size(216.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .then(
+                    Modifier.border(
+                        width = if (selected) 2.dp else 1.dp,
+                        color = if (selected) {
+                            Color.White.copy(alpha = 0.88f)
+                        } else {
+                            Color(0xFF6A4C35).copy(alpha = 0.70f)
+                        },
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                )
+                .background(
+                    Brush.linearGradient(
+                        colors = listOf(
+                            Color(0xFF080808),
+                            Color(0xFF141414),
+                            Color(0xFF050505)
+                        )
+                    )
+                )
+                .padding(5.dp)
+                .clickable { onPlay(song) }
+        ) {
+            ArtworkView(
+                song = song,
+                maxSizePx = 512,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(4.dp))
+            )
+
+            // Paper edge and glossy catch-light.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(2.dp)
+                    .align(Alignment.TopCenter)
+                    .background(Color.White.copy(alpha = 0.18f))
+            )
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight()
+                    .background(
+                        Brush.linearGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.03f),
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.16f)
+                            )
+                        )
+                    )
             )
         }
     }
