@@ -46,9 +46,9 @@ class PlaybackService : MediaSessionService() {
                     )
                 ).also { usbAudioSink = it }
             }
-        }.apply {
-            extensionRendererMode = DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
-        }
+        }.setExtensionRendererMode(
+            DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
+        )
 
         val loadControl = UsbAudioSink.wrapLoadControl(
             DefaultLoadControl.Builder()
