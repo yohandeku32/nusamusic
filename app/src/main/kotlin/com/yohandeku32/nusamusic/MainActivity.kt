@@ -1415,9 +1415,7 @@ private fun NusaMusicApp(
 
                                             if (targetIndex >= 0 && targetIndex != lastDragTarget) {
                                                 lastDragTarget = targetIndex
-                                                scope.launch {
-                                                    libraryListState.scrollToItem(targetIndex)
-                                                }
+                                                libraryListState.scrollToItem(targetIndex)
                                             }
                                         },
                                         onDragEnd = {
