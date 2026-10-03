@@ -14,6 +14,8 @@ if (localPropertiesFile.exists()) {
 }
 
 val lastFmApiKey = localProperties.getProperty("LASTFM_API_KEY", "")
+    .replace("\\", "\\\\")
+    .replace("\"", "\\\"")
 
 private const val DECENT_AUDIO_ENGINE_VERSION = "v0.1.0-libs"
 private const val DECENT_AUDIO_ENGINE_BASE_URL =
@@ -61,8 +63,6 @@ tasks.named("preBuild") {
     dependsOn(downloadDecentAudioEngine)
 }
 
-    .replace("\\", "\\\\")
-    .replace("\"", "\\\"")
 
 android {
     namespace = "com.yohandeku32.nusamusic"
