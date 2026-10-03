@@ -651,7 +651,7 @@ class MainActivity : ComponentActivity() {
 
 private fun displayMusicFolderName(uriString: String): String {
     val treeUri = runCatching { Uri.parse(uriString) }.getOrNull()
-        ?: return "Folder musik"
+        ?: return nusaText("Folder musik", "Music folder")
 
     val documentId = runCatching {
         DocumentsContract.getTreeDocumentId(treeUri)
@@ -1177,7 +1177,7 @@ private fun NusaMusicApp(
                     ) {
                         Icon(
                             Icons.Default.Refresh,
-                            contentDescription = "Scan musik"
+                            contentDescription = nusaText("Scan musik", "Scan music")
                         )
                         Spacer(Modifier.width(8.dp))
                         Text(
@@ -1327,7 +1327,7 @@ private fun NusaMusicApp(
                                             IconButton(onClick = {}) {
                                                 Icon(
                                                     Icons.Default.MoreHoriz,
-                                                    contentDescription = "More"
+                                                    contentDescription = nusaText("Lainnya", "More")
                                                 )
                                             }
                                             IconButton(onClick = { showSettings = true }) {
@@ -1573,7 +1573,7 @@ private fun NusaMusicApp(
                                             FilledIconButton(onClick = onRequestPermission) {
                                                 Icon(
                                                     Icons.Default.FolderOpen,
-                                                    contentDescription = "Allow music access"
+                                                    contentDescription = nusaText("Izinkan akses musik", "Allow music access")
                                                 )
                                             }
                                         } else if (filtered.isEmpty()) {
@@ -1729,7 +1729,7 @@ private fun NusaMusicApp(
                                             FilledIconButton(onClick = onRequestPermission) {
                                                 Icon(
                                                     Icons.Default.FolderOpen,
-                                                    contentDescription = "Allow music access"
+                                                    contentDescription = nusaText("Izinkan akses musik", "Allow music access")
                                                 )
                                             }
                                         }
@@ -1932,7 +1932,7 @@ private fun NusaMusicApp(
                                     ) {
                                         Icon(
                                             Icons.Default.Shuffle,
-                                            contentDescription = "Shuffle",
+                                            contentDescription = nusaText("Acak", "Shuffle"),
                                             tint = shuffleIconColor
                                         )
                                     }
@@ -1971,7 +1971,7 @@ private fun NusaMusicApp(
                                             } else {
                                                 Icons.Default.Repeat
                                             },
-                                            contentDescription = "Repeat",
+                                            contentDescription = nusaText("Ulangi", "Repeat"),
                                             tint = repeatIconColor
                                         )
                                     }
@@ -2304,13 +2304,13 @@ private fun AudioQualityPill(song: Song?) {
                         Spacer(Modifier.height(16.dp))
 
                         MetadataRow(
-                            label = "Codec",
+                            label = nusaText("Codec", "Codec"),
                             value = info.codecName,
                             hiRes = isHiRes
                         )
                         MetadataDivider(hiRes = isHiRes)
                         MetadataRow(
-                            label = "Sample rate",
+                            label = nusaText("Sample rate", "Sample rate"),
                             value = formatSampleRate(info.sampleRateHz),
                             hiRes = isHiRes
                         )
