@@ -1435,6 +1435,8 @@ private fun NusaMusicApp(
                                         VinylRecord(
                                             song = currentSong,
                                             isPlaying = isPlaying,
+                                            positionMs = positionMs,
+                                            durationMs = durationMs,
                                             modifier = Modifier
                                                 .fillMaxWidth(0.88f)
                                                 .aspectRatio(1f)
@@ -2682,7 +2684,13 @@ private fun TransportPillButton(
 }
 
 @Composable
-private fun VinylRecord(song: Song?, isPlaying: Boolean, modifier: Modifier = Modifier) {
+private fun VinylRecord(
+    song: Song?,
+    isPlaying: Boolean,
+    positionMs: Long,
+    durationMs: Long,
+    modifier: Modifier = Modifier
+) {
     // Keep the physical angle continuous while changing rotation speed.
     // Playback starts and stops with a gentle acceleration/deceleration instead
     // of an abrupt jump.
@@ -2755,15 +2763,27 @@ private fun VinylRecord(song: Song?, isPlaying: Boolean, modifier: Modifier = Mo
         }
     }
 
+    val progress = if (durationMs > 0L) {
+        (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
+    } else {
+        0f
+    }
+
     Box(
-        modifier = modifier.graphicsLayer {
-            rotationZ = rotation.value
-            shadowElevation = 18.dp.toPx()
-            shape = CircleShape
-            clip = false
-        },
+        modifier = modifier,
         contentAlignment = Alignment.Center
     ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    rotationZ = rotation.value
+                    shadowElevation = 18.dp.toPx()
+                    shape = CircleShape
+                    clip = false
+                },
+            contentAlignment = Alignment.Center
+        ) {
         Canvas(
             Modifier
                 .fillMaxSize()
@@ -3317,18 +3337,311 @@ private fun VinylRecord(song: Song?, isPlaying: Boolean, modifier: Modifier = Mo
             }
         }
 
-        // Metal spindle and hole.
-        Box(
-            modifier = Modifier
-                .size(18.dp)
-                .clip(CircleShape)
-                .background(Color(0xFF080808))
+            // Metal spindle and hole.
+            Box(
+                modifier = Modifier
+                    .size(18.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF080808))
+            )
+            Box(
+                modifier = Modifier
+                    .size(5.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFA8A8A8))
+            )
+        }
+
+        VinylTonearm(
+            isPlaying = isPlaying,
+            hasSong = song != null,
+            progress = progress,
+            modifier = Modifier.fillMaxSize()
         )
-        Box(
-            modifier = Modifier
-                .size(5.dp)
-                .clip(CircleShape)
-                .background(Color(0xFFA8A8A8))
+    }
+}
+
+@Composable
+private fun VinylTonearm(
+    isPlaying: Boolean,
+    hasSong: Boolean,
+    progress: Float,
+    modifier: Modifier = Modifier
+) {
+    val targetAngle = if (isPlaying && hasSong) {
+        5.5f + progress * 13.5f
+    } else {
+        0f
+    }
+
+    val armAngle by animateFloatAsState(
+        targetValue = targetAngle,
+        animationSpec = tween(
+            durationMillis = if (isPlaying) 900 else 650,
+            easing = androidx.compose.animation.core.FastOutSlowInEasing
+        ),
+        label = "tonearmAngle"
+    )
+
+    val targetContact = if (isPlaying && hasSong) 1f else 0f
+    val contact by animateFloatAsState(
+        targetValue = targetContact,
+        animationSpec = tween(
+            durationMillis = if (isPlaying) 720 else 420,
+            easing = androidx.compose.animation.core.FastOutSlowInEasing
+        ),
+        label = "tonearmContact"
+    )
+
+    Canvas(modifier = modifier) {
+        val pivot = androidx.compose.ui.geometry.Offset(
+            x = size.width * 0.835f,
+            y = size.height * 0.145f
+        )
+
+        fun rotatePoint(
+            point: androidx.compose.ui.geometry.Offset,
+            degrees: Float
+        ): androidx.compose.ui.geometry.Offset {
+            val radians = Math.toRadians(degrees.toDouble())
+            val cos = kotlin.math.cos(radians).toFloat()
+            val sin = kotlin.math.sin(radians).toFloat()
+            val dx = point.x - pivot.x
+            val dy = point.y - pivot.y
+
+            return androidx.compose.ui.geometry.Offset(
+                x = pivot.x + dx * cos - dy * sin,
+                y = pivot.y + dx * sin + dy * cos
+            )
+        }
+
+        // The arm is deliberately drawn as a physical two-stage assembly:
+        // pivot -> bearing block -> straight tonearm -> cartridge -> stylus.
+        val bearing = rotatePoint(
+            androidx.compose.ui.geometry.Offset(
+                x = size.width * 0.812f,
+                y = size.height * 0.255f
+            ),
+            armAngle
+        )
+
+        val armEnd = rotatePoint(
+            androidx.compose.ui.geometry.Offset(
+                x = size.width * 0.748f,
+                y = size.height * 0.455f
+            ),
+            armAngle
+        )
+
+        val cartridgeBody = rotatePoint(
+            androidx.compose.ui.geometry.Offset(
+                x = size.width * 0.722f,
+                y = size.height * 0.505f
+            ),
+            armAngle
+        )
+
+        val stylusBase = rotatePoint(
+            androidx.compose.ui.geometry.Offset(
+                x = size.width * 0.716f,
+                y = size.height * 0.535f
+            ),
+            armAngle
+        )
+
+        val liftOffset = size.height * 0.010f * (1f - contact)
+        val stylus = androidx.compose.ui.geometry.Offset(
+            x = stylusBase.x,
+            y = stylusBase.y + liftOffset
+        )
+
+        // Soft shadow under the mechanism makes the assembly sit above the
+        // rotating record rather than looking painted onto it.
+        drawLine(
+            color = Color.Black.copy(alpha = 0.32f),
+            start = androidx.compose.ui.geometry.Offset(
+                bearing.x + 1.8f,
+                bearing.y + 2.8f
+            ),
+            end = androidx.compose.ui.geometry.Offset(
+                armEnd.x + 1.8f,
+                armEnd.y + 2.8f
+            ),
+            strokeWidth = 9.5f,
+            cap = androidx.compose.ui.graphics.StrokeCap.Round
+        )
+
+        drawLine(
+            color = Color.Black.copy(alpha = 0.35f),
+            start = androidx.compose.ui.geometry.Offset(
+                armEnd.x + 1.5f,
+                armEnd.y + 2.4f
+            ),
+            end = androidx.compose.ui.geometry.Offset(
+                cartridgeBody.x + 1.5f,
+                cartridgeBody.y + 2.4f
+            ),
+            strokeWidth = 11f,
+            cap = androidx.compose.ui.graphics.StrokeCap.Round
+        )
+
+        // Pivot housing.
+        drawCircle(
+            color = Color.Black.copy(alpha = 0.30f),
+            radius = size.minDimension * 0.047f,
+            center = androidx.compose.ui.geometry.Offset(
+                pivot.x + 1.5f,
+                pivot.y + 2.6f
+            )
+        )
+        drawCircle(
+            color = Color(0xFF171717),
+            radius = size.minDimension * 0.043f,
+            center = pivot
+        )
+        drawCircle(
+            color = Color(0xFF5D5D5D),
+            radius = size.minDimension * 0.021f,
+            center = pivot
+        )
+        drawCircle(
+            color = Color(0xFF151515),
+            radius = size.minDimension * 0.009f,
+            center = pivot
+        )
+
+        // Main metal arm: dark foundation + brighter top edge.
+        drawLine(
+            color = Color(0xFF171717),
+            start = pivot,
+            end = bearing,
+            strokeWidth = 10f,
+            cap = androidx.compose.ui.graphics.StrokeCap.Round
+        )
+        drawLine(
+            color = Color(0xFFBDBDBD),
+            start = pivot,
+            end = bearing,
+            strokeWidth = 6.2f,
+            cap = androidx.compose.ui.graphics.StrokeCap.Round
+        )
+        drawLine(
+            color = Color.White.copy(alpha = 0.48f),
+            start = androidx.compose.ui.geometry.Offset(
+                pivot.x,
+                pivot.y - 0.9f
+            ),
+            end = androidx.compose.ui.geometry.Offset(
+                bearing.x,
+                bearing.y - 0.9f
+            ),
+            strokeWidth = 1.35f,
+            cap = androidx.compose.ui.graphics.StrokeCap.Round
+        )
+
+        // Bearing block between the pivot and the long arm.
+        drawCircle(
+            color = Color(0xFF282828),
+            radius = size.minDimension * 0.028f,
+            center = bearing
+        )
+        drawCircle(
+            color = Color(0xFF9E9E9E),
+            radius = size.minDimension * 0.012f,
+            center = bearing
+        )
+
+        drawLine(
+            color = Color(0xFF151515),
+            start = bearing,
+            end = armEnd,
+            strokeWidth = 11f,
+            cap = androidx.compose.ui.graphics.StrokeCap.Round
+        )
+        drawLine(
+            color = Color(0xFFB6B6B6),
+            start = bearing,
+            end = armEnd,
+            strokeWidth = 7.2f,
+            cap = androidx.compose.ui.graphics.StrokeCap.Round
+        )
+        drawLine(
+            color = Color.White.copy(alpha = 0.40f),
+            start = androidx.compose.ui.geometry.Offset(
+                bearing.x,
+                bearing.y - 1.0f
+            ),
+            end = androidx.compose.ui.geometry.Offset(
+                armEnd.x,
+                armEnd.y - 1.0f
+            ),
+            strokeWidth = 1.3f,
+            cap = androidx.compose.ui.graphics.StrokeCap.Round
+        )
+
+        // Cartridge mount and cartridge.
+        drawLine(
+            color = Color(0xFF202020),
+            start = armEnd,
+            end = cartridgeBody,
+            strokeWidth = 8.5f,
+            cap = androidx.compose.ui.graphics.StrokeCap.Round
+        )
+        drawLine(
+            color = Color(0xFFD4D4D4),
+            start = armEnd,
+            end = cartridgeBody,
+            strokeWidth = 4.8f,
+            cap = androidx.compose.ui.graphics.StrokeCap.Round
+        )
+
+        drawCircle(
+            color = Color(0xFF101010),
+            radius = size.minDimension * 0.027f,
+            center = cartridgeBody
+        )
+
+        val cartridgeTip = androidx.compose.ui.geometry.Offset(
+            x = cartridgeBody.x - size.width * 0.008f,
+            y = cartridgeBody.y + size.height * 0.050f
+        )
+
+        drawLine(
+            color = Color(0xFF080808),
+            start = cartridgeBody,
+            end = cartridgeTip,
+            strokeWidth = 9.2f,
+            cap = androidx.compose.ui.graphics.StrokeCap.Round
+        )
+
+        // The stylus is intentionally very thin and sits just above the groove
+        // while paused, then drops onto it when playback starts.
+        drawLine(
+            color = Color(0xFF060606),
+            start = cartridgeTip,
+            end = stylus,
+            strokeWidth = 2.15f,
+            cap = androidx.compose.ui.graphics.StrokeCap.Round
+        )
+
+        drawCircle(
+            color = if (contact > 0.55f) {
+                Color(0xFFBDBDBD)
+            } else {
+                Color(0xFF6A6A6A)
+            },
+            radius = 2.4f,
+            center = stylus
+        )
+
+        // A tiny highlight communicates the needle/cartridge separation.
+        drawCircle(
+            color = Color.White.copy(alpha = 0.42f),
+            radius = 0.75f,
+            center = androidx.compose.ui.geometry.Offset(
+                cartridgeBody.x - 0.9f,
+                cartridgeBody.y - 0.9f
+            )
         )
     }
 }
