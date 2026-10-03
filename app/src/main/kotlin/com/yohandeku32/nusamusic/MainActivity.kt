@@ -1305,6 +1305,61 @@ private fun NusaMusicApp(
 }
 
 @Composable
+private fun ImmersiveArtwork(
+    song: Song?,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .background(Color.Transparent)
+    ) {
+        // This box is measured at the exact same size as the Vinyl slot.
+        // Only the artwork drawing is enlarged, so the rest of the player
+        // keeps its original vertical layout.
+        Box(
+            modifier = Modifier.matchParentSize()
+        ) {
+            ArtworkView(
+                song = song,
+                maxSizePx = 1024,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        val immersiveScale = 1.45f
+                        scaleX = immersiveScale
+                        scaleY = immersiveScale
+
+                        // Align the enlarged artwork to the bottom of the
+                        // original Vinyl slot. This lets it grow upward into
+                        // the header/status-bar area without pushing content.
+                        translationY = -(size.height * (immersiveScale - 1f))
+                    }
+            )
+
+            // Smoothly dissolve the artwork into the existing white player
+            // background at the exact point where the title begins below.
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.62f)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                MaterialTheme.colorScheme.background.copy(alpha = 0.08f),
+                                MaterialTheme.colorScheme.background.copy(alpha = 0.32f),
+                                MaterialTheme.colorScheme.background.copy(alpha = 0.72f),
+                                MaterialTheme.colorScheme.background
+                            )
+                        )
+                    )
+            )
+        }
+    }
+}
+
+@Composable
 private fun ArtistBiographySection(
     artistName: String?,
     biography: com.yohandeku32.nusamusic.data.ArtistBiography?,
