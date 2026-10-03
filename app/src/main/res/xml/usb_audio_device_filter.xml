@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Match USB Audio Class devices so Android can offer Nusa Music
+         as a handler when a DAC is connected. -->
+    <usb-device class="1" />
+</resources>
