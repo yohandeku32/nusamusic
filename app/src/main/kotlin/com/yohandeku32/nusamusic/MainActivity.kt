@@ -1012,7 +1012,7 @@ private fun NusaMusicApp(
                                             normalizedDistance * (Math.PI / 2.0).toFloat()
                                         val curveRadiusPx = with(density) { 118.dp.toPx() }
                                         val horizontalShift =
-                                            kotlin.math.cos(curveAngle) * curveRadiusPx
+                                            kotlin.math.cos(curveAngle.toDouble()).toFloat() * curveRadiusPx
                                         val distanceFromCenter =
                                             kotlin.math.abs(normalizedDistance)
                                         val centerProximity = 1f - distanceFromCenter
