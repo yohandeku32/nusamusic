@@ -499,13 +499,25 @@ private fun NusaMusicApp(
 
 
 
-    // Prepare the library position silently as soon as the current song
-    // changes. There is intentionally NO scroll animation here.
-    LaunchedEffect(currentSong?.id) {
-        if (currentSong != null) {
+    // Center the currently playing song only when entering the library.
+    // Selecting another song inside the library never changes the scroll position.
+    LaunchedEffect(pagerState.currentPage) {
+        if (pagerState.currentPage == 1 && currentSong != null) {
             val index = filtered.indexOfFirst { it.id == currentSong.id }
             if (index >= 0) {
-                libraryListState.scrollToItem(index = index)
+                kotlinx.coroutines.yield()
+
+                val itemHeightPx = with(density) { 108.dp.roundToPx() }
+                val viewportHeightPx =
+                    libraryListState.layoutInfo.viewportEndOffset -
+                        libraryListState.layoutInfo.viewportStartOffset
+                val centerOffset =
+                    -((viewportHeightPx - itemHeightPx) / 2).coerceAtLeast(0)
+
+                libraryListState.scrollToItem(
+                    index = index,
+                    scrollOffset = centerOffset
+                )
             }
         }
     }
@@ -1089,7 +1101,6 @@ private fun NusaMusicApp(
                                         LibrarySongRow(
                                             song = song,
                                             selected = currentSong?.id == song.id,
-                                            isPlaying = isPlaying,
                                             onPlay = onPlay
                                         )
                                     }
@@ -2223,7 +2234,6 @@ private fun ArtworkView(
 private fun LibrarySongRow(
     song: Song,
     selected: Boolean,
-    isPlaying: Boolean,
     onPlay: (Song) -> Unit
 ) {
     val rowHeight = if (selected) 108.dp else 82.dp
@@ -2238,26 +2248,15 @@ private fun LibrarySongRow(
             .clip(RoundedCornerShape(12.dp))
             .then(
                 if (selected) {
-                    Modifier.background(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                Color(0xFF25272A),
-                                Color(0xFF111214)
-                            )
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                } else {
                     Modifier
-                }
-            )
-            .then(
-                if (selected) {
-                    Modifier
-                        .border(
-                            width = 2.dp,
-                            color = Color.White.copy(alpha = 0.92f),
-                            shape = RoundedCornerShape(14.dp)
+                        .background(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    Color(0xFF25272A),
+                                    Color(0xFF111214)
+                                )
+                            ),
+                            shape = RoundedCornerShape(12.dp)
                         )
                         .graphicsLayer {
                             scaleX = 1.015f
@@ -2339,18 +2338,6 @@ private fun LibrarySongRow(
                             .fillMaxSize()
                             .clip(RoundedCornerShape(4.dp))
                     )
-
-                    if (selected) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .border(
-                                    width = 1.5.dp,
-                                    color = Color.White.copy(alpha = 0.50f),
-                                    shape = RoundedCornerShape(4.dp)
-                                )
-                        )
-                    }
                 }
             }
 
@@ -2385,80 +2372,8 @@ private fun LibrarySongRow(
                     color = Color(0xFF777777)
                 )
             }
-
-            if (selected) {
-                PlayingBars(isPlaying = isPlaying)
-            }
         }
     }
-}
-
-@Composable
-private fun PlayingBars(isPlaying: Boolean) {
-    val transition = androidx.compose.animation.core.rememberInfiniteTransition(
-        label = "libraryPlayingBars"
-    )
-
-    val bar1 by transition.animateFloat(
-        initialValue = 0.35f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(
-                durationMillis = 520,
-                easing = androidx.compose.animation.core.FastOutSlowInEasing
-            ),
-            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
-        ),
-        label = "libraryBar1"
-    )
-    val bar2 by transition.animateFloat(
-        initialValue = 0.75f,
-        targetValue = 0.30f,
-        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-            animation = tween(
-                durationMillis = 430,
-                easing = androidx.compose.animation.core.FastOutSlowInEasing
-            ),
-            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
-        ),
-        label = "libraryBar2"
-    )
-    val bar3 by transition.animateFloat(
-        initialValue = 0.50f,
-        targetValue = 0.95f,
-        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-            animation = tween(
-                durationMillis = 610,
-                easing = androidx.compose.animation.core.FastOutSlowInEasing
-            ),
-            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
-        ),
-        label = "libraryBar3"
-    )
-
-    Row(
-        modifier = Modifier
-            .width(28.dp)
-            .height(36.dp),
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
-        verticalAlignment = Alignment.Bottom
-    ) {
-        PlayingBar(value = if (isPlaying) bar1 else 0.45f)
-        PlayingBar(value = if (isPlaying) bar2 else 0.45f)
-        PlayingBar(value = if (isPlaying) bar3 else 0.45f)
-        PlayingBar(value = if (isPlaying) bar2 else 0.45f)
-    }
-}
-
-@Composable
-private fun PlayingBar(value: Float) {
-    Box(
-        modifier = Modifier
-            .width(3.5.dp)
-            .height((9 + value * 24).dp)
-            .clip(RoundedCornerShape(2.dp))
-            .background(Color.White.copy(alpha = 0.80f))
-    )
 }
 
 private fun formatTime(ms: Long): String {
