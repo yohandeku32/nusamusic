@@ -26,7 +26,6 @@ Modern Android music player focused on local/offline playback with a clean vinyl
 - Biography lookup tries Indonesian first and falls back to English
 - Biography results cached in memory to avoid repeated requests for the same artist
 - Light and dark theme support
-- Immersive player presentation with the Android status bar hidden while the navigation bar remains available
 
 ## Performance
 
