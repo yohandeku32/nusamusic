@@ -2263,6 +2263,9 @@ private fun VinylRecord(song: Song?, isPlaying: Boolean, modifier: Modifier = Mo
     Box(
         modifier = modifier.graphicsLayer {
             rotationZ = rotation.value
+            shadowElevation = 18.dp.toPx()
+            shape = CircleShape
+            clip = false
         },
         contentAlignment = Alignment.Center
     ) {
@@ -2683,14 +2686,141 @@ private fun VinylRecord(song: Song?, isPlaying: Boolean, modifier: Modifier = Mo
             )
         }
 
-        // Center label/artwork remains physically raised above the PVC face.
-        ArtworkView(
-            song = song,
-            maxSizePx = 512,
+        // Center label/artwork is treated as a real paper label adhered
+        // to the vinyl: slightly warm paper base, soft edge shading, grain,
+        // fibers and subtle crease marks.
+        val paperTexture = remember {
+            val random = Random(2047)
+            List(150) {
+                floatArrayOf(
+                    random.nextFloat(),
+                    random.nextFloat(),
+                    random.nextFloat(),
+                    random.nextFloat()
+                )
+            }
+        }
+
+        Box(
             modifier = Modifier
                 .size(142.dp)
                 .clip(CircleShape)
-        )
+                .graphicsLayer {
+                    shadowElevation = 3.dp.toPx()
+                    shape = CircleShape
+                    clip = true
+                }
+                .background(Color(0xFFE7E3D7))
+        ) {
+            ArtworkView(
+                song = song,
+                maxSizePx = 512,
+                modifier = Modifier.fillMaxSize()
+            )
+
+            Canvas(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                val labelRadius = size.minDimension / 2f
+                val center = androidx.compose.ui.geometry.Offset(
+                    size.width / 2f,
+                    size.height / 2f
+                )
+
+                // Soft paper edge shading: the printed label is not a
+                // perfectly flat digital circle.
+                drawCircle(
+                    color = Color.White.copy(alpha = 0.045f),
+                    radius = labelRadius * 0.992f,
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(
+                        width = 2.2f
+                    )
+                )
+                drawCircle(
+                    color = Color.Black.copy(alpha = 0.085f),
+                    radius = labelRadius * 0.976f,
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(
+                        width = 2.4f
+                    )
+                )
+
+                // Fine paper grain.
+                for (sample in paperTexture) {
+                    val x = sample[0] * size.width
+                    val y = sample[1] * size.height
+                    val dx = x - center.x
+                    val dy = y - center.y
+
+                    if (dx * dx + dy * dy <= labelRadius * labelRadius) {
+                        val bright = sample[3] > 0.53f
+                        drawCircle(
+                            color = if (bright) {
+                                Color.White.copy(alpha = 0.018f + sample[2] * 0.020f)
+                            } else {
+                                Color.Black.copy(alpha = 0.010f + sample[2] * 0.014f)
+                            },
+                            radius = 0.22f + sample[2] * 0.58f,
+                            center = androidx.compose.ui.geometry.Offset(x, y)
+                        )
+                    }
+                }
+
+                // Very subtle fibers/wrinkles following a natural paper surface.
+                for (i in 0 until 14) {
+                    val startX = size.width * (0.10f + (i % 5) * 0.17f)
+                    val startY = size.height * (0.18f + (i % 7) * 0.095f)
+                    val endX = startX + size.width * (0.12f + (i % 4) * 0.055f)
+                    val endY = startY + size.height * (0.025f + (i % 3) * 0.018f)
+
+                    drawLine(
+                        color = Color.Black.copy(alpha = 0.022f),
+                        start = androidx.compose.ui.geometry.Offset(startX, startY),
+                        end = androidx.compose.ui.geometry.Offset(endX, endY),
+                        strokeWidth = 0.55f
+                    )
+                }
+
+                // Printed paper catch-light, like a slightly glossy label
+                // pressed onto the record surface.
+                drawArc(
+                    color = Color.White.copy(alpha = 0.10f),
+                    startAngle = -78f,
+                    sweepAngle = 27f,
+                    useCenter = false,
+                    topLeft = androidx.compose.ui.geometry.Offset(
+                        size.width * 0.09f,
+                        size.height * 0.09f
+                    ),
+                    size = androidx.compose.ui.geometry.Size(
+                        size.width * 0.82f,
+                        size.height * 0.82f
+                    ),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(
+                        width = 2.6f
+                    )
+                )
+
+                // Gentle lower edge shade makes the paper look physically
+                // seated against the recessed label area.
+                drawArc(
+                    color = Color.Black.copy(alpha = 0.055f),
+                    startAngle = 58f,
+                    sweepAngle = 116f,
+                    useCenter = false,
+                    topLeft = androidx.compose.ui.geometry.Offset(
+                        size.width * 0.06f,
+                        size.height * 0.06f
+                    ),
+                    size = androidx.compose.ui.graphics.drawscope.Size(
+                        size.width * 0.88f,
+                        size.height * 0.88f
+                    ),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(
+                        width = 2.8f
+                    )
+                )
+            }
+        }
 
         // Metal spindle and hole.
         Box(
