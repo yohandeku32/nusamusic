@@ -29,7 +29,6 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.animation.Crossfade
@@ -39,6 +38,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
@@ -97,9 +98,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.zIndex
-import androidx.compose.ui.platform.LocalDensity
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -471,7 +469,21 @@ private fun NusaMusicApp(
     var titleFontSize by remember {
         mutableStateOf(uiPrefs.getFloat("title_font_size", 34f))
     }
-    val filtered = songs
+    var librarySearchVisible by remember { mutableStateOf(false) }
+    var librarySearchQuery by remember { mutableStateOf("") }
+
+    val filtered = remember(songs, librarySearchQuery) {
+        val query = librarySearchQuery.trim()
+        if (query.isBlank()) {
+            songs
+        } else {
+            songs.filter {
+                it.title.contains(query, ignoreCase = true) ||
+                    it.artist.contains(query, ignoreCase = true) ||
+                    it.album.contains(query, ignoreCase = true)
+            }
+        }
+    }
 
     val pagerState = androidx.compose.foundation.pager.rememberPagerState(
         initialPage = 0,
@@ -483,24 +495,15 @@ private fun NusaMusicApp(
         androidx.compose.foundation.lazy.rememberLazyListState()
     val scope = rememberCoroutineScope()
 
-    val configuration = LocalConfiguration.current
-    val density = LocalDensity.current
-    val libraryCenterOffset = remember(configuration.screenHeightDp, density) {
-        with(density) {
-            -((configuration.screenHeightDp.dp - 74.dp) / 2f).roundToPx()
-        }
-    }
+
 
     // Prepare the library position silently as soon as the current song
     // changes. There is intentionally NO scroll animation here.
-    LaunchedEffect(currentSong?.id, filtered.size) {
+    LaunchedEffect(currentSong?.id) {
         if (currentSong != null) {
             val index = filtered.indexOfFirst { it.id == currentSong.id }
             if (index >= 0) {
-                libraryListState.scrollToItem(
-                    index = index,
-                    scrollOffset = libraryCenterOffset
-                )
+                libraryListState.scrollToItem(index = index)
             }
         }
     }
@@ -979,110 +982,105 @@ private fun NusaMusicApp(
                                 .fillMaxSize()
                                 .background(Color.Black)
                         ) {
-                            RecordCrateBackdrop(
+                            Row(
                                 modifier = Modifier
-                                    .align(Alignment.Center)
-                                    .fillMaxWidth(0.94f)
-                                    .fillMaxHeight(0.84f)
-                            )
+                                    .fillMaxWidth()
+                                    .height(76.dp)
+                                    .padding(horizontal = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                IconButton(
+                                    onClick = {
+                                        scope.launch {
+                                            pagerState.animateScrollToPage(0)
+                                        }
+                                    }
+                                ) {
+                                    Icon(
+                                        Icons.Default.ArrowBack,
+                                        contentDescription = "Back to player",
+                                        tint = Color.White
+                                    )
+                                }
 
-                            Text(
-                                text = "DAFTAR LAGU",
-                                modifier = Modifier
-                                    .align(Alignment.TopCenter)
-                                    .padding(top = 28.dp),
-                                fontSize = 21.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 1.8.sp,
-                                color = Color.White
-                            )
+                                if (librarySearchVisible) {
+                                    androidx.compose.material3.OutlinedTextField(
+                                        value = librarySearchQuery,
+                                        onValueChange = { librarySearchQuery = it },
+                                        singleLine = true,
+                                        placeholder = {
+                                            Text(
+                                                "Cari lagu, artis, atau album",
+                                                color = Color(0xFF7F7F7F)
+                                            )
+                                        },
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(24.dp),
+                                        colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                                            focusedContainerColor = Color(0xFF151515),
+                                            unfocusedContainerColor = Color(0xFF151515),
+                                            focusedBorderColor = Color.White.copy(alpha = 0.65f),
+                                            unfocusedBorderColor = Color.White.copy(alpha = 0.16f),
+                                            focusedTextColor = Color.White,
+                                            unfocusedTextColor = Color.White,
+                                            cursorColor = Color.White,
+                                            focusedPlaceholderColor = Color(0xFF7F7F7F),
+                                            unfocusedPlaceholderColor = Color(0xFF7F7F7F)
+                                        )
+                                    )
+                                } else {
+                                    Text(
+                                        text = "Daftar Lagu",
+                                        modifier = Modifier.weight(1f),
+                                        textAlign = TextAlign.Center,
+                                        fontSize = 21.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                }
+
+                                IconButton(
+                                    onClick = {
+                                        librarySearchVisible = !librarySearchVisible
+                                        if (!librarySearchVisible) {
+                                            librarySearchQuery = ""
+                                        }
+                                    }
+                                ) {
+                                    Icon(
+                                        Icons.Default.Search,
+                                        contentDescription = if (librarySearchVisible) {
+                                            "Tutup pencarian"
+                                        } else {
+                                            "Cari lagu"
+                                        },
+                                        tint = Color.White
+                                    )
+                                }
+                            }
 
                             LazyColumn(
                                 state = libraryListState,
-                                modifier = Modifier.fillMaxSize(),
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(top = 76.dp),
                                 contentPadding = PaddingValues(
-                                    top = 112.dp,
-                                    bottom = 160.dp
+                                    top = 4.dp,
+                                    bottom = 140.dp
                                 )
                             ) {
                                 if (permissionGranted && filtered.isNotEmpty()) {
-                                    itemsIndexed(
+                                    items(
                                         items = filtered,
-                                        key = { _, song -> song.id },
-                                        contentType = { _, _ -> "song" }
-                                    ) { index, song ->
-                                        val itemInfo =
-                                            libraryListState.layoutInfo.visibleItemsInfo
-                                                .firstOrNull { it.index == index }
-                                        val viewportCenter =
-                                            (libraryListState.layoutInfo.viewportStartOffset +
-                                                libraryListState.layoutInfo.viewportEndOffset) / 2f
-                                        val itemCenter =
-                                            itemInfo?.let {
-                                                it.offset + it.size / 2f
-                                            } ?: viewportCenter
-                                        val distancePx = itemCenter - viewportCenter
-                                        val maxStackDistancePx = with(density) { 300.dp.toPx() }
-                                        val normalizedDistance =
-                                            (distancePx / maxStackDistancePx).coerceIn(-1f, 1f)
-
-                                        // The closest sleeve becomes the front record in the
-                                        // crate. Neighboring sleeves remain visible as a stack.
-                                        val distanceFromCenter =
-                                            kotlin.math.abs(normalizedDistance)
-                                        val centerProximity =
-                                            1f - distanceFromCenter
-                                        val selected = currentSong?.id == song.id
-
-                                        val horizontalShift =
-                                            -normalizedDistance * 8f
-                                        val rotationY =
-                                            -normalizedDistance * 10f
-                                        val rotationZ =
-                                            -normalizedDistance * 2.5f
-                                        val scale =
-                                            (0.84f + centerProximity * 0.13f +
-                                                if (selected) 0.04f else 0f)
-                                                .coerceIn(0.82f, 1.02f)
-                                        val alpha =
-                                            (0.60f + centerProximity * 0.40f)
-                                                .coerceIn(0.55f, 1f)
-                                        val z =
-                                            centerProximity * 20f +
-                                                if (selected) 10f else 0f
-
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .height(74.dp)
-                                        ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .height(230.dp)
-                                                    .graphicsLayer {
-                                                        translationX = with(density) {
-                                                            horizontalShift.dp.toPx()
-                                                        }
-                                                        this.rotationY = rotationY
-                                                        this.rotationZ = rotationZ
-                                                        scaleX = scale
-                                                        scaleY = scale
-                                                        this.alpha = alpha
-                                                        cameraDistance = 32f * density.density
-                                                    }
-                                                    .zIndex(z)
-                                            ) {
-                                                SongRow(
-                                                    song = song,
-                                                    selected = selected,
-                                                    onPlay = onPlay,
-                                                    darkSurface = true,
-                                                    sleeveStack = true,
-                                                    depth = z
-                                                )
-                                            }
-                                        }
+                                        key = { song -> song.id },
+                                        contentType = { "library-song" }
+                                    ) { song ->
+                                        LibrarySongRow(
+                                            song = song,
+                                            selected = currentSong?.id == song.id,
+                                            isPlaying = isPlaying,
+                                            onPlay = onPlay
+                                        )
                                     }
                                 } else if (!permissionGranted) {
                                     item {
@@ -1115,7 +1113,11 @@ private fun NusaMusicApp(
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Text(
-                                                "No local music found",
+                                                if (librarySearchQuery.isBlank()) {
+                                                    "No local music found"
+                                                } else {
+                                                    "Tidak ada lagu yang cocok"
+                                                },
                                                 color = Color(0xFF9D9D9D),
                                                 fontSize = 14.sp
                                             )
@@ -1126,12 +1128,12 @@ private fun NusaMusicApp(
 
                             val showFloatingControls by remember {
                                 derivedStateOf {
-                                    libraryListState.firstVisibleItemIndex >= 3
+                                    libraryListState.firstVisibleItemIndex >= 4
                                 }
                             }
                             val showBackToPlayer by remember {
                                 derivedStateOf {
-                                    libraryListState.firstVisibleItemIndex >= 5
+                                    libraryListState.firstVisibleItemIndex >= 8
                                 }
                             }
 
@@ -1180,8 +1182,25 @@ private fun NusaMusicApp(
                                         animationSpec = tween(180),
                                         label = "shuffleIcon"
                                     )
+
+                                    Box(
+                                        modifier = Modifier
+                                            .size(46.dp)
+                                            .clip(CircleShape)
+                                            .background(shuffleActiveColor)
+                                            .clickable(onClick = onToggleShuffle),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Shuffle,
+                                            contentDescription = "Shuffle",
+                                            tint = shuffleIconColor
+                                        )
+                                    }
+
+                                    val repeatActive = repeatMode != Player.REPEAT_MODE_OFF
                                     val repeatActiveColor by animateColorAsState(
-                                        targetValue = if (repeatMode != Player.REPEAT_MODE_OFF) {
+                                        targetValue = if (repeatActive) {
                                             MaterialTheme.colorScheme.primary
                                         } else {
                                             Color.Transparent
@@ -1190,7 +1209,7 @@ private fun NusaMusicApp(
                                         label = "repeatBackground"
                                     )
                                     val repeatIconColor by animateColorAsState(
-                                        targetValue = if (repeatMode != Player.REPEAT_MODE_OFF) {
+                                        targetValue = if (repeatActive) {
                                             MaterialTheme.colorScheme.onPrimary
                                         } else {
                                             MaterialTheme.colorScheme.onSurfaceVariant
@@ -1199,109 +1218,72 @@ private fun NusaMusicApp(
                                         label = "repeatIcon"
                                     )
 
-                                    val shuffleScale by animateFloatAsState(
-                                        targetValue = if (shuffleEnabled) 1.08f else 1f,
-                                        animationSpec = tween(180),
-                                        label = "shuffleScale"
-                                    )
-                                    val repeatScale by animateFloatAsState(
-                                        targetValue = if (repeatMode != Player.REPEAT_MODE_OFF) 1.08f else 1f,
-                                        animationSpec = tween(180),
-                                        label = "repeatScale"
-                                    )
-
-                                    androidx.compose.material3.Surface(
-                                        onClick = onToggleShuffle,
-                                        enabled = showFloatingControls,
-                                        shape = CircleShape,
-                                        color = shuffleActiveColor,
-                                        tonalElevation = 0.dp,
-                                        modifier = Modifier.size(42.dp)
+                                    Box(
+                                        modifier = Modifier
+                                            .size(46.dp)
+                                            .clip(CircleShape)
+                                            .background(repeatActiveColor)
+                                            .clickable(onClick = onToggleRepeat),
+                                        contentAlignment = Alignment.Center
                                     ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Icon(
-                                                Icons.Default.Shuffle,
-                                                contentDescription = if (shuffleEnabled) "Shuffle on" else "Shuffle off",
-                                                tint = shuffleIconColor,
-                                                modifier = Modifier
-                                                    .size(20.dp)
-                                                    .graphicsLayer {
-                                                        scaleX = shuffleScale
-                                                        scaleY = shuffleScale
-                                                    }
-                                            )
-                                        }
-                                    }
-
-                                    Spacer(Modifier.width(2.dp))
-
-                                    androidx.compose.material3.Surface(
-                                        onClick = onToggleRepeat,
-                                        enabled = showFloatingControls,
-                                        shape = CircleShape,
-                                        color = repeatActiveColor,
-                                        tonalElevation = 0.dp,
-                                        modifier = Modifier.size(42.dp)
-                                    ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Icon(
-                                                if (repeatMode == Player.REPEAT_MODE_ONE) {
-                                                    Icons.Default.RepeatOne
-                                                } else {
-                                                    Icons.Default.Repeat
-                                                },
-                                                contentDescription = when (repeatMode) {
-                                                    Player.REPEAT_MODE_ONE -> "Repeat one"
-                                                    Player.REPEAT_MODE_ALL -> "Repeat all"
-                                                    else -> "Repeat off"
-                                                },
-                                                tint = repeatIconColor,
-                                                modifier = Modifier
-                                                    .size(20.dp)
-                                                    .graphicsLayer {
-                                                        scaleX = repeatScale
-                                                        scaleY = repeatScale
-                                                    }
-                                            )
-                                        }
+                                        Icon(
+                                            if (repeatMode == Player.REPEAT_MODE_ONE) {
+                                                Icons.Default.RepeatOne
+                                            } else {
+                                                Icons.Default.Repeat
+                                            },
+                                            contentDescription = "Repeat",
+                                            tint = repeatIconColor
+                                        )
                                     }
                                 }
                             }
 
-                            val backButtonAlpha by animateFloatAsState(
+                            val backAlpha by animateFloatAsState(
                                 targetValue = if (showBackToPlayer) 1f else 0f,
-                                animationSpec = tween(300),
-                                label = "libraryBackAlpha"
+                                animationSpec = tween(280),
+                                label = "backPlayerAlpha"
                             )
-                            val backButtonOffset by animateFloatAsState(
+                            val backOffset by animateFloatAsState(
                                 targetValue = if (showBackToPlayer) 0f else 26f,
-                                animationSpec = tween(340),
-                                label = "libraryBackOffset"
+                                animationSpec = tween(320),
+                                label = "backPlayerOffset"
                             )
 
-                            Box(
+                            Surface(
+                                shape = RoundedCornerShape(50),
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                tonalElevation = 3.dp,
                                 modifier = Modifier
-                                    .align(Alignment.BottomEnd)
-                                    .padding(end = 16.dp, bottom = 18.dp)
+                                    .align(Alignment.TopEnd)
+                                    .padding(top = 82.dp, end = 14.dp)
                                     .graphicsLayer {
-                                        alpha = backButtonAlpha
-                                        translationY = backButtonOffset
+                                        alpha = backAlpha
+                                        translationY = backOffset
                                     }
-                            ) {
-                                FilledIconButton(
-                                    enabled = showBackToPlayer,
-                                    onClick = {
+                                    .clickable {
                                         scope.launch {
                                             pagerState.animateScrollToPage(0)
                                         }
-                                    },
-                                    modifier = Modifier.size(46.dp),
-                                    shape = CircleShape
+                                    }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(
+                                        horizontal = 12.dp,
+                                        vertical = 8.dp
+                                    ),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(
-                                        Icons.Default.KeyboardArrowUp,
+                                        Icons.Default.KeyboardArrowDown,
                                         contentDescription = "Back to player",
-                                        modifier = Modifier.size(25.dp)
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(
+                                        "Player",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             }
@@ -2227,355 +2209,220 @@ private fun ArtworkView(
 }
 
 @Composable
-private fun SongRow(
+private fun LibrarySongRow(
     song: Song,
     selected: Boolean,
-    onPlay: (Song) -> Unit,
-    darkSurface: Boolean = false,
-    titleSize: Float = 14f,
-    coverScale: Float = 1f,
-    sleeveStack: Boolean = false,
-    depth: Float = 0f
+    isPlaying: Boolean,
+    onPlay: (Song) -> Unit
 ) {
-    if (sleeveStack) {
-        CrateSongSleeve(
-            song = song,
-            selected = selected,
-            onPlay = onPlay,
-            depth = depth
-        )
-        return
-    }
-
-    val selectedBackground =
-        if (darkSurface) Color(0xFF1B1B1B) else MaterialTheme.colorScheme.surfaceVariant
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 2.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(
-                if (selected) selectedBackground.copy(alpha = 0.96f)
-                else Color(0xFF0D0D0D).copy(alpha = 0.72f)
-            )
-            .clickable { onPlay(song) }
-            .padding(horizontal = 8.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .width(78.dp * coverScale)
-                .height(74.dp * coverScale)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(68.dp * coverScale)
-                    .offset(
-                        x = 6.dp + (depth * 0.22f).dp,
-                        y = 4.dp
-                    )
-                    .clip(RoundedCornerShape(5.dp))
-                    .background(Color(0xFF242424))
-            )
-            Box(
-                modifier = Modifier
-                    .size(70.dp * coverScale)
-                    .offset(x = 3.dp, y = 2.dp)
-                    .clip(RoundedCornerShape(5.dp))
-                    .background(Color(0xFF0B0B0B))
-            )
-            Box(
-                modifier = Modifier
-                    .size(70.dp * coverScale)
-                    .clip(RoundedCornerShape(5.dp))
-                    .background(Color(0xFF050505))
-                    .padding(3.dp)
-            ) {
-                ArtworkView(
-                    song = song,
-                    maxSizePx = 192,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clip(RoundedCornerShape(2.dp))
-                )
-            }
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(1.dp)
-                    .offset(y = 3.dp)
-                    .background(Color.White.copy(alpha = 0.18f))
-            )
-        }
-
-        Spacer(Modifier.width(14.dp))
-
-        Column(Modifier.weight(1f)) {
-            Text(
-                song.title,
-                maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                fontSize = titleSize.sp,
-                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                color = if (darkSurface) Color.White else MaterialTheme.colorScheme.onBackground
-            )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                "${song.artist}  •  ${song.album}",
-                maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                fontSize = 12.sp,
-                color = if (darkSurface) Color(0xFF9D9D9D) else MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-
-        IconButton(onClick = { onPlay(song) }) {
-            Icon(
-                if (selected) Icons.Default.Pause else Icons.Default.PlayArrow,
-                contentDescription = if (selected) "Pause" else "Play",
-                tint = if (darkSurface) Color.White else MaterialTheme.colorScheme.onBackground
-            )
-        }
-    }
-}
-
-@Composable
-private fun RecordCrateBackdrop(modifier: Modifier = Modifier) {
-    Box(modifier = modifier) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .clip(RoundedCornerShape(24.dp))
-                .background(
-                    Brush.linearGradient(
-                        colors = listOf(
-                            Color(0xFF3A2418),
-                            Color(0xFF6A452B),
-                            Color(0xFF2A1A12)
-                        )
-                    )
-                )
-                .border(
-                    width = 1.5.dp,
-                    color = Color(0xFF8A603A).copy(alpha = 0.75f),
-                    shape = RoundedCornerShape(24.dp)
-                )
-        )
-
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp)
-                .clip(RoundedCornerShape(18.dp))
-                .background(
-                    Brush.verticalGradient(
-                        listOf(
-                            Color(0xFF17120F),
-                            Color(0xFF0A0908),
-                            Color(0xFF1B120D)
-                        )
-                    )
-                )
-        )
-
-        Box(
-            modifier = Modifier
-                .width(16.dp)
-                .fillMaxHeight()
-                .align(Alignment.CenterStart)
-                .clip(
-                    RoundedCornerShape(
-                        topStart = 20.dp,
-                        bottomStart = 20.dp
-                    )
-                )
-                .background(
-                    Brush.horizontalGradient(
-                        listOf(
-                            Color(0xFF7A5131),
-                            Color(0xFF3A2418),
-                            Color(0xFF1E140E)
-                        )
-                    )
-                )
-        )
-        Box(
-            modifier = Modifier
-                .width(16.dp)
-                .fillMaxHeight()
-                .align(Alignment.CenterEnd)
-                .clip(
-                    RoundedCornerShape(
-                        topEnd = 20.dp,
-                        bottomEnd = 20.dp
-                    )
-                )
-                .background(
-                    Brush.horizontalGradient(
-                        listOf(
-                            Color(0xFF1E140E),
-                            Color(0xFF3A2418),
-                            Color(0xFF7A5131)
-                        )
-                    )
-                )
-        )
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(50.dp)
-                .align(Alignment.BottomCenter)
-                .clip(
-                    RoundedCornerShape(
-                        bottomStart = 22.dp,
-                        bottomEnd = 22.dp
-                    )
-                )
-                .background(
-                    Brush.verticalGradient(
-                        listOf(
-                            Color(0xFF70482D),
-                            Color(0xFF422817),
-                            Color(0xFF24170F)
-                        )
-                    )
-                )
-        )
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth(0.88f)
-                .height(3.dp)
-                .align(Alignment.TopCenter)
-                .offset(y = 18.dp)
-                .clip(RoundedCornerShape(50))
-                .background(Color(0xFFC08A52).copy(alpha = 0.45f))
-        )
-    }
-}
-
-@Composable
-private fun CrateSongSleeve(
-    song: Song,
-    selected: Boolean,
-    onPlay: (Song) -> Unit,
-    depth: Float
-) {
-    val rearOffset = (depth * 0.12f).coerceIn(0f, 3f).dp
+    val rowHeight = if (selected) 102.dp else 86.dp
+    val artworkSize = if (selected) 84.dp else 68.dp
+    val vinylSize = if (selected) 78.dp else 64.dp
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(230.dp),
-        contentAlignment = Alignment.TopCenter
-    ) {
-        Box(
-            modifier = Modifier
-                .size(178.dp)
-                .offset(x = 92.dp, y = 28.dp)
-                .clip(CircleShape)
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(
-                            Color(0xFF3A3A3A),
-                            Color(0xFF161616),
-                            Color(0xFF030303)
-                        )
+            .height(rowHeight)
+            .padding(horizontal = 10.dp, vertical = 2.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(
+                if (selected) Color(0xFF121212) else Color.Transparent
+            )
+            .then(
+                if (selected) {
+                    Modifier.border(
+                        width = 1.5.dp,
+                        color = Color.White.copy(alpha = 0.86f),
+                        shape = RoundedCornerShape(12.dp)
                     )
-                )
+                } else {
+                    Modifier
+                }
+            )
+            .clickable { onPlay(song) }
+            .padding(horizontal = 8.dp, vertical = 6.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            for (ring in 1..7) {
+            Box(
+                modifier = Modifier
+                    .width(if (selected) 92.dp else 78.dp)
+                    .fillMaxHeight()
+            ) {
                 Box(
                     modifier = Modifier
-                        .size((92 + ring * 10).dp)
-                        .align(Alignment.Center)
+                        .size(vinylSize)
+                        .align(Alignment.CenterEnd)
+                        .offset(x = if (selected) 10.dp else 7.dp)
                         .clip(CircleShape)
-                        .border(
-                            width = 0.8.dp,
-                            color = Color.White.copy(alpha = 0.045f)
-                        )
-                )
-            }
-            Box(
-                modifier = Modifier
-                    .size(22.dp)
-                    .align(Alignment.Center)
-                    .clip(CircleShape)
-                    .background(Color(0xFF090909))
-            )
-        }
-
-        Box(
-            modifier = Modifier
-                .size(205.dp)
-                .offset(x = rearOffset, y = 8.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(Color(0xFF111111))
-        )
-        Box(
-            modifier = Modifier
-                .size(211.dp)
-                .offset(x = (-7).dp, y = 4.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(Color(0xFF2A211A))
-        )
-
-        Box(
-            modifier = Modifier
-                .size(216.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .border(
-                    width = if (selected) 2.dp else 1.dp,
-                    color = if (selected) {
-                        Color.White.copy(alpha = 0.88f)
-                    } else {
-                        Color(0xFF6A4C35).copy(alpha = 0.70f)
-                    },
-                    shape = RoundedCornerShape(8.dp)
-                )
-                .background(
-                    Brush.linearGradient(
-                        colors = listOf(
-                            Color(0xFF080808),
-                            Color(0xFF141414),
-                            Color(0xFF050505)
-                        )
-                    )
-                )
-                .padding(5.dp)
-                .clickable { onPlay(song) }
-        ) {
-            ArtworkView(
-                song = song,
-                maxSizePx = 512,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(RoundedCornerShape(4.dp))
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(2.dp)
-                    .align(Alignment.TopCenter)
-                    .background(Color.White.copy(alpha = 0.18f))
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.linearGradient(
-                            colors = listOf(
-                                Color.White.copy(alpha = 0.03f),
-                                Color.Transparent,
-                                Color.Black.copy(alpha = 0.16f)
+                        .background(
+                            Brush.radialGradient(
+                                colors = listOf(
+                                    Color(0xFF434343),
+                                    Color(0xFF191919),
+                                    Color(0xFF050505)
+                                )
                             )
                         )
+                ) {
+                    for (ring in 1..6) {
+                        Box(
+                            modifier = Modifier
+                                .size((46 + ring * 4).dp)
+                                .align(Alignment.Center)
+                                .clip(CircleShape)
+                                .border(
+                                    width = 0.65.dp,
+                                    color = Color.White.copy(alpha = 0.045f)
+                                )
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .align(Alignment.Center)
+                            .clip(CircleShape)
+                            .background(Color(0xFF090909))
                     )
-            )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .size(artworkSize)
+                        .align(Alignment.CenterStart)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color(0xFF090909))
+                        .padding(2.dp)
+                ) {
+                    ArtworkView(
+                        song = song,
+                        maxSizePx = 256,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(4.dp))
+                    )
+
+                    if (selected) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .border(
+                                    width = 1.5.dp,
+                                    color = Color.White.copy(alpha = 0.50f),
+                                    shape = RoundedCornerShape(4.dp)
+                                )
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.width(10.dp))
+
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 4.dp)
+            ) {
+                Text(
+                    text = song.title,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    fontSize = if (selected) 16.sp else 15.sp,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                    color = Color.White
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = song.artist,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    fontSize = 12.sp,
+                    color = Color(0xFFB0B0B0)
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = formatTime(song.durationMs),
+                    maxLines = 1,
+                    fontSize = 11.sp,
+                    color = Color(0xFF777777)
+                )
+            }
+
+            if (selected) {
+                PlayingBars(isPlaying = isPlaying)
+            }
         }
     }
+}
+
+@Composable
+private fun PlayingBars(isPlaying: Boolean) {
+    val transition = androidx.compose.animation.core.rememberInfiniteTransition(
+        label = "libraryPlayingBars"
+    )
+
+    val bar1 by transition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 1f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            animation = tween(
+                durationMillis = 520,
+                easing = androidx.compose.animation.core.FastOutSlowInEasing
+            ),
+            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+        ),
+        label = "libraryBar1"
+    )
+    val bar2 by transition.animateFloat(
+        initialValue = 0.75f,
+        targetValue = 0.30f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            animation = tween(
+                durationMillis = 430,
+                easing = androidx.compose.animation.core.FastOutSlowInEasing
+            ),
+            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+        ),
+        label = "libraryBar2"
+    )
+    val bar3 by transition.animateFloat(
+        initialValue = 0.50f,
+        targetValue = 0.95f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            animation = tween(
+                durationMillis = 610,
+                easing = androidx.compose.animation.core.FastOutSlowInEasing
+            ),
+            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+        ),
+        label = "libraryBar3"
+    )
+
+    Row(
+        modifier = Modifier
+            .width(24.dp)
+            .height(34.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        verticalAlignment = Alignment.Bottom
+    ) {
+        PlayingBar(value = if (isPlaying) bar1 else 0.45f)
+        PlayingBar(value = if (isPlaying) bar2 else 0.45f)
+        PlayingBar(value = if (isPlaying) bar3 else 0.45f)
+        PlayingBar(value = if (isPlaying) bar2 else 0.45f)
+    }
+}
+
+@Composable
+private fun PlayingBar(value: Float) {
+    Box(
+        modifier = Modifier
+            .width(3.dp)
+            .height((8 + value * 23).dp)
+            .clip(RoundedCornerShape(2.dp))
+            .background(Color.White.copy(alpha = 0.80f))
+    )
 }
 
 private fun formatTime(ms: Long): String {
