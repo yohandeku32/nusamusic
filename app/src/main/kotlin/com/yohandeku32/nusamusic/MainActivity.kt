@@ -1005,18 +1005,38 @@ private fun NusaMusicApp(
                                         val maxArcDistancePx = with(density) { 260.dp.toPx() }
                                         val normalizedDistance =
                                             (distancePx / maxArcDistancePx).coerceIn(-1f, 1f)
-                                        val arcAngle = normalizedDistance * 34f
-                                        val curveRadiusPx = with(density) { 150.dp.toPx() }
+                                        // Right-facing circular arc: the center item
+                                        // sits furthest to the right, while items
+                                        // farther away recede toward the left.
+                                        val curveAngle =
+                                            normalizedDistance * (Math.PI / 2.0).toFloat()
+                                        val curveRadiusPx = with(density) { 118.dp.toPx() }
                                         val horizontalShift =
-                                            kotlin.math.sin(
-                                                Math.toRadians(arcAngle.toDouble())
-                                            ).toFloat() * curveRadiusPx
+                                            kotlin.math.cos(curveAngle) * curveRadiusPx
+                                        val distanceFromCenter =
+                                            kotlin.math.abs(normalizedDistance)
+                                        val centerProximity = 1f - distanceFromCenter
+                                        val selected = currentSong?.id == song.id
+
                                         val scale =
-                                            (1f - kotlin.math.abs(normalizedDistance) * 0.12f)
-                                                .coerceIn(0.86f, 1f)
+                                            (0.86f + centerProximity * 0.16f +
+                                                if (selected) 0.05f else 0f)
+                                                .coerceIn(0.82f, 1.07f)
                                         val alpha =
-                                            (1f - kotlin.math.abs(normalizedDistance) * 0.28f)
-                                                .coerceIn(0.64f, 1f)
+                                            (0.62f + centerProximity * 0.38f)
+                                                .coerceIn(0.58f, 1f)
+                                        val rotation = -normalizedDistance * 12f
+
+                                        // Current track is visually dominant; distant
+                                        // rows progressively become smaller.
+                                        val titleSize =
+                                            (13.5f + centerProximity * 3.0f +
+                                                if (selected) 2.5f else 0f)
+                                                .coerceIn(12.5f, 19f)
+                                        val coverScale =
+                                            (0.88f + centerProximity * 0.14f +
+                                                if (selected) 0.04f else 0f)
+                                                .coerceIn(0.84f, 1.06f)
 
                                         Box(
                                             modifier = Modifier
@@ -1024,7 +1044,7 @@ private fun NusaMusicApp(
                                                 .padding(horizontal = 22.dp)
                                                 .graphicsLayer {
                                                     translationX = horizontalShift
-                                                    rotationZ = arcAngle * 0.48f
+                                                    rotationZ = rotation
                                                     scaleX = scale
                                                     scaleY = scale
                                                     this.alpha = alpha
@@ -1032,9 +1052,11 @@ private fun NusaMusicApp(
                                         ) {
                                             SongRow(
                                                 song = song,
-                                                selected = currentSong?.id == song.id,
+                                                selected = selected,
                                                 onPlay = onPlay,
-                                                darkSurface = true
+                                                darkSurface = true,
+                                                titleSize = titleSize,
+                                                coverScale = coverScale
                                             )
                                         }
                                     }
@@ -2185,7 +2207,9 @@ private fun SongRow(
     song: Song,
     selected: Boolean,
     onPlay: (Song) -> Unit,
-    darkSurface: Boolean = false
+    darkSurface: Boolean = false,
+    titleSize: Float = 14f,
+    coverScale: Float = 1f
 ) {
     val selectedBackground =
         if (darkSurface) Color(0xFF191919) else MaterialTheme.colorScheme.surfaceVariant
@@ -2200,13 +2224,41 @@ private fun SongRow(
             .padding(horizontal = 8.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        ArtworkView(
-            song = song,
-            maxSizePx = 128,
+        // Album sleeve / vinyl-jacket treatment: a dark jacket edge,
+        // inset artwork, and a subtle offset backing make each cover read
+        // like a physical LP sleeve rather than a generic thumbnail.
+        Box(
             modifier = Modifier
-                .size(56.dp)
-                .clip(RoundedCornerShape(12.dp))
-        )
+                .size(62.dp * coverScale)
+                .padding(2.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .offset(x = 2.dp, y = 2.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color(0xFF050505))
+            )
+
+            ArtworkView(
+                song = song,
+                maxSizePx = 160,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(8.dp))
+            )
+
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(
+                        Color.Black.copy(
+                            alpha = if (selected) 0.04f else 0.10f
+                        )
+                    )
+            )
+        }
 
         Spacer(Modifier.width(14.dp))
 
@@ -2215,6 +2267,7 @@ private fun SongRow(
                 song.title,
                 maxLines = 1,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                fontSize = titleSize.sp,
                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                 color = if (darkSurface) Color.White else MaterialTheme.colorScheme.onBackground
             )
