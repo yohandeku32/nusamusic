@@ -1980,20 +1980,20 @@ private fun VinylRecord(song: Song?, isPlaying: Boolean, modifier: Modifier = Mo
         var lastFrameNanos = 0L
 
         while (isActive) {
-            androidx.compose.runtime.withFrameNanos { frameNanos ->
-                if (lastFrameNanos != 0L) {
-                    val deltaSeconds =
-                        ((frameNanos - lastFrameNanos).coerceAtMost(100_000_000L)) /
-                            1_000_000_000f
+            val frameNanos = androidx.compose.runtime.withFrameNanos { it }
 
-                    val nextRotation =
-                        (rotation.value + rotationSpeed.value * deltaSeconds) % 360f
+            if (lastFrameNanos != 0L) {
+                val deltaSeconds =
+                    ((frameNanos - lastFrameNanos).coerceAtMost(100_000_000L)) /
+                        1_000_000_000f
 
-                    rotation.snapTo(nextRotation)
-                }
+                val nextRotation =
+                    (rotation.value + rotationSpeed.value * deltaSeconds) % 360f
 
-                lastFrameNanos = frameNanos
+                rotation.snapTo(nextRotation)
             }
+
+            lastFrameNanos = frameNanos
         }
     }
 
