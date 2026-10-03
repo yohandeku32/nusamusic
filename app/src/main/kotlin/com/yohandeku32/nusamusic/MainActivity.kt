@@ -2811,7 +2811,7 @@ private fun VinylRecord(song: Song?, isPlaying: Boolean, modifier: Modifier = Mo
                         size.width * 0.06f,
                         size.height * 0.06f
                     ),
-                    size = androidx.compose.ui.graphics.drawscope.Size(
+                    size = androidx.compose.ui.geometry.Size(
                         size.width * 0.88f,
                         size.height * 0.88f
                     ),
