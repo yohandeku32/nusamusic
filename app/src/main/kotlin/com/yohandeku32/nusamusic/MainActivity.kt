@@ -497,6 +497,7 @@ private fun NusaMusicApp(
     val libraryListState =
         androidx.compose.foundation.lazy.rememberLazyListState()
     val scope = rememberCoroutineScope()
+    val density = androidx.compose.ui.platform.LocalDensity.current
 
 
 
