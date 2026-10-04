@@ -1384,12 +1384,10 @@ private fun NusaMusicApp(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .fillParentMaxHeight()
-                                        .clip(
-                                            RoundedCornerShape(
-                                                bottomStart = 34.dp,
-                                                bottomEnd = 34.dp
-                                            )
-                                        )
+                                        // Keep the player surface flush with the
+                                        // biography section. The previous rounded
+                                        // bottom corners exposed the black parent
+                                        // background during screenshots/scrolling.
                                         .background(MaterialTheme.colorScheme.background),
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
