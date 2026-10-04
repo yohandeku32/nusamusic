@@ -3218,7 +3218,7 @@ private fun VinylRecord(
 
         Box(
             modifier = Modifier
-                .size(142.dp)
+                .size(132.dp)
                 .clip(CircleShape)
                 .graphicsLayer {
                     shadowElevation = 3.dp.toPx()
@@ -3378,7 +3378,9 @@ private fun VinylTonearm(
     // increasing the angle moves it inward toward the label without crossing
     // onto the album artwork.
     val targetAngle = if (hasSong) {
-        5f + trackProgress * 13f
+        // Start just a little farther outward than the previous position,
+        // while keeping the same smooth inward tracking range.
+        2.5f + trackProgress * 13f
     } else {
         0f
     }
