@@ -3027,7 +3027,7 @@ private fun VinylRecord(
                 .fillMaxSize()
                 .graphicsLayer {
                     rotationZ = rotation.value
-                    shadowElevation = 18.dp.toPx()
+                    shadowElevation = 25.dp.toPx()
                     shape = CircleShape
                     clip = false
                 },
@@ -3051,6 +3051,18 @@ private fun VinylRecord(
             // black circle.
             val edgeOffset = (radius * 0.030f).coerceAtLeast(1.5f)
 
+            // Stronger but still soft physical cast shadow around the
+            // lower perimeter. Because the complete record layer rotates,
+            // this highlight/shadow interaction rotates naturally with it.
+            drawCircle(
+                color = Color.Black.copy(alpha = 0.18f),
+                center = androidx.compose.ui.geometry.Offset(
+                    centerX + radius * 0.008f,
+                    centerY + radius * 0.045f
+                ),
+                radius = radius * 1.005f
+            )
+
             drawCircle(
                 color = Color(0xFF090909),
                 center = androidx.compose.ui.geometry.Offset(
@@ -3061,7 +3073,8 @@ private fun VinylRecord(
             )
 
             drawArc(
-                color = Color.Black.copy(alpha = 0.66f),
+                color = Color.Black.copy(alpha = 0.78f),
+
                 startAngle = 12f,
                 sweepAngle = 156f,
                 useCenter = false,
@@ -3079,9 +3092,9 @@ private fun VinylRecord(
             )
 
             drawArc(
-                color = Color.White.copy(alpha = 0.075f),
-                startAngle = 190f,
-                sweepAngle = 145f,
+                color = Color.White.copy(alpha = 0.10f),
+                startAngle = 188f,
+                sweepAngle = 147f,
                 useCenter = false,
                 topLeft = androidx.compose.ui.geometry.Offset(
                     centerX - radius * 0.992f,
@@ -3680,7 +3693,7 @@ private fun VinylTonearm(
         // Keep the pivot clearly in the white area to the right of the vinyl.
         // The slight right shift is intentional; a small part of the artwork
         // may sit beyond the canvas edge, matching a real turntable layout.
-        val pivotShift = size.width * 0.085f
+        val pivotShift = size.width * 0.115f
         val left = size.width - designWidth + pivotShift
         val top = -size.height * 0.085f
 
