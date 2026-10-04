@@ -2938,51 +2938,50 @@ private fun VinylRecord(
 
             // -------------------------------------------------------------
             // POWER LED REFLECTION
-            // A narrow, soft red bias on the rotating PVC. Because this code
-            // lives inside the rotating vinyl layer, the highlight itself
-            // rotates with the record and catches the groove texture.
+            // Realistic side-lamp bias: a faint red smear on the lacquer close
+            // to the lower-left platter edge, rotating with the record.
             if (isPlaying && song != null) {
                 val reflectionCenter = androidx.compose.ui.geometry.Offset(
                     size.width * 0.145f,
-                    size.height * 0.805f
+                    size.height * 0.765f
                 )
 
                 drawOval(
                     brush = Brush.radialGradient(
                         colors = listOf(
-                            Color(0xFFFF4A4A).copy(alpha = 0.050f),
-                            Color(0xFFFF3333).copy(alpha = 0.022f),
+                            Color(0xFFFF3B3B).copy(alpha = 0.052f),
+                            Color(0xFFFF3B3B).copy(alpha = 0.021f),
+                            Color(0xFFFF3B3B).copy(alpha = 0.006f),
                             Color.Transparent
                         ),
                         center = reflectionCenter,
-                        radius = radius * 0.19f
+                        radius = radius * 0.20f
                     ),
                     topLeft = androidx.compose.ui.geometry.Offset(
-                        reflectionCenter.x - radius * 0.30f,
-                        reflectionCenter.y - radius * 0.075f
+                        reflectionCenter.x - radius * 0.28f,
+                        reflectionCenter.y - radius * 0.055f
                     ),
                     size = androidx.compose.ui.geometry.Size(
-                        radius * 0.60f,
-                        radius * 0.15f
+                        radius * 0.56f,
+                        radius * 0.11f
                     )
                 )
 
-                // A second, tighter streak follows the vinyl's groove direction.
                 drawArc(
-                    color = Color(0xFFFF5959).copy(alpha = 0.028f),
+                    color = Color(0xFFFF5454).copy(alpha = 0.020f),
                     startAngle = 145f,
-                    sweepAngle = 26f,
+                    sweepAngle = 22f,
                     useCenter = false,
                     topLeft = androidx.compose.ui.geometry.Offset(
-                        reflectionCenter.x - radius * 0.23f,
-                        reflectionCenter.y - radius * 0.23f
+                        reflectionCenter.x - radius * 0.22f,
+                        reflectionCenter.y - radius * 0.22f
                     ),
                     size = androidx.compose.ui.geometry.Size(
-                        radius * 0.46f,
-                        radius * 0.46f
+                        radius * 0.44f,
+                        radius * 0.44f
                     ),
                     style = androidx.compose.ui.graphics.drawscope.Stroke(
-                        width = 1.6f
+                        width = 1.4f
                     )
                 )
             }
@@ -3427,201 +3426,220 @@ private fun VinylPowerIndicator(
     modifier: Modifier = Modifier
 ) {
     val lightAlpha by animateFloatAsState(
-        targetValue = if (isPlaying) 1f else 0.10f,
-        animationSpec = tween(durationMillis = 260),
+        targetValue = if (isPlaying) 1f else 0.08f,
+        animationSpec = tween(durationMillis = 240),
         label = "powerLightAlpha"
     )
 
-    // Compact physical switch. The actual light is intentionally treated as
-    // an optical source: soft bloom + warm hotspot, not a UI dot.
+    // Small turntable-style power control: black rotary knob with tiny white
+    // markings, matching the physical control shown in the reference.
     Box(
-        modifier = modifier
-            .size(34.dp)
-            .graphicsLayer {
-                shadowElevation = 4.dp.toPx()
-                shape = CircleShape
-                clip = false
-            },
+        modifier = modifier.size(50.dp),
         contentAlignment = Alignment.Center
     ) {
-        Box(
-            modifier = Modifier
-                .size(52.dp),
-            contentAlignment = Alignment.Center
+        Canvas(
+            modifier = Modifier.fillMaxSize()
         ) {
-            Canvas(
-                modifier = Modifier.fillMaxSize()
-            ) {
-                val center = androidx.compose.ui.geometry.Offset(
-                    size.width / 2f,
-                    size.height / 2f
-                )
+            val center = androidx.compose.ui.geometry.Offset(
+                size.width * 0.48f,
+                size.height * 0.55f
+            )
+            val knobRadius = size.minDimension * 0.285f
 
-                // Physical bezel center / radius.
-                val bezelRadius = 15.2f
+            // -------------------------------------------------------------
+            // SOFT AMBIENT RED BIAS
+            // -------------------------------------------------------------
+            // Light exits from the right side of the knob and spills upward
+            // toward the record. It is deliberately soft and directional.
+            val lamp = androidx.compose.ui.geometry.Offset(
+                center.x + knobRadius * 1.12f,
+                center.y - knobRadius * 0.10f
+            )
 
-                // ---------------------------------------------------------
-                // OPTICAL BLOOM
-                // ---------------------------------------------------------
-                // Side-emitting lamp: the light leaves the switch laterally,
-                // producing a soft streak instead of a visible red dot.
-                val lightCenter = androidx.compose.ui.geometry.Offset(
-                    center.x + 16.5f,
-                    center.y + 0.5f
-                )
-
-                if (isPlaying) {
-                    // Broad spill.
-                    drawOval(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                Color(0xFFFF3838).copy(alpha = 0.14f * lightAlpha),
-                                Color(0xFFFF3838).copy(alpha = 0.052f * lightAlpha),
-                                Color(0xFFFF3838).copy(alpha = 0.012f * lightAlpha),
-                                Color.Transparent
-                            ),
-                            center = lightCenter,
-                            radius = 17f
-                        ),
-                        topLeft = androidx.compose.ui.geometry.Offset(
-                            lightCenter.x - 18f,
-                            lightCenter.y - 7f
-                        ),
-                        size = androidx.compose.ui.geometry.Size(
-                            36f,
-                            14f
-                        )
-                    )
-
-                    // Focused beam edge.
-                    drawLine(
-                        color = Color(0xFFFF4B4B).copy(alpha = 0.11f * lightAlpha),
-                        start = androidx.compose.ui.geometry.Offset(
-                            lightCenter.x - 1f,
-                            lightCenter.y
-                        ),
-                        end = androidx.compose.ui.geometry.Offset(
-                            lightCenter.x + 11f,
-                            lightCenter.y + 0.4f
-                        ),
-                        strokeWidth = 1.8f,
-                        cap = androidx.compose.ui.graphics.StrokeCap.Round
-                    )
-                }
-
-                // ---------------------------------------------------------
-                // SWITCH BODY
-                // ---------------------------------------------------------
-                drawCircle(
-                    color = Color.Black.copy(alpha = 0.15f),
-                    radius = bezelRadius * 0.98f,
-                    center = androidx.compose.ui.geometry.Offset(
-                        center.x + 1.0f,
-                        center.y + 1.7f
-                    )
-                )
-
-                drawCircle(
-                    color = Color(0xFF171717),
-                    radius = bezelRadius,
-                    center = center
-                )
-
-                drawCircle(
+            if (isPlaying) {
+                drawOval(
                     brush = Brush.radialGradient(
                         colors = listOf(
-                            Color(0xFF474747),
-                            Color(0xFF252525),
-                            Color(0xFF0C0C0C)
-                        ),
-                        center = androidx.compose.ui.geometry.Offset(
-                            center.x - 4.0f,
-                            center.y - 4.0f
-                        ),
-                        radius = 15.5f
-                    ),
-                    radius = 12.7f,
-                    center = center
-                )
-
-                drawArc(
-                    color = Color.White.copy(alpha = 0.15f),
-                    startAngle = 212f,
-                    sweepAngle = 95f,
-                    useCenter = false,
-                    topLeft = androidx.compose.ui.geometry.Offset(
-                        center.x - 12.7f,
-                        center.y - 12.7f
-                    ),
-                    size = androidx.compose.ui.geometry.Size(
-                        25.4f,
-                        25.4f
-                    ),
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(
-                        width = 1.0f
-                    )
-                )
-
-                // ---------------------------------------------------------
-                // SIDE-FACING LIGHT SOURCE
-                // ---------------------------------------------------------
-                // Recessed side slot. It is bright but not circular.
-                drawRoundRect(
-                    color = Color.Black.copy(alpha = 0.82f),
-                    topLeft = androidx.compose.ui.geometry.Offset(
-                        lightCenter.x - 4.5f,
-                        lightCenter.y - 2.5f
-                    ),
-                    size = androidx.compose.ui.geometry.Size(
-                        9f,
-                        5f
-                    ),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(
-                        2.2f,
-                        2.2f
-                    )
-                )
-
-                // Hot elongated LED lens.
-                drawRoundRect(
-                    brush = Brush.horizontalGradient(
-                        colors = listOf(
-                            Color(0xFFFF7777).copy(alpha = 0.55f * lightAlpha),
-                            Color(0xFFFF3030).copy(alpha = 0.95f * lightAlpha),
-                            Color(0xFFD90909).copy(alpha = 0.62f * lightAlpha),
+                            Color(0xFFFF2F2F).copy(alpha = 0.16f * lightAlpha),
+                            Color(0xFFFF2F2F).copy(alpha = 0.060f * lightAlpha),
+                            Color(0xFFFF2F2F).copy(alpha = 0.012f * lightAlpha),
                             Color.Transparent
-                        )
+                        ),
+                        center = lamp,
+                        radius = 15f
                     ),
                     topLeft = androidx.compose.ui.geometry.Offset(
-                        lightCenter.x - 3.8f,
-                        lightCenter.y - 1.9f
+                        lamp.x - 19f,
+                        lamp.y - 11f
                     ),
                     size = androidx.compose.ui.geometry.Size(
-                        8.5f,
-                        3.8f
-                    ),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(
-                        1.8f,
-                        1.8f
+                        38f,
+                        22f
                     )
                 )
 
-                // Tiny glass catch-light.
                 drawLine(
-                    color = Color.White.copy(alpha = 0.32f * lightAlpha),
+                    color = Color(0xFFFF4646).copy(alpha = 0.085f * lightAlpha),
                     start = androidx.compose.ui.geometry.Offset(
-                        lightCenter.x - 1.9f,
-                        lightCenter.y - 1.1f
+                        lamp.x - 2f,
+                        lamp.y
                     ),
                     end = androidx.compose.ui.geometry.Offset(
-                        lightCenter.x - 0.2f,
-                        lightCenter.y - 1.1f
+                        lamp.x + 12f,
+                        lamp.y - 4f
                     ),
-                    strokeWidth = 0.75f,
+                    strokeWidth = 1.5f,
                     cap = androidx.compose.ui.graphics.StrokeCap.Round
                 )
             }
+
+            // -------------------------------------------------------------
+            // PHYSICAL KNOB
+            // -------------------------------------------------------------
+            drawCircle(
+                color = Color.Black.copy(alpha = 0.16f),
+                radius = knobRadius * 1.04f,
+                center = androidx.compose.ui.geometry.Offset(
+                    center.x + 1.0f,
+                    center.y + 1.8f
+                )
+            )
+
+            // Outer black bezel.
+            drawCircle(
+                color = Color(0xFF111111),
+                radius = knobRadius,
+                center = center
+            )
+
+            // Matte graphite face, not silver/white.
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        Color(0xFF343434),
+                        Color(0xFF1F1F1F),
+                        Color(0xFF0D0D0D)
+                    ),
+                    center = androidx.compose.ui.geometry.Offset(
+                        center.x - knobRadius * 0.28f,
+                        center.y - knobRadius * 0.30f
+                    ),
+                    radius = knobRadius * 1.05f
+                ),
+                radius = knobRadius * 0.86f,
+                center = center
+            )
+
+            // Very subtle outer rim.
+            drawCircle(
+                color = Color.White.copy(alpha = 0.11f),
+                radius = knobRadius * 0.88f,
+                center = center,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(
+                    width = 0.85f
+                )
+            )
+
+            // Center indicator groove, slightly angled like a real knob mark.
+            val markAngle = if (isPlaying) -18f else -52f
+            rotate(
+                degrees = markAngle,
+                pivot = center
+            ) {
+                drawLine(
+                    color = Color.White.copy(alpha = 0.72f),
+                    start = androidx.compose.ui.geometry.Offset(
+                        center.x,
+                        center.y - knobRadius * 0.62f
+                    ),
+                    end = androidx.compose.ui.geometry.Offset(
+                        center.x,
+                        center.y - knobRadius * 0.24f
+                    ),
+                    strokeWidth = 1.15f,
+                    cap = androidx.compose.ui.graphics.StrokeCap.Round
+                )
+            }
+
+            // Side LED lens: small horizontal red lens facing the vinyl.
+            val led = androidx.compose.ui.geometry.Offset(
+                x = center.x + knobRadius * 0.72f,
+                y = center.y + knobRadius * 0.02f
+            )
+
+            drawRoundRect(
+                color = Color.Black.copy(alpha = 0.80f),
+                topLeft = androidx.compose.ui.geometry.Offset(
+                    led.x - 3.0f,
+                    led.y - 1.65f
+                ),
+                size = androidx.compose.ui.geometry.Size(
+                    6.0f,
+                    3.3f
+                ),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(
+                    1.65f,
+                    1.65f
+                )
+            )
+
+            drawRoundRect(
+                brush = Brush.horizontalGradient(
+                    colors = listOf(
+                        Color(0xFFFF8585).copy(alpha = 0.52f * lightAlpha),
+                        Color(0xFFFF3131).copy(alpha = 0.98f * lightAlpha),
+                        Color(0xFFD20A0A).copy(alpha = 0.58f * lightAlpha)
+                    )
+                ),
+                topLeft = androidx.compose.ui.geometry.Offset(
+                    led.x - 2.55f,
+                    led.y - 1.15f
+                ),
+                size = androidx.compose.ui.geometry.Size(
+                    5.1f,
+                    2.3f
+                ),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(
+                    1.15f,
+                    1.15f
+                )
+            )
         }
+
+        // Tiny physical markings around the knob, modeled after the reference.
+        Text(
+            text = "OFF",
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(start = 10.dp, top = 2.dp),
+            fontSize = 6.sp,
+            fontWeight = FontWeight.Medium,
+            color = Color(0xFF6F6F6F)
+        )
+
+        Text(
+            text = "ON",
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .padding(end = 0.dp, top = 1.dp),
+            fontSize = 6.sp,
+            fontWeight = FontWeight.Medium,
+            color = if (isPlaying) {
+                Color(0xFF6F6F6F)
+            } else {
+                Color(0xFF767676)
+            }
+        )
+
+        Text(
+            text = "POWER",
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(start = 7.dp, bottom = 3.dp),
+            fontSize = 5.5.sp,
+            fontWeight = FontWeight.Medium,
+            color = Color(0xFF777777)
+        )
     }
 }
 
