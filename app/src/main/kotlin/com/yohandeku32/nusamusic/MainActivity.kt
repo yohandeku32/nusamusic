@@ -3443,7 +3443,7 @@ private fun VinylTonearm(
         val rWandEnd = rotated(wandEnd)
         val rHeadshell = rotated(headshellMount)
         val rCartridge = rotated(cartridgeCenter)
-        val stylusTip = rotated(stylusTip)
+        val rStylusTip = rotated(stylusTip)
 
         // Fine shadow underneath the metal assembly.
         drawLine(
@@ -3666,7 +3666,7 @@ private fun VinylTonearm(
             drawLine(
                 color = Color(0xFF121212),
                 start = cartridgeTip,
-                end = stylusTip,
+                end = rStylusTip,
                 strokeWidth = 2.0f,
                 cap = androidx.compose.ui.graphics.StrokeCap.Round
             )
@@ -3677,7 +3677,7 @@ private fun VinylTonearm(
                     Color(0xFF747474)
                 },
                 radius = 2.15f,
-                center = stylusTip
+                center = rStylusTip
             )
 
             // Minimal highlight makes the headshell read as metal rather
