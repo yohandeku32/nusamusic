@@ -2224,7 +2224,10 @@ private fun ArtistBiographySection(
                 )
             }
             Text(
-                text = nusaText("Sumber: Last.fm (", "Source: Last.fm (" + biography.sourceLanguage.uppercase() + ")",
+                text = nusaText(
+                    "Sumber: Last.fm (" + biography.sourceLanguage.uppercase() + ")",
+                    "Source: Last.fm (" + biography.sourceLanguage.uppercase() + ")"
+                ),
                 color = Color(0xFF777777),
                 fontSize = 11.sp,
                 modifier = Modifier.padding(start = 4.dp, top = 8.dp)
