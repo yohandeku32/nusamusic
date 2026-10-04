@@ -3367,47 +3367,47 @@ private fun VinylTonearm(
     progress: Float,
     modifier: Modifier = Modifier
 ) {
-    // The complete assembly rotates from the pivot. Playback is staged:
-    // 1) swing in from the parked position to the outer groove,
-    // 2) lower the stylus,
-    // 3) track inward slowly with the song progress.
+    // The complete assembly rotates from the pivot. Movement is intentionally
+    // damped so the tonearm has visible mass instead of snapping between
+    // progress values.
     val trackProgress = progress.coerceIn(0f, 1f)
+
+    // A slightly eased tracking curve keeps the arm almost still at the
+    // beginning of a record, then gradually follows the groove inward.
+    val shapedProgress = trackProgress
+        .toDouble()
+        .pow(1.16)
+        .toFloat()
+
     val targetAngle = if (isPlaying && hasSong) {
-        1.1f + trackProgress * 6.4f
+        1.0f + shapedProgress * 6.5f
     } else {
         0f
     }
 
     val armAngle by animateFloatAsState(
         targetValue = targetAngle,
-        animationSpec = if (isPlaying && hasSong) {
-            tween(
-                durationMillis = 1150,
-                easing = androidx.compose.animation.core.FastOutSlowInEasing
-            )
-        } else {
-            tween(
-                durationMillis = 900,
-                easing = androidx.compose.animation.core.FastOutSlowInEasing
-            )
-        },
+        animationSpec = spring(
+            dampingRatio = 0.90f,
+            stiffness = if (isPlaying && hasSong) 34f else 44f
+        ),
         label = "tonearmAngle"
     )
 
-    // On play the arm reaches the outer groove first; the stylus drops shortly
-    // afterwards. On pause the stylus lifts immediately, then the arm parks.
+    // The stylus drops only after the arm has had time to reach the outer
+    // groove. When paused, it lifts quickly before the arm returns.
     val targetContact = if (isPlaying && hasSong) 1f else 0f
     val contact by animateFloatAsState(
         targetValue = targetContact,
         animationSpec = if (isPlaying && hasSong) {
             tween(
-                durationMillis = 520,
-                delayMillis = 430,
+                durationMillis = 430,
+                delayMillis = 650,
                 easing = androidx.compose.animation.core.FastOutSlowInEasing
             )
         } else {
             tween(
-                durationMillis = 260,
+                durationMillis = 220,
                 easing = androidx.compose.animation.core.FastOutSlowInEasing
             )
         },
@@ -3521,6 +3521,18 @@ private fun VinylTonearm(
                 color = Color.White.copy(alpha = 0.44f),
                 style = androidx.compose.ui.graphics.drawscope.Stroke(
                     width = 1.35f,
+                    cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                    join = androidx.compose.ui.graphics.StrokeJoin.Round
+                )
+            )
+
+            // Very soft lower-edge reflection gives the tube a rounded metal
+            // profile without changing its established silhouette.
+            drawPath(
+                path = armPath,
+                color = Color.White.copy(alpha = 0.10f),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(
+                    width = 2.0f,
                     cap = androidx.compose.ui.graphics.StrokeCap.Round,
                     join = androidx.compose.ui.graphics.StrokeJoin.Round
                 )
@@ -3649,6 +3661,13 @@ private fun VinylTonearm(
                 cap = androidx.compose.ui.graphics.StrokeCap.Round
             )
 
+            val stylusMicroMotion =
+                if (contact > 0.50f && isPlaying) {
+                    kotlin.math.sin(trackProgress * 180f) * 0.55f
+                } else {
+                    0f
+                }
+
             drawCircle(
                 color = if (contact > 0.50f) {
                     Color(0xFFE2E2E2)
@@ -3656,7 +3675,10 @@ private fun VinylTonearm(
                     Color(0xFF777777)
                 },
                 radius = 2.45f,
-                center = stylusTip
+                center = androidx.compose.ui.geometry.Offset(
+                    stylusTip.x,
+                    stylusTip.y + stylusMicroMotion
+                )
             )
         }
 
