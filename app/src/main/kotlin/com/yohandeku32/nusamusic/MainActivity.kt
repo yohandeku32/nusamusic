@@ -2685,8 +2685,18 @@ private fun RealisticControlButton(
     }
     val pressed by interactionSource.collectIsPressedAsState()
     val pressScale by animateFloatAsState(
-        targetValue = if (pressed) 0.955f else 1f,
-        animationSpec = tween(durationMillis = 95),
+        targetValue = if (pressed) 0.94f else 1f,
+        animationSpec = if (pressed) {
+            androidx.compose.animation.core.tween(
+                durationMillis = 120,
+                easing = androidx.compose.animation.core.FastOutSlowInEasing
+            )
+        } else {
+            androidx.compose.animation.core.spring(
+                dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
+                stiffness = 700f
+            )
+        },
         label = "controlPressScale"
     )
 
@@ -2722,7 +2732,7 @@ private fun RealisticControlButton(
             .graphicsLayer {
                 scaleX = pressScale
                 scaleY = pressScale
-                shadowElevation = 8.dp.toPx()
+                shadowElevation = if (pressed) 4.dp.toPx() else 5.dp.toPx()
                 this.shape = shape
                 clip = false
             },
@@ -2795,19 +2805,19 @@ private fun RealisticControlButton(
                         style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.2f)
                     )
 
-                    // Subtle circular machining marks.
-                    for (i in 0 until 7) {
+                    // Clean concentric machining texture. Kept sparse so the
+                    // surface reads as brushed material instead of visual noise.
+                    for (i in 0 until 4) {
                         drawCircle(
-                            color = Color.White.copy(alpha = if (dark) 0.028f else 0.08f),
-                            radius = r * (0.46f + i * 0.045f),
+                            color = Color.White.copy(alpha = if (dark) 0.020f else 0.055f),
+                            radius = r * (0.52f + i * 0.075f),
                             center = center,
-                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 0.55f)
+                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 0.45f)
                         )
                     }
 
-                    // A few irregular micro specks keep the button from
-                    // looking digitally perfect.
-                    for (i in 0 until 40) {
+                    // A small, deterministic set of fine micro specks.
+                    for (i in 0 until 22) {
                         val dx = (((i * 37) % 101) / 100f - 0.5f) * r * 1.45f
                         val dy = (((i * 61) % 97) / 96f - 0.5f) * r * 1.45f
                         val px = center.x + dx
@@ -2886,18 +2896,18 @@ private fun RealisticControlButton(
                         style = androidx.compose.ui.graphics.drawscope.Stroke(width = 0.9f)
                     )
 
-                    // Fine horizontal texture.
-                    for (i in 0 until 28) {
-                        val yy = h * (0.17f + i / 42f)
+                    // Evenly spaced, very fine brushed-metal grain.
+                    for (i in 0 until 16) {
+                        val yy = h * (0.22f + i / 30f)
                         drawLine(
                             color = if (i % 2 == 0) {
-                                Color.White.copy(alpha = if (dark) 0.014f else 0.040f)
+                                Color.White.copy(alpha = if (dark) 0.010f else 0.026f)
                             } else {
-                                Color.Black.copy(alpha = if (dark) 0.018f else 0.014f)
+                                Color.Black.copy(alpha = if (dark) 0.012f else 0.010f)
                             },
-                            start = androidx.compose.ui.geometry.Offset(9f, yy),
-                            end = androidx.compose.ui.geometry.Offset(w - 9f, yy),
-                            strokeWidth = 0.65f
+                            start = androidx.compose.ui.geometry.Offset(10f, yy),
+                            end = androidx.compose.ui.geometry.Offset(w - 10f, yy),
+                            strokeWidth = 0.5f
                         )
                     }
                 }
