@@ -3,20 +3,25 @@
 Nusa is a modern Android music player focused on local/offline playback, a realistic vinyl-style player, and a future-ready Hi-Res / USB DAC audio path.
 
 > **Project status:** Active development  
-> **Status snapshot:** 3 October 2026  
+> **Status snapshot:** 4 October 2026  
 > **Current branch:** `main`
 
 ## Project Progress
 
-The project has moved beyond the basic music-player prototype. The UI, local library, MediaSession playback, artist information, persistence, performance optimizations, and the first integration of a dedicated Hi-Res USB audio engine are now implemented.
+The project has moved well beyond the basic music-player prototype. Nusa now has a mature player UI, a two-column local library, persistent Media3 playback, manual folder access and scanning, multi-artist normalization, Indonesian-only artist biographies, device-language UI, realistic vinyl rendering, performance optimizations, and the first integration of a dedicated Hi-Res USB audio engine.
 
-The remaining work is mainly **hardware validation and refinement of the Hi-Res path**, especially testing with real USB DACs and confirming sample-rate / bit-depth transitions on target devices.
+The remaining work is mainly **hardware validation, release hardening, and refinement of the Hi-Res path**, especially testing with real USB DACs and confirming sample-rate / bit-depth transitions on target devices.
 
 ### Overall status
 
 | Area | Status | Notes |
 |---|---|---|
-| Local music scanning | ✅ Implemented | Reads local audio through Android MediaStore |
+| Local music scanning | ✅ Implemented | MediaStore + manually selected folders |
+| Manual folder access | ✅ Implemented | Android Storage Access Framework |
+| Recursive folder scanning | ✅ Implemented | Includes subfolders |
+| Minimum track duration | ✅ Implemented | Tracks below 10 seconds are excluded |
+| Safe library refresh | ✅ Implemented | New songs are appended without clearing the active queue |
+| Device-language UI | 🟢 Implemented | Indonesian / English follows Android language |
 | Normal playback | ✅ Implemented | Media3 / ExoPlayer |
 | Background playback | ✅ Implemented | MediaSession + PlaybackService |
 | Lock-screen / notification control | ✅ Implemented | Media session controls are tied to Nusa |
@@ -29,7 +34,8 @@ The remaining work is mainly **hardware validation and refinement of the Hi-Res 
 | A–Z library index | ✅ Implemented | Tap and vertical swipe navigation |
 | Sorting | ✅ Implemented | Title, artist, album and duration |
 | Artist portrait | ✅ Implemented | Deezer lookup with local caching |
-| Artist biography | ✅ Implemented | Last.fm `artist.getInfo` |
+| Artist biography | 🟢 Implemented | Last.fm `artist.getInfo`, Indonesian only |
+| Multi-artist normalization | ✅ Implemented | First artist used for biography / portrait lookup |
 | Biography internal scrolling | ✅ Implemented | Long text scrolls inside the biography box |
 | Share | ✅ Implemented | Custom Nusa share icon |
 | Favorite | ✅ Implemented | Custom favorite icon |
@@ -38,6 +44,7 @@ The remaining work is mainly **hardware validation and refinement of the Hi-Res 
 | Title font-size setting | ✅ Implemented | Stored in SharedPreferences |
 | Hi-Res metadata badge | ✅ Implemented | Lossless / Hi-Res indicator |
 | Dedicated USB Hi-Res engine | 🟡 Integrated | Decent USB Audio engine is wired into PlaybackService |
+| Hi-Res information dialog | ✅ Implemented | Dialog follows Lossless / Hi-Res state |
 | USB DAC permission flow | 🟡 Integrated | USB Audio device detection and permission handling added |
 | Bit-perfect hardware validation | ⏳ Pending | Requires real USB DAC testing |
 | DSD playback | ⏳ Not implemented | Current dedicated native path targets FLAC/PCM |
@@ -113,6 +120,17 @@ Performance work currently includes:
 
 The player-to-library swipe was also optimized so the library does not repeatedly recalculate the active-song position while the user is still dragging.
 
+## Language / Localization
+
+Nusa follows the language configured on the Android device.
+
+```text
+Android Bahasa Indonesia → Nusa Bahasa Indonesia
+Android English          → Nusa English
+```
+
+The main player, settings, library, scan controls and metadata UI support Indonesian and English.
+
 ## Artist Biography
 
 The old lyrics area was replaced with artist biography.
@@ -121,8 +139,8 @@ Nusa uses the Last.fm `artist.getInfo` API.
 
 The lookup strategy is:
 
-1. Request Indonesian biography first
-2. Fall back to English when needed
+1. Request the Indonesian biography from Last.fm
+2. Do not fall back to English
 3. Cache the resolved biography in memory
 4. Display the biography in a fixed dark panel
 5. Allow long biography text to scroll **inside the panel**
@@ -321,7 +339,7 @@ app/
           └─ PlaybackService.kt
 ```
 
-The Hi-Res engine AARs are downloaded by Gradle and cached under the application's build directory.
+The Hi-Res engine AARs are obtained by Gradle and cached in the application's app/libs directory for dependency resolution.
 
 ## Third-Party Notices
 
@@ -335,18 +353,25 @@ for the current attribution and licensing notes for the integrated Decent USB Au
 
 ## Current Development Stage
 
+Nusa is currently at the **advanced development / validation stage**.
+
+The core application is already functional. The main gap before production release is validation: physical USB DAC testing, long-duration playback, edge-case scanning, and final release hardening.
+
 Nusa is currently at the stage of:
 
 ```text
-UI/UX            → Advanced / stable iteration
-Local playback   → Implemented
-MediaSession     → Implemented
-Library          → Implemented
-Artist metadata  → Implemented
-Performance      → Ongoing optimization
-Hi-Res engine    → Integrated
-USB DAC          → Ready for hardware validation
-Release          → Not final yet
+UI/UX                 → Advanced / stable iteration
+Local playback        → Implemented
+MediaSession          → Implemented
+Library               → Implemented
+Folder scanning       → Implemented
+Playback persistence  → Implemented
+Artist metadata      → Implemented
+Localization          → Indonesian / English
+Performance           → Ongoing optimization
+Hi-Res engine         → Integrated
+USB DAC               → Ready for hardware validation
+Release               → Not final yet
 ```
 
 ### Next technical milestone
