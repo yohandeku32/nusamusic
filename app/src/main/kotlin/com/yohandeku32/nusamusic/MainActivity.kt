@@ -3373,8 +3373,11 @@ private fun VinylTonearm(
     // artwork cannot be stretched/squashed by Image content scaling.
     val trackProgress = progress.coerceIn(0f, 1f)
 
-    val targetAngle = if (isPlaying && hasSong) {
-        1.0f + trackProgress * 6.5f
+    // A real record starts at the outer groove and travels inward toward
+    // the center as playback progresses. The larger starting angle places
+    // the stylus near the record edge; decreasing the angle brings it inward.
+    val targetAngle = if (hasSong) {
+        29f - trackProgress * 27f
     } else {
         0f
     }
@@ -3401,7 +3404,12 @@ private fun VinylTonearm(
         // top-right just like the original artwork.
         val designScale = minOf(size.width, size.height) * 0.92f / 732f
         val designWidth = 297f * designScale
-        val left = size.width - designWidth
+
+        // Keep the pivot clearly in the white area to the right of the vinyl.
+        // The slight right shift is intentional; a small part of the artwork
+        // may sit beyond the canvas edge, matching a real turntable layout.
+        val pivotShift = size.width * 0.05f
+        val left = size.width - designWidth + pivotShift
         val top = -size.height * 0.085f
 
         fun x(value: Float): Float = left + value * designScale
