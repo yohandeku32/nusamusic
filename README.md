@@ -54,24 +54,25 @@ The remaining work is mainly **hardware validation, release hardening, and refin
 
 ### Main Player
 
-The player currently follows the latest Nusa reference UI direction:
+The player currently uses the established Nusa player design:
 
 - warm off-white player surface
 - large realistic rotating vinyl record with tonearm
 - album artwork embedded in the vinyl label
 - physical vinyl shadow, grooves, PVC grain and wear details
-- serif song title typography
-- artist name centered below the title
-- narrow progress track with time labels
-- large flat transport controls inspired by the current reference design
+- song title and artist information
+- progress track with time labels
+- playback controls
 - compact biography / collapse control
 - share and favorite controls
 - Lossless / Hi-Res badge
-- artist portrait in the top-left
-- overflow and settings controls in the top-right
+- artist portrait
+- overflow and settings controls
 - swipe navigation between player and library
 
-The **flat player controls are now the default for new installations**, while the existing 3D Realistic / Flat setting remains available in Settings.
+The screenshot below is a **visual reference for the README only**. It does not represent a request to change the current player UI.
+
+> **UI reference screenshot:** the reference image supplied for this project is intentionally documentation-only. The current application UI is not being redesigned from this screenshot.
 
 ### Vinyl Rendering
 
