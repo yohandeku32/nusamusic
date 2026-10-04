@@ -1444,7 +1444,7 @@ private fun NusaMusicApp(
                                             positionMs = positionMs,
                                             durationMs = durationMs,
                                             modifier = Modifier
-                                                .fillMaxWidth(0.88f)
+                                                .fillMaxWidth(0.84f)
                                                 .aspectRatio(1f)
                                         )
 
@@ -3373,12 +3373,12 @@ private fun VinylTonearm(
     // artwork cannot be stretched/squashed by Image content scaling.
     val trackProgress = progress.coerceIn(0f, 1f)
 
-    // The Canvas artwork's stylus geometry points down-right at 0 degrees.
-    // Positive rotation swings it leftward across the record. Therefore the
-    // start groove needs a larger angle, then the arm gradually relaxes toward
-    // the center as the song progresses.
+    // The stylus is physically mounted down-right from the pivot in the
+    // Canvas artwork. A small angle puts the stylus at the outer groove;
+    // increasing the angle moves it inward toward the label without crossing
+    // onto the album artwork.
     val targetAngle = if (hasSong) {
-        42f - trackProgress * 13f
+        5f + trackProgress * 13f
     } else {
         0f
     }
