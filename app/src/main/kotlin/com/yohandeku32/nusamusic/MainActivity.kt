@@ -985,7 +985,7 @@ private fun NusaMusicApp(
         mutableStateOf(uiPrefs.getFloat("title_font_size", 34f))
     }
     var realisticControls by remember {
-        mutableStateOf(uiPrefs.getBoolean("realistic_controls", true))
+        mutableStateOf(uiPrefs.getBoolean("realistic_controls", false))
     }
     var sortMenuExpanded by remember { mutableStateOf(false) }
     var librarySortOption by remember { mutableStateOf(LibrarySortOption.TITLE_ASC) }
@@ -1461,8 +1461,8 @@ private fun NusaMusicApp(
                                             ArtistAvatar(
                                                 song = currentSong,
                                                 modifier = Modifier
-                                                    .padding(start = 18.dp)
-                                                    .size(40.dp)
+                                                    .padding(start = 28.dp)
+                                                    .size(52.dp)
                                                     .clip(CircleShape)
                                             )
                                         },
@@ -1496,7 +1496,7 @@ private fun NusaMusicApp(
                                             positionMs = positionMs,
                                             durationMs = durationMs,
                                             modifier = Modifier
-                                                .fillMaxWidth(0.84f)
+                                                .fillMaxWidth(0.82f)
                                                 .aspectRatio(1f)
                                         )
 
@@ -1566,7 +1566,7 @@ private fun NusaMusicApp(
                                             onSeek = onSeek,
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .padding(horizontal = 12.dp)
+                                                .padding(horizontal = 32.dp)
                                         )
 
                                         Row(
@@ -1594,7 +1594,7 @@ private fun NusaMusicApp(
                                                 realistic = realisticControls
                                             )
 
-                                            Spacer(Modifier.width(16.dp))
+                                            Spacer(Modifier.width(10.dp))
 
                                             PlayerControlButton(
                                                 realistic = realisticControls,
@@ -1614,11 +1614,11 @@ private fun NusaMusicApp(
                                                     onTogglePlay
                                                 },
                                                 enabled = true,
-                                                modifier = Modifier.size(84.dp),
-                                                iconSize = 40.dp
+                                                modifier = Modifier.size(126.dp),
+                                                iconSize = 48.dp
                                             )
 
-                                            Spacer(Modifier.width(16.dp))
+                                            Spacer(Modifier.width(10.dp))
 
                                             TransportPillButton(
                                                 icon = Icons.Rounded.FastForward,
@@ -1629,8 +1629,8 @@ private fun NusaMusicApp(
                                             )
                                         }
 
+                                        Spacer(Modifier.height(14.dp))
                                         Spacer(Modifier.height(10.dp))
-                                        Spacer(Modifier.height(12.dp))
                                         Spacer(Modifier.height(18.dp))
 
                                         Row(
@@ -2770,8 +2770,8 @@ private fun TransportPillButton(
             onClick = onClick,
             enabled = enabled,
             circular = false,
-            modifier = Modifier.size(width = 96.dp, height = 58.dp),
-            iconSize = 32.dp
+            modifier = Modifier.size(width = 144.dp, height = 76.dp),
+            iconSize = 36.dp
         )
     } else {
         Surface(
@@ -4830,9 +4830,9 @@ private fun NusaMusicTheme(content: @Composable () -> Unit) {
         )
     } else {
         lightColorScheme(
-            background = Color(0xFFF2F0EB),
-            surface = Color(0xFFF7F5F0),
-            surfaceVariant = Color(0xFFE2E0DA),
+            background = Color(0xFFF4F2ED),
+            surface = Color(0xFFF8F6F1),
+            surfaceVariant = Color(0xFFE4E2DC),
             primary = Color(0xFF111111)
         )
     }
