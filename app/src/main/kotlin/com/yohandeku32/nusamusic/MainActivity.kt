@@ -115,6 +115,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
@@ -3410,7 +3411,7 @@ private fun VinylTonearm(
 
         val pivot = point(151f, 171f)
 
-        androidx.compose.ui.graphics.drawscope.rotate(
+        rotate(
             degrees = armAngle,
             pivot = pivot
         ) {
