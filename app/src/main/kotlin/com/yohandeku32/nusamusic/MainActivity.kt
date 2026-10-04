@@ -3443,7 +3443,7 @@ private fun VinylTonearm(
         val rWandEnd = rotated(wandEnd)
         val rHeadshell = rotated(headshellMount)
         val rCartridge = rotated(cartridgeCenter)
-        val rStylus = rotated(stylusTip)
+        val stylusTip = rotated(stylusTip)
 
         // Fine shadow underneath the metal assembly.
         drawLine(
@@ -3612,8 +3612,8 @@ private fun VinylTonearm(
             drawRoundRect(
                 color = Color(0xFF171717),
                 topLeft = androidx.compose.ui.geometry.Offset(
-                    rCartridge.x - bodyW * 0.50f,
-                    rCartridge.y - bodyH * 0.50f
+                    cartridgeCenter.x - bodyW * 0.50f,
+                    cartridgeCenter.y - bodyH * 0.50f
                 ),
                 size = androidx.compose.ui.geometry.Size(
                     bodyW,
@@ -3627,8 +3627,8 @@ private fun VinylTonearm(
             drawRoundRect(
                 color = Color(0xFFCBCBCB),
                 topLeft = androidx.compose.ui.geometry.Offset(
-                    rCartridge.x - bodyW * 0.41f,
-                    rCartridge.y - bodyH * 0.33f
+                    cartridgeCenter.x - bodyW * 0.41f,
+                    cartridgeCenter.y - bodyH * 0.33f
                 ),
                 size = androidx.compose.ui.geometry.Size(
                     bodyW * 0.82f,
@@ -3645,28 +3645,28 @@ private fun VinylTonearm(
                 color = Color(0xFF4A4A4A),
                 radius = 1.35f,
                 center = androidx.compose.ui.geometry.Offset(
-                    rCartridge.x + bodyW * 0.22f,
-                    rCartridge.y - bodyH * 0.13f
+                    cartridgeCenter.x + bodyW * 0.22f,
+                    cartridgeCenter.y - bodyH * 0.13f
                 )
             )
             drawCircle(
                 color = Color(0xFF4A4A4A),
                 radius = 1.35f,
                 center = androidx.compose.ui.geometry.Offset(
-                    rCartridge.x + bodyW * 0.22f,
-                    rCartridge.y + bodyH * 0.13f
+                    cartridgeCenter.x + bodyW * 0.22f,
+                    cartridgeCenter.y + bodyH * 0.13f
                 )
             )
 
             // Cantilever + stylus.
             val cartridgeTip = androidx.compose.ui.geometry.Offset(
-                x = rCartridge.x - bodyW * 0.24f,
-                y = rCartridge.y + bodyH * 0.40f
+                x = cartridgeCenter.x - bodyW * 0.24f,
+                y = cartridgeCenter.y + bodyH * 0.40f
             )
             drawLine(
                 color = Color(0xFF121212),
                 start = cartridgeTip,
-                end = rStylus,
+                end = stylusTip,
                 strokeWidth = 2.0f,
                 cap = androidx.compose.ui.graphics.StrokeCap.Round
             )
@@ -3677,7 +3677,7 @@ private fun VinylTonearm(
                     Color(0xFF747474)
                 },
                 radius = 2.15f,
-                center = rStylus
+                center = stylusTip
             )
 
             // Minimal highlight makes the headshell read as metal rather
@@ -3685,12 +3685,12 @@ private fun VinylTonearm(
             drawLine(
                 color = Color.White.copy(alpha = 0.38f),
                 start = androidx.compose.ui.geometry.Offset(
-                    rCartridge.x - bodyW * 0.22f,
-                    rCartridge.y - bodyH * 0.20f
+                    cartridgeCenter.x - bodyW * 0.22f,
+                    cartridgeCenter.y - bodyH * 0.20f
                 ),
                 end = androidx.compose.ui.geometry.Offset(
-                    rCartridge.x + bodyW * 0.28f,
-                    rCartridge.y - bodyH * 0.20f
+                    cartridgeCenter.x + bodyW * 0.28f,
+                    cartridgeCenter.y - bodyH * 0.20f
                 ),
                 strokeWidth = 1.0f
             )
