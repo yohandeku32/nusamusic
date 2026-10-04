@@ -3367,30 +3367,50 @@ private fun VinylTonearm(
     progress: Float,
     modifier: Modifier = Modifier
 ) {
-    // The whole tonearm assembly rotates from its pivot. The arm, headshell
-    // and stylus stay physically connected instead of moving independently.
+    // The complete assembly rotates from the pivot. Playback is staged:
+    // 1) swing in from the parked position to the outer groove,
+    // 2) lower the stylus,
+    // 3) track inward slowly with the song progress.
+    val trackProgress = progress.coerceIn(0f, 1f)
     val targetAngle = if (isPlaying && hasSong) {
-        progress * 5.0f
+        1.1f + trackProgress * 6.4f
     } else {
         0f
     }
 
     val armAngle by animateFloatAsState(
         targetValue = targetAngle,
-        animationSpec = tween(
-            durationMillis = if (isPlaying) 900 else 620,
-            easing = androidx.compose.animation.core.FastOutSlowInEasing
-        ),
+        animationSpec = if (isPlaying && hasSong) {
+            tween(
+                durationMillis = 1150,
+                easing = androidx.compose.animation.core.FastOutSlowInEasing
+            )
+        } else {
+            tween(
+                durationMillis = 900,
+                easing = androidx.compose.animation.core.FastOutSlowInEasing
+            )
+        },
         label = "tonearmAngle"
     )
 
+    // On play the arm reaches the outer groove first; the stylus drops shortly
+    // afterwards. On pause the stylus lifts immediately, then the arm parks.
     val targetContact = if (isPlaying && hasSong) 1f else 0f
     val contact by animateFloatAsState(
         targetValue = targetContact,
-        animationSpec = tween(
-            durationMillis = if (isPlaying) 720 else 400,
-            easing = androidx.compose.animation.core.FastOutSlowInEasing
-        ),
+        animationSpec = if (isPlaying && hasSong) {
+            tween(
+                durationMillis = 520,
+                delayMillis = 430,
+                easing = androidx.compose.animation.core.FastOutSlowInEasing
+            )
+        } else {
+            tween(
+                durationMillis = 260,
+                easing = androidx.compose.animation.core.FastOutSlowInEasing
+            )
+        },
         label = "tonearmContact"
     )
 
@@ -3406,41 +3426,41 @@ private fun VinylTonearm(
             moveTo(pivot.x, pivot.y)
 
             cubicTo(
-                size.width * 0.938f,
+                size.width * 0.942f,
                 size.height * 0.235f,
-                size.width * 0.940f,
+                size.width * 0.944f,
                 size.height * 0.345f,
-                size.width * 0.915f,
+                size.width * 0.925f,
                 size.height * 0.440f
             )
 
             cubicTo(
-                size.width * 0.895f,
+                size.width * 0.910f,
                 size.height * 0.525f,
-                size.width * 0.865f,
-                size.height * 0.600f,
-                size.width * 0.825f,
-                size.height * 0.665f
+                size.width * 0.885f,
+                size.height * 0.610f,
+                size.width * 0.850f,
+                size.height * 0.690f
             )
 
             cubicTo(
-                size.width * 0.810f,
-                size.height * 0.690f,
-                size.width * 0.800f,
-                size.height * 0.710f,
-                size.width * 0.788f,
-                size.height * 0.725f
+                size.width * 0.838f,
+                size.height * 0.718f,
+                size.width * 0.827f,
+                size.height * 0.742f,
+                size.width * 0.815f,
+                size.height * 0.758f
             )
         }
 
         val headshellCenter = androidx.compose.ui.geometry.Offset(
-            x = size.width * 0.775f,
-            y = size.height * 0.745f
+            x = size.width * 0.805f,
+            y = size.height * 0.790f
         )
 
         val stylusTip = androidx.compose.ui.geometry.Offset(
-            x = size.width * 0.748f,
-            y = size.height * 0.805f +
+            x = size.width * 0.780f,
+            y = size.height * 0.855f +
                 size.height * 0.010f * (1f - contact)
         )
 
@@ -3543,8 +3563,8 @@ private fun VinylTonearm(
             val shellHeight = size.height * 0.066f
 
             val shellNeckStart = androidx.compose.ui.geometry.Offset(
-                x = size.width * 0.785f,
-                y = size.height * 0.700f
+                x = size.width * 0.840f,
+                y = size.height * 0.733f
             )
 
             drawLine(
