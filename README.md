@@ -103,6 +103,22 @@ Current behavior:
 
 The former search button has been intentionally removed.
 
+### Music scanning
+
+Nusa can read music from Android MediaStore and from folders explicitly selected by the user.
+
+From Settings, the user can:
+
+- choose one or more music folders
+- grant persistent folder access through Android's Storage Access Framework
+- scan folders recursively, including subfolders
+- remove selected folders
+- manually start a music scan
+
+Tracks shorter than **10 seconds** are excluded from the library.
+
+A scan does not rebuild the active Media3 queue. Newly discovered songs are appended so the current song and playback session are preserved.
+
 ## Library Performance
 
 Performance work currently includes:
@@ -135,7 +151,7 @@ The main player, settings, library, scan controls and metadata UI support Indone
 
 The old lyrics area was replaced with artist biography.
 
-Nusa uses the Last.fm `artist.getInfo` API.
+Nusa uses the Last.fm `artist.getInfo` API and currently requests the Indonesian biography only.
 
 The lookup strategy is:
 
@@ -162,7 +178,8 @@ Artist portraits are resolved through the public Deezer artist-search endpoint.
 The app:
 
 1. normalizes the artist name
-2. checks memory cache
+2. uses the first artist when multiple artists are present
+3. checks memory cache
 3. checks local persistent cache
 4. searches Deezer
 5. downloads and stores the portrait
