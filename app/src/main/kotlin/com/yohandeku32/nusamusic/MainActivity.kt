@@ -3365,7 +3365,7 @@ private fun VinylTonearm(
 ) {
     // The arm swings around the fixed pivot like a real turntable.
     val targetAngle = if (isPlaying && hasSong) {
-        progress * 18f
+        progress * 6.5f
     } else {
         0f
     }
@@ -3402,43 +3402,43 @@ private fun VinylTonearm(
             moveTo(pivot.x, pivot.y)
 
             cubicTo(
-                size.width * 0.900f,
+                size.width * 0.925f,
                 size.height * 0.215f,
-                size.width * 0.920f,
+                size.width * 0.955f,
                 size.height * 0.345f,
-                size.width * 0.905f,
+                size.width * 0.940f,
                 size.height * 0.445f
             )
 
             cubicTo(
-                size.width * 0.895f,
+                size.width * 0.930f,
                 size.height * 0.520f,
-                size.width * 0.875f,
+                size.width * 0.905f,
                 size.height * 0.585f,
-                size.width * 0.815f,
-                size.height * 0.625f
+                size.width * 0.850f,
+                size.height * 0.665f
             )
 
             cubicTo(
+                size.width * 0.820f,
+                size.height * 0.690f,
+                size.width * 0.805f,
+                size.height * 0.720f,
                 size.width * 0.790f,
-                size.height * 0.650f,
-                size.width * 0.775f,
-                size.height * 0.670f,
-                size.width * 0.755f,
-                size.height * 0.685f
+                size.height * 0.735f
             )
         }
 
         // Cartridge is kept as a separate, slightly squared piece at the
         // end of the curved tube.
         val cartridgeCenter = androidx.compose.ui.geometry.Offset(
-            x = size.width * 0.715f,
-            y = size.height * 0.705f
+            x = size.width * 0.765f,
+            y = size.height * 0.750f
         )
 
         val stylusTip = androidx.compose.ui.geometry.Offset(
-            x = size.width * 0.695f,
-            y = size.height * 0.775f +
+            x = size.width * 0.750f,
+            y = size.height * 0.825f +
                 size.height * 0.012f * (1f - contact)
         )
 
@@ -3531,12 +3531,12 @@ private fun VinylTonearm(
                 drawLine(
                     color = Color(0xFF202020),
                     start = androidx.compose.ui.geometry.Offset(
-                        size.width * 0.775f,
-                        size.height * 0.680f
+                        size.width * 0.805f,
+                        size.height * 0.730f
                     ),
                     end = androidx.compose.ui.geometry.Offset(
-                        size.width * 0.750f,
-                        size.height * 0.695f
+                        size.width * 0.775f,
+                        size.height * 0.742f
                     ),
                     strokeWidth = 9f,
                     cap = androidx.compose.ui.graphics.StrokeCap.Round
