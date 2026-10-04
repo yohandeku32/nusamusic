@@ -2937,6 +2937,50 @@ private fun VinylRecord(
             )
 
             // -------------------------------------------------------------
+            // POWER LED REFLECTION
+            // -------------------------------------------------------------
+            // The reflection is drawn on the rotating record surface so the
+            // red highlight physically travels with the vinyl while playing.
+            if (isPlaying && song != null) {
+                val reflectionCenter = androidx.compose.ui.geometry.Offset(
+                    size.width * 0.20f,
+                    size.height * 0.72f
+                )
+
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            Color.Red.copy(alpha = 0.075f),
+                            Color.Red.copy(alpha = 0.032f),
+                            Color.Transparent
+                        ),
+                        center = reflectionCenter,
+                        radius = radius * 0.24f
+                    ),
+                    radius = radius * 0.24f,
+                    center = reflectionCenter
+                )
+
+                drawArc(
+                    color = Color.Red.copy(alpha = 0.045f),
+                    startAngle = 136f,
+                    sweepAngle = 42f,
+                    useCenter = false,
+                    topLeft = androidx.compose.ui.geometry.Offset(
+                        reflectionCenter.x - radius * 0.30f,
+                        reflectionCenter.y - radius * 0.30f
+                    ),
+                    size = androidx.compose.ui.geometry.Size(
+                        radius * 0.60f,
+                        radius * 0.60f
+                    ),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(
+                        width = 3.0f
+                    )
+                )
+            }
+
+            // -------------------------------------------------------------
             // PVC GRAIN
             // -------------------------------------------------------------
             for (sample in grain) {
@@ -3351,12 +3395,110 @@ private fun VinylRecord(
             )
         }
 
+        VinylPowerIndicator(
+            isPlaying = isPlaying && song != null,
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(
+                    start = 18.dp,
+                    bottom = 22.dp
+                )
+        )
+
         VinylTonearm(
             isPlaying = isPlaying,
             hasSong = song != null,
             progress = progress,
             modifier = Modifier.fillMaxSize()
         )
+    }
+}
+
+@Composable
+private fun VinylPowerIndicator(
+    isPlaying: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val ledAlpha by animateFloatAsState(
+        targetValue = if (isPlaying) 1f else 0.30f,
+        animationSpec = tween(durationMillis = 260),
+        label = "powerLedAlpha"
+    )
+
+    Surface(
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color(0xFF191919))
+            .border(
+                width = 1.dp,
+                color = Color.White.copy(alpha = 0.08f),
+                shape = RoundedCornerShape(14.dp)
+            ),
+        color = Color(0xFF171717),
+        tonalElevation = 0.dp,
+        shadowElevation = 5.dp
+    ) {
+        Row(
+            modifier = Modifier.padding(
+                horizontal = 11.dp,
+                vertical = 7.dp
+            ),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Canvas(
+                modifier = Modifier.size(16.dp)
+            ) {
+                val center = androidx.compose.ui.geometry.Offset(
+                    size.width / 2f,
+                    size.height / 2f
+                )
+
+                drawCircle(
+                    color = Color.Black.copy(alpha = 0.55f),
+                    radius = size.minDimension * 0.36f,
+                    center = center
+                )
+
+                drawCircle(
+                    color = Color.Red.copy(alpha = ledAlpha),
+                    radius = size.minDimension * 0.24f,
+                    center = center
+                )
+
+                drawCircle(
+                    color = Color.White.copy(alpha = 0.22f * ledAlpha),
+                    radius = size.minDimension * 0.09f,
+                    center = androidx.compose.ui.geometry.Offset(
+                        center.x - size.minDimension * 0.07f,
+                        center.y - size.minDimension * 0.07f
+                    )
+                )
+            }
+
+            Spacer(Modifier.width(7.dp))
+
+            Text(
+                text = "POWER",
+                fontSize = 9.sp,
+                letterSpacing = 1.2.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White.copy(alpha = 0.82f)
+            )
+
+            Spacer(Modifier.width(6.dp))
+
+            Text(
+                text = if (isPlaying) "ON" else "OFF",
+                fontSize = 9.sp,
+                letterSpacing = 0.8.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = if (isPlaying) {
+                    Color(0xFFFF5A5A)
+                } else {
+                    Color(0xFF8E8E8E)
+                }
+            )
+        }
     }
 }
 
