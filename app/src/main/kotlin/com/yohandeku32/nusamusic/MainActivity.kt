@@ -35,6 +35,7 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
@@ -1543,29 +1544,27 @@ private fun NusaMusicApp(
 
                                             Spacer(Modifier.width(16.dp))
 
-                                            FilledIconButton(
+                                            RealisticControlButton(
+                                                icon = if (isPlaying) {
+                                                    Icons.Rounded.Pause
+                                                } else {
+                                                    Icons.Rounded.PlayArrow
+                                                },
+                                                contentDescription = if (isPlaying) {
+                                                    nusaText("Jeda", "Pause")
+                                                } else {
+                                                    nusaText("Putar", "Play")
+                                                },
                                                 onClick = if (currentSong == null) {
                                                     onRequestPermission
                                                 } else {
                                                     onTogglePlay
                                                 },
+                                                enabled = true,
+                                                circular = true,
                                                 modifier = Modifier.size(84.dp),
-                                                shape = CircleShape
-                                            ) {
-                                                Icon(
-                                                    if (isPlaying) {
-                                                        Icons.Rounded.Pause
-                                                    } else {
-                                                        Icons.Rounded.PlayArrow
-                                                    },
-                                                    contentDescription = if (isPlaying) {
-                                                        nusaText("Jeda", "Pause")
-                                                    } else {
-                                                        nusaText("Putar", "Play")
-                                                    },
-                                                    modifier = Modifier.size(40.dp)
-                                                )
-                                            }
+                                                iconSize = 40.dp
+                                            )
 
                                             Spacer(Modifier.width(16.dp))
 
@@ -2660,24 +2659,281 @@ private fun TransportPillButton(
     onClick: () -> Unit,
     enabled: Boolean
 ) {
-    androidx.compose.material3.Surface(
+    RealisticControlButton(
+        icon = icon,
+        contentDescription = contentDescription,
         onClick = onClick,
         enabled = enabled,
+        circular = false,
         modifier = Modifier.size(width = 96.dp, height = 58.dp),
-        shape = RoundedCornerShape(50),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        tonalElevation = 0.dp
+        iconSize = 32.dp
+    )
+}
+
+@Composable
+private fun RealisticControlButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+    enabled: Boolean,
+    circular: Boolean,
+    modifier: Modifier = Modifier,
+    iconSize: androidx.compose.ui.unit.Dp = 32.dp
+) {
+    val interactionSource = remember {
+        androidx.compose.foundation.interaction.MutableInteractionSource()
+    }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val pressScale by animateFloatAsState(
+        targetValue = if (pressed) 0.955f else 1f,
+        animationSpec = tween(durationMillis = 95),
+        label = "controlPressScale"
+    )
+
+    val shape = if (circular) CircleShape else RoundedCornerShape(50)
+    val base = if (enabled) {
+        Color(0xFF242628)
+    } else {
+        Color(0xFF55585A).copy(alpha = 0.45f)
+    }
+
+    Surface(
+        modifier = modifier
+            .graphicsLayer {
+                scaleX = pressScale
+                scaleY = pressScale
+                shadowElevation = 9.dp.toPx()
+                this.shape = shape
+                clip = false
+            },
+        shape = shape,
+        color = Color.Transparent,
+        contentColor = if (enabled) Color.White else Color.White.copy(alpha = 0.42f),
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp
     ) {
-        Box(contentAlignment = Alignment.Center) {
-            Icon(
-                icon,
-                contentDescription = contentDescription,
-                modifier = Modifier
-                    .size(32.dp)
-                    .graphicsLayer {
-                        scaleX = 1.05f
-                        scaleY = 1.05f
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    enabled = enabled,
+                    onClick = onClick
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Canvas(Modifier.fillMaxSize()) {
+                val w = size.width
+                val h = size.height
+                val minDim = size.minDimension
+
+                if (circular) {
+                    val r = minDim / 2f
+                    val center = androidx.compose.ui.geometry.Offset(w / 2f, h / 2f)
+
+                    // Deep outer shadow / machined edge.
+                    drawCircle(
+                        color = Color.Black.copy(alpha = if (enabled) 0.40f else 0.18f),
+                        radius = r * 0.97f,
+                        center = androidx.compose.ui.geometry.Offset(center.x, center.y + 3.5f)
+                    )
+                    drawCircle(
+                        color = Color(0xFF0F1011),
+                        radius = r * 0.975f,
+                        center = center
+                    )
+                    drawCircle(
+                        brush = Brush.linearGradient(
+                            colors = if (enabled) {
+                                listOf(
+                                    Color(0xFF6D7173),
+                                    Color(0xFF303335),
+                                    Color(0xFF17191A),
+                                    Color(0xFF4B4F51)
+                                )
+                            } else {
+                                listOf(
+                                    Color(0xFF686B6C),
+                                    Color(0xFF444748),
+                                    Color(0xFF2C2E2F)
+                                )
+                            },
+                            start = androidx.compose.ui.geometry.Offset(
+                                w * 0.20f,
+                                h * 0.08f
+                            ),
+                            end = androidx.compose.ui.geometry.Offset(
+                                w * 0.82f,
+                                h * 0.94f
+                            )
+                        ),
+                        radius = r * 0.91f,
+                        center = center
+                    )
+                    // Fine concentric machining rings.
+                    drawCircle(
+                        color = Color.White.copy(alpha = if (enabled) 0.17f else 0.06f),
+                        radius = r * 0.79f,
+                        center = center,
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.3f)
+                    )
+                    drawCircle(
+                        color = Color.Black.copy(alpha = if (enabled) 0.42f else 0.18f),
+                        radius = r * 0.68f,
+                        center = center,
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.1f)
+                    )
+                    // Brushed-metal micro texture.
+                    for (i in 0 until 55) {
+                        val dx = ((i * 37) % 101) / 100f - 0.5f
+                        val dy = ((i * 61) % 97) / 100f - 0.5f
+                        val px = center.x + dx * r * 1.48f
+                        val py = center.y + dy * r * 1.48f
+                        if ((px - center.x) * (px - center.x) +
+                            (py - center.y) * (py - center.y) < r * r * 0.62f
+                        ) {
+                            drawCircle(
+                                color = if (i % 3 == 0) {
+                                    Color.White.copy(alpha = 0.045f)
+                                } else {
+                                    Color.Black.copy(alpha = 0.038f)
+                                },
+                                radius = 0.7f,
+                                center = androidx.compose.ui.geometry.Offset(px, py)
+                            )
+                        }
                     }
+                    // Top-left specular highlight and lower-right falloff.
+                    drawArc(
+                        color = Color.White.copy(alpha = 0.23f),
+                        startAngle = 202f,
+                        sweepAngle = 65f,
+                        useCenter = false,
+                        topLeft = androidx.compose.ui.geometry.Offset(
+                            center.x - r * 0.82f,
+                            center.y - r * 0.82f
+                        ),
+                        size = androidx.compose.ui.geometry.Size(
+                            r * 1.64f,
+                            r * 1.64f
+                        ),
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.0f)
+                    )
+                    drawCircle(
+                        color = Color.Black.copy(alpha = if (enabled) 0.16f else 0.06f),
+                        radius = r * 0.50f,
+                        center = androidx.compose.ui.geometry.Offset(
+                            center.x + r * 0.10f,
+                            center.y + r * 0.12f
+                        ),
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.8f)
+                    )
+                } else {
+                    val radius = h / 2f
+                    val left = 1.5f
+                    val top = 1.5f
+                    val bw = w - 3f
+                    val bh = h - 3f
+                    val rect = androidx.compose.ui.geometry.Size(bw, bh)
+
+                    drawRoundRect(
+                        color = Color.Black.copy(alpha = if (enabled) 0.38f else 0.16f),
+                        topLeft = androidx.compose.ui.geometry.Offset(left, top + 3.5f),
+                        size = rect,
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(radius, radius)
+                    )
+                    drawRoundRect(
+                        color = Color(0xFF111213),
+                        topLeft = androidx.compose.ui.geometry.Offset(left, top),
+                        size = rect,
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(radius, radius)
+                    )
+                    drawRoundRect(
+                        brush = Brush.linearGradient(
+                            colors = if (enabled) {
+                                listOf(
+                                    Color(0xFF777B7D),
+                                    Color(0xFF36393B),
+                                    Color(0xFF1A1C1D),
+                                    Color(0xFF575B5D)
+                                )
+                            } else {
+                                listOf(
+                                    Color(0xFF686B6C),
+                                    Color(0xFF414344),
+                                    Color(0xFF2B2D2E)
+                                )
+                            },
+                            start = androidx.compose.ui.geometry.Offset(
+                                w * 0.08f,
+                                h * 0.08f
+                            ),
+                            end = androidx.compose.ui.geometry.Offset(
+                                w * 0.88f,
+                                h * 0.95f
+                            )
+                        ),
+                        topLeft = androidx.compose.ui.geometry.Offset(
+                            2.5f,
+                            2.5f
+                        ),
+                        size = androidx.compose.ui.geometry.Size(
+                            w - 5f,
+                            h - 5f
+                        ),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(
+                            radius - 2f,
+                            radius - 2f
+                        )
+                    )
+                    drawRoundRect(
+                        color = Color.White.copy(alpha = 0.16f),
+                        topLeft = androidx.compose.ui.geometry.Offset(5f, 4f),
+                        size = androidx.compose.ui.geometry.Size(w - 10f, h * 0.30f),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(
+                            radius * 0.75f,
+                            radius * 0.75f
+                        ),
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.2f)
+                    )
+                    drawRoundRect(
+                        color = Color.Black.copy(alpha = 0.40f),
+                        topLeft = androidx.compose.ui.geometry.Offset(5f, 6f),
+                        size = androidx.compose.ui.geometry.Size(w - 10f, h - 11f),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(
+                            radius * 0.78f,
+                            radius * 0.78f
+                        ),
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.0f)
+                    )
+
+                    // Long, faint machining streaks for a tactile brushed surface.
+                    for (i in 0 until 34) {
+                        val yy = h * (0.16f + i / 43f)
+                        drawLine(
+                            color = if (i % 2 == 0) {
+                                Color.White.copy(alpha = 0.016f)
+                            } else {
+                                Color.Black.copy(alpha = 0.020f)
+                            },
+                            start = androidx.compose.ui.geometry.Offset(9f, yy),
+                            end = androidx.compose.ui.geometry.Offset(w - 9f, yy),
+                            strokeWidth = 0.7f
+                        )
+                    }
+                }
+
+                if (!enabled) {
+                    drawRect(color = Color.Black.copy(alpha = 0.18f))
+                }
+            }
+
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                modifier = Modifier.size(iconSize),
+                tint = if (enabled) Color(0xFFF1F2F2) else Color.White.copy(alpha = 0.45f)
             )
         }
     }
