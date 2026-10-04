@@ -984,6 +984,9 @@ private fun NusaMusicApp(
     var titleFontSize by remember {
         mutableStateOf(uiPrefs.getFloat("title_font_size", 34f))
     }
+    var realisticControls by remember {
+        mutableStateOf(uiPrefs.getBoolean("realistic_controls", true))
+    }
     var sortMenuExpanded by remember { mutableStateOf(false) }
     var librarySortOption by remember { mutableStateOf(LibrarySortOption.TITLE_ASC) }
 
@@ -1144,6 +1147,53 @@ private fun NusaMusicApp(
                     lineHeight = 18.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+
+                Spacer(Modifier.height(22.dp))
+
+                Text(
+                    nusaText("GAYA TOMBOL PEMUTARAN", "PLAYER BUTTON STYLE"),
+                    fontSize = 11.sp,
+                    letterSpacing = 1.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    PlayerButtonStyleOption(
+                        title = nusaText("3D Realistis", "3D Realistic"),
+                        subtitle = nusaText(
+                            "Tekstur dan kedalaman seperti tombol fisik.",
+                            "Textured, physical button depth."
+                        ),
+                        selected = realisticControls,
+                        onClick = {
+                            realisticControls = true
+                            uiPrefs.edit()
+                                .putBoolean("realistic_controls", true)
+                                .apply()
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                    PlayerButtonStyleOption(
+                        title = "Flat",
+                        subtitle = nusaText(
+                            "Tampilan datar seperti versi sebelumnya.",
+                            "Simple flat buttons like before."
+                        ),
+                        selected = !realisticControls,
+                        onClick = {
+                            realisticControls = false
+                            uiPrefs.edit()
+                                .putBoolean("realistic_controls", false)
+                                .apply()
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
 
                 Spacer(Modifier.height(22.dp))
 
@@ -1539,12 +1589,14 @@ private fun NusaMusicApp(
                                                 icon = Icons.Rounded.FastRewind,
                                                 contentDescription = nusaText("Sebelumnya", "Previous"),
                                                 onClick = onPrevious,
-                                                enabled = currentSong != null
+                                                enabled = currentSong != null,
+                                                realistic = realisticControls
                                             )
 
                                             Spacer(Modifier.width(16.dp))
 
-                                            RealisticControlButton(
+                                            PlayerControlButton(
+                                                realistic = realisticControls,
                                                 icon = if (isPlaying) {
                                                     Icons.Rounded.Pause
                                                 } else {
@@ -1561,7 +1613,6 @@ private fun NusaMusicApp(
                                                     onTogglePlay
                                                 },
                                                 enabled = true,
-                                                circular = true,
                                                 modifier = Modifier.size(84.dp),
                                                 iconSize = 40.dp
                                             )
@@ -1572,7 +1623,8 @@ private fun NusaMusicApp(
                                                 icon = Icons.Rounded.FastForward,
                                                 contentDescription = nusaText("Berikutnya", "Next"),
                                                 onClick = onNext,
-                                                enabled = currentSong != null
+                                                enabled = currentSong != null,
+                                                realistic = realisticControls
                                             )
                                         }
 
@@ -2707,17 +2759,78 @@ private fun TransportPillButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     contentDescription: String,
     onClick: () -> Unit,
-    enabled: Boolean
+    enabled: Boolean,
+    realistic: Boolean = true
 ) {
-    RealisticControlButton(
-        icon = icon,
-        contentDescription = contentDescription,
-        onClick = onClick,
-        enabled = enabled,
-        circular = false,
-        modifier = Modifier.size(width = 96.dp, height = 58.dp),
-        iconSize = 32.dp
-    )
+    if (realistic) {
+        RealisticControlButton(
+            icon = icon,
+            contentDescription = contentDescription,
+            onClick = onClick,
+            enabled = enabled,
+            circular = false,
+            modifier = Modifier.size(width = 96.dp, height = 58.dp),
+            iconSize = 32.dp
+        )
+    } else {
+        Surface(
+            onClick = onClick,
+            enabled = enabled,
+            modifier = Modifier.size(width = 96.dp, height = 58.dp),
+            shape = RoundedCornerShape(50),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            tonalElevation = 0.dp
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    icon,
+                    contentDescription = contentDescription,
+                    modifier = Modifier
+                        .size(32.dp)
+                        .graphicsLayer {
+                            scaleX = 1.05f
+                            scaleY = 1.05f
+                        }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlayerControlButton(
+    realistic: Boolean,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+    enabled: Boolean,
+    modifier: Modifier,
+    iconSize: androidx.compose.ui.unit.Dp
+) {
+    if (realistic) {
+        RealisticControlButton(
+            icon = icon,
+            contentDescription = contentDescription,
+            onClick = onClick,
+            enabled = enabled,
+            circular = true,
+            modifier = modifier,
+            iconSize = iconSize
+        )
+    } else {
+        FilledIconButton(
+            onClick = onClick,
+            enabled = enabled,
+            modifier = modifier,
+            shape = CircleShape
+        ) {
+            Icon(
+                icon,
+                contentDescription = contentDescription,
+                modifier = Modifier.size(iconSize)
+            )
+        }
+    }
 }
 
 @Composable
