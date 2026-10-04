@@ -13,6 +13,7 @@
     <application
         android:allowBackup="true"
         android:label="Nusa"
+        android:icon="@drawable/nusamusic_app_icon"
         android:supportsRtl="true"
         android:theme="@style/Theme.NusaMusic"
         android:hardwareAccelerated="true">
