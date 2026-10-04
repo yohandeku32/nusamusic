@@ -2938,48 +2938,51 @@ private fun VinylRecord(
 
             // -------------------------------------------------------------
             // POWER LED REFLECTION
-            // Small soft directional spill from the side-facing lamp.
+            // A narrow, soft red bias on the rotating PVC. Because this code
+            // lives inside the rotating vinyl layer, the highlight itself
+            // rotates with the record and catches the groove texture.
             if (isPlaying && song != null) {
                 val reflectionCenter = androidx.compose.ui.geometry.Offset(
-                    size.width * 0.125f,
-                    size.height * 0.825f
+                    size.width * 0.145f,
+                    size.height * 0.805f
                 )
 
                 drawOval(
                     brush = Brush.radialGradient(
                         colors = listOf(
-                            Color(0xFFFF4040).copy(alpha = 0.040f),
-                            Color(0xFFFF4040).copy(alpha = 0.014f),
+                            Color(0xFFFF4A4A).copy(alpha = 0.050f),
+                            Color(0xFFFF3333).copy(alpha = 0.022f),
                             Color.Transparent
                         ),
                         center = reflectionCenter,
-                        radius = radius * 0.18f
+                        radius = radius * 0.19f
                     ),
                     topLeft = androidx.compose.ui.geometry.Offset(
-                        reflectionCenter.x - radius * 0.27f,
-                        reflectionCenter.y - radius * 0.10f
+                        reflectionCenter.x - radius * 0.30f,
+                        reflectionCenter.y - radius * 0.075f
                     ),
                     size = androidx.compose.ui.geometry.Size(
-                        radius * 0.54f,
-                        radius * 0.20f
+                        radius * 0.60f,
+                        radius * 0.15f
                     )
                 )
 
+                // A second, tighter streak follows the vinyl's groove direction.
                 drawArc(
-                    color = Color(0xFFFF5050).copy(alpha = 0.020f),
-                    startAngle = 142f,
-                    sweepAngle = 24f,
+                    color = Color(0xFFFF5959).copy(alpha = 0.028f),
+                    startAngle = 145f,
+                    sweepAngle = 26f,
                     useCenter = false,
                     topLeft = androidx.compose.ui.geometry.Offset(
-                        reflectionCenter.x - radius * 0.20f,
-                        reflectionCenter.y - radius * 0.20f
+                        reflectionCenter.x - radius * 0.23f,
+                        reflectionCenter.y - radius * 0.23f
                     ),
                     size = androidx.compose.ui.geometry.Size(
-                        radius * 0.40f,
-                        radius * 0.40f
+                        radius * 0.46f,
+                        radius * 0.46f
                     ),
                     style = androidx.compose.ui.graphics.drawscope.Stroke(
-                        width = 1.3f
+                        width = 1.6f
                     )
                 )
             }
@@ -3460,46 +3463,49 @@ private fun VinylPowerIndicator(
                 // ---------------------------------------------------------
                 // OPTICAL BLOOM
                 // ---------------------------------------------------------
-                // The red source is elongated toward the record so it reads
-                // like a side-facing lamp whose light spills into the vinyl.
+                // Side-emitting lamp: the light leaves the switch laterally,
+                // producing a soft streak instead of a visible red dot.
                 val lightCenter = androidx.compose.ui.geometry.Offset(
-                    center.x + 15.0f,
+                    center.x + 16.5f,
                     center.y + 0.5f
                 )
 
                 if (isPlaying) {
+                    // Broad spill.
                     drawOval(
                         brush = Brush.radialGradient(
                             colors = listOf(
-                                Color(0xFFFF3434).copy(alpha = 0.19f * lightAlpha),
-                                Color(0xFFFF3434).copy(alpha = 0.075f * lightAlpha),
+                                Color(0xFFFF3838).copy(alpha = 0.14f * lightAlpha),
+                                Color(0xFFFF3838).copy(alpha = 0.052f * lightAlpha),
+                                Color(0xFFFF3838).copy(alpha = 0.012f * lightAlpha),
                                 Color.Transparent
                             ),
                             center = lightCenter,
-                            radius = 12.5f
+                            radius = 17f
                         ),
                         topLeft = androidx.compose.ui.geometry.Offset(
-                            lightCenter.x - 16f,
-                            lightCenter.y - 8f
+                            lightCenter.x - 18f,
+                            lightCenter.y - 7f
                         ),
                         size = androidx.compose.ui.geometry.Size(
-                            32f,
-                            16f
+                            36f,
+                            14f
                         )
                     )
 
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                Color(0xFFFF5A5A).copy(alpha = 0.16f * lightAlpha),
-                                Color(0xFFFF2020).copy(alpha = 0.045f * lightAlpha),
-                                Color.Transparent
-                            ),
-                            center = lightCenter,
-                            radius = 8.5f
+                    // Focused beam edge.
+                    drawLine(
+                        color = Color(0xFFFF4B4B).copy(alpha = 0.11f * lightAlpha),
+                        start = androidx.compose.ui.geometry.Offset(
+                            lightCenter.x - 1f,
+                            lightCenter.y
                         ),
-                        radius = 8.5f,
-                        center = lightCenter
+                        end = androidx.compose.ui.geometry.Offset(
+                            lightCenter.x + 11f,
+                            lightCenter.y + 0.4f
+                        ),
+                        strokeWidth = 1.8f,
+                        cap = androidx.compose.ui.graphics.StrokeCap.Round
                     )
                 }
 
@@ -3559,52 +3565,60 @@ private fun VinylPowerIndicator(
                 // ---------------------------------------------------------
                 // SIDE-FACING LIGHT SOURCE
                 // ---------------------------------------------------------
-                // Dark socket behind the lens.
-                drawOval(
-                    color = Color.Black.copy(alpha = 0.80f),
-                    topLeft = androidx.compose.ui.geometry.Offset(
-                        lightCenter.x - 3.9f,
-                        lightCenter.y - 3.15f
-                    ),
-                    size = androidx.compose.ui.geometry.Size(
-                        7.8f,
-                        6.3f
-                    )
-                )
-
-                // Broad luminous lens instead of a dot.
-                drawOval(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            Color(0xFFFFC0C0).copy(alpha = 0.95f * lightAlpha),
-                            Color(0xFFFF4A4A).copy(alpha = 0.72f * lightAlpha),
-                            Color(0xFFE10F0F).copy(alpha = 0.42f * lightAlpha),
-                            Color.Transparent
-                        ),
-                        center = lightCenter,
-                        radius = 5.4f
-                    ),
+                // Recessed side slot. It is bright but not circular.
+                drawRoundRect(
+                    color = Color.Black.copy(alpha = 0.82f),
                     topLeft = androidx.compose.ui.geometry.Offset(
                         lightCenter.x - 4.5f,
-                        lightCenter.y - 3.6f
+                        lightCenter.y - 2.5f
                     ),
                     size = androidx.compose.ui.geometry.Size(
                         9f,
-                        7.2f
+                        5f
+                    ),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(
+                        2.2f,
+                        2.2f
                     )
                 )
 
-                // Tiny specular streak: helps the lamp read as glass.
-                drawOval(
-                    color = Color.White.copy(alpha = 0.38f * lightAlpha),
+                // Hot elongated LED lens.
+                drawRoundRect(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            Color(0xFFFF7777).copy(alpha = 0.55f * lightAlpha),
+                            Color(0xFFFF3030).copy(alpha = 0.95f * lightAlpha),
+                            Color(0xFFD90909).copy(alpha = 0.62f * lightAlpha),
+                            Color.Transparent
+                        )
+                    ),
                     topLeft = androidx.compose.ui.geometry.Offset(
-                        lightCenter.x - 2.3f,
-                        lightCenter.y - 2.1f
+                        lightCenter.x - 3.8f,
+                        lightCenter.y - 1.9f
                     ),
                     size = androidx.compose.ui.geometry.Size(
-                        2.4f,
-                        1.1f
+                        8.5f,
+                        3.8f
+                    ),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(
+                        1.8f,
+                        1.8f
                     )
+                )
+
+                // Tiny glass catch-light.
+                drawLine(
+                    color = Color.White.copy(alpha = 0.32f * lightAlpha),
+                    start = androidx.compose.ui.geometry.Offset(
+                        lightCenter.x - 1.9f,
+                        lightCenter.y - 1.1f
+                    ),
+                    end = androidx.compose.ui.geometry.Offset(
+                        lightCenter.x - 0.2f,
+                        lightCenter.y - 1.1f
+                    ),
+                    strokeWidth = 0.75f,
+                    cap = androidx.compose.ui.graphics.StrokeCap.Round
                 )
             }
         }
