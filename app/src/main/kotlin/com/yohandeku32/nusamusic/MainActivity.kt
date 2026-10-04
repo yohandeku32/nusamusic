@@ -74,6 +74,10 @@ import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.rounded.FastRewind
+import androidx.compose.material.icons.rounded.FastForward
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -1530,7 +1534,7 @@ private fun NusaMusicApp(
                                             horizontalArrangement = Arrangement.Center
                                         ) {
                                             TransportPillButton(
-                                                icon = Icons.Default.FastRewind,
+                                                icon = Icons.Rounded.FastRewind,
                                                 contentDescription = nusaText("Sebelumnya", "Previous"),
                                                 onClick = onPrevious,
                                                 enabled = currentSong != null
@@ -1549,23 +1553,23 @@ private fun NusaMusicApp(
                                             ) {
                                                 Icon(
                                                     if (isPlaying) {
-                                                        Icons.Default.Pause
+                                                        Icons.Rounded.Pause
                                                     } else {
-                                                        Icons.Default.PlayArrow
+                                                        Icons.Rounded.PlayArrow
                                                     },
                                                     contentDescription = if (isPlaying) {
                                                         nusaText("Jeda", "Pause")
                                                     } else {
                                                         nusaText("Putar", "Play")
                                                     },
-                                                    modifier = Modifier.size(36.dp)
+                                                    modifier = Modifier.size(40.dp)
                                                 )
                                             }
 
                                             Spacer(Modifier.width(16.dp))
 
                                             TransportPillButton(
-                                                icon = Icons.Default.FastForward,
+                                                icon = Icons.Rounded.FastForward,
                                                 contentDescription = nusaText("Berikutnya", "Next"),
                                                 onClick = onNext,
                                                 enabled = currentSong != null
@@ -2658,7 +2662,7 @@ private fun TransportPillButton(
     androidx.compose.material3.Surface(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier.size(width = 92.dp, height = 54.dp),
+        modifier = Modifier.size(width = 96.dp, height = 58.dp),
         shape = RoundedCornerShape(50),
         color = MaterialTheme.colorScheme.surfaceVariant,
         tonalElevation = 0.dp
@@ -2668,7 +2672,7 @@ private fun TransportPillButton(
                 icon,
                 contentDescription = contentDescription,
                 modifier = Modifier
-                    .size(28.dp)
+                    .size(32.dp)
                     .graphicsLayer {
                         scaleX = 1.05f
                         scaleY = 1.05f
@@ -3393,7 +3397,7 @@ private fun VinylTonearm(
     Canvas(modifier = modifier) {
         // Pivot remains fixed in the white area outside the vinyl.
         val pivot = androidx.compose.ui.geometry.Offset(
-            x = size.width * 0.905f,
+            x = size.width * 0.935f,
             y = size.height * 0.125f
         )
 
@@ -3402,29 +3406,29 @@ private fun VinylTonearm(
             moveTo(pivot.x, pivot.y)
 
             cubicTo(
-                size.width * 0.908f,
+                size.width * 0.938f,
                 size.height * 0.235f,
-                size.width * 0.910f,
+                size.width * 0.940f,
                 size.height * 0.345f,
-                size.width * 0.885f,
+                size.width * 0.915f,
                 size.height * 0.440f
             )
 
             cubicTo(
-                size.width * 0.865f,
+                size.width * 0.895f,
                 size.height * 0.525f,
-                size.width * 0.835f,
+                size.width * 0.865f,
                 size.height * 0.600f,
-                size.width * 0.795f,
+                size.width * 0.825f,
                 size.height * 0.665f
             )
 
             cubicTo(
-                size.width * 0.780f,
+                size.width * 0.810f,
                 size.height * 0.690f,
-                size.width * 0.770f,
+                size.width * 0.800f,
                 size.height * 0.710f,
-                size.width * 0.758f,
+                size.width * 0.788f,
                 size.height * 0.725f
             )
         }
