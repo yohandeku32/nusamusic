@@ -18,6 +18,7 @@ import android.os.Bundle
 import android.content.SharedPreferences
 import org.json.JSONArray
 import kotlin.math.abs
+import kotlin.math.pow
 import android.view.View
 import android.view.WindowInsets
 import android.view.WindowInsetsController
@@ -52,6 +53,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.spring
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Sort
