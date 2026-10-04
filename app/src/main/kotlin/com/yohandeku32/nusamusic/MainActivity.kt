@@ -3388,14 +3388,14 @@ private fun VinylTonearm(
     val armAngle by animateFloatAsState(
         targetValue = targetAngle,
         animationSpec = if (isPlaying && hasSong) {
-            tween(
-                durationMillis = 1150,
-                easing = androidx.compose.animation.core.FastOutSlowInEasing
+            androidx.compose.animation.core.spring(
+                dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
+                stiffness = 180f
             )
         } else {
-            tween(
-                durationMillis = 900,
-                easing = androidx.compose.animation.core.FastOutSlowInEasing
+            androidx.compose.animation.core.spring(
+                dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
+                stiffness = 220f
             )
         },
         label = "tonearmAngle"
@@ -3411,7 +3411,7 @@ private fun VinylTonearm(
         // Keep the pivot clearly in the white area to the right of the vinyl.
         // The slight right shift is intentional; a small part of the artwork
         // may sit beyond the canvas edge, matching a real turntable layout.
-        val pivotShift = size.width * 0.05f
+        val pivotShift = size.width * 0.085f
         val left = size.width - designWidth + pivotShift
         val top = -size.height * 0.085f
 
