@@ -2844,15 +2844,6 @@ private fun RealisticControlButton(
     modifier: Modifier = Modifier,
     iconSize: androidx.compose.ui.unit.Dp = 32.dp
 ) {
-
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    contentDescription: String,
-    onClick: () -> Unit,
-    enabled: Boolean,
-    circular: Boolean,
-    modifier: Modifier = Modifier,
-    iconSize: androidx.compose.ui.unit.Dp = 32.dp
-) {
     var isPressed by remember { mutableStateOf(false) }
     val pressScale by animateFloatAsState(
         targetValue = if (isPressed) 0.92f else 1f,
