@@ -1489,14 +1489,16 @@ private fun NusaMusicApp(
                                     ) {
                                         Spacer(Modifier.height(2.dp))
 
-                                        VinylRecord(
-                                            song = currentSong,
+                                        SongAlbumCarousel(
+                                            songs = filtered,
+                                            currentSong = currentSong,
                                             isPlaying = isPlaying,
                                             positionMs = positionMs,
                                             durationMs = durationMs,
+                                            onPlay = onPlay,
                                             modifier = Modifier
-                                                .fillMaxWidth(0.84f)
-                                                .aspectRatio(1f)
+                                                .fillMaxWidth(0.98f)
+                                                .aspectRatio(1.08f)
                                         )
 
                                         Spacer(Modifier.height(24.dp))
@@ -1746,21 +1748,13 @@ private fun NusaMusicApp(
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(
-                                    Brush.verticalGradient(
-                                        colors = listOf(
-                                            Color(0xFF18191B),
-                                            Color(0xFF0D0E10),
-                                            Color(0xFF070708)
-                                        )
-                                    )
-                                )
+                                .background(Color(0xFFF3F1EB))
                         ) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(76.dp)
-                                    .background(Color.Black.copy(alpha = 0.18f))
+                                    .background(Color(0xFFF8F7F3))
                                     .padding(horizontal = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -1774,7 +1768,7 @@ private fun NusaMusicApp(
                                     Icon(
                                         Icons.Default.ArrowBack,
                                         contentDescription = nusaText("Kembali ke pemutar", "Back to player"),
-                                        tint = Color.White
+                                        tint = Color(0xFF252525)
                                     )
                                 }
 
@@ -1784,7 +1778,7 @@ private fun NusaMusicApp(
                                     textAlign = TextAlign.Center,
                                     fontSize = 21.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color.White
+                                    color = Color(0xFF252525)
                                 )
 
                                 Box {
@@ -3095,6 +3089,242 @@ private fun RealisticControlButton(
     }
 }
 
+
+@Composable
+private fun SongAlbumCarousel(
+    songs: List<Song>,
+    currentSong: Song?,
+    isPlaying: Boolean,
+    positionMs: Long,
+    durationMs: Long,
+    onPlay: (Song) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (songs.isEmpty()) {
+        VinylRecord(
+            song = currentSong,
+            isPlaying = isPlaying,
+            positionMs = positionMs,
+            durationMs = durationMs,
+            modifier = modifier
+        )
+        return
+    }
+
+    val initialPage = remember(songs, currentSong?.id) {
+        currentSong?.let { selected ->
+            songs.indexOfFirst { it.id == selected.id }.takeIf { it >= 0 } ?: 0
+        } ?: 0
+    }
+
+    val pagerState = androidx.compose.foundation.pager.rememberPagerState(
+        initialPage = initialPage,
+        pageCount = { songs.size }
+    )
+
+    LaunchedEffect(currentSong?.id, songs) {
+        val target = currentSong?.let { selected ->
+            songs.indexOfFirst { it.id == selected.id }
+        } ?: 0
+
+        if (target >= 0 && target < songs.size && target != pagerState.currentPage) {
+            pagerState.animateScrollToPage(target)
+        }
+    }
+
+    LaunchedEffect(pagerState, songs) {
+        androidx.compose.runtime.snapshotFlow { pagerState.settledPage }
+            .collect { page ->
+                songs.getOrNull(page)?.let { song ->
+                    if (song.id != currentSong?.id) {
+                        onPlay(song)
+                    }
+                }
+            }
+    }
+
+    androidx.compose.foundation.pager.HorizontalPager(
+        state = pagerState,
+        modifier = modifier,
+        contentPadding = PaddingValues(horizontal = 12.dp),
+        pageSpacing = 2.dp
+    ) { page ->
+        val song = songs[page]
+
+        AlbumVinylSlide(
+            song = song,
+            isPlaying = isPlaying && song.id == currentSong?.id,
+            positionMs = if (song.id == currentSong?.id) positionMs else 0L,
+            durationMs = if (song.id == currentSong?.id) durationMs else song.durationMs,
+            modifier = Modifier.fillMaxSize()
+        )
+    }
+}
+
+@Composable
+private fun AlbumVinylSlide(
+    song: Song,
+    isPlaying: Boolean,
+    positionMs: Long,
+    durationMs: Long,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1.10f),
+            contentAlignment = Alignment.Center
+        ) {
+            // Vinyl peeking out from behind the sleeve, like a physical record
+            // partially pulled from its album jacket.
+            VinylDiscPreview(
+                song = song,
+                modifier = Modifier
+                    .fillMaxHeight(0.76f)
+                    .aspectRatio(1f)
+                    .offset(x = 62.dp, y = 4.dp)
+            )
+
+            // Album sleeve remains in front of the record.
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight(0.78f)
+                    .aspectRatio(0.86f)
+                    .offset(x = (-34).dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .graphicsLayer {
+                        shadowElevation = 10.dp.toPx()
+                        shape = RoundedCornerShape(3.dp)
+                        clip = false
+                    }
+            ) {
+                WornCoverArtwork(
+                    song = song,
+                    maxSizePx = 720,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
+
+        // Keep the established tonearm design layered over the turntable scene.
+        VinylTonearm(
+            isPlaying = isPlaying,
+            hasSong = true,
+            progress = if (durationMs > 0L) {
+                positionMs.toFloat() / durationMs.toFloat()
+            } else {
+                0f
+            },
+            modifier = Modifier.fillMaxSize()
+        )
+    }
+}
+
+@Composable
+private fun VinylDiscPreview(
+    song: Song,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .clip(CircleShape)
+            .background(Color(0xFF050505))
+            .graphicsLayer {
+                shadowElevation = 8.dp.toPx()
+                shape = CircleShape
+                clip = false
+            }
+    ) {
+        Canvas(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            val radius = size.minDimension / 2f
+            val center = androidx.compose.ui.geometry.Offset(
+                size.width / 2f,
+                size.height / 2f
+            )
+
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        Color(0xFF3A3A3A),
+                        Color(0xFF101010),
+                        Color(0xFF020202)
+                    ),
+                    center = androidx.compose.ui.geometry.Offset(
+                        size.width * 0.32f,
+                        size.height * 0.28f
+                    ),
+                    radius = radius * 1.05f
+                ),
+                radius = radius,
+                center = center
+            )
+
+            for (i in 0..72) {
+                val groove = radius * (0.20f + i * 0.0105f)
+                if (groove < radius * 0.96f) {
+                    drawCircle(
+                        color = Color.White.copy(alpha = if (i % 9 == 0) 0.050f else 0.014f),
+                        radius = groove,
+                        center = center,
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(
+                            width = if (i % 9 == 0) 0.75f else 0.30f
+                        )
+                    )
+                }
+            }
+
+            drawArc(
+                color = Color.White.copy(alpha = 0.13f),
+                startAngle = -72f,
+                sweepAngle = 48f,
+                useCenter = false,
+                topLeft = androidx.compose.ui.geometry.Offset(
+                    size.width * 0.035f,
+                    size.height * 0.035f
+                ),
+                size = androidx.compose.ui.geometry.Size(
+                    size.width * 0.93f,
+                    size.height * 0.93f
+                ),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 5f)
+            )
+
+            drawCircle(
+                color = Color.Black.copy(alpha = 0.70f),
+                radius = radius * 0.23f,
+                center = center
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .size(72.dp)
+                .align(Alignment.Center)
+                .clip(CircleShape)
+                .background(Color(0xFF171717))
+        ) {
+            ArtworkView(
+                song = song,
+                maxSizePx = 256,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .size(7.dp)
+                .align(Alignment.Center)
+                .clip(CircleShape)
+                .background(Color(0xFFB9B9B9))
+        )
+    }
+}
 
 @Composable
 private fun VinylRecord(
@@ -4723,34 +4953,25 @@ private fun LibrarySongRow(
 ) {
     // Fixed height keeps grid rows stable when the active track changes.
     val cardHeight = 194.dp
-    val artworkSize = if (selected) 160.dp else 148.dp
-    val artworkAreaHeight = 164.dp
+    val artworkSize = if (selected) 154.dp else 146.dp
+    val artworkAreaHeight = 158.dp
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(cardHeight)
             .clip(RoundedCornerShape(16.dp))
-            .then(
-                if (selected) {
-                    Modifier
-                        .background(
-                            brush = Brush.verticalGradient(
-                                colors = listOf(
-                                    Color(0xFF292B2E),
-                                    Color(0xFF151618)
-                                )
-                            ),
-                            shape = RoundedCornerShape(16.dp)
-                        )
-                        .graphicsLayer {
-                            scaleX = 1.012f
-                            scaleY = 1.012f
-                        }
-                } else {
-                    Modifier
-                }
+            .background(
+                if (selected) Color(0xFFFFFFFF) else Color(0xFFFAF9F5),
+                shape = RoundedCornerShape(16.dp)
             )
+            .graphicsLayer {
+                shadowElevation = if (selected) 4.dp.toPx() else 2.dp.toPx()
+                shape = RoundedCornerShape(16.dp)
+                clip = false
+                scaleX = if (selected) 1.012f else 1f
+                scaleY = if (selected) 1.012f else 1f
+            }
             .clickable { onPlay(song) }
             .padding(horizontal = 4.dp, vertical = 6.dp)
     ) {
@@ -4770,7 +4991,7 @@ private fun LibrarySongRow(
                     modifier = Modifier
                         .size(artworkSize)
                         .clip(RoundedCornerShape(7.dp))
-                        .background(Color(0xFF0A0A0A))
+                        .background(Color(0xFFE5E2DB))
                         .padding(2.dp)
                 ) {
                     WornCoverArtwork(
@@ -4788,7 +5009,7 @@ private fun LibrarySongRow(
                 fontSize = if (selected) 13.sp else 12.sp,
                 lineHeight = 13.sp,
                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                color = Color.White,
+                color = Color(0xFF242424),
                 textAlign = TextAlign.Center,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -4801,7 +5022,7 @@ private fun LibrarySongRow(
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 fontSize = 9.5.sp,
                 lineHeight = 10.sp,
-                color = if (selected) Color(0xFFD2D2D2) else Color(0xFFAAAAAA),
+                color = if (selected) Color(0xFF66625C) else Color(0xFF8A867E),
                 textAlign = TextAlign.Center,
                 modifier = Modifier
                     .fillMaxWidth()
