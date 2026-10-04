@@ -1572,7 +1572,7 @@ private fun NusaMusicApp(
                                         Row(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .padding(horizontal = 12.dp),
+                                                .padding(horizontal = 32.dp),
                                             horizontalArrangement = Arrangement.SpaceBetween
                                         ) {
                                             Text(formatTime(positionMs), fontSize = 12.sp)
@@ -2777,7 +2777,7 @@ private fun TransportPillButton(
         Surface(
             onClick = onClick,
             enabled = enabled,
-            modifier = Modifier.size(width = 96.dp, height = 58.dp),
+            modifier = Modifier.size(width = 144.dp, height = 76.dp),
             shape = RoundedCornerShape(50),
             color = MaterialTheme.colorScheme.surfaceVariant,
             tonalElevation = 0.dp
@@ -2787,7 +2787,7 @@ private fun TransportPillButton(
                     icon,
                     contentDescription = contentDescription,
                     modifier = Modifier
-                        .size(32.dp)
+                        .size(36.dp)
                         .graphicsLayer {
                             scaleX = 1.05f
                             scaleY = 1.05f
