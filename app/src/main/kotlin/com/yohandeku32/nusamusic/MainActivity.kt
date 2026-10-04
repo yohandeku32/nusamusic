@@ -3448,9 +3448,9 @@ private fun VinylTonearm(
             // Very subtle shadow under the complete metal arm.
             drawPath(
                 path = armPath,
-                color = Color.Black.copy(alpha = 0.18f),
+                color = Color.Black.copy(alpha = 0.14f),
                 style = androidx.compose.ui.graphics.drawscope.Stroke(
-                    width = 8.5f,
+                    width = 14.0f,
                     cap = androidx.compose.ui.graphics.StrokeCap.Round,
                     join = androidx.compose.ui.graphics.StrokeJoin.Round
                 )
@@ -3461,7 +3461,7 @@ private fun VinylTonearm(
                 path = armPath,
                 color = Color(0xFF3C3C3C),
                 style = androidx.compose.ui.graphics.drawscope.Stroke(
-                    width = 7.0f,
+                    width = 11.5f,
                     cap = androidx.compose.ui.graphics.StrokeCap.Round,
                     join = androidx.compose.ui.graphics.StrokeJoin.Round
                 )
@@ -3485,7 +3485,7 @@ private fun VinylTonearm(
                     )
                 ),
                 style = androidx.compose.ui.graphics.drawscope.Stroke(
-                    width = 4.9f,
+                    width = 8.8f,
                     cap = androidx.compose.ui.graphics.StrokeCap.Round,
                     join = androidx.compose.ui.graphics.StrokeJoin.Round
                 )
@@ -3496,7 +3496,7 @@ private fun VinylTonearm(
                 path = armPath,
                 color = Color.White.copy(alpha = 0.44f),
                 style = androidx.compose.ui.graphics.drawscope.Stroke(
-                    width = 0.95f,
+                    width = 1.35f,
                     cap = androidx.compose.ui.graphics.StrokeCap.Round,
                     join = androidx.compose.ui.graphics.StrokeJoin.Round
                 )
@@ -3516,7 +3516,7 @@ private fun VinylTonearm(
                 color = Color(0xFF202020),
                 start = collarTop,
                 end = collarBottom,
-                strokeWidth = size.width * 0.018f,
+                strokeWidth = size.width * 0.024f,
                 cap = androidx.compose.ui.graphics.StrokeCap.Round
             )
 
@@ -3530,13 +3530,13 @@ private fun VinylTonearm(
                     collarBottom.x - 1f,
                     collarBottom.y
                 ),
-                strokeWidth = size.width * 0.007f,
+                strokeWidth = size.width * 0.010f,
                 cap = androidx.compose.ui.graphics.StrokeCap.Round
             )
 
             // The headshell follows the exact same rotation.
-            val shellWidth = size.width * 0.066f
-            val shellHeight = size.height * 0.054f
+            val shellWidth = size.width * 0.078f
+            val shellHeight = size.height * 0.066f
 
             val shellNeckStart = androidx.compose.ui.geometry.Offset(
                 x = size.width * 0.785f,
@@ -3547,7 +3547,7 @@ private fun VinylTonearm(
                 color = Color(0xFF252525),
                 start = shellNeckStart,
                 end = headshellCenter,
-                strokeWidth = 6.8f,
+                strokeWidth = 10.0f,
                 cap = androidx.compose.ui.graphics.StrokeCap.Round
             )
 
@@ -3555,7 +3555,7 @@ private fun VinylTonearm(
                 color = Color(0xFFD0D0D0),
                 start = shellNeckStart,
                 end = headshellCenter,
-                strokeWidth = 4.0f,
+                strokeWidth = 6.2f,
                 cap = androidx.compose.ui.graphics.StrokeCap.Round
             )
 
@@ -3597,7 +3597,7 @@ private fun VinylTonearm(
                 for (col in 0 until 3) {
                     drawCircle(
                         color = Color(0xFF6A6A6A),
-                        radius = 0.95f,
+                        radius = 1.10f,
                         center = androidx.compose.ui.geometry.Offset(
                             x = headshellCenter.x -
                                 shellWidth * 0.20f +
@@ -3621,7 +3621,7 @@ private fun VinylTonearm(
                 color = Color(0xFF161616),
                 start = cantileverStart,
                 end = stylusTip,
-                strokeWidth = 1.85f,
+                strokeWidth = 2.25f,
                 cap = androidx.compose.ui.graphics.StrokeCap.Round
             )
 
@@ -3631,7 +3631,7 @@ private fun VinylTonearm(
                 } else {
                     Color(0xFF777777)
                 },
-                radius = 2.05f,
+                radius = 2.45f,
                 center = stylusTip
             )
         }
