@@ -3363,11 +3363,11 @@ private fun VinylTonearm(
     progress: Float,
     modifier: Modifier = Modifier
 ) {
-    // Clean straight/offset tonearm. The parked pivot sits in the white
-    // space outside the record, while the wand reaches toward the outer
-    // groove with a subtle headshell offset.
+    // Reference-style hi-fi tonearm:
+    // a compact pivot/bearing at the top, a long slim metal tube with
+    // one smooth bend, and a rectangular headshell/cartridge at the end.
     val targetAngle = if (isPlaying && hasSong) {
-        progress * 7.0f
+        progress * 5.0f
     } else {
         0f
     }
@@ -3375,7 +3375,7 @@ private fun VinylTonearm(
     val armAngle by animateFloatAsState(
         targetValue = targetAngle,
         animationSpec = tween(
-            durationMillis = if (isPlaying) 900 else 650,
+            durationMillis = if (isPlaying) 900 else 620,
             easing = androidx.compose.animation.core.FastOutSlowInEasing
         ),
         label = "tonearmAngle"
@@ -3385,51 +3385,66 @@ private fun VinylTonearm(
     val contact by animateFloatAsState(
         targetValue = targetContact,
         animationSpec = tween(
-            durationMillis = if (isPlaying) 680 else 380,
+            durationMillis = if (isPlaying) 720 else 400,
             easing = androidx.compose.animation.core.FastOutSlowInEasing
         ),
         label = "tonearmContact"
     )
 
     Canvas(modifier = modifier) {
-        // Pivot deliberately moved into the empty white area to the right
-        // of the record, matching the reference placement.
+        // Keep the pivot in the white area outside the record.
         val pivot = androidx.compose.ui.geometry.Offset(
-            x = size.width * 0.945f,
-            y = size.height * 0.135f
+            x = size.width * 0.905f,
+            y = size.height * 0.125f
         )
 
-        // Straight/offset geometry. It is intentionally not S-shaped.
-        val elbow = androidx.compose.ui.geometry.Offset(
-            x = size.width * 0.900f,
-            y = size.height * 0.425f
+        // The geometry intentionally places the stylus near the outer rim.
+        // It is much farther right than the previous version.
+        val armPath = androidx.compose.ui.graphics.Path().apply {
+            moveTo(pivot.x, pivot.y)
+
+            cubicTo(
+                size.width * 0.908f,
+                size.height * 0.235f,
+                size.width * 0.910f,
+                size.height * 0.345f,
+                size.width * 0.885f,
+                size.height * 0.440f
+            )
+
+            cubicTo(
+                size.width * 0.865f,
+                size.height * 0.525f,
+                size.width * 0.835f,
+                size.height * 0.600f,
+                size.width * 0.795f,
+                size.height * 0.665f
+            )
+
+            cubicTo(
+                size.width * 0.780f,
+                size.height * 0.690f,
+                size.width * 0.770f,
+                size.height * 0.710f,
+                size.width * 0.758f,
+                size.height * 0.725f
+            )
+        }
+
+        val headshellCenter = androidx.compose.ui.geometry.Offset(
+            x = size.width * 0.775f,
+            y = size.height * 0.745f
         )
 
-        val wandEnd = androidx.compose.ui.geometry.Offset(
-            x = size.width * 0.765f,
-            y = size.height * 0.660f
-        )
-
-        val headshellMount = androidx.compose.ui.geometry.Offset(
-            x = size.width * 0.725f,
-            y = size.height * 0.700f
-        )
-
-        // Headshell starts close to the outer playing area. The needle is
-        // intentionally parked near the outer groove, far away from the
-        // center artwork.
-        val cartridgeCenter = androidx.compose.ui.geometry.Offset(
-            x = size.width * 0.735f,
-            y = size.height * 0.755f
-        )
-
-        val stylusLift = size.height * 0.010f * (1f - contact)
         val stylusTip = androidx.compose.ui.geometry.Offset(
-            x = size.width * 0.700f,
-            y = size.height * 0.825f + stylusLift
+            x = size.width * 0.748f,
+            y = size.height * 0.805f +
+                size.height * 0.010f * (1f - contact)
         )
 
-        fun rotated(point: androidx.compose.ui.geometry.Offset): androidx.compose.ui.geometry.Offset {
+        fun rotatePoint(
+            point: androidx.compose.ui.geometry.Offset
+        ): androidx.compose.ui.geometry.Offset {
             val radians = Math.toRadians(armAngle.toDouble())
             val cos = kotlin.math.cos(radians).toFloat()
             val sin = kotlin.math.sin(radians).toFloat()
@@ -3442,288 +3457,245 @@ private fun VinylTonearm(
             )
         }
 
-        val rElbow = rotated(elbow)
-        val rWandEnd = rotated(wandEnd)
-        val rHeadshell = rotated(headshellMount)
-        val rCartridge = rotated(cartridgeCenter)
-        val rStylusTip = rotated(stylusTip)
+        val rHeadshell = rotatePoint(headshellCenter)
+        val rStylus = rotatePoint(stylusTip)
 
-        // Fine shadow underneath the metal assembly.
-        drawLine(
-            color = Color.Black.copy(alpha = 0.28f),
-            start = androidx.compose.ui.geometry.Offset(pivot.x + 2f, pivot.y + 3f),
-            end = androidx.compose.ui.geometry.Offset(rElbow.x + 2f, rElbow.y + 3f),
-            strokeWidth = 11f,
-            cap = androidx.compose.ui.graphics.StrokeCap.Round
-        )
-        drawLine(
-            color = Color.Black.copy(alpha = 0.28f),
-            start = androidx.compose.ui.geometry.Offset(rElbow.x + 2f, rElbow.y + 3f),
-            end = androidx.compose.ui.geometry.Offset(rWandEnd.x + 2f, rWandEnd.y + 3f),
-            strokeWidth = 10f,
-            cap = androidx.compose.ui.graphics.StrokeCap.Round
-        )
-
-        // Realistic low-profile pivot assembly. The circular housing is
-        // mechanically plausible, but deliberately shallow and subtle.
-        val pivotShadowCenter = androidx.compose.ui.geometry.Offset(
-            pivot.x + size.minDimension * 0.008f,
-            pivot.y + size.minDimension * 0.011f
-        )
-
-        drawCircle(
-            color = Color.Black.copy(alpha = 0.16f),
-            radius = size.minDimension * 0.050f,
-            center = pivotShadowCenter
-        )
-
-        // Lower body / platter bearing housing.
-        drawCircle(
-            color = Color(0xFF8E8E8E),
-            radius = size.minDimension * 0.047f,
-            center = pivot
-        )
-
-        // Soft metallic face.
-        drawCircle(
-            brush = Brush.radialGradient(
-                colors = listOf(
-                    Color(0xFFF2F2F2),
-                    Color(0xFFD9D9D9),
-                    Color(0xFFB4B4B4),
-                    Color(0xFF7F7F7F)
-                ),
-                center = androidx.compose.ui.geometry.Offset(
-                    pivot.x - size.minDimension * 0.012f,
-                    pivot.y - size.minDimension * 0.014f
-                ),
-                radius = size.minDimension * 0.050f
-            ),
-            radius = size.minDimension * 0.041f,
-            center = pivot
-        )
-
-        // Very thin bevel rather than a heavy outline.
-        drawCircle(
-            color = Color.White.copy(alpha = 0.42f),
-            radius = size.minDimension * 0.039f,
-            center = androidx.compose.ui.geometry.Offset(
-                pivot.x - 0.5f,
-                pivot.y - 0.6f
-            ),
+        // Subtle mechanical shadow, kept deliberately light.
+        drawPath(
+            path = armPath,
+            color = Color.Black.copy(alpha = 0.18f),
             style = androidx.compose.ui.graphics.drawscope.Stroke(
-                width = 1.1f
+                width = 8.5f,
+                cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                join = androidx.compose.ui.graphics.StrokeJoin.Round
             )
         )
 
-        // Small central bearing cap.
-        drawCircle(
-            color = Color(0xFF777777),
-            radius = size.minDimension * 0.016f,
-            center = pivot
+        // Slim dark under-body.
+        drawPath(
+            path = armPath,
+            color = Color(0xFF3C3C3C),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(
+                width = 7.0f,
+                cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                join = androidx.compose.ui.graphics.StrokeJoin.Round
+            )
+        )
+
+        // Fine metallic tube.
+        drawPath(
+            path = armPath,
+            brush = Brush.linearGradient(
+                colors = listOf(
+                    Color(0xFF8B8B8B),
+                    Color(0xFFE5E5E5),
+                    Color(0xFFB7B7B7),
+                    Color(0xFFF4F4F4),
+                    Color(0xFF898989)
+                ),
+                start = androidx.compose.ui.geometry.Offset(
+                    pivot.x,
+                    pivot.y
+                ),
+                end = androidx.compose.ui.geometry.Offset(
+                    size.width * 0.75f,
+                    size.height * 0.75f
+                )
+            ),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(
+                width = 4.9f,
+                cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                join = androidx.compose.ui.graphics.StrokeJoin.Round
+            )
+        )
+
+        // Fine highlight running along the metal.
+        drawPath(
+            path = armPath,
+            color = Color.White.copy(alpha = 0.44f),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(
+                width = 0.95f,
+                cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                join = androidx.compose.ui.graphics.StrokeJoin.Round
+            )
+        )
+
+        // Pivot bearing: smaller, flatter and darker than the previous design.
+        val pivotShadow = androidx.compose.ui.geometry.Offset(
+            pivot.x + size.minDimension * 0.007f,
+            pivot.y + size.minDimension * 0.010f
         )
         drawCircle(
-            color = Color(0xFF232323),
+            color = Color.Black.copy(alpha = 0.12f),
+            radius = size.minDimension * 0.048f,
+            center = pivotShadow
+        )
+
+        drawCircle(
+            color = Color(0xFF1A1A1A),
+            radius = size.minDimension * 0.045f,
+            center = pivot
+        )
+
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(
+                    Color(0xFF4A4A4A),
+                    Color(0xFF202020),
+                    Color(0xFF0D0D0D)
+                ),
+                center = androidx.compose.ui.geometry.Offset(
+                    pivot.x - size.minDimension * 0.011f,
+                    pivot.y - size.minDimension * 0.011f
+                ),
+                radius = size.minDimension * 0.043f
+            ),
+            radius = size.minDimension * 0.036f,
+            center = pivot
+        )
+
+        drawCircle(
+            color = Color(0xFFB8B8B8),
+            radius = size.minDimension * 0.014f,
+            center = pivot
+        )
+
+        drawCircle(
+            color = Color(0xFF161616),
             radius = size.minDimension * 0.008f,
             center = pivot
+        )
+
+        // A small vertical collar under the bearing mirrors the reference.
+        val collarTop = androidx.compose.ui.geometry.Offset(
+            x = pivot.x,
+            y = pivot.y + size.height * 0.042f
+        )
+        val collarBottom = androidx.compose.ui.geometry.Offset(
+            x = pivot.x,
+            y = pivot.y + size.height * 0.093f
+        )
+        drawLine(
+            color = Color(0xFF202020),
+            start = collarTop,
+            end = collarBottom,
+            strokeWidth = size.width * 0.018f,
+            cap = androidx.compose.ui.graphics.StrokeCap.Round
+        )
+        drawLine(
+            color = Color(0xFFD0D0D0),
+            start = androidx.compose.ui.geometry.Offset(
+                collarTop.x - 1f,
+                collarTop.y
+            ),
+            end = androidx.compose.ui.geometry.Offset(
+                collarBottom.x - 1f,
+                collarBottom.y
+            ),
+            strokeWidth = size.width * 0.007f,
+            cap = androidx.compose.ui.graphics.StrokeCap.Round
         )
 
         rotate(
             degrees = armAngle,
             pivot = pivot
         ) {
-            // Short bearing/collar leaving the pivot.
-            drawLine(
-                color = Color(0xFF1B1B1B),
-                start = pivot,
-                end = elbow,
-                strokeWidth = 11f,
-                cap = androidx.compose.ui.graphics.StrokeCap.Round
+            // Headshell neck.
+            val neckStart = androidx.compose.ui.geometry.Offset(
+                x = size.width * 0.785f,
+                y = size.height * 0.700f
             )
             drawLine(
-                brush = Brush.linearGradient(
-                    colors = listOf(
-                        Color(0xFF8E8E8E),
-                        Color(0xFFE7E7E7),
-                        Color(0xFFB5B5B5),
-                        Color(0xFFF0F0F0)
-                    ),
-                    start = pivot,
-                    end = elbow
-                ),
-                start = pivot,
-                end = elbow,
-                strokeWidth = 7f,
-                cap = androidx.compose.ui.graphics.StrokeCap.Round
-            )
-            drawLine(
-                color = Color.White.copy(alpha = 0.45f),
-                start = androidx.compose.ui.geometry.Offset(
-                    pivot.x,
-                    pivot.y - 1.2f
-                ),
-                end = androidx.compose.ui.geometry.Offset(
-                    elbow.x,
-                    elbow.y - 1.2f
-                ),
-                strokeWidth = 1.15f,
-                cap = androidx.compose.ui.graphics.StrokeCap.Round
-            )
-
-            // Small bearing ring at the elbow.
-            drawCircle(
-                color = Color(0xFF282828),
-                radius = size.minDimension * 0.026f,
-                center = elbow
-            )
-            drawCircle(
-                color = Color(0xFFBDBDBD),
-                radius = size.minDimension * 0.011f,
-                center = elbow
-            )
-
-            // Main straight tonearm wand.
-            drawLine(
-                color = Color(0xFF171717),
-                start = elbow,
-                end = wandEnd,
-                strokeWidth = 10f,
-                cap = androidx.compose.ui.graphics.StrokeCap.Round
-            )
-            drawLine(
-                brush = Brush.linearGradient(
-                    colors = listOf(
-                        Color(0xFF8C8C8C),
-                        Color(0xFFE5E5E5),
-                        Color(0xFFB1B1B1),
-                        Color(0xFFEFEFEF)
-                    ),
-                    start = elbow,
-                    end = wandEnd
-                ),
-                start = elbow,
-                end = wandEnd,
-                strokeWidth = 6.2f,
-                cap = androidx.compose.ui.graphics.StrokeCap.Round
-            )
-            drawLine(
-                color = Color.White.copy(alpha = 0.43f),
-                start = androidx.compose.ui.geometry.Offset(
-                    elbow.x,
-                    elbow.y - 1f
-                ),
-                end = androidx.compose.ui.geometry.Offset(
-                    wandEnd.x,
-                    wandEnd.y - 1f
-                ),
-                strokeWidth = 1.2f,
-                cap = androidx.compose.ui.graphics.StrokeCap.Round
-            )
-
-            // Short angled headshell connector.
-            drawLine(
-                color = Color(0xFF1A1A1A),
-                start = wandEnd,
-                end = headshellMount,
-                strokeWidth = 8.5f,
+                color = Color(0xFF252525),
+                start = neckStart,
+                end = headshellCenter,
+                strokeWidth = 6.8f,
                 cap = androidx.compose.ui.graphics.StrokeCap.Round
             )
             drawLine(
                 color = Color(0xFFD0D0D0),
-                start = wandEnd,
-                end = headshellMount,
-                strokeWidth = 5.0f,
+                start = neckStart,
+                end = headshellCenter,
+                strokeWidth = 4.0f,
                 cap = androidx.compose.ui.graphics.StrokeCap.Round
             )
 
-            // Compact modern rectangular cartridge / headshell.
-            val bodyW = size.width * 0.070f
-            val bodyH = size.height * 0.038f
+            // Rectangular headshell similar to the provided reference.
+            val shellWidth = size.width * 0.066f
+            val shellHeight = size.height * 0.054f
 
             drawRoundRect(
-                color = Color(0xFF171717),
+                color = Color(0xFF111111),
                 topLeft = androidx.compose.ui.geometry.Offset(
-                    cartridgeCenter.x - bodyW * 0.50f,
-                    cartridgeCenter.y - bodyH * 0.50f
+                    rHeadshell.x - shellWidth * 0.50f,
+                    rHeadshell.y - shellHeight * 0.50f
                 ),
                 size = androidx.compose.ui.geometry.Size(
-                    bodyW,
-                    bodyH
+                    shellWidth,
+                    shellHeight
                 ),
                 cornerRadius = androidx.compose.ui.geometry.CornerRadius(
-                    bodyH * 0.20f,
-                    bodyH * 0.20f
+                    2.5f,
+                    2.5f
                 )
             )
+
             drawRoundRect(
-                color = Color(0xFFCBCBCB),
+                color = Color(0xFFE0E0E0),
                 topLeft = androidx.compose.ui.geometry.Offset(
-                    cartridgeCenter.x - bodyW * 0.41f,
-                    cartridgeCenter.y - bodyH * 0.33f
+                    rHeadshell.x - shellWidth * 0.42f,
+                    rHeadshell.y - shellHeight * 0.42f
                 ),
                 size = androidx.compose.ui.geometry.Size(
-                    bodyW * 0.82f,
-                    bodyH * 0.66f
+                    shellWidth * 0.84f,
+                    shellHeight * 0.84f
                 ),
                 cornerRadius = androidx.compose.ui.geometry.CornerRadius(
-                    bodyH * 0.14f,
-                    bodyH * 0.14f
+                    2f,
+                    2f
                 )
             )
 
-            // Tiny screws/details.
-            drawCircle(
-                color = Color(0xFF4A4A4A),
-                radius = 1.35f,
-                center = androidx.compose.ui.geometry.Offset(
-                    cartridgeCenter.x + bodyW * 0.22f,
-                    cartridgeCenter.y - bodyH * 0.13f
-                )
-            )
-            drawCircle(
-                color = Color(0xFF4A4A4A),
-                radius = 1.35f,
-                center = androidx.compose.ui.geometry.Offset(
-                    cartridgeCenter.x + bodyW * 0.22f,
-                    cartridgeCenter.y + bodyH * 0.13f
-                )
+            // Small perforations/details inspired by the reference cartridge.
+            for (row in 0 until 3) {
+                for (col in 0 until 3) {
+                    drawCircle(
+                        color = Color(0xFF6A6A6A),
+                        radius = 0.95f,
+                        center = androidx.compose.ui.geometry.Offset(
+                            x = rHeadshell.x -
+                                shellWidth * 0.20f +
+                                col * shellWidth * 0.16f,
+                            y = rHeadshell.y -
+                                shellHeight * 0.16f +
+                                row * shellHeight * 0.16f
+                        )
+                    )
+                }
+            }
+
+            // Cantilever and needle.
+            val cantileverStart = androidx.compose.ui.geometry.Offset(
+                x = rHeadshell.x - shellWidth * 0.18f,
+                y = rHeadshell.y + shellHeight * 0.42f
             )
 
-            // Cantilever + stylus.
-            val cartridgeTip = androidx.compose.ui.geometry.Offset(
-                x = cartridgeCenter.x - bodyW * 0.24f,
-                y = cartridgeCenter.y + bodyH * 0.40f
-            )
             drawLine(
-                color = Color(0xFF121212),
-                start = cartridgeTip,
-                end = rStylusTip,
-                strokeWidth = 2.0f,
+                color = Color(0xFF161616),
+                start = cantileverStart,
+                end = rStylus,
+                strokeWidth = 1.85f,
                 cap = androidx.compose.ui.graphics.StrokeCap.Round
             )
+
             drawCircle(
-                color = if (contact > 0.5f) {
-                    Color(0xFFE0E0E0)
+                color = if (contact > 0.50f) {
+                    Color(0xFFE2E2E2)
                 } else {
-                    Color(0xFF747474)
+                    Color(0xFF777777)
                 },
-                radius = 2.15f,
-                center = rStylusTip
-            )
-
-            // Minimal highlight makes the headshell read as metal rather
-            // than a flat rectangle.
-            drawLine(
-                color = Color.White.copy(alpha = 0.38f),
-                start = androidx.compose.ui.geometry.Offset(
-                    cartridgeCenter.x - bodyW * 0.22f,
-                    cartridgeCenter.y - bodyH * 0.20f
-                ),
-                end = androidx.compose.ui.geometry.Offset(
-                    cartridgeCenter.x + bodyW * 0.28f,
-                    cartridgeCenter.y - bodyH * 0.20f
-                ),
-                strokeWidth = 1.0f
+                radius = 2.05f,
+                center = rStylus
             )
         }
     }
