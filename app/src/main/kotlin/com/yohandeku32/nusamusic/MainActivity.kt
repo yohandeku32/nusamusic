@@ -3373,11 +3373,12 @@ private fun VinylTonearm(
     // artwork cannot be stretched/squashed by Image content scaling.
     val trackProgress = progress.coerceIn(0f, 1f)
 
-    // A real record starts at the outer groove and travels inward toward
-    // the center as playback progresses. The larger starting angle places
-    // the stylus near the record edge; decreasing the angle brings it inward.
+    // The Canvas artwork's stylus geometry points down-right at 0 degrees.
+    // Positive rotation swings it leftward across the record. Therefore the
+    // start groove needs a larger angle, then the arm gradually relaxes toward
+    // the center as the song progresses.
     val targetAngle = if (hasSong) {
-        29f - trackProgress * 27f
+        42f - trackProgress * 13f
     } else {
         0f
     }
