@@ -3697,6 +3697,33 @@ private fun VinylTonearm(
         ) {
             val softShadow = Color.Black.copy(alpha = 0.12f)
 
+            // Pivot contact shadow: several soft offset layers make the
+            // bearing look seated above the white turntable surface.
+            drawCircle(
+                color = Color.Black.copy(alpha = 0.08f),
+                radius = 53f * designScale,
+                center = androidx.compose.ui.geometry.Offset(
+                    x(151f) + 3.5f * designScale,
+                    y(171f) + 4.5f * designScale
+                )
+            )
+            drawCircle(
+                color = Color.Black.copy(alpha = 0.11f),
+                radius = 48f * designScale,
+                center = androidx.compose.ui.geometry.Offset(
+                    x(151f) + 2.2f * designScale,
+                    y(171f) + 3.0f * designScale
+                )
+            )
+            drawCircle(
+                color = Color.Black.copy(alpha = 0.13f),
+                radius = 43f * designScale,
+                center = androidx.compose.ui.geometry.Offset(
+                    x(151f) + 1.3f * designScale,
+                    y(171f) + 2.0f * designScale
+                )
+            )
+
             // Soft contact shadow under the metal arm and cartridge.
             val shadowPath = androidx.compose.ui.graphics.Path().apply {
                 moveTo(x(145f), y(249f))
