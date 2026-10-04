@@ -2680,21 +2680,18 @@ private fun RealisticControlButton(
     modifier: Modifier = Modifier,
     iconSize: androidx.compose.ui.unit.Dp = 32.dp
 ) {
-    val interactionSource = remember {
-        androidx.compose.foundation.interaction.MutableInteractionSource()
-    }
-    val pressed by interactionSource.collectIsPressedAsState()
+    var isPressed by remember { mutableStateOf(false) }
     val pressScale by animateFloatAsState(
-        targetValue = if (pressed) 0.94f else 1f,
-        animationSpec = if (pressed) {
+        targetValue = if (isPressed) 0.92f else 1f,
+        animationSpec = if (isPressed) {
             androidx.compose.animation.core.tween(
-                durationMillis = 120,
+                durationMillis = 85,
                 easing = androidx.compose.animation.core.FastOutSlowInEasing
             )
         } else {
-            androidx.compose.animation.core.spring(
-                dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
-                stiffness = 700f
+            androidx.compose.animation.core.tween(
+                durationMillis = 150,
+                easing = androidx.compose.animation.core.FastOutSlowInEasing
             )
         },
         label = "controlPressScale"
@@ -2732,7 +2729,7 @@ private fun RealisticControlButton(
             .graphicsLayer {
                 scaleX = pressScale
                 scaleY = pressScale
-                shadowElevation = if (pressed) 4.dp.toPx() else 5.dp.toPx()
+                shadowElevation = if (isPressed) 2.5.dp.toPx() else 5.dp.toPx()
                 this.shape = shape
                 clip = false
             },
@@ -2744,12 +2741,20 @@ private fun RealisticControlButton(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .clickable(
-                    interactionSource = interactionSource,
-                    indication = null,
-                    enabled = enabled,
-                    onClick = onClick
-                ),
+                .pointerInput(enabled) {
+                    if (enabled) {
+                        detectTapGestures(
+                            onPress = {
+                                isPressed = true
+                                val released = tryAwaitRelease()
+                                isPressed = false
+                                if (released) {
+                                    onClick()
+                                }
+                            }
+                        )
+                    }
+                },
             contentAlignment = Alignment.Center
         ) {
             Canvas(Modifier.fillMaxSize()) {
@@ -3294,6 +3299,26 @@ private fun VinylRecord(
             }
 
             // Broad glossy highlight that travels with the rotating record.
+            // A paired soft shadow makes the lacquered surface read as a
+            // physical object while the whole record spins.
+            drawArc(
+                color = Color.Black.copy(alpha = 0.18f),
+                startAngle = 32f,
+                sweepAngle = 72f,
+                useCenter = false,
+                topLeft = androidx.compose.ui.geometry.Offset(
+                    size.width * 0.035f,
+                    size.height * 0.035f
+                ),
+                size = androidx.compose.ui.geometry.Size(
+                    size.width * 0.93f,
+                    size.height * 0.93f
+                ),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(
+                    width = 12f
+                )
+            )
+
             drawArc(
                 color = Color.White.copy(alpha = 0.23f),
                 startAngle = -80f,
