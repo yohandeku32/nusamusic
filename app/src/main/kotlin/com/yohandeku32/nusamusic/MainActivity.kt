@@ -3415,15 +3415,18 @@ private fun VinylTonearm(
             y = size.height * 0.700f
         )
 
+        // Headshell starts close to the outer playing area. The needle is
+        // intentionally parked near the outer groove, far away from the
+        // center artwork.
         val cartridgeCenter = androidx.compose.ui.geometry.Offset(
-            x = size.width * 0.695f,
-            y = size.height * 0.720f
+            x = size.width * 0.735f,
+            y = size.height * 0.755f
         )
 
         val stylusLift = size.height * 0.010f * (1f - contact)
         val stylusTip = androidx.compose.ui.geometry.Offset(
-            x = size.width * 0.668f,
-            y = size.height * 0.775f + stylusLift
+            x = size.width * 0.700f,
+            y = size.height * 0.825f + stylusLift
         )
 
         fun rotated(point: androidx.compose.ui.geometry.Offset): androidx.compose.ui.geometry.Offset {
@@ -3461,39 +3464,67 @@ private fun VinylTonearm(
             cap = androidx.compose.ui.graphics.StrokeCap.Round
         )
 
-        // Pivot cap.
-        drawCircle(
-            color = Color.Black.copy(alpha = 0.24f),
-            radius = size.minDimension * 0.060f,
-            center = androidx.compose.ui.geometry.Offset(
-                pivot.x + 2f,
-                pivot.y + 3f
-            )
+        // Realistic low-profile pivot assembly. The circular housing is
+        // mechanically plausible, but deliberately shallow and subtle.
+        val pivotShadowCenter = androidx.compose.ui.geometry.Offset(
+            pivot.x + size.minDimension * 0.008f,
+            pivot.y + size.minDimension * 0.011f
         )
+
+        drawCircle(
+            color = Color.Black.copy(alpha = 0.16f),
+            radius = size.minDimension * 0.050f,
+            center = pivotShadowCenter
+        )
+
+        // Lower body / platter bearing housing.
+        drawCircle(
+            color = Color(0xFF8E8E8E),
+            radius = size.minDimension * 0.047f,
+            center = pivot
+        )
+
+        // Soft metallic face.
         drawCircle(
             brush = Brush.radialGradient(
                 colors = listOf(
-                    Color(0xFFF7F7F7),
-                    Color(0xFFD1D1D1),
-                    Color(0xFF858585)
+                    Color(0xFFF2F2F2),
+                    Color(0xFFD9D9D9),
+                    Color(0xFFB4B4B4),
+                    Color(0xFF7F7F7F)
                 ),
                 center = androidx.compose.ui.geometry.Offset(
-                    pivot.x - size.minDimension * 0.014f,
-                    pivot.y - size.minDimension * 0.016f
+                    pivot.x - size.minDimension * 0.012f,
+                    pivot.y - size.minDimension * 0.014f
                 ),
-                radius = size.minDimension * 0.060f
+                radius = size.minDimension * 0.050f
             ),
-            radius = size.minDimension * 0.053f,
+            radius = size.minDimension * 0.041f,
+            center = pivot
+        )
+
+        // Very thin bevel rather than a heavy outline.
+        drawCircle(
+            color = Color.White.copy(alpha = 0.42f),
+            radius = size.minDimension * 0.039f,
+            center = androidx.compose.ui.geometry.Offset(
+                pivot.x - 0.5f,
+                pivot.y - 0.6f
+            ),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(
+                width = 1.1f
+            )
+        )
+
+        // Small central bearing cap.
+        drawCircle(
+            color = Color(0xFF777777),
+            radius = size.minDimension * 0.016f,
             center = pivot
         )
         drawCircle(
-            color = Color(0xFF696969),
-            radius = size.minDimension * 0.018f,
-            center = pivot
-        )
-        drawCircle(
-            color = Color(0xFF171717),
-            radius = size.minDimension * 0.009f,
+            color = Color(0xFF232323),
+            radius = size.minDimension * 0.008f,
             center = pivot
         )
 
