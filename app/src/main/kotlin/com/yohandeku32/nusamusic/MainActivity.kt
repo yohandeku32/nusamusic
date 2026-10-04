@@ -2630,7 +2630,7 @@ private fun SimpleProgressBar(
             }
     ) {
         val y = size.height / 2f
-        val stroke = 3.4.dp.toPx()
+        val stroke = 3.0.dp.toPx()
 
         drawLine(
             color = Color(0xFFD0CDC6),
@@ -2644,12 +2644,6 @@ private fun SimpleProgressBar(
             start = androidx.compose.ui.geometry.Offset(0f, y),
             end = androidx.compose.ui.geometry.Offset(size.width * fraction, y),
             strokeWidth = stroke
-        )
-
-        drawCircle(
-            color = primary,
-            radius = 3.2.dp.toPx(),
-            center = androidx.compose.ui.geometry.Offset(size.width * fraction, y)
         )
     }
 }
@@ -3371,7 +3365,7 @@ private fun VinylTonearm(
 ) {
     // The arm swings around the fixed pivot like a real turntable.
     val targetAngle = if (isPlaying && hasSong) {
-        progress * 12.5f
+        progress * 18f
     } else {
         0f
     }
@@ -3397,7 +3391,7 @@ private fun VinylTonearm(
 
     Canvas(modifier = modifier) {
         val pivot = androidx.compose.ui.geometry.Offset(
-            x = size.width * 0.835f,
+            x = size.width * 0.855f,
             y = size.height * 0.145f
         )
 
@@ -3408,43 +3402,43 @@ private fun VinylTonearm(
             moveTo(pivot.x, pivot.y)
 
             cubicTo(
-                size.width * 0.885f,
-                size.height * 0.205f,
+                size.width * 0.900f,
+                size.height * 0.215f,
+                size.width * 0.920f,
+                size.height * 0.345f,
+                size.width * 0.905f,
+                size.height * 0.445f
+            )
+
+            cubicTo(
                 size.width * 0.895f,
-                size.height * 0.315f,
-                size.width * 0.855f,
-                size.height * 0.415f
+                size.height * 0.520f,
+                size.width * 0.875f,
+                size.height * 0.585f,
+                size.width * 0.815f,
+                size.height * 0.625f
             )
 
             cubicTo(
-                size.width * 0.825f,
-                size.height * 0.490f,
-                size.width * 0.795f,
-                size.height * 0.555f,
-                size.width * 0.725f,
-                size.height * 0.610f
-            )
-
-            cubicTo(
-                size.width * 0.685f,
-                size.height * 0.642f,
-                size.width * 0.640f,
-                size.height * 0.665f,
-                size.width * 0.605f,
-                size.height * 0.675f
+                size.width * 0.790f,
+                size.height * 0.650f,
+                size.width * 0.775f,
+                size.height * 0.670f,
+                size.width * 0.755f,
+                size.height * 0.685f
             )
         }
 
         // Cartridge is kept as a separate, slightly squared piece at the
         // end of the curved tube.
         val cartridgeCenter = androidx.compose.ui.geometry.Offset(
-            x = size.width * 0.588f,
-            y = size.height * 0.688f
+            x = size.width * 0.715f,
+            y = size.height * 0.705f
         )
 
         val stylusTip = androidx.compose.ui.geometry.Offset(
-            x = size.width * 0.552f,
-            y = size.height * 0.745f +
+            x = size.width * 0.695f,
+            y = size.height * 0.775f +
                 size.height * 0.012f * (1f - contact)
         )
 
@@ -3520,8 +3514,8 @@ private fun VinylTonearm(
                     color = Color(0xFF252525),
                     radius = size.minDimension * 0.025f,
                     center = androidx.compose.ui.geometry.Offset(
-                        size.width * 0.876f,
-                        size.height * 0.210f
+                        size.width * 0.896f,
+                        size.height * 0.230f
                     )
                 )
                 drawCircle(
@@ -3537,12 +3531,12 @@ private fun VinylTonearm(
                 drawLine(
                     color = Color(0xFF202020),
                     start = androidx.compose.ui.geometry.Offset(
-                        size.width * 0.620f,
-                        size.height * 0.669f
+                        size.width * 0.775f,
+                        size.height * 0.680f
                     ),
                     end = androidx.compose.ui.geometry.Offset(
-                        size.width * 0.595f,
-                        size.height * 0.682f
+                        size.width * 0.750f,
+                        size.height * 0.695f
                     ),
                     strokeWidth = 9f,
                     cap = androidx.compose.ui.graphics.StrokeCap.Round
