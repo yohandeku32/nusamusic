@@ -3420,83 +3420,114 @@ private fun VinylPowerIndicator(
     modifier: Modifier = Modifier
 ) {
     val ledAlpha by animateFloatAsState(
-        targetValue = if (isPlaying) 1f else 0.30f,
-        animationSpec = tween(durationMillis = 260),
+        targetValue = if (isPlaying) 1f else 0.18f,
+        animationSpec = tween(durationMillis = 240),
         label = "powerLedAlpha"
     )
 
-    Surface(
+    // Compact physical-style power switch. No text/badge: it is intentionally
+    // small so it reads like a turntable hardware control.
+    Box(
         modifier = modifier
-            .clip(RoundedCornerShape(14.dp))
-            .background(Color(0xFF191919))
-            .border(
-                width = 1.dp,
-                color = Color.White.copy(alpha = 0.08f),
-                shape = RoundedCornerShape(14.dp)
-            ),
-        color = Color(0xFF171717),
-        tonalElevation = 0.dp,
-        shadowElevation = 5.dp
+            .size(34.dp)
+            .graphicsLayer {
+                shadowElevation = 4.dp.toPx()
+                shape = CircleShape
+                clip = false
+            },
+        contentAlignment = Alignment.Center
     ) {
-        Row(
-            modifier = Modifier.padding(
-                horizontal = 11.dp,
-                vertical = 7.dp
-            ),
-            verticalAlignment = Alignment.CenterVertically
+        Canvas(
+            modifier = Modifier.fillMaxSize()
         ) {
-            Canvas(
-                modifier = Modifier.size(16.dp)
-            ) {
-                val center = androidx.compose.ui.geometry.Offset(
-                    size.width / 2f,
-                    size.height / 2f
-                )
+            val center = androidx.compose.ui.geometry.Offset(
+                size.width / 2f,
+                size.height / 2f
+            )
+            val radius = size.minDimension / 2f
 
-                drawCircle(
-                    color = Color.Black.copy(alpha = 0.55f),
-                    radius = size.minDimension * 0.36f,
-                    center = center
+            // Soft shadow beneath the physical switch.
+            drawCircle(
+                color = Color.Black.copy(alpha = 0.18f),
+                radius = radius * 0.82f,
+                center = androidx.compose.ui.geometry.Offset(
+                    center.x + 1.1f,
+                    center.y + 1.8f
                 )
+            )
 
-                drawCircle(
-                    color = Color.Red.copy(alpha = ledAlpha),
-                    radius = size.minDimension * 0.24f,
-                    center = center
-                )
+            // Dark metal / rubber bezel.
+            drawCircle(
+                color = Color(0xFF1A1A1A),
+                radius = radius * 0.80f,
+                center = center
+            )
 
-                drawCircle(
-                    color = Color.White.copy(alpha = 0.22f * ledAlpha),
-                    radius = size.minDimension * 0.09f,
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        Color(0xFF4A4A4A),
+                        Color(0xFF242424),
+                        Color(0xFF0D0D0D)
+                    ),
                     center = androidx.compose.ui.geometry.Offset(
-                        center.x - size.minDimension * 0.07f,
-                        center.y - size.minDimension * 0.07f
-                    )
+                        center.x - radius * 0.22f,
+                        center.y - radius * 0.25f
+                    ),
+                    radius = radius * 0.78f
+                ),
+                radius = radius * 0.68f,
+                center = center
+            )
+
+            // Thin top catch-light; keeps the control photographic rather
+            // than flat/cartoon-like.
+            drawArc(
+                color = Color.White.copy(alpha = 0.16f),
+                startAngle = 208f,
+                sweepAngle = 102f,
+                useCenter = false,
+                topLeft = androidx.compose.ui.geometry.Offset(
+                    center.x - radius * 0.68f,
+                    center.y - radius * 0.68f
+                ),
+                size = androidx.compose.ui.geometry.Size(
+                    radius * 1.36f,
+                    radius * 1.36f
+                ),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(
+                    width = 1.1f
+                )
+            )
+
+            // Tiny red power LED in the center.
+            if (isPlaying) {
+                drawCircle(
+                    color = Color.Red.copy(alpha = 0.10f * ledAlpha),
+                    radius = radius * 0.34f,
+                    center = center
                 )
             }
 
-            Spacer(Modifier.width(7.dp))
-
-            Text(
-                text = "POWER",
-                fontSize = 9.sp,
-                letterSpacing = 1.2.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White.copy(alpha = 0.82f)
+            drawCircle(
+                color = Color.Black.copy(alpha = 0.72f),
+                radius = radius * 0.17f,
+                center = center
             )
 
-            Spacer(Modifier.width(6.dp))
+            drawCircle(
+                color = Color.Red.copy(alpha = ledAlpha),
+                radius = radius * 0.095f,
+                center = center
+            )
 
-            Text(
-                text = if (isPlaying) "ON" else "OFF",
-                fontSize = 9.sp,
-                letterSpacing = 0.8.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = if (isPlaying) {
-                    Color(0xFFFF5A5A)
-                } else {
-                    Color(0xFF8E8E8E)
-                }
+            drawCircle(
+                color = Color.White.copy(alpha = 0.20f * ledAlpha),
+                radius = radius * 0.035f,
+                center = androidx.compose.ui.geometry.Offset(
+                    center.x - radius * 0.035f,
+                    center.y - radius * 0.040f
+                )
             )
         }
     }
