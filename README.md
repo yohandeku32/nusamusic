@@ -1,4 +1,4 @@
-<img width="1220" height="2712" alt="Screenshot_20261004-224728" src="https://github.com/user-attachments/assets/10e6509c-5c90-4323-88af-cb4fa95c87f7" /># Nusa
+# Nusa
 
 Nusa is a modern Android music player focused on local/offline playback, a realistic vinyl-style player, and a future-ready Hi-Res / USB DAC audio path.
 
