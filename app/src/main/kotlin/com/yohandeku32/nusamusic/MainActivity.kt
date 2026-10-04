@@ -1746,13 +1746,21 @@ private fun NusaMusicApp(
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(Color(0xFFF3F1EB))
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(
+                                            Color(0xFF18191B),
+                                            Color(0xFF0D0E10),
+                                            Color(0xFF070708)
+                                        )
+                                    )
+                                )
                         ) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(76.dp)
-                                    .background(Color(0xFFF8F7F3))
+                                    .background(Color.Black.copy(alpha = 0.18f))
                                     .padding(horizontal = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -1766,7 +1774,7 @@ private fun NusaMusicApp(
                                     Icon(
                                         Icons.Default.ArrowBack,
                                         contentDescription = nusaText("Kembali ke pemutar", "Back to player"),
-                                        tint = Color(0xFF252525)
+                                        tint = Color.White
                                     )
                                 }
 
@@ -1776,7 +1784,7 @@ private fun NusaMusicApp(
                                     textAlign = TextAlign.Center,
                                     fontSize = 21.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF252525)
+                                    color = Color.White
                                 )
 
                                 Box {
@@ -4715,25 +4723,34 @@ private fun LibrarySongRow(
 ) {
     // Fixed height keeps grid rows stable when the active track changes.
     val cardHeight = 194.dp
-    val artworkSize = if (selected) 154.dp else 146.dp
-    val artworkAreaHeight = 158.dp
+    val artworkSize = if (selected) 160.dp else 148.dp
+    val artworkAreaHeight = 164.dp
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(cardHeight)
             .clip(RoundedCornerShape(16.dp))
-            .background(
-                if (selected) Color(0xFFFFFFFF) else Color(0xFFFAF9F5),
-                shape = RoundedCornerShape(16.dp)
+            .then(
+                if (selected) {
+                    Modifier
+                        .background(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    Color(0xFF292B2E),
+                                    Color(0xFF151618)
+                                )
+                            ),
+                            shape = RoundedCornerShape(16.dp)
+                        )
+                        .graphicsLayer {
+                            scaleX = 1.012f
+                            scaleY = 1.012f
+                        }
+                } else {
+                    Modifier
+                }
             )
-            .graphicsLayer {
-                shadowElevation = if (selected) 4.dp.toPx() else 2.dp.toPx()
-                shape = RoundedCornerShape(16.dp)
-                clip = false
-                scaleX = if (selected) 1.012f else 1f
-                scaleY = if (selected) 1.012f else 1f
-            }
             .clickable { onPlay(song) }
             .padding(horizontal = 4.dp, vertical = 6.dp)
     ) {
@@ -4753,7 +4770,7 @@ private fun LibrarySongRow(
                     modifier = Modifier
                         .size(artworkSize)
                         .clip(RoundedCornerShape(7.dp))
-                        .background(Color(0xFFE5E2DB))
+                        .background(Color(0xFF0A0A0A))
                         .padding(2.dp)
                 ) {
                     WornCoverArtwork(
@@ -4771,7 +4788,7 @@ private fun LibrarySongRow(
                 fontSize = if (selected) 13.sp else 12.sp,
                 lineHeight = 13.sp,
                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                color = Color(0xFF242424),
+                color = Color.White,
                 textAlign = TextAlign.Center,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -4784,7 +4801,7 @@ private fun LibrarySongRow(
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 fontSize = 9.5.sp,
                 lineHeight = 10.sp,
-                color = if (selected) Color(0xFF66625C) else Color(0xFF8A867E),
+                color = if (selected) Color(0xFFD2D2D2) else Color(0xFFAAAAAA),
                 textAlign = TextAlign.Center,
                 modifier = Modifier
                     .fillMaxWidth()
