@@ -1043,6 +1043,11 @@ private fun NusaMusicApp(
         androidx.compose.foundation.lazy.grid.rememberLazyGridState()
     val scope = rememberCoroutineScope()
     val density = androidx.compose.ui.platform.LocalDensity.current
+    val revealPlayerCurve by remember {
+        derivedStateOf {
+            playerScrollState.firstVisibleItemScrollOffset > 18
+        }
+    }
 
 
 
@@ -1426,7 +1431,13 @@ private fun NusaMusicApp(
                             state = playerScrollState,
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(MaterialTheme.colorScheme.background),
+                                .background(
+                                    if (revealPlayerCurve) {
+                                        Color.Black
+                                    } else {
+                                        MaterialTheme.colorScheme.background
+                                    }
+                                ),
                             contentPadding = PaddingValues(0.dp)
                         ) {
                             item {
