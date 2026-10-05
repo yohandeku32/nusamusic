@@ -2310,6 +2310,7 @@ private fun AudioQualityPill(song: Song?) {
 
     val info = codecInfo
     val isLossless = info?.codecName == "Apple Lossless" || info?.codecName == "FLAC"
+    val isHiRes = isLossless && (info?.bitDepth ?: 16) >= 24
 
     androidx.compose.animation.AnimatedVisibility(
         visible = isLossless,
@@ -2320,42 +2321,58 @@ private fun AudioQualityPill(song: Song?) {
             animationSpec = tween(durationMillis = 180)
         )
     ) {
-        Box(
-            modifier = Modifier
-                .padding(top = 4.dp)
-                .clip(RoundedCornerShape(50))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .clickable(enabled = song != null && info != null) {
-                    showMetadataDialog = true
-                }
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                androidx.compose.foundation.Image(
-                    painter = painterResource(id = R.drawable.apple_lossless_logo),
-                    contentDescription = "Lossless",
-                    contentScale = ContentScale.Fit,
-                    colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(
-                        MaterialTheme.colorScheme.onSurface
-                    ),
-                    modifier = Modifier.size(
-                        width = 20.dp,
-                        height = 11.dp
+        Crossfade(
+            targetState = isHiRes,
+            animationSpec = tween(durationMillis = 180),
+            label = "qualityBadgeCrossfade"
+        ) { hiRes ->
+            Box(
+                modifier = Modifier
+                    .padding(top = 4.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(
+                        color = if (hiRes) {
+                            Color(0xFFB5A77C).copy(alpha = 0.42f)
+                        } else {
+                            MaterialTheme.colorScheme.surfaceVariant
+                        }
                     )
-                )
+                    .clickable(enabled = song != null && info != null) {
+                        showMetadataDialog = true
+                    }
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    androidx.compose.foundation.Image(
+                        painter = painterResource(id = R.drawable.apple_lossless_logo),
+                        contentDescription = if (hiRes) "Hi-Res" else "Lossless",
+                        contentScale = ContentScale.Fit,
+                        colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(
+                            if (hiRes) Color(0xFF3D3728) else MaterialTheme.colorScheme.onSurface
+                        ),
+                        modifier = Modifier.size(
+                            width = 20.dp,
+                            height = 11.dp
+                        )
+                    )
 
-                Spacer(Modifier.width(5.dp))
+                    Spacer(Modifier.width(5.dp))
 
-                Text(
-                    text = "Lossless",
-                    fontSize = 10.sp,
-                    lineHeight = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+                    Text(
+                        text = if (hiRes) "Hi-Res" else "Lossless",
+                        fontSize = 10.sp,
+                        lineHeight = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = if (hiRes) {
+                            Color(0xFF3D3728)
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        }
+                    )
+                }
             }
         }
     }
@@ -2390,7 +2407,11 @@ private fun AudioQualityPill(song: Song?) {
                         .widthIn(min = 300.dp, max = 352.dp)
                         .padding(horizontal = 18.dp),
                     shape = RoundedCornerShape(28.dp),
-                    color = MaterialTheme.colorScheme.surface,
+                    color = if (isHiRes) {
+                        Color(0xFFDDD0A6)
+                    } else {
+                        MaterialTheme.colorScheme.surface
+                    },
                     tonalElevation = 8.dp,
                     shadowElevation = 18.dp
                 ) {
@@ -2406,7 +2427,11 @@ private fun AudioQualityPill(song: Song?) {
                             text = nusaText("Info Audio", "Audio Info"),
                             fontSize = 21.sp,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = if (isHiRes) {
+                                Color(0xFF3D3728)
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            }
                         )
 
                         Text(
@@ -2414,7 +2439,7 @@ private fun AudioQualityPill(song: Song?) {
                             fontSize = 14.sp,
                             maxLines = 1,
                             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = if (isHiRes) Color(0xFF5A4E2F) else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 3.dp)
                         )
 
@@ -2423,7 +2448,7 @@ private fun AudioQualityPill(song: Song?) {
                             fontSize = 12.sp,
                             maxLines = 1,
                             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f),
+                            color = if (isHiRes) Color(0xFF5A4E2F) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f),
                             modifier = Modifier.padding(top = 1.dp)
                         )
 
@@ -2431,22 +2456,26 @@ private fun AudioQualityPill(song: Song?) {
 
                         MetadataRow(
                             label = nusaText("Codec", "Codec"),
-                            value = info.codecName
+                            value = info.codecName,
+                            hiRes = isHiRes
                         )
-                        MetadataDivider()
+                        MetadataDivider(hiRes = isHiRes)
                         MetadataRow(
                             label = nusaText("Sample rate", "Sample rate"),
-                            value = formatSampleRate(info.sampleRateHz)
+                            value = formatSampleRate(info.sampleRateHz),
+                            hiRes = isHiRes
                         )
-                        MetadataDivider()
+                        MetadataDivider(hiRes = isHiRes)
                         MetadataRow(
                             label = nusaText("Kedalaman bit", "Bit depth"),
-                            value = formatBitDepth(info.bitDepth)
+                            value = formatBitDepth(info.bitDepth),
+                            hiRes = isHiRes
                         )
-                        MetadataDivider()
+                        MetadataDivider(hiRes = isHiRes)
                         MetadataRow(
                             label = nusaText("Durasi", "Duration"),
-                            value = formatTime(song.durationMs)
+                            value = formatTime(song.durationMs),
+                            hiRes = isHiRes
                         )
 
                         Spacer(Modifier.height(12.dp))
