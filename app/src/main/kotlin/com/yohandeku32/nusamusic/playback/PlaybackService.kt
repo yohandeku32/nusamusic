@@ -321,7 +321,6 @@ class PlaybackService : MediaSessionService() {
         crossfadeActive = false
         expectedPrimaryMediaId = null
         expectedNextMediaId = null
-        preloadedNextMediaId = null
         handoffDone = false
     }
 
