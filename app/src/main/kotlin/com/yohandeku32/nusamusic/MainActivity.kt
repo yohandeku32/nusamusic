@@ -981,6 +981,22 @@ private fun NusaMusicApp(
     var realisticControls by remember {
         mutableStateOf(uiPrefs.getBoolean("realistic_controls", true))
     }
+    val playbackPrefs = remember(context) {
+        context.getSharedPreferences(
+            "playback_preferences",
+            android.content.Context.MODE_PRIVATE
+        )
+    }
+    var crossfadeEnabled by remember {
+        mutableStateOf(playbackPrefs.getBoolean("crossfade_enabled", false))
+    }
+    var crossfadeDurationSeconds by remember {
+        mutableStateOf(
+            (playbackPrefs.getLong("crossfade_duration_ms", 5_000L) / 1_000L)
+                .coerceIn(1L, 12L)
+                .toFloat()
+        )
+    }
     var sortMenuExpanded by remember { mutableStateOf(false) }
     var librarySortOption by remember { mutableStateOf(LibrarySortOption.TITLE_ASC) }
 
@@ -1192,6 +1208,110 @@ private fun NusaMusicApp(
                         },
                         modifier = Modifier.weight(1f)
                     )
+                }
+
+                Spacer(Modifier.height(22.dp))
+
+                Text(
+                    nusaText("CROSSFADE", "CROSSFADE"),
+                    fontSize = 11.sp,
+                    letterSpacing = 1.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(8.dp))
+
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    tonalElevation = 0.dp
+                ) {
+                    Column(
+                        modifier = Modifier.padding(
+                            horizontal = 16.dp,
+                            vertical = 8.dp
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(
+                                    nusaText("Crossfade", "Crossfade"),
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    nusaText(
+                                        "Transisi halus antara dua lagu.",
+                                        "Smooth transition between two songs."
+                                    ),
+                                    fontSize = 12.sp,
+                                    lineHeight = 17.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+
+                            androidx.compose.material3.Switch(
+                                checked = crossfadeEnabled,
+                                onCheckedChange = { enabled ->
+                                    crossfadeEnabled = enabled
+                                    playbackPrefs.edit()
+                                        .putBoolean("crossfade_enabled", enabled)
+                                        .apply()
+                                }
+                            )
+                        }
+
+                        Spacer(Modifier.height(4.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                nusaText("Durasi", "Duration"),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                "${crossfadeDurationSeconds.toInt()} s",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+
+                        androidx.compose.material3.Slider(
+                            value = crossfadeDurationSeconds,
+                            onValueChange = { crossfadeDurationSeconds = it },
+                            onValueChangeFinished = {
+                                playbackPrefs.edit()
+                                    .putLong(
+                                        "crossfade_duration_ms",
+                                        (crossfadeDurationSeconds * 1_000L).toLong()
+                                    )
+                                    .apply()
+                            },
+                            valueRange = 1f..12f,
+                            steps = 10,
+                            enabled = crossfadeEnabled
+                        )
+
+                        Text(
+                            nusaText(
+                                "1–12 detik. Default 5 detik.",
+                                "1–12 seconds. Default is 5 seconds."
+                            ),
+                            fontSize = 12.sp,
+                            lineHeight = 17.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
 
                 Spacer(Modifier.height(22.dp))
