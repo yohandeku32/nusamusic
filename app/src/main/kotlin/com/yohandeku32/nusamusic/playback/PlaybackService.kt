@@ -4,7 +4,10 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import androidx.annotation.OptIn
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -53,12 +56,20 @@ class PlaybackService : MediaSessionService() {
             .setLoadControl(loadControl)
             .build()
 
+        val audioAttributes = AudioAttributes.Builder()
+            .setUsage(C.USAGE_MEDIA)
+            .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+            .build()
+
         val transitionPlayer = ExoPlayer.Builder(
             this,
             DefaultRenderersFactory(this)
         )
+            .setAudioAttributes(audioAttributes, false)
             .setLoadControl(loadControl)
             .build()
+
+        player.setAudioAttributes(audioAttributes, true)
 
         primaryPlayer = player
         crossfadePlayer = transitionPlayer
@@ -151,6 +162,7 @@ class PlaybackService : MediaSessionService() {
 
         if (!primary.isPlaying || !primary.playWhenReady) return
         if (primary.repeatMode == Player.REPEAT_MODE_ONE) return
+        if (!primary.hasNextMediaItem()) return
 
         val duration = primary.duration
         if (duration <= 0L || duration == androidx.media3.common.C.TIME_UNSET) return
@@ -189,6 +201,12 @@ class PlaybackService : MediaSessionService() {
         secondary.play()
 
         crossfadeActive = true
+        Log.d(
+            "NusaCrossfade",
+            "START current=" + currentItem.mediaId +
+                " next=" + nextItem.mediaId +
+                " duration=" + durationMs + "ms"
+        )
         applyCrossfadeVolumes(primary, secondary, durationMs)
     }
 
@@ -205,12 +223,21 @@ class PlaybackService : MediaSessionService() {
         val remaining = (duration - primary.currentPosition)
             .coerceIn(0L, durationMs)
 
-        val progress = 1f - (remaining.toFloat() / durationMs.toFloat())
-        val fadeIn = progress.coerceIn(0f, 1f)
-        val fadeOut = 1f - fadeIn
+        val progress = (
+            1f - (remaining.toFloat() / durationMs.toFloat())
+        ).coerceIn(0f, 1f)
 
-        primary.volume = fadeOut
-        secondary.volume = fadeIn
+        // Equal-power crossfade keeps perceived loudness more stable
+        // during the overlap than a simple linear ramp.
+        val fadeOut = kotlin.math.cos(
+            progress * Math.PI.toDouble() / 2.0
+        ).toFloat()
+        val fadeIn = kotlin.math.sin(
+            progress * Math.PI.toDouble() / 2.0
+        ).toFloat()
+
+        primary.volume = fadeOut.coerceIn(0f, 1f)
+        secondary.volume = fadeIn.coerceIn(0f, 1f)
     }
 
     private fun completeCrossfadeHandoff(
@@ -257,6 +284,12 @@ class PlaybackService : MediaSessionService() {
         secondary.stop()
         secondary.clearMediaItems()
 
+        Log.d(
+            "NusaCrossfade",
+            "HANDOFF next=" + expectedNextId +
+                " position=" + nextPosition + "ms"
+        )
+
         crossfadeActive = false
         expectedPrimaryMediaId = null
         expectedNextMediaId = null
@@ -264,6 +297,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     private fun cancelCrossfade(restorePrimaryVolume: Boolean) {
+        Log.d("NusaCrossfade", "CANCEL")
         crossfadeActive = false
         expectedPrimaryMediaId = null
         expectedNextMediaId = null
