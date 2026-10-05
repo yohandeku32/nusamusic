@@ -1896,9 +1896,8 @@ private fun NusaMusicApp(
                     }
 
                     1 -> {
-                        // Physical album-stack layout:
-                        // the selected cover is the front/bottom cover, while
-                        // previous covers rise behind it like a real stack.
+                        // Lightweight album stack. Swipe only selects a
+                        // cover; playback requires tapping the selected cover.
                         val stackSongs = remember(filtered) {
                             filtered.toList()
                         }
@@ -1928,7 +1927,9 @@ private fun NusaMusicApp(
                                 stackSongs.indexOfFirst { it.id == song.id }
                             } ?: -1
 
-                            if (target >= 0) {
+                            if (target >= 0 &&
+                                target != selectedStackIndex
+                            ) {
                                 selectedStackIndex = target
                             }
                         }
@@ -1962,12 +1963,8 @@ private fun NusaMusicApp(
                                         stackSongs.isNotEmpty()
                                     ) {
                                         val next = if (dragDistance < 0f) {
-                                            // Swipe up: bring the next cover
-                                            // forward.
                                             selectedStackIndex + 1
                                         } else {
-                                            // Swipe down: bring the previous
-                                            // cover forward.
                                             selectedStackIndex - 1
                                         }
 
@@ -1975,7 +1972,6 @@ private fun NusaMusicApp(
                                             chooseStack(next)
                                         }
                                     }
-
                                     dragDistance = 0f
                                 },
                                 onDragCancel = {
@@ -2023,35 +2019,27 @@ private fun NusaMusicApp(
                                     modifier = Modifier
                                         .fillMaxSize()
                                         .padding(
-                                            top = 112.dp,
+                                            top = 104.dp,
                                             bottom = 0.dp
                                         )
                                         .then(stackGesture),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    /*
-                                     * Balanced physical stack:
-                                     * the selected cover stays in the middle,
-                                     * with covers visible above and below.
-                                     * Only five covers are composed at once.
-                                     */
+                                    // Balanced stack: selected cover in the
+                                    // middle, two covers above and two below.
                                     val visibleRelatives = intArrayOf(
-                                        -2,
-                                        -1,
-                                        0,
-                                        1,
-                                        2
+                                        -2, -1, 0, 1, 2
                                     )
 
                                     for (relative in visibleRelatives) {
-                                        val albumIndex =
+                                        val index =
                                             selectedStackIndex + relative
 
-                                        if (albumIndex !in stackSongs.indices) {
+                                        if (index !in stackSongs.indices) {
                                             continue
                                         }
 
-                                        val song = stackSongs[albumIndex]
+                                        val song = stackSongs[index]
                                         val distance =
                                             kotlin.math.abs(relative)
 
@@ -2061,40 +2049,37 @@ private fun NusaMusicApp(
                                             else -> 0.88f
                                         }
 
-                                        val verticalOffset =
-                                            when (relative) {
-                                                -2 -> -150.dp
-                                                -1 -> -75.dp
-                                                0 -> 0.dp
-                                                1 -> 75.dp
-                                                2 -> 150.dp
-                                                else -> 0.dp
-                                            }
+                                        val verticalOffset = when (relative) {
+                                            -2 -> (-150).dp
+                                            -1 -> (-75).dp
+                                            0 -> 0.dp
+                                            1 -> 75.dp
+                                            2 -> 150.dp
+                                            else -> 0.dp
+                                        }
 
                                         Box(
                                             modifier = Modifier
                                                 .align(Alignment.Center)
                                                 .fillMaxWidth(0.72f)
                                                 .aspectRatio(1f)
-                                                .offset(
-                                                    y = verticalOffset
-                                                )
+                                                .offset(y = verticalOffset)
                                                 .graphicsLayer {
                                                     scaleX = scale
                                                     scaleY = scale
                                                     alpha = 1f
                                                     shadowElevation =
                                                         if (relative == 0) {
-                                                            20.dp.toPx()
+                                                            18.dp.toPx()
                                                         } else {
-                                                            7.dp.toPx()
+                                                            6.dp.toPx()
                                                         }
                                                     shape =
                                                         RoundedCornerShape(8.dp)
                                                     clip = false
                                                     rotationZ = when {
-                                                        relative < 0 -> -0.35f
-                                                        relative > 0 -> 0.35f
+                                                        relative < 0 -> -0.3f
+                                                        relative > 0 -> 0.3f
                                                         else -> 0f
                                                     }
                                                 }
@@ -2103,17 +2088,10 @@ private fun NusaMusicApp(
                                                 )
                                                 .clickable {
                                                     if (relative == 0) {
-                                                        // Tap the selected
-                                                        // cover to confirm
-                                                        // the choice and open
-                                                        // the play dialog.
                                                         selectedSongForPlayback =
                                                             song
                                                     } else {
-                                                        // Tapping another
-                                                        // cover only selects
-                                                        // it. No dialog.
-                                                        chooseStack(albumIndex)
+                                                        chooseStack(index)
                                                     }
                                                 }
                                         ) {
@@ -2130,10 +2108,9 @@ private fun NusaMusicApp(
                                     }
                                 }
                             }
-                        }
 
-                            // The popup opens only after the selected cover
-                            // itself is tapped. Scrolling/swiping never opens it.
+                            // Open only when the selected/front cover is tapped.
+                            // Swipe never opens the dialog.
                             selectedSongForPlayback?.let { song ->
                                 androidx.compose.ui.window.Dialog(
                                     onDismissRequest = {
