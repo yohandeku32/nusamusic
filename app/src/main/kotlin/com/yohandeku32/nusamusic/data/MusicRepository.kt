@@ -73,7 +73,8 @@ class MusicRepository(private val context: Context) {
             MediaStore.Audio.Media.ARTIST,
             MediaStore.Audio.Media.ALBUM,
             MediaStore.Audio.Media.DURATION,
-            MediaStore.Audio.Media.ALBUM_ID
+            MediaStore.Audio.Media.ALBUM_ID,
+            MediaStore.Audio.Media.DATE_ADDED
         )
         val selection =
             MediaStore.Audio.Media.IS_MUSIC + " != 0 AND " +
@@ -95,6 +96,9 @@ class MusicRepository(private val context: Context) {
                 val albumCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
                 val durationCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
                 val albumIdCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
+                val dateAddedCol = cursor.getColumnIndexOrThrow(
+                    MediaStore.Audio.Media.DATE_ADDED
+                )
 
                 while (cursor.moveToNext()) {
                     val id = cursor.getLong(idCol)
@@ -109,7 +113,8 @@ class MusicRepository(private val context: Context) {
                         album = cursor.getString(albumCol) ?: "Unknown album",
                         uri = ContentUris.withAppendedId(collection, id).toString(),
                         durationMs = durationMs,
-                        albumId = cursor.getLong(albumIdCol)
+                        albumId = cursor.getLong(albumIdCol),
+                        dateAddedMs = cursor.getLong(dateAddedCol) * 1_000L
                     )
                 }
             }
@@ -140,7 +145,8 @@ class MusicRepository(private val context: Context) {
             val projection = arrayOf(
                 DocumentsContract.Document.COLUMN_DOCUMENT_ID,
                 DocumentsContract.Document.COLUMN_DISPLAY_NAME,
-                DocumentsContract.Document.COLUMN_MIME_TYPE
+                DocumentsContract.Document.COLUMN_MIME_TYPE,
+                DocumentsContract.Document.COLUMN_LAST_MODIFIED
             )
 
             resolver.query(
@@ -158,6 +164,9 @@ class MusicRepository(private val context: Context) {
                 )
                 val mimeCol = cursor.getColumnIndexOrThrow(
                     DocumentsContract.Document.COLUMN_MIME_TYPE
+                )
+                val modifiedCol = cursor.getColumnIndexOrThrow(
+                    DocumentsContract.Document.COLUMN_LAST_MODIFIED
                 )
 
                 while (cursor.moveToNext()) {
@@ -181,7 +190,8 @@ class MusicRepository(private val context: Context) {
 
                     readSongFromDocument(
                         documentUri = documentUri,
-                        displayName = displayName
+                        displayName = displayName,
+                        modifiedTimeMs = cursor.getLong(modifiedCol)
                     )?.let { song ->
                         songs += song
                     }
@@ -194,7 +204,8 @@ class MusicRepository(private val context: Context) {
 
     private fun readSongFromDocument(
         documentUri: Uri,
-        displayName: String
+        displayName: String,
+        modifiedTimeMs: Long
     ): Song? {
         val retriever = MediaMetadataRetriever()
 
@@ -235,7 +246,8 @@ class MusicRepository(private val context: Context) {
                 album = album,
                 uri = uriString,
                 durationMs = durationMs,
-                albumId = stableDocumentId("$uriString#album")
+                albumId = stableDocumentId("$uriString#album"),
+                dateAddedMs = modifiedTimeMs
             )
         } catch (_: Exception) {
             null
