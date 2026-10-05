@@ -2067,7 +2067,7 @@ private fun NusaMusicApp(
                                     color =
                                         MaterialTheme.colorScheme.onBackground,
                                     modifier = Modifier.padding(
-                                        start = 150.dp,
+                                        start = 50.dp,
                                         top = 20.dp,
                                         bottom = 14.dp
                                     )
@@ -2086,7 +2086,7 @@ private fun NusaMusicApp(
                                             androidx.compose.foundation.rememberScrollState()
                                         )
                                         .padding(
-                                            horizontal = 150.dp,
+                                            horizontal = 50.dp,
                                             vertical = 24.dp
                                         )
                                 ) {
