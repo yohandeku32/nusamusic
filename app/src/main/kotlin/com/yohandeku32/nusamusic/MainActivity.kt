@@ -1887,99 +1887,70 @@ private fun NusaMusicApp(
                     }
 
                     1 -> {
-                        val albumStack = remember(filtered) {
-                            val grouped = linkedMapOf<String, MutableList<Song>>()
+                        var selectedStackIndex by remember(filtered, currentSong?.id) {
+                            mutableIntStateOf(
+                                currentSong?.let { song ->
+                                    filtered.indexOfFirst { it.id == song.id }
+                                }?.takeIf { it >= 0 } ?: 0
+                            )
+                        }
 
-                            filtered.forEach { song ->
-                                val albumKey = if (song.albumId != 0L) {
-                                    "id:" + song.albumId
-                                } else {
-                                    "album:" +
-                                        song.album.trim().lowercase(Locale.ROOT) +
-                                        "|artist:" +
-                                        song.artist.trim().lowercase(Locale.ROOT)
+                        LaunchedEffect(currentSong?.id, filtered) {
+                            if (filtered.isEmpty()) return@LaunchedEffect
+
+                            val targetIndex = currentSong?.let { song ->
+                                filtered.indexOfFirst { it.id == song.id }
+                            } ?: -1
+
+                            if (targetIndex >= 0 &&
+                                targetIndex != selectedStackIndex
+                            ) {
+                                selectedStackIndex = targetIndex
+                            }
+                        }
+
+                        LaunchedEffect(selectedStackIndex, filtered) {
+                            filtered.getOrNull(selectedStackIndex)?.let { song ->
+                                if (song.id != currentSong?.id) {
+                                    onPlay(song)
                                 }
-
-                                grouped.getOrPut(albumKey) {
-                                    mutableListOf()
-                                }.add(song)
-                            }
-
-                            grouped.values.map { tracks -> tracks.toList() }
-                        }
-
-                        var selectedAlbumIndex by remember(
-                            albumStack,
-                            currentSong?.albumId,
-                            currentSong?.album
-                        ) {
-                            val currentAlbum = currentSong?.album
-                                ?.trim()
-                                ?.lowercase(Locale.ROOT)
-
-                            val target = albumStack.indexOfFirst { tracks ->
-                                val first = tracks.firstOrNull() ?: return@indexOfFirst false
-                                first.albumId == currentSong?.albumId &&
-                                    first.album.trim().lowercase(Locale.ROOT) ==
-                                    currentAlbum
-                            }
-
-                            mutableIntStateOf(target.coerceAtLeast(0))
-                        }
-
-                        LaunchedEffect(
-                            currentSong?.albumId,
-                            currentSong?.album,
-                            albumStack
-                        ) {
-                            if (albumStack.isEmpty()) return@LaunchedEffect
-
-                            val currentAlbum = currentSong?.album
-                                ?.trim()
-                                ?.lowercase(Locale.ROOT)
-
-                            val target = albumStack.indexOfFirst { tracks ->
-                                val first = tracks.firstOrNull() ?: return@indexOfFirst false
-                                first.albumId == currentSong?.albumId &&
-                                    first.album.trim().lowercase(Locale.ROOT) ==
-                                    currentAlbum
-                            }
-
-                            if (target >= 0) {
-                                selectedAlbumIndex = target
                             }
                         }
 
-                        val stackGestureModifier = Modifier.pointerInput(
-                            albumStack.size,
-                            selectedAlbumIndex
+                        val stackGesture = Modifier.pointerInput(
+                            filtered.size,
+                            selectedStackIndex
                         ) {
-                            var totalDragY = 0f
+                            var dragY = 0f
 
                             detectDragGestures(
                                 onDragStart = {
-                                    totalDragY = 0f
+                                    dragY = 0f
                                 },
                                 onDrag = { change, dragAmount ->
                                     change.consume()
-                                    totalDragY += dragAmount.y
+                                    dragY += dragAmount.y
                                 },
                                 onDragEnd = {
-                                    if (kotlin.math.abs(totalDragY) >= 55f &&
-                                        albumStack.isNotEmpty()
+                                    if (kotlin.math.abs(dragY) >= 55f &&
+                                        filtered.isNotEmpty()
                                     ) {
-                                        selectedAlbumIndex =
-                                            if (totalDragY < 0f) {
-                                                (selectedAlbumIndex + 1)
-                                                    .coerceAtMost(albumStack.lastIndex)
-                                            } else {
-                                                (selectedAlbumIndex - 1)
-                                                    .coerceAtLeast(0)
-                                            }
+                                        val nextIndex = if (dragY < 0f) {
+                                            (selectedStackIndex + 1)
+                                                .coerceAtMost(filtered.lastIndex)
+                                        } else {
+                                            (selectedStackIndex - 1)
+                                                .coerceAtLeast(0)
+                                        }
+
+                                        if (nextIndex != selectedStackIndex) {
+                                            selectedStackIndex = nextIndex
+                                        }
                                     }
+                                    dragY = 0f
                                 },
                                 onDragCancel = {
-                                    totalDragY = 0f
+                                    dragY = 0f
                                 }
                             )
                         }
@@ -1989,131 +1960,126 @@ private fun NusaMusicApp(
                                 .fillMaxSize()
                                 .background(MaterialTheme.colorScheme.background)
                         ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(bottom = 24.dp)
-                            ) {
-                                Text(
-                                    text = "MY MUSIC",
-                                    fontSize = 32.sp,
-                                    lineHeight = 36.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    letterSpacing = (-0.8).sp,
-                                    color = MaterialTheme.colorScheme.onBackground,
-                                    modifier = Modifier.padding(
-                                        start = 28.dp,
-                                        top = 28.dp,
-                                        bottom = 10.dp
-                                    )
+                            Text(
+                                text = "MY MUSIC",
+                                fontSize = 32.sp,
+                                lineHeight = 36.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                letterSpacing = (-0.8).sp,
+                                color = MaterialTheme.colorScheme.onBackground,
+                                modifier = Modifier.padding(
+                                    start = 28.dp,
+                                    top = 28.dp
                                 )
+                            )
 
-                                if (albumStack.isEmpty()) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .weight(1f),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            nusaText(
-                                                "Tidak ada musik lokal",
-                                                "No local music found"
-                                            ),
-                                            fontSize = 14.sp,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            if (filtered.isEmpty()) {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        nusaText(
+                                            "Tidak ada musik lokal",
+                                            "No local music found"
+                                        ),
+                                        fontSize = 14.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .fillMaxHeight()
+                                        .padding(
+                                            top = 104.dp,
+                                            bottom = 28.dp
                                         )
-                                    }
-                                } else {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .weight(1f)
-                                            .then(stackGestureModifier),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        // Render a small number of album covers
-                                        // above and below the active one. The
-                                        // tight vertical overlap creates the
-                                        // physical album-stack look from the
-                                        // supplied reference.
-                                        val firstVisible =
-                                            (selectedAlbumIndex - 3)
-                                                .coerceAtLeast(0)
-                                        val lastVisible =
-                                            (selectedAlbumIndex + 3)
-                                                .coerceAtMost(albumStack.lastIndex)
+                                        .then(stackGesture),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    val visibleOffsets = listOf(
+                                        -2,
+                                        -1,
+                                        0,
+                                        1,
+                                        2
+                                    )
 
-                                        for (albumIndex in firstVisible..lastVisible) {
-                                            val relative =
-                                                albumIndex - selectedAlbumIndex
-                                            val distance =
-                                                kotlin.math.abs(relative)
+                                    // Draw furthest cards first and the active
+                                    // card last. This gives a clean physical
+                                    // stack instead of translucent cards
+                                    // bleeding through one another.
+                                    for (relative in visibleOffsets) {
+                                        val albumIndex =
+                                            selectedStackIndex + relative
 
-                                            val scale = when (distance) {
-                                                0 -> 1f
-                                                1 -> 0.96f
-                                                2 -> 0.92f
-                                                else -> 0.88f
+                                        if (albumIndex !in filtered.indices) {
+                                            continue
+                                        }
+
+                                        val song = filtered[albumIndex]
+                                        val distance =
+                                            kotlin.math.abs(relative)
+
+                                        val scale = when (distance) {
+                                            0 -> 1f
+                                            1 -> 0.94f
+                                            else -> 0.88f
+                                        }
+
+                                        val verticalOffset =
+                                            when (relative) {
+                                                -2 -> -300.dp
+                                                -1 -> -150.dp
+                                                0 -> 0.dp
+                                                1 -> 150.dp
+                                                2 -> 300.dp
+                                                else -> 0.dp
                                             }
 
-                                            val alpha = when (distance) {
-                                                0 -> 1f
-                                                1 -> 0.92f
-                                                2 -> 0.68f
-                                                else -> 0.42f
-                                            }
-
-                                            // More breathing room between covers so
-                                            // each album reads as a separate sleeve.
-                                            val verticalOffset =
-                                                relative * 155f
-
-                                            val cover = albumStack[
-                                                albumIndex
-                                            ].first()
-
-                                            Box(
-                                                modifier = Modifier
-                                                    .align(Alignment.Center)
-                                                    .width(304.dp)
-                                                    .aspectRatio(1f)
-                                                    .graphicsLayer {
-                                                        scaleX = scale
-                                                        scaleY = scale
-                                                        this.alpha = alpha
-                                                        translationY =
-                                                            verticalOffset
-                                                        rotationZ =
-                                                            when {
-                                                                relative < 0 -> -0.7f
-                                                                relative > 0 -> 0.7f
-                                                                else -> 0f
-                                                            }
-                                                        shadowElevation =
-                                                            if (relative == 0) {
-                                                                18.dp.toPx()
-                                                            } else {
-                                                                7.dp.toPx()
-                                                            }
-                                                        shape = RoundedCornerShape(8.dp)
-                                                        clip = true
-                                                    }
-                                                    .clickable {
+                                        Box(
+                                            modifier = Modifier
+                                                .align(Alignment.Center)
+                                                .fillMaxWidth(0.72f)
+                                                .aspectRatio(1f)
+                                                .graphicsLayer {
+                                                    scaleX = scale
+                                                    scaleY = scale
+                                                    translationY =
+                                                        verticalOffset.toPx()
+                                                    alpha = 1f
+                                                    shadowElevation =
                                                         if (relative == 0) {
-                                                            onPlay(cover)
+                                                            18.dp.toPx()
                                                         } else {
-                                                            selectedAlbumIndex =
-                                                                albumIndex
+                                                            8.dp.toPx()
                                                         }
-                                                    }
-                                            ) {
-                                                WornCoverArtwork(
-                                                    song = cover,
-                                                    maxSizePx = 900,
-                                                    modifier = Modifier.fillMaxSize()
+                                                    shape = RoundedCornerShape(8.dp)
+                                                    clip = false
+                                                }
+                                                .zIndex(
+                                                    (10 - distance).toFloat()
                                                 )
-                                            }
+                                                .clickable {
+                                                    if (relative == 0) {
+                                                        onPlay(song)
+                                                    } else {
+                                                        selectedStackIndex =
+                                                            albumIndex
+                                                    }
+                                                }
+                                        ) {
+                                            WornCoverArtwork(
+                                                song = song,
+                                                maxSizePx = 760,
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .clip(
+                                                        RoundedCornerShape(8.dp)
+                                                    )
+                                            )
                                         }
                                     }
                                 }
