@@ -2050,9 +2050,19 @@ private fun NusaMusicApp(
                             fun requestAlphabetScroll(targetIndex: Int) {
                                 if (targetIndex < 0) return
 
-                                // Follow the finger immediately instead of
-                                // starting a new animation on every alphabet
-                                // slot crossed.
+                                scope.launch {
+                                    libraryListState.animateScrollToItem(
+                                        index = targetIndex,
+                                        scrollOffset = 0
+                                    )
+                                }
+                            }
+
+                            fun followAlphabetDrag(targetIndex: Int) {
+                                if (targetIndex < 0) return
+
+                                // Dragging the index should follow the finger
+                                // directly; no competing animations.
                                 scope.launch {
                                     libraryListState.scrollToItem(
                                         index = targetIndex,
@@ -2084,7 +2094,7 @@ private fun NusaMusicApp(
 
                                             if (targetIndex >= 0) {
                                                 lastDragTarget = targetIndex
-                                                requestAlphabetScroll(targetIndex)
+                                                followAlphabetDrag(targetIndex)
                                             }
                                         },
                                         onDrag = { change, _ ->
