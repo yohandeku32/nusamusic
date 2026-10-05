@@ -2145,57 +2145,78 @@ private fun MyMusicArtworkCard(
 ) {
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(10.dp))
     ) {
-        // Realistic record: the disc is deliberately smaller than the card so
-        // the full circle remains visible instead of being clipped at the edge.
         Canvas(
             modifier = Modifier.fillMaxSize()
         ) {
+            // Reference-style sleeve + record composition:
+            // the record is nearly as tall as the square sleeve, sits behind it,
+            // and is fully contained by the card bounds.
             val center = androidx.compose.ui.geometry.Offset(
-                x = size.width * 0.65f,
+                x = size.width * 0.64f,
                 y = size.height * 0.50f
             )
-            // Keep the whole record inside the card. The sleeve covers the
-            // left portion, while the entire circular disc remains visible.
-            val radius = size.minDimension * 0.30f
+            val radius = size.minDimension * 0.355f
 
-            // Soft drop shadow under the record.
+            // Soft ground shadow.
             drawCircle(
-                color = Color.Black.copy(alpha = 0.28f),
-                radius = radius * 1.035f,
-                center = center.copy(y = center.y + size.minDimension * 0.018f)
+                color = Color.Black.copy(alpha = 0.24f),
+                radius = radius * 1.04f,
+                center = center.copy(
+                    y = center.y + size.minDimension * 0.015f
+                )
             )
 
-            // Vinyl body.
+            // Deep glossy vinyl body.
             drawCircle(
-                color = Color(0xFF0A0A0A),
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        Color(0xFF343434),
+                        Color(0xFF111111),
+                        Color(0xFF050505)
+                    ),
+                    center = center,
+                    radius = radius
+                ),
                 radius = radius,
                 center = center
             )
 
-            // Concentric grooves.
-            for (ring in 1..22) {
-                val ringRadius = radius * (ring / 23f)
-                drawCircle(
-                    color = if (ring % 2 == 0) {
-                        Color.White.copy(alpha = 0.030f)
-                    } else {
-                        Color.Black.copy(alpha = 0.20f)
-                    },
-                    radius = ringRadius,
-                    center = center,
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(
-                        width = 0.65f
-                    )
+            // Outer rim.
+            drawCircle(
+                color = Color.White.copy(alpha = 0.08f),
+                radius = radius * 0.985f,
+                center = center,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(
+                    width = 1.2f
                 )
+            )
+
+            // Fine concentric grooves.
+            for (ring in 1..28) {
+                val ringRadius = radius * (0.28f + ring / 38f)
+                if (ringRadius < radius * 0.96f) {
+                    drawCircle(
+                        color = if (ring % 2 == 0) {
+                            Color.White.copy(alpha = 0.028f)
+                        } else {
+                            Color.Black.copy(alpha = 0.24f)
+                        },
+                        radius = ringRadius,
+                        center = center,
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(
+                            width = 0.7f
+                        )
+                    )
+                }
             }
 
-            // Subtle radial sheen that makes the grooves catch light.
+            // Broad moving-light reflection, inspired by a real lacquered record.
             drawArc(
-                color = Color.White.copy(alpha = 0.10f),
-                startAngle = 208f,
-                sweepAngle = 74f,
+                color = Color.White.copy(alpha = 0.115f),
+                startAngle = 205f,
+                sweepAngle = 72f,
                 useCenter = false,
                 topLeft = androidx.compose.ui.geometry.Offset(
                     center.x - radius,
@@ -2206,43 +2227,60 @@ private fun MyMusicArtworkCard(
                     radius * 2f
                 ),
                 style = androidx.compose.ui.graphics.drawscope.Stroke(
-                    width = radius * 0.020f
+                    width = radius * 0.065f
                 )
             )
 
-            // Center label.
+            drawArc(
+                color = Color.White.copy(alpha = 0.045f),
+                startAngle = 24f,
+                sweepAngle = 48f,
+                useCenter = false,
+                topLeft = androidx.compose.ui.geometry.Offset(
+                    center.x - radius,
+                    center.y - radius
+                ),
+                size = androidx.compose.ui.geometry.Size(
+                    radius * 2f,
+                    radius * 2f
+                ),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(
+                    width = radius * 0.025f
+                )
+            )
+
+            // Center label + spindle hole.
             drawCircle(
-                color = Color(0xFF2A2A2A),
+                color = Color(0xFF292929),
                 radius = radius * 0.185f,
                 center = center
             )
             drawCircle(
-                color = Color(0xFFB52828),
-                radius = radius * 0.118f,
+                color = Color(0xFF8E2C23),
+                radius = radius * 0.122f,
                 center = center
             )
             drawCircle(
-                color = Color.Black.copy(alpha = 0.72f),
-                radius = radius * 0.036f,
+                color = Color.Black.copy(alpha = 0.82f),
+                radius = radius * 0.038f,
                 center = center
             )
             drawCircle(
-                color = Color.White.copy(alpha = 0.62f),
+                color = Color.White.copy(alpha = 0.70f),
                 radius = radius * 0.012f,
                 center = center
             )
         }
 
-        // Album sleeve stays perfectly square (1:1) and sits in front of the
-        // record, with a physically raised edge so it reads like a real sleeve.
+        // Square 1:1 album sleeve in front of the record.
         Box(
             modifier = Modifier
-                .fillMaxHeight(0.76f)
+                .fillMaxHeight(0.82f)
                 .aspectRatio(1f)
                 .align(Alignment.CenterStart)
                 .clip(RoundedCornerShape(8.dp))
                 .graphicsLayer {
-                    shadowElevation = 10.dp.toPx()
+                    shadowElevation = 12.dp.toPx()
                     shape = RoundedCornerShape(8.dp)
                     clip = true
                 }
