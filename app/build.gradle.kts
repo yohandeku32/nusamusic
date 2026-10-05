@@ -25,8 +25,8 @@ android {
         applicationId = "com.yohandeku32.nusamusic"
         minSdk = 29
         targetSdk = 36
-        versionCode = 20
-        versionName = "2.9"
+        versionCode = 21
+        versionName = "3.0"
 
         buildConfigField("String", "LASTFM_API_KEY", "\"$lastFmApiKey\"")
     }
