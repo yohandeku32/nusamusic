@@ -70,12 +70,22 @@ class PlaybackService : MediaSessionService() {
             .setLoadControl(loadControl)
             .build()
 
-        player.setAudioAttributes(audioAttributes, true)
-
         primaryPlayer = player
         crossfadePlayer = transitionPlayer
 
+        transitionPlayer.addListener(object : Player.Listener {
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                Log.e("NusaCrossfade", "SECONDARY PLAYER ERROR", error)
+                cancelCrossfade(restorePrimaryVolume = true)
+            }
+        })
+
         player.addListener(object : Player.Listener {
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                Log.e("NusaCrossfade", "PRIMARY PLAYER ERROR", error)
+                cancelCrossfade(restorePrimaryVolume = true)
+            }
+
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 // A manual next/previous or an unexpected automatic transition
                 // invalidates the in-flight crossfade. The normal transition
@@ -88,7 +98,10 @@ class PlaybackService : MediaSessionService() {
                     cancelCrossfade(restorePrimaryVolume = true)
                 }
 
-                if (!handoffDone) {
+                if (!handoffDone &&
+                    getSharedPreferences("playback_preferences", MODE_PRIVATE)
+                        .getBoolean("crossfade_enabled", false)
+                ) {
                     preloadNext(primaryPlayer, crossfadePlayer)
                 }
             }
@@ -194,6 +207,12 @@ class PlaybackService : MediaSessionService() {
         secondary: ExoPlayer?
     ) {
         if (primary == null || secondary == null) return
+
+        if (!getSharedPreferences("playback_preferences", MODE_PRIVATE)
+                .getBoolean("crossfade_enabled", false)
+        ) {
+            return
+        }
         if (!primary.hasNextMediaItem()) return
         if (primary.repeatMode == Player.REPEAT_MODE_ONE) return
 
