@@ -349,6 +349,7 @@ class MainActivity : ComponentActivity() {
                     durationMs = durationMs,
                     permissionGranted = permissionGranted,
                     onPlay = ::playSong,
+                    onPlayAlbum = ::playAlbum,
                     onTogglePlay = ::togglePlay,
                     onNext = ::nextSong,
                     onPrevious = ::previousSong,
@@ -658,6 +659,23 @@ class MainActivity : ComponentActivity() {
             )
             .build()
 
+    private fun playAlbum(album: CollectionAlbum) {
+        controller?.let { c ->
+            if (album.tracks.isEmpty()) return@let
+
+            c.setMediaItems(
+                album.tracks.map(::mediaItemFor),
+                0,
+                0L
+            )
+            c.prepare()
+            c.play()
+
+            currentSong = album.tracks.first()
+            isPlaying = true
+        }
+    }
+
     private fun playSong(song: Song) {
         controller?.let { c ->
             val targetIndex = songs.indexOfFirst { it.id == song.id }
@@ -954,6 +972,14 @@ private enum class LibrarySortOption(
         get() = nusaText(indonesianLabel, englishLabel)
 }
 
+private data class CollectionAlbum(
+    val key: String,
+    val album: String,
+    val artist: String,
+    val coverSong: Song,
+    val tracks: List<Song>
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NusaMusicApp(
@@ -964,6 +990,7 @@ private fun NusaMusicApp(
     durationMs: Long,
     permissionGranted: Boolean,
     onPlay: (Song) -> Unit,
+    onPlayAlbum: (CollectionAlbum) -> Unit,
     onTogglePlay: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
@@ -1887,255 +1914,378 @@ private fun NusaMusicApp(
                     }
 
                     1 -> {
-                        val initialSongIndex = remember(filtered, currentSong?.id) {
-                            currentSong?.let { song ->
-                                filtered.indexOfFirst { it.id == song.id }
-                                    .takeIf { it >= 0 }
-                            } ?: 0
+                        val collectionAlbums = remember(filtered) {
+                            val grouped = linkedMapOf<String, MutableList<Song>>()
+
+                            filtered.forEach { song ->
+                                val key = if (song.albumId != 0L) {
+                                    "id:" + song.albumId
+                                } else {
+                                    "name:" +
+                                        song.album.trim().lowercase(Locale.ROOT) +
+                                        "|artist:" +
+                                        song.artist.trim().lowercase(Locale.ROOT)
+                                }
+                                grouped.getOrPut(key) { mutableListOf() }.add(song)
+                            }
+
+                            grouped.entries.map { (key, tracks) ->
+                                val first = tracks.first()
+                                CollectionAlbum(
+                                    key = key,
+                                    album = first.album.ifBlank {
+                                        nusaText("Album tanpa judul", "Untitled album")
+                                    },
+                                    artist = ArtistNameUtils.firstArtist(first.artist).ifBlank {
+                                        nusaText("Artis tidak dikenal", "Unknown artist")
+                                    },
+                                    coverSong = first,
+                                    tracks = tracks
+                                )
+                            }
                         }
 
-                        val songPagerState = androidx.compose.foundation.pager.rememberPagerState(
-                            initialPage = initialSongIndex,
-                            pageCount = { filtered.size.coerceAtLeast(1) }
-                        )
+                        var selectedCollectionIndex by remember(
+                            collectionAlbums,
+                            currentSong?.albumId,
+                            currentSong?.album
+                        ) {
+                            val currentAlbum = currentSong?.album
+                                ?.trim()
+                                ?.lowercase(Locale.ROOT)
 
-                        LaunchedEffect(currentSong?.id, filtered) {
-                            if (filtered.isEmpty()) return@LaunchedEffect
+                            val target = collectionAlbums.indexOfFirst {
+                                it.coverSong.albumId == currentSong?.albumId &&
+                                    it.album.trim().lowercase(Locale.ROOT) == currentAlbum
+                            }
 
-                            val targetIndex = currentSong?.let { song ->
-                                filtered.indexOfFirst { it.id == song.id }
-                            } ?: -1
+                            mutableIntStateOf(target.coerceAtLeast(0))
+                        }
 
-                            if (targetIndex >= 0 &&
-                                targetIndex != songPagerState.currentPage
+                        LaunchedEffect(
+                            currentSong?.albumId,
+                            currentSong?.album,
+                            collectionAlbums
+                        ) {
+                            if (collectionAlbums.isEmpty()) return@LaunchedEffect
+
+                            val currentAlbum = currentSong?.album
+                                ?.trim()
+                                ?.lowercase(Locale.ROOT)
+
+                            val target = collectionAlbums.indexOfFirst {
+                                it.coverSong.albumId == currentSong?.albumId &&
+                                    it.album.trim().lowercase(Locale.ROOT) == currentAlbum
+                            }
+
+                            if (target >= 0 &&
+                                target != selectedCollectionIndex
                             ) {
-                                songPagerState.animateScrollToPage(targetIndex)
+                                selectedCollectionIndex = target
                             }
                         }
 
-                        LaunchedEffect(songPagerState, filtered) {
-                            var firstSettled = true
+                        val deckDragModifier = Modifier.pointerInput(
+                            collectionAlbums.size,
+                            selectedCollectionIndex
+                        ) {
+                            var dragDistance = 0f
 
-                            androidx.compose.runtime.snapshotFlow {
-                                songPagerState.settledPage
-                            }.collect { page ->
-                                if (firstSettled) {
-                                    firstSettled = false
-                                    return@collect
-                                }
-
-                                filtered.getOrNull(page)?.let { song ->
-                                    if (song.id != currentSong?.id) {
-                                        onPlay(song)
+                            detectDragGestures(
+                                onDragStart = {
+                                    dragDistance = 0f
+                                },
+                                onDrag = { change, dragAmount ->
+                                    change.consume()
+                                    dragDistance += dragAmount.y
+                                },
+                                onDragEnd = {
+                                    if (kotlin.math.abs(dragDistance) >= 65f) {
+                                        selectedCollectionIndex =
+                                            if (dragDistance < 0f) {
+                                                (selectedCollectionIndex + 1)
+                                                    .coerceAtMost(collectionAlbums.lastIndex)
+                                            } else {
+                                                (selectedCollectionIndex - 1)
+                                                    .coerceAtLeast(0)
+                                            }
                                     }
+                                },
+                                onDragCancel = {
+                                    dragDistance = 0f
                                 }
-                            }
+                            )
                         }
 
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(MaterialTheme.colorScheme.background)
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(
+                                            Color(0xFFFCE5EC),
+                                            Color(0xFFFFEFE0),
+                                            MaterialTheme.colorScheme.background
+                                        )
+                                    )
+                                )
                         ) {
-                            Column(
+                            // Soft pastel circles from the supplied reference.
+                            Box(
+                                modifier = Modifier
+                                    .size(420.dp)
+                                    .offset(x = (-145).dp, y = 85.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        Color(0xFFFFDDE8).copy(alpha = 0.64f)
+                                    )
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(360.dp)
+                                    .align(Alignment.TopEnd)
+                                    .offset(x = 130.dp, y = 205.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        Color(0xFFFFE8CF).copy(alpha = 0.74f)
+                                    )
+                            )
+
+                            Surface(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .padding(bottom = 116.dp)
+                                    .padding(
+                                        start = 54.dp,
+                                        end = 54.dp,
+                                        top = 38.dp,
+                                        bottom = 88.dp
+                                    ),
+                                shape = RoundedCornerShape(34.dp),
+                                color = Color.White.copy(alpha = 0.96f),
+                                tonalElevation = 2.dp,
+                                shadowElevation = 22.dp
                             ) {
-                                Row(
+                                Column(
                                     modifier = Modifier
-                                        .fillMaxWidth()
+                                        .fillMaxSize()
                                         .padding(
-                                            start = 28.dp,
-                                            end = 22.dp,
-                                            top = 26.dp,
-                                            bottom = 10.dp
+                                            top = 22.dp,
+                                            start = 16.dp,
+                                            end = 16.dp
                                         ),
-                                    verticalAlignment = Alignment.CenterVertically
+                                    horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
-                                    Text(
-                                        text = "MY MUSIC",
-                                        fontSize = 32.sp,
-                                        lineHeight = 36.sp,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        letterSpacing = (-0.8).sp,
-                                        color = MaterialTheme.colorScheme.onBackground,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                }
-
-                                if (filtered.isNotEmpty()) {
-                                    androidx.compose.foundation.pager.HorizontalPager(
-                                        state = songPagerState,
-                                        pageSize = androidx.compose.foundation.pager.PageSize.Fixed(292.dp),
-                                        contentPadding = PaddingValues(horizontal = 26.dp),
-                                        pageSpacing = 18.dp,
-                                        beyondViewportPageCount = 1,
+                                    Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .height(312.dp)
-                                    ) { page ->
-                                        val song = filtered[page]
-                                        val pageDistance = abs(
-                                            (songPagerState.currentPage - page) +
-                                                songPagerState.currentPageOffsetFraction
-                                        )
-                                        val emphasis = (1f - pageDistance.coerceIn(0f, 1f))
-                                        val scale = 0.86f + (0.14f * emphasis)
-                                        val alpha = 0.58f + (0.42f * emphasis)
-
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .graphicsLayer {
-                                                    scaleX = scale
-                                                    scaleY = scale
-                                                    this.alpha = alpha
-                                                },
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            MyMusicArtworkCard(
-                                                song = song,
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .aspectRatio(1f)
-                                                    .clickable {
-                                                        onPlay(song)
-                                                    }
-                                            )
-                                        }
-                                    }
-                                } else {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(312.dp),
-                                        contentAlignment = Alignment.Center
+                                            .padding(horizontal = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text(
-                                            nusaText(
-                                                "Tidak ada musik lokal",
-                                                "No local music found"
-                                            ),
-                                            fontSize = 14.sp,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        Icon(
+                                            Icons.Default.MoreHoriz,
+                                            contentDescription = null,
+                                            tint = Color(0xFF8CA5B1),
+                                            modifier = Modifier.size(20.dp)
                                         )
-                                    }
-                                }
 
-                                Spacer(Modifier.height(8.dp))
-
-                                androidx.compose.material3.HorizontalDivider(
-                                    modifier = Modifier.padding(horizontal = 28.dp),
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
-                                    thickness = 1.5.dp
-                                )
-
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(
-                                            horizontal = 30.dp,
-                                            vertical = 18.dp
-                                        ),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        nusaText("BIOGRAPHY", "BIOGRAPHY"),
-                                        fontSize = 18.sp,
-                                        lineHeight = 22.sp,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        color = MaterialTheme.colorScheme.onBackground
-                                    )
-                                    Spacer(Modifier.width(18.dp))
-                                    Text(
-                                        text = ArtistNameUtils.firstArtist(
-                                            currentSong?.artist
-                                        ).ifBlank {
-                                            nusaText("ARTIST", "ARTIST")
-                                        }.uppercase(Locale.ROOT),
-                                        fontSize = 16.sp,
-                                        lineHeight = 20.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1,
-                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                }
-
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .weight(1f)
-                                        .padding(horizontal = 28.dp)
-                                        .clip(RoundedCornerShape(18.dp))
-                                        .background(
-                                            MaterialTheme.colorScheme.surfaceVariant.copy(
-                                                alpha = 0.46f
+                                        Column(
+                                            modifier = Modifier.weight(1f),
+                                            horizontalAlignment = Alignment.CenterHorizontally
+                                        ) {
+                                            Text(
+                                                nusaText("Koleksi", "Collection"),
+                                                fontSize = 17.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF17334A)
                                             )
-                                        )
-                                        .verticalScroll(
-                                            androidx.compose.foundation.rememberScrollState()
-                                        )
-                                        .padding(
-                                            horizontal = 22.dp,
-                                            vertical = 20.dp
-                                        )
-                                ) {
-                                    when {
-                                        biographyLoading -> {
                                             Text(
                                                 nusaText(
-                                                    "Memuat biografi artis…",
-                                                    "Loading artist biography…"
+                                                    "${collectionAlbums.size} album",
+                                                    "${collectionAlbums.size} albums"
                                                 ),
-                                                fontSize = 15.sp,
-                                                lineHeight = 23.sp,
+                                                fontSize = 10.sp,
                                                 fontWeight = FontWeight.Medium,
-                                                color = MaterialTheme.colorScheme.onSurface
+                                                color = Color(0xFFA4B4BD)
                                             )
                                         }
 
-                                        artistBiography != null -> {
-                                            Column {
-                                                Text(
-                                                    text = artistBiography!!.text,
-                                                    fontSize = 15.sp,
-                                                    lineHeight = 24.sp,
-                                                    fontWeight = FontWeight.Medium,
-                                                    color = MaterialTheme.colorScheme.onSurface
-                                                )
+                                        Spacer(Modifier.size(20.dp))
+                                    }
 
-                                                Spacer(Modifier.height(14.dp))
+                                    Spacer(Modifier.height(18.dp))
 
-                                                Text(
-                                                    text = nusaText(
-                                                        "Sumber: Last.fm (" +
-                                                            artistBiography!!.sourceLanguage.uppercase() +
-                                                            ")",
-                                                        "Source: Last.fm (" +
-                                                            artistBiography!!.sourceLanguage.uppercase() +
-                                                            ")"
-                                                    ),
-                                                    fontSize = 11.sp,
-                                                    lineHeight = 16.sp,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                            }
-                                        }
-
-                                        else -> {
+                                    if (collectionAlbums.isEmpty()) {
+                                        Box(
+                                            modifier = Modifier.weight(1f),
+                                            contentAlignment = Alignment.Center
+                                        ) {
                                             Text(
-                                                text = nusaText(
-                                                    "Biografi artis belum tersedia.",
-                                                    "Artist biography is not available."
+                                                nusaText(
+                                                    "Tidak ada album",
+                                                    "No albums found"
                                                 ),
-                                                fontSize = 15.sp,
-                                                lineHeight = 23.sp,
-                                                fontWeight = FontWeight.Medium,
+                                                fontSize = 14.sp,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
+                                        }
+                                    } else {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .weight(1f)
+                                                .then(deckDragModifier),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            val startVisible =
+                                                (selectedCollectionIndex - 3)
+                                                    .coerceAtLeast(0)
+                                            val endVisible =
+                                                (selectedCollectionIndex + 3)
+                                                    .coerceAtMost(collectionAlbums.lastIndex)
+
+                                            for (albumIndex in startVisible..endVisible) {
+                                                val relative =
+                                                    albumIndex - selectedCollectionIndex
+                                                val album = collectionAlbums[albumIndex]
+
+                                                val absRelative =
+                                                    kotlin.math.abs(relative)
+
+                                                val targetScale =
+                                                    when (absRelative) {
+                                                        0 -> 1f
+                                                        1 -> 0.90f
+                                                        2 -> 0.80f
+                                                        else -> 0.70f
+                                                    }
+
+                                                val targetAlpha =
+                                                    when (absRelative) {
+                                                        0 -> 1f
+                                                        1 -> 0.68f
+                                                        2 -> 0.40f
+                                                        else -> 0.20f
+                                                    }
+
+                                                val targetOffset =
+                                                    relative * 92f
+
+                                                val scale by animateFloatAsState(
+                                                    targetValue = targetScale,
+                                                    animationSpec = tween(
+                                                        360,
+                                                        easing = androidx.compose.animation.core.FastOutSlowInEasing
+                                                    ),
+                                                    label = "collectionScale"
+                                                )
+
+                                                val alpha by animateFloatAsState(
+                                                    targetValue = targetAlpha,
+                                                    animationSpec = tween(320),
+                                                    label = "collectionAlpha"
+                                                )
+
+                                                val offset by animateFloatAsState(
+                                                    targetValue = targetOffset,
+                                                    animationSpec = tween(
+                                                        380,
+                                                        easing = androidx.compose.animation.core.FastOutSlowInEasing
+                                                    ),
+                                                    label = "collectionOffset"
+                                                )
+
+                                                Box(
+                                                    modifier = Modifier
+                                                        .align(Alignment.Center)
+                                                        .width(214.dp)
+                                                        .aspectRatio(1f)
+                                                        .graphicsLayer {
+                                                            scaleX = scale
+                                                            scaleY = scale
+                                                            this.alpha = alpha
+                                                            translationY = offset
+                                                            shadowElevation =
+                                                                if (relative == 0) {
+                                                                    18.dp.toPx()
+                                                                } else {
+                                                                    4.dp.toPx()
+                                                                }
+                                                            shape = RoundedCornerShape(8.dp)
+                                                            clip = false
+                                                            rotationZ =
+                                                                when {
+                                                                    relative == -2 -> -0.6f
+                                                                    relative == 2 -> 0.6f
+                                                                    else -> 0f
+                                                                }
+                                                        }
+                                                        .clickable {
+                                                            if (relative == 0) {
+                                                                onPlayAlbum(album)
+                                                            } else {
+                                                                selectedCollectionIndex = albumIndex
+                                                            }
+                                                        }
+                                                ) {
+                                                    WornCoverArtwork(
+                                                        song = album.coverSong,
+                                                        maxSizePx = 720,
+                                                        modifier = Modifier
+                                                            .fillMaxSize()
+                                                            .clip(RoundedCornerShape(8.dp))
+                                                    )
+
+                                                    if (relative == 0) {
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .align(Alignment.Center)
+                                                                .size(58.dp)
+                                                                .clip(CircleShape)
+                                                                .background(
+                                                                    Color.Black.copy(alpha = 0.68f)
+                                                                ),
+                                                            contentAlignment = Alignment.Center
+                                                        ) {
+                                                            Icon(
+                                                                Icons.Default.PlayArrow,
+                                                                contentDescription = nusaText(
+                                                                    "Putar album",
+                                                                    "Play album"
+                                                                ),
+                                                                tint = Color.White,
+                                                                modifier = Modifier.size(34.dp)
+                                                            )
+                                                        }
+
+                                                        Surface(
+                                                            modifier = Modifier
+                                                                .align(Alignment.BottomCenter)
+                                                                .padding(bottom = 10.dp),
+                                                            shape = RoundedCornerShape(50),
+                                                            color = Color.White.copy(alpha = 0.95f),
+                                                            tonalElevation = 2.dp,
+                                                            onClick = {
+                                                                onPlayAlbum(album)
+                                                            }
+                                                        ) {
+                                                            Text(
+                                                                nusaText(
+                                                                    "PUTAR ALBUM",
+                                                                    "PLAY ALBUM"
+                                                                ),
+                                                                fontSize = 9.sp,
+                                                                fontWeight = FontWeight.Bold,
+                                                                letterSpacing = 0.7.sp,
+                                                                color = Color(0xFF17212B),
+                                                                modifier = Modifier.padding(
+                                                                    horizontal = 14.dp,
+                                                                    vertical = 7.dp
+                                                                )
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }
