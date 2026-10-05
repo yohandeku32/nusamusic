@@ -15,6 +15,7 @@ import android.provider.MediaStore
 import java.util.Locale
 import kotlin.random.Random
 import android.os.Bundle
+import android.graphics.Typeface
 import android.content.SharedPreferences
 import org.json.JSONArray
 import kotlin.math.abs
@@ -22,6 +23,7 @@ import android.view.View
 import android.view.WindowInsets
 import android.view.WindowInsetsController
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.WindowCompat
@@ -168,6 +170,8 @@ class MainActivity : ComponentActivity() {
     private var permissionGranted by mutableStateOf(false)
     private var shuffleEnabled by mutableStateOf(false)
     private var repeatMode by mutableIntStateOf(Player.REPEAT_MODE_OFF)
+    private var customTitleFontPath by mutableStateOf<String?>(null)
+    private var customTitleFontName by mutableStateOf<String?>(null)
 
     private val playbackPrefs: SharedPreferences by lazy {
         getSharedPreferences("playback_state", MODE_PRIVATE)
@@ -216,6 +220,131 @@ class MainActivity : ComponentActivity() {
             selectedMusicFolders = updatedFolders
             persistSelectedMusicFolders(updatedFolders)
             scanMusic()
+        }
+
+    private val titleFontPicker =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri == null) return@registerForActivityResult
+
+            val displayName = runCatching {
+                contentResolver.query(
+                    uri,
+                    arrayOf(
+                        android.provider.OpenableColumns.DISPLAY_NAME
+                    ),
+                    null,
+                    null,
+                    null
+                )?.use { cursor ->
+                    val index = cursor.getColumnIndex(
+                        android.provider.OpenableColumns.DISPLAY_NAME
+                    )
+                    if (index >= 0 && cursor.moveToFirst()) {
+                        cursor.getString(index)
+                    } else {
+                        null
+                    }
+                }
+            }.getOrNull()
+                ?.takeIf { it.isNotBlank() }
+                ?: (uri.lastPathSegment ?: "custom-font")
+
+            val extension = displayName
+                .substringAfterLast('.', "")
+                .lowercase(Locale.ROOT)
+
+            if (extension != "ttf" && extension != "otf") {
+                android.widget.Toast.makeText(
+                    this,
+                    nusaText(
+                        "Pilih file font .TTF atau .OTF",
+                        "Please choose a .TTF or .OTF font file"
+                    ),
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+                return@registerForActivityResult
+            }
+
+            lifecycleScope.launch(Dispatchers.IO) {
+                val result = runCatching {
+                    val fontsDir = java.io.File(
+                        filesDir,
+                        "custom_fonts"
+                    ).apply { mkdirs() }
+
+                    val safeBaseName = displayName
+                        .replace(Regex("[^A-Za-z0-9._-]"), "_")
+
+                    val targetFile = java.io.File(
+                        fontsDir,
+                        System.currentTimeMillis().toString() +
+                            "_" + safeBaseName
+                    )
+
+                    contentResolver.openInputStream(uri)?.use { input ->
+                        targetFile.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    } ?: error("Unable to open font file")
+
+                    // Verify immediately so a corrupt/unsupported file never
+                    // becomes the active font.
+                    Typeface.createFromFile(targetFile)
+
+                    targetFile
+                }
+
+                withContext(Dispatchers.Main) {
+                    result.onSuccess { targetFile ->
+                        val oldPath = customTitleFontPath
+
+                        customTitleFontPath = targetFile.absolutePath
+                        customTitleFontName = displayName
+
+                        uiPrefsForFonts().edit()
+                            .putString(
+                                "custom_title_font_path",
+                                targetFile.absolutePath
+                            )
+                            .putString(
+                                "custom_title_font_name",
+                                displayName
+                            )
+                            .putString(
+                                "title_font_family",
+                                "Custom Font"
+                            )
+                            .apply()
+
+                        if (
+                            oldPath != null &&
+                            oldPath != targetFile.absolutePath
+                        ) {
+                            runCatching {
+                                java.io.File(oldPath).delete()
+                            }
+                        }
+
+                        android.widget.Toast.makeText(
+                            this@MainActivity,
+                            nusaText(
+                                "Font berhasil diterapkan",
+                                "Font applied successfully"
+                            ),
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }.onFailure {
+                        android.widget.Toast.makeText(
+                            this@MainActivity,
+                            nusaText(
+                                "Font tidak dapat digunakan",
+                                "This font cannot be used"
+                            ),
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+            }
         }
 
     private val permissionLauncher =
@@ -269,6 +398,14 @@ class MainActivity : ComponentActivity() {
             .getStringSet("music_folder_uris", emptySet())
             ?.toList()
             .orEmpty()
+
+        customTitleFontPath = uiPrefsForFonts()
+            .getString("custom_title_font_path", null)
+            ?.takeIf { java.io.File(it).exists() }
+
+        customTitleFontName = uiPrefsForFonts()
+            .getString("custom_title_font_name", null)
+            ?.takeIf { customTitleFontPath != null }
 
         permissionGranted = checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
 
@@ -350,6 +487,31 @@ class MainActivity : ComponentActivity() {
                     permissionGranted = permissionGranted,
                     onPlay = ::playSong,
                     onTogglePlay = ::togglePlay,
+                    customTitleFontPath = customTitleFontPath,
+                    customTitleFontName = customTitleFontName,
+                    onChooseCustomTitleFont = {
+                        titleFontPicker.launch(arrayOf("*/*"))
+                    },
+                    onResetCustomTitleFont = {
+                        val oldPath = customTitleFontPath
+                        customTitleFontPath = null
+                        customTitleFontName = null
+
+                        uiPrefsForFonts().edit()
+                            .remove("custom_title_font_path")
+                            .remove("custom_title_font_name")
+                            .putString(
+                                "title_font_family",
+                                "Serif"
+                            )
+                            .apply()
+
+                        if (oldPath != null) {
+                            runCatching {
+                                java.io.File(oldPath).delete()
+                            }
+                        }
+                    },
                     onNext = ::nextSong,
                     onPrevious = ::previousSong,
                     onSeek = ::seekTo,
@@ -643,6 +805,13 @@ class MainActivity : ComponentActivity() {
                 android.widget.Toast.LENGTH_SHORT
             ).show()
         }
+    }
+
+    private fun uiPrefsForFonts(): SharedPreferences {
+        return getSharedPreferences(
+            "ui_preferences",
+            android.content.Context.MODE_PRIVATE
+        )
     }
 
     private fun mediaItemFor(song: Song): MediaItem =
@@ -974,6 +1143,10 @@ private fun NusaMusicApp(
     permissionGranted: Boolean,
     onPlay: (Song) -> Unit,
     onTogglePlay: () -> Unit,
+    customTitleFontPath: String?,
+    customTitleFontName: String?,
+    onChooseCustomTitleFont: () -> Unit,
+    onResetCustomTitleFont: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
     onSeek: (Long) -> Unit,
@@ -1012,8 +1185,27 @@ private fun NusaMusicApp(
         )
     }
 
-    val titleFontFamily = remember(titleFontName) {
-        when (titleFontName) {
+    var customTitleTypeface by remember {
+        mutableStateOf<Typeface?>(null)
+    }
+
+    LaunchedEffect(customTitleFontPath) {
+        customTitleTypeface = customTitleFontPath?.let { path ->
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    Typeface.createFromFile(path)
+                }.getOrNull()
+            }
+        }
+    }
+
+    val titleFontFamily = remember(
+        titleFontName,
+        customTitleTypeface
+    ) {
+        customTitleTypeface?.let {
+            FontFamily(it)
+        } ?: when (titleFontName) {
             "Sans Serif" -> FontFamily.SansSerif
             "Monospace" -> FontFamily.Monospace
             "Cursive" -> FontFamily.Cursive
@@ -1245,7 +1437,7 @@ private fun NusaMusicApp(
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Text(
-                                    text = titleFontName,
+                                    text = customTitleFontName ?: titleFontName,
                                     fontFamily = titleFontFamily,
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.SemiBold
@@ -1308,14 +1500,127 @@ private fun NusaMusicApp(
                                 },
                                 onClick = {
                                     titleFontName = fontName
+
+                                    val oldPath = customTitleFontPath
+                                    customTitleFontPath = null
+                                    customTitleFontName = null
+
                                     uiPrefs.edit()
+                                        .remove("custom_title_font_path")
+                                        .remove("custom_title_font_name")
                                         .putString(
                                             "title_font_family",
                                             fontName
                                         )
                                         .apply()
+
+                                    if (oldPath != null) {
+                                        runCatching {
+                                            java.io.File(oldPath).delete()
+                                        }
+                                    }
+
                                     titleFontMenuExpanded = false
                                 }
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(10.dp))
+
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    onClick = onChooseCustomTitleFont
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(
+                                horizontal = 16.dp,
+                                vertical = 14.dp
+                            ),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                nusaText(
+                                    "Choose custom font",
+                                    "Choose custom font"
+                                ),
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                ".TTF / .OTF",
+                                fontSize = 11.sp,
+                                color =
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        Icon(
+                            Icons.Default.FolderOpen,
+                            contentDescription = nusaText(
+                                "Pilih font",
+                                "Choose font"
+                            ),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                if (customTitleFontPath != null) {
+                    Spacer(Modifier.height(8.dp))
+
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        onClick = onResetCustomTitleFont
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(
+                                    horizontal = 16.dp,
+                                    vertical = 12.dp
+                                ),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(
+                                    nusaText(
+                                        "Reset to system font",
+                                        "Reset to system font"
+                                    ),
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    customTitleFontName ?: "Custom font",
+                                    fontSize = 10.sp,
+                                    maxLines = 1,
+                                    overflow =
+                                        androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                    color =
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = nusaText(
+                                    "Reset font",
+                                    "Reset font"
+                                ),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
