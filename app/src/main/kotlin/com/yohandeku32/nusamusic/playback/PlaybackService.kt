@@ -28,7 +28,6 @@ class PlaybackService : MediaSessionService() {
     private var crossfadeActive = false
     private var expectedPrimaryMediaId: String? = null
     private var expectedNextMediaId: String? = null
-    private var preloadedNextMediaId: String? = null
     private var handoffDone = false
 
     private val crossfadeTick = object : Runnable {
@@ -101,7 +100,6 @@ class PlaybackService : MediaSessionService() {
 
     private fun updateCrossfade() {
         val primary = primaryPlayer ?: return
-        val secondary = crossfadePlayer ?: return
 
         val prefs = getSharedPreferences("playback_preferences", MODE_PRIVATE)
         val enabled = prefs.getBoolean("crossfade_enabled", false)
@@ -109,7 +107,7 @@ class PlaybackService : MediaSessionService() {
             .coerceIn(1_000L, 12_000L)
 
         if (!enabled) {
-            if (crossfadeActive || preloadedNextMediaId != null) {
+            if (crossfadeActive || crossfadePlayer != null) {
                 cancelCrossfade(restorePrimaryVolume = true)
             }
             return
@@ -122,6 +120,11 @@ class PlaybackService : MediaSessionService() {
         }
 
         if (crossfadeActive) {
+            val secondary = crossfadePlayer ?: run {
+                cancelCrossfade(restorePrimaryVolume = true)
+                return
+            }
+
             // A user action such as pause/seek/next/previous cancels the
             // transition. Buffering does not, because playWhenReady remains true.
             if (!primary.playWhenReady) {
@@ -163,7 +166,7 @@ class PlaybackService : MediaSessionService() {
 
         val remaining = duration - primary.currentPosition
         if (remaining in 1L..durationMs) {
-            startCrossfade(primary, secondary, nextIndex, durationMs)
+            startCrossfade(primary, nextIndex, durationMs)
         }
     }
 
@@ -202,7 +205,6 @@ class PlaybackService : MediaSessionService() {
 
     private fun startCrossfade(
         primary: ExoPlayer,
-        @Suppress("UNUSED_PARAMETER") secondaryPlaceholder: ExoPlayer,
         nextIndex: Int,
         durationMs: Long
     ) {
@@ -340,7 +342,6 @@ class PlaybackService : MediaSessionService() {
         if (restorePrimaryVolume) {
             primaryPlayer?.volume = 1f
         }
-        preloadedNextMediaId = null
     }
 
     override fun onGetSession(
