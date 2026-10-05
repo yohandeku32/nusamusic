@@ -28,6 +28,7 @@ class PlaybackService : MediaSessionService() {
     private var crossfadeActive = false
     private var expectedPrimaryMediaId: String? = null
     private var expectedNextMediaId: String? = null
+    private var preloadedNextMediaId: String? = null
     private var handoffDone = false
 
     private val crossfadeTick = object : Runnable {
@@ -86,6 +87,10 @@ class PlaybackService : MediaSessionService() {
                 ) {
                     cancelCrossfade(restorePrimaryVolume = true)
                 }
+
+                if (!handoffDone) {
+                    preloadNext(primaryPlayer, crossfadePlayer)
+                }
             }
         })
 
@@ -118,7 +123,7 @@ class PlaybackService : MediaSessionService() {
             .coerceIn(1_000L, 12_000L)
 
         if (!enabled) {
-            if (crossfadeActive) {
+            if (crossfadeActive || preloadedNextMediaId != null) {
                 cancelCrossfade(restorePrimaryVolume = true)
             }
             return
@@ -170,10 +175,52 @@ class PlaybackService : MediaSessionService() {
         val nextIndex = primary.nextMediaItemIndex
         if (nextIndex < 0 || nextIndex >= primary.mediaItemCount) return
 
+        // Prepare the next item well before the actual fade window. This is
+        // important for local FLAC/ALAC files where decoder setup may take
+        // longer than the configured crossfade duration.
+        preloadNext(primary, secondary)
+
         val remaining = duration - primary.currentPosition
-        if (remaining in 1L..durationMs) {
+        if (remaining in 1L..durationMs &&
+            preloadedNextMediaId == primary.getMediaItemAt(nextIndex).mediaId &&
+            secondary.playbackState == Player.STATE_READY
+        ) {
             startCrossfade(primary, secondary, nextIndex, durationMs)
         }
+    }
+
+    private fun preloadNext(
+        primary: ExoPlayer?,
+        secondary: ExoPlayer?
+    ) {
+        if (primary == null || secondary == null) return
+        if (!primary.hasNextMediaItem()) return
+        if (primary.repeatMode == Player.REPEAT_MODE_ONE) return
+
+        val nextIndex = primary.nextMediaItemIndex
+        if (nextIndex < 0 || nextIndex >= primary.mediaItemCount) return
+
+        val nextItem = primary.getMediaItemAt(nextIndex)
+        val currentSecondaryId = secondary.currentMediaItem?.mediaId
+
+        if (currentSecondaryId == nextItem.mediaId &&
+            secondary.playbackState != Player.STATE_IDLE
+        ) {
+            preloadedNextMediaId = nextItem.mediaId
+            return
+        }
+
+        secondary.stop()
+        secondary.clearMediaItems()
+        secondary.setMediaItem(nextItem)
+        secondary.volume = 0f
+        secondary.prepare()
+        preloadedNextMediaId = nextItem.mediaId
+
+        Log.d(
+            "NusaCrossfade",
+            "PRELOAD next=" + nextItem.mediaId
+        )
     }
 
     private fun startCrossfade(
@@ -193,11 +240,17 @@ class PlaybackService : MediaSessionService() {
         expectedNextMediaId = nextItem.mediaId
         handoffDone = false
 
-        secondary.stop()
-        secondary.clearMediaItems()
-        secondary.setMediaItem(nextItem)
+        if (secondary.currentMediaItem?.mediaId != nextItem.mediaId) {
+            preloadNext(primary, secondary)
+        }
+
+        if (secondary.currentMediaItem?.mediaId != nextItem.mediaId ||
+            secondary.playbackState != Player.STATE_READY
+        ) {
+            return
+        }
+
         secondary.volume = 0f
-        secondary.prepare()
         secondary.play()
 
         crossfadeActive = true
@@ -293,6 +346,7 @@ class PlaybackService : MediaSessionService() {
         crossfadeActive = false
         expectedPrimaryMediaId = null
         expectedNextMediaId = null
+        preloadedNextMediaId = null
         handoffDone = false
     }
 
