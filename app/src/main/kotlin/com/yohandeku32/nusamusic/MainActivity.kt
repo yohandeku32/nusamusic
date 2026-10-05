@@ -2145,65 +2145,110 @@ private fun MyMusicArtworkCard(
 ) {
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(12.dp))
     ) {
+        // Realistic record: the disc is deliberately smaller than the card so
+        // the full circle remains visible instead of being clipped at the edge.
         Canvas(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(start = 34.dp)
+            modifier = Modifier.fillMaxSize()
         ) {
             val center = androidx.compose.ui.geometry.Offset(
                 x = size.width * 0.67f,
                 y = size.height * 0.50f
             )
-            val radius = size.minDimension * 0.40f
+            val radius = size.minDimension * 0.335f
 
+            // Soft drop shadow under the record.
             drawCircle(
-                color = Color(0xFF101112),
+                color = Color.Black.copy(alpha = 0.28f),
+                radius = radius * 1.035f,
+                center = center.copy(y = center.y + size.minDimension * 0.018f)
+            )
+
+            // Vinyl body.
+            drawCircle(
+                color = Color(0xFF0A0A0A),
                 radius = radius,
                 center = center
             )
 
-            for (ring in 1..8) {
-                val ringRadius = radius * (ring / 9f)
+            // Concentric grooves.
+            for (ring in 1..22) {
+                val ringRadius = radius * (ring / 23f)
                 drawCircle(
-                    color = Color.White.copy(alpha = 0.055f),
+                    color = if (ring % 2 == 0) {
+                        Color.White.copy(alpha = 0.030f)
+                    } else {
+                        Color.Black.copy(alpha = 0.20f)
+                    },
                     radius = ringRadius,
                     center = center,
                     style = androidx.compose.ui.graphics.drawscope.Stroke(
-                        width = 0.7f
+                        width = 0.65f
                     )
                 )
             }
 
+            // Subtle radial sheen that makes the grooves catch light.
+            drawArc(
+                color = Color.White.copy(alpha = 0.10f),
+                startAngle = 208f,
+                sweepAngle = 74f,
+                useCenter = false,
+                topLeft = androidx.compose.ui.geometry.Offset(
+                    center.x - radius,
+                    center.y - radius
+                ),
+                size = androidx.compose.ui.geometry.Size(
+                    radius * 2f,
+                    radius * 2f
+                ),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(
+                    width = radius * 0.020f
+                )
+            )
+
+            // Center label.
             drawCircle(
-                color = Color(0xFF242528),
-                radius = radius * 0.17f,
+                color = Color(0xFF2A2A2A),
+                radius = radius * 0.185f,
                 center = center
             )
             drawCircle(
-                color = Color(0xFFB62929),
-                radius = radius * 0.105f,
+                color = Color(0xFFB52828),
+                radius = radius * 0.118f,
                 center = center
             )
             drawCircle(
-                color = Color.Black,
-                radius = radius * 0.026f,
+                color = Color.Black.copy(alpha = 0.72f),
+                radius = radius * 0.036f,
+                center = center
+            )
+            drawCircle(
+                color = Color.White.copy(alpha = 0.62f),
+                radius = radius * 0.012f,
                 center = center
             )
         }
 
+        // Album sleeve stays perfectly square (1:1) and sits in front of the
+        // record, with a physically raised edge so it reads like a real sleeve.
         Box(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(end = 26.dp)
+                .fillMaxHeight(0.78f)
+                .aspectRatio(1f)
+                .align(Alignment.CenterStart)
+                .clip(RoundedCornerShape(8.dp))
+                .graphicsLayer {
+                    shadowElevation = 10.dp.toPx()
+                    shape = RoundedCornerShape(8.dp)
+                    clip = true
+                }
         ) {
             WornCoverArtwork(
                 song = song,
                 maxSizePx = 640,
-                modifier = Modifier
-                    .fillMaxSize(0.89f)
-                    .align(Alignment.CenterStart)
+                modifier = Modifier.fillMaxSize()
             )
         }
     }
@@ -2211,14 +2256,41 @@ private fun MyMusicArtworkCard(
 
 @Composable
 private fun MyMusicMiniVinyl(
+    isPlaying: Boolean,
     modifier: Modifier = Modifier
 ) {
-    Canvas(modifier = modifier) {
+    val rotation = remember { Animatable(0f) }
+
+    LaunchedEffect(isPlaying) {
+        if (isPlaying) {
+            while (isActive) {
+                rotation.animateTo(
+                    targetValue = rotation.value + 360f,
+                    animationSpec = tween(
+                        durationMillis = 1800,
+                        easing = LinearEasing
+                    )
+                )
+            }
+        }
+    }
+
+    Canvas(
+        modifier = modifier.graphicsLayer {
+            rotationZ = rotation.value
+        }
+    ) {
         val center = androidx.compose.ui.geometry.Offset(
             size.width / 2f,
             size.height / 2f
         )
-        val radius = size.minDimension * 0.46f
+        val radius = size.minDimension * 0.43f
+
+        drawCircle(
+            color = Color.Black.copy(alpha = 0.20f),
+            radius = radius * 1.03f,
+            center = center.copy(y = center.y + 1.5f)
+        )
 
         drawCircle(
             color = Color(0xFF080808),
@@ -2226,26 +2298,58 @@ private fun MyMusicMiniVinyl(
             center = center
         )
 
-        for (ring in 1..7) {
+        // Dense micro-grooves.
+        for (ring in 1..18) {
             drawCircle(
-                color = Color.White.copy(alpha = 0.065f),
-                radius = radius * (ring / 8f),
+                color = if (ring % 2 == 0) {
+                    Color.White.copy(alpha = 0.032f)
+                } else {
+                    Color.Black.copy(alpha = 0.20f)
+                },
+                radius = radius * (ring / 19f),
                 center = center,
                 style = androidx.compose.ui.graphics.drawscope.Stroke(
-                    width = 0.65f
+                    width = 0.45f
                 )
             )
         }
 
-        drawCircle(
-            color = Color(0xFFB62929),
-            radius = radius * 0.16f,
-            center = center
+        drawArc(
+            color = Color.White.copy(alpha = 0.13f),
+            startAngle = 205f,
+            sweepAngle = 66f,
+            useCenter = false,
+            topLeft = androidx.compose.ui.geometry.Offset(
+                center.x - radius,
+                center.y - radius
+            ),
+            size = androidx.compose.ui.geometry.Size(
+                radius * 2f,
+                radius * 2f
+            ),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(
+                width = radius * 0.045f
+            )
         )
 
         drawCircle(
+            color = Color(0xFF2C2C2C),
+            radius = radius * 0.17f,
+            center = center
+        )
+        drawCircle(
+            color = Color(0xFFB52828),
+            radius = radius * 0.115f,
+            center = center
+        )
+        drawCircle(
+            color = Color.Black,
+            radius = radius * 0.034f,
+            center = center
+        )
+        drawCircle(
             color = Color.White.copy(alpha = 0.65f),
-            radius = radius * 0.025f,
+            radius = radius * 0.012f,
             center = center
         )
     }
@@ -2279,6 +2383,7 @@ private fun MyMusicMiniPlayer(
             verticalAlignment = Alignment.CenterVertically
         ) {
             MyMusicMiniVinyl(
+                isPlaying = isPlaying,
                 modifier = Modifier.size(64.dp)
             )
 
