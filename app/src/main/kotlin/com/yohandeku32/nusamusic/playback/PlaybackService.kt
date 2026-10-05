@@ -14,6 +14,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.ShuffleOrder
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.yohandeku32.nusamusic.MainActivity
@@ -288,12 +289,25 @@ class PlaybackService : MediaSessionService() {
             return
         }
 
-        handoffDone = true
+        val nextIndexInActive = (0 until active.mediaItemCount)
+            .firstOrNull {
+                active.getMediaItemAt(it).mediaId == expectedNextId
+            } ?: run {
+            cancelCrossfade(restorePrimaryVolume = true)
+            return
+        }
 
         // The transition player is already producing the next track's audio.
-        // Make it the session player first, then stop the old player. This
-        // avoids the old gap caused by stopping the next track and restarting
-        // the primary player.
+        // Before swapping the session player, restore the rest of the original
+        // playlist onto it so Next/Previous/Repeat continue to work.
+        restorePlaylistOnFadingPlayer(
+            sourcePlayer = active,
+            targetPlayer = fadingIn,
+            currentIndex = nextIndexInActive
+        )
+
+        handoffDone = true
+
         mediaSession?.setPlayer(fadingIn)
 
         fadingIn.volume = 1f
@@ -304,9 +318,6 @@ class PlaybackService : MediaSessionService() {
         active.stop()
         active.clearMediaItems()
 
-        // Swap roles: the player that just became active remains the session
-        // player, while the old player becomes the standby player for the next
-        // transition.
         primaryPlayer = fadingIn
         crossfadePlayer = active
 
@@ -320,6 +331,82 @@ class PlaybackService : MediaSessionService() {
         expectedPrimaryMediaId = null
         expectedNextMediaId = null
         handoffDone = false
+    }
+
+    private fun restorePlaylistOnFadingPlayer(
+        sourcePlayer: ExoPlayer,
+        targetPlayer: ExoPlayer,
+        currentIndex: Int
+    ) {
+        if (sourcePlayer.mediaItemCount <= 1) {
+            targetPlayer.repeatMode = sourcePlayer.repeatMode
+            targetPlayer.shuffleModeEnabled = sourcePlayer.shuffleModeEnabled
+            return
+        }
+
+        val currentId = sourcePlayer.getMediaItemAt(currentIndex).mediaId
+
+        val remainingItems = (0 until sourcePlayer.mediaItemCount)
+            .filter { it != currentIndex }
+            .map { sourcePlayer.getMediaItemAt(it) }
+
+        targetPlayer.addMediaItems(remainingItems)
+
+        // Preserve the exact playback order that was active before the
+        // crossfade. This matters when shuffle mode is enabled.
+        if (sourcePlayer.shuffleModeEnabled) {
+            val newIndexByMediaId = buildMap {
+                put(currentId, 0)
+                var newIndex = 1
+                for (index in 0 until sourcePlayer.mediaItemCount) {
+                    if (index == currentIndex) continue
+                    put(sourcePlayer.getMediaItemAt(index).mediaId, newIndex)
+                    newIndex++
+                }
+            }
+
+            val shuffledIndices = mutableListOf<Int>()
+            var originalIndex = currentIndex
+            val visited = mutableSetOf<Int>()
+
+            while (originalIndex != androidx.media3.common.C.INDEX_UNSET &&
+                visited.add(originalIndex)
+            ) {
+                val mediaId = sourcePlayer.getMediaItemAt(originalIndex).mediaId
+                newIndexByMediaId[mediaId]?.let { shuffledIndices.add(it) }
+
+                originalIndex = sourcePlayer
+                    .getShuffleOrder()
+                    .getNextIndex(originalIndex)
+            }
+
+            if (shuffledIndices.size < targetPlayer.mediaItemCount) {
+                for (index in 0 until targetPlayer.mediaItemCount) {
+                    if (index !in shuffledIndices) {
+                        shuffledIndices.add(index)
+                    }
+                }
+            }
+
+            targetPlayer.setShuffleOrder(
+                ShuffleOrder.DefaultShuffleOrder(
+                    shuffledIndices.toIntArray(),
+                    System.nanoTime()
+                )
+            )
+            targetPlayer.shuffleModeEnabled = true
+        } else {
+            targetPlayer.shuffleModeEnabled = false
+        }
+
+        targetPlayer.repeatMode = sourcePlayer.repeatMode
+
+        Log.d(
+            "NusaCrossfade",
+            "RESTORE QUEUE count=" + targetPlayer.mediaItemCount +
+                " shuffle=" + sourcePlayer.shuffleModeEnabled +
+                " repeat=" + sourcePlayer.repeatMode
+        )
     }
 
     private fun cancelCrossfade(restorePrimaryVolume: Boolean) {
