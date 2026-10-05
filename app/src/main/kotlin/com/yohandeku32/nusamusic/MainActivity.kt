@@ -1088,7 +1088,6 @@ private fun NusaMusicApp(
     }
 
 
-
     // Center the currently playing song only after the pager has settled.
     // Because every grid card has a fixed height, the target offset is
     // deterministic and can be applied in one operation without a second
@@ -1914,10 +1913,6 @@ private fun NusaMusicApp(
                             )
                         }
 
-                        var selectedSongForPlayback by remember {
-                            mutableStateOf<Song?>(null)
-                        }
-
                         LaunchedEffect(
                             currentSong?.id,
                             stackSongs
@@ -2107,8 +2102,7 @@ private fun NusaMusicApp(
                                                 )
                                                 .clickable {
                                                     if (distance == 0) {
-                                                        selectedSongForPlayback =
-                                                            song
+                                                        onPlay(song)
                                                     } else {
                                                         chooseStack(index)
                                                     }
@@ -2123,167 +2117,34 @@ private fun NusaMusicApp(
                                                         RoundedCornerShape(8.dp)
                                                     )
                                             )
-                                        }
-                                    }
-                                }
-                            }
 
-                            // Pick the cassette first; play only after the
-                            // selected cover is confirmed.
-                            selectedSongForPlayback?.let { song ->
-                                androidx.compose.ui.window.Dialog(
-                                    onDismissRequest = {
-                                        selectedSongForPlayback = null
-                                    },
-                                    properties =
-                                        androidx.compose.ui.window.DialogProperties(
-                                            dismissOnClickOutside = true,
-                                            dismissOnBackPress = true,
-                                            usePlatformDefaultWidth = false
-                                        )
-                                ) {
-                                    Surface(
-                                        modifier = Modifier
-                                            .widthIn(
-                                                min = 280.dp,
-                                                max = 350.dp
-                                            )
-                                            .padding(horizontal = 20.dp),
-                                        shape = RoundedCornerShape(24.dp),
-                                        color =
-                                            MaterialTheme.colorScheme.surface,
-                                        tonalElevation = 8.dp,
-                                        shadowElevation = 20.dp
-                                    ) {
-                                        Column(
-                                            modifier = Modifier.padding(
-                                                18.dp
-                                            ),
-                                            horizontalAlignment =
-                                                Alignment.CenterHorizontally
-                                        ) {
-                                            ArtworkView(
-                                                song = song,
-                                                maxSizePx = 420,
-                                                modifier = Modifier
-                                                    .size(148.dp)
-                                                    .clip(
-                                                        RoundedCornerShape(10.dp)
-                                                    )
-                                            )
-
-                                            Spacer(Modifier.height(13.dp))
-
-                                            Text(
-                                                text = song.title,
-                                                fontSize = 18.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                maxLines = 2,
-                                                textAlign = TextAlign.Center,
-                                                overflow =
-                                                    androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                            )
-
-                                            Spacer(Modifier.height(3.dp))
-
-                                            Text(
-                                                text = ArtistNameUtils.firstArtist(
-                                                    song.artist
-                                                ),
-                                                fontSize = 13.sp,
-                                                color =
-                                                    MaterialTheme.colorScheme.onSurfaceVariant,
-                                                maxLines = 1,
-                                                textAlign = TextAlign.Center,
-                                                overflow =
-                                                    androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                            )
-
-                                            Spacer(Modifier.height(16.dp))
-
-                                            Row(
-                                                modifier =
-                                                    Modifier.fillMaxWidth(),
-                                                horizontalArrangement =
-                                                    Arrangement.spacedBy(10.dp)
-                                            ) {
-                                                Surface(
-                                                    modifier =
-                                                        Modifier.weight(1f),
-                                                    shape =
-                                                        RoundedCornerShape(16.dp),
-                                                    color =
-                                                        MaterialTheme.colorScheme.surfaceVariant,
-                                                    onClick = {
-                                                        selectedSongForPlayback =
-                                                            null
-                                                    }
+                                            if (distance == 0) {
+                                                Box(
+                                                    modifier = Modifier.fillMaxSize(),
+                                                    contentAlignment = Alignment.Center
                                                 ) {
                                                     Box(
-                                                        modifier = Modifier.padding(
-                                                            vertical = 12.dp
-                                                        ),
-                                                        contentAlignment =
-                                                            Alignment.Center
-                                                    ) {
-                                                        Text(
-                                                            nusaText(
-                                                                "Batal",
-                                                                "Cancel"
-                                                            ),
-                                                            fontSize = 13.sp,
-                                                            fontWeight =
-                                                                FontWeight.SemiBold
-                                                        )
-                                                    }
-                                                }
-
-                                                Surface(
-                                                    modifier =
-                                                        Modifier.weight(1f),
-                                                    shape =
-                                                        RoundedCornerShape(16.dp),
-                                                    color =
-                                                        MaterialTheme.colorScheme.primary,
-                                                    contentColor =
-                                                        MaterialTheme.colorScheme.onPrimary,
-                                                    onClick = {
-                                                        selectedSongForPlayback =
-                                                            null
-                                                        onPlay(song)
-                                                    }
-                                                ) {
-                                                    Row(
-                                                        modifier = Modifier.padding(
-                                                            horizontal = 16.dp,
-                                                            vertical = 12.dp
-                                                        ),
-                                                        verticalAlignment =
-                                                            Alignment.CenterVertically,
-                                                        horizontalArrangement =
-                                                            Arrangement.Center
+                                                        modifier = Modifier
+                                                            .size(64.dp)
+                                                            .clip(CircleShape)
+                                                            .background(
+                                                                Color.Black.copy(
+                                                                    alpha = 0.55f
+                                                                )
+                                                            )
+                                                            .clickable {
+                                                                onPlay(song)
+                                                            },
+                                                        contentAlignment = Alignment.Center
                                                     ) {
                                                         Icon(
                                                             Icons.Default.PlayArrow,
-                                                            contentDescription =
-                                                                nusaText(
-                                                                    "Putar",
-                                                                    "Play"
-                                                                ),
-                                                            modifier =
-                                                                Modifier.size(20.dp)
-                                                        )
-                                                        Spacer(
-                                                            Modifier.width(5.dp)
-                                                        )
-                                                        Text(
-                                                            nusaText(
+                                                            contentDescription = nusaText(
                                                                 "Putar",
                                                                 "Play"
                                                             ),
-                                                            fontSize = 13.sp,
-                                                            fontWeight =
-                                                                FontWeight.Bold
+                                                            tint = Color.White,
+                                                            modifier = Modifier.size(38.dp)
                                                         )
                                                     }
                                                 }
@@ -2292,6 +2153,8 @@ private fun NusaMusicApp(
                                     }
                                 }
                             }
+
+
                         }
                     }
                 }
