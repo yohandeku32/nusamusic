@@ -124,7 +124,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.zIndex
 import androidx.compose.ui.platform.LocalDensity
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
@@ -1895,257 +1894,437 @@ private fun NusaMusicApp(
                     }
 
                     1 -> {
-                        val songPagerState =
-                            androidx.compose.foundation.pager.rememberPagerState(
-                                initialPage = remember(filtered, currentSong?.id) {
-                                    currentSong?.let { song ->
-                                        filtered.indexOfFirst { it.id == song.id }
-                                    }?.takeIf { it >= 0 } ?: 0
-                                },
-                                pageCount = { filtered.size.coerceAtLeast(1) }
-                            )
-
-                        // Keep the pager aligned with the currently playing
-                        // song, but do not rebuild the media queue.
-                        LaunchedEffect(currentSong?.id, filtered) {
-                            if (filtered.isEmpty()) return@LaunchedEffect
-
-                            val target = currentSong?.let { song ->
-                                filtered.indexOfFirst { it.id == song.id }
-                            } ?: -1
-
-                            if (target >= 0 &&
-                                target != songPagerState.currentPage
-                            ) {
-                                songPagerState.animateScrollToPage(target)
-                            }
-                        }
-
-                        // Swiping is the only action that changes the selected
-                        // track from this page. The settled page is played.
-                        LaunchedEffect(songPagerState, filtered) {
-                            var initial = true
-
-                            androidx.compose.runtime.snapshotFlow {
-                                songPagerState.settledPage
-                            }.collect { page ->
-                                if (initial) {
-                                    initial = false
-                                    return@collect
-                                }
-
-                                filtered.getOrNull(page)?.let { song ->
-                                    if (song.id != currentSong?.id) {
-                                        onPlay(song)
-                                    }
-                                }
-                            }
-                        }
-
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .background(
-                                    MaterialTheme.colorScheme.background
+                                    Brush.verticalGradient(
+                                        colors = listOf(
+                                            Color(0xFF18191B),
+                                            Color(0xFF0D0E10),
+                                            Color(0xFF070708)
+                                        )
+                                    )
                                 )
                         ) {
-                            Column(
+                            Row(
                                 modifier = Modifier
-                                    .fillMaxSize()
+                                    .fillMaxWidth()
+                                    .height(76.dp)
+                                    .background(Color.Black.copy(alpha = 0.18f))
+                                    .padding(horizontal = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(
-                                            start = 28.dp,
-                                            end = 28.dp,
-                                            top = 28.dp,
-                                            bottom = 18.dp
-                                        ),
-                                    verticalAlignment =
-                                        Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "MY MUSIC",
-                                        fontSize = 34.sp,
-                                        lineHeight = 38.sp,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        letterSpacing = (-1.0).sp,
-                                        color =
-                                            MaterialTheme.colorScheme.onBackground
-                                    )
-                                }
-
-                                if (filtered.isEmpty()) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(340.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            nusaText(
-                                                "Tidak ada musik lokal",
-                                                "No local music found"
-                                            ),
-                                            fontSize = 14.sp,
-                                            color =
-                                                MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                } else {
-                                    androidx.compose.foundation.pager.HorizontalPager(
-                                        state = songPagerState,
-                                        pageSize =
-                                            androidx.compose.foundation.pager.PageSize.Fixed(
-                                                304.dp
-                                            ),
-                                        contentPadding = PaddingValues(
-                                            horizontal = 32.dp
-                                        ),
-                                        pageSpacing = 18.dp,
-                                        beyondViewportPageCount = 1,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(344.dp)
-                                    ) { page ->
-                                        val song = filtered[page]
-                                        val pageDistance =
-                                            abs(
-                                                (songPagerState.currentPage - page) +
-                                                    songPagerState.currentPageOffsetFraction
-                                            )
-                                        val emphasis =
-                                            (1f - pageDistance.coerceIn(0f, 1f))
-                                        val scale =
-                                            0.84f + (0.16f * emphasis)
-                                        val alpha =
-                                            0.48f + (0.52f * emphasis)
-
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .graphicsLayer {
-                                                    scaleX = scale
-                                                    scaleY = scale
-                                                    this.alpha = alpha
-                                                }
-                                                .clickable {
-                                                    onPlay(song)
-                                                },
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            PrototypeAlbumRecordCard(
-                                                song = song,
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .aspectRatio(1f)
-                                            )
+                                IconButton(
+                                    onClick = {
+                                        scope.launch {
+                                            pagerState.animateScrollToPage(0)
                                         }
                                     }
+                                ) {
+                                    Icon(
+                                        Icons.Default.ArrowBack,
+                                        contentDescription = nusaText("Kembali ke pemutar", "Back to player"),
+                                        tint = Color.White
+                                    )
                                 }
-
-                                Spacer(Modifier.height(30.dp))
-
-                                androidx.compose.material3.HorizontalDivider(
-                                    modifier = Modifier.padding(
-                                        horizontal = 30.dp
-                                    ),
-                                    thickness = 1.5.dp,
-                                    color =
-                                        MaterialTheme.colorScheme.onSurface.copy(
-                                            alpha = 0.58f
-                                        )
-                                )
 
                                 Text(
-                                    text = "BIOGRAPHY",
-                                    fontSize = 20.sp,
-                                    lineHeight = 24.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    letterSpacing = 0.2.sp,
-                                    color =
-                                        MaterialTheme.colorScheme.onBackground,
-                                    modifier = Modifier.padding(
-                                        start = 50.dp,
-                                        top = 20.dp,
-                                        bottom = 14.dp
-                                    )
+                                    text = nusaText("Daftar Lagu", "Songs"),
+                                    modifier = Modifier.weight(1f),
+                                    textAlign = TextAlign.Center,
+                                    fontSize = 21.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
                                 )
 
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .weight(1f)
-                                        .background(
-                                            MaterialTheme.colorScheme.surfaceVariant.copy(
-                                                alpha = 0.34f
-                                            )
-                                        )
-                                        .verticalScroll(
-                                            androidx.compose.foundation.rememberScrollState()
-                                        )
-                                        .padding(
-                                            horizontal = 50.dp,
-                                            vertical = 24.dp
-                                        )
-                                ) {
-                                    when {
-                                        biographyLoading -> {
-                                            Text(
-                                                text = nusaText(
-                                                    "Memuat biografi artis…",
-                                                    "Loading artist biography…"
-                                                ),
-                                                fontSize = 17.sp,
-                                                lineHeight = 28.sp,
-                                                fontWeight = FontWeight.Medium,
-                                                color =
-                                                    MaterialTheme.colorScheme.onSurface
+                                Box {
+                                    IconButton(
+                                        onClick = { sortMenuExpanded = true }
+                                    ) {
+                                            Icon(
+                                                Icons.Default.Sort,
+                                                contentDescription = nusaText("Urutkan lagu", "Sort songs"),
+                                                tint = Color.White
                                             )
                                         }
 
-                                        artistBiography != null -> {
-                                            Column {
-                                                Text(
-                                                    text = artistBiography!!.text,
-                                                    fontSize = 17.sp,
-                                                    lineHeight = 28.sp,
-                                                    fontWeight = FontWeight.Medium,
-                                                    color =
-                                                        MaterialTheme.colorScheme.onSurface
-                                                )
+                                        DropdownMenu(
+                                        expanded = sortMenuExpanded,
+                                        onDismissRequest = {
+                                            sortMenuExpanded = false
+                                        }
+                                    ) {
+                                        LibrarySortOption.entries.forEach { option ->
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Text(
+                                                        text = option.label,
+                                                        fontWeight = if (
+                                                            option == librarySortOption
+                                                        ) {
+                                                            FontWeight.Bold
+                                                        } else {
+                                                            FontWeight.Normal
+                                                        }
+                                                    )
+                                                },
+                                                onClick = {
+                                                    librarySortOption = option
+                                                    sortMenuExpanded = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
 
-                                                Spacer(Modifier.height(18.dp))
-
-                                                Text(
-                                                    text = nusaText(
-                                                        "Sumber: Last.fm",
-                                                        "Source: Last.fm"
-                                                    ),
-                                                    fontSize = 11.sp,
-                                                    lineHeight = 16.sp,
-                                                    color =
-                                                        MaterialTheme.colorScheme.onSurfaceVariant
+                            LazyVerticalGrid(
+                                columns = GridCells.Fixed(2),
+                                state = libraryListState,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(top = 76.dp),
+                                contentPadding = PaddingValues(
+                                    top = 10.dp,
+                                    start = 6.dp,
+                                    end = 6.dp,
+                                    bottom = 140.dp
+                                ),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                if ((permissionGranted || selectedMusicFolders.isNotEmpty()) && filtered.isNotEmpty()) {
+                                    items(
+                                        items = filtered,
+                                        key = { song -> song.id },
+                                        span = { GridItemSpan(1) },
+                                        contentType = { "library-song" }
+                                    ) { song ->
+                                        LibrarySongRow(
+                                            song = song,
+                                            selected = currentSong?.id == song.id,
+                                            onPlay = onPlay
+                                        )
+                                    }
+                                } else if (!permissionGranted && selectedMusicFolders.isEmpty()) {
+                                    item(span = { GridItemSpan(maxLineSpan) }) {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(top = 80.dp),
+                                            horizontalAlignment = Alignment.CenterHorizontally
+                                        ) {
+                                            Text(
+                                                nusaText("Izinkan Nusa mengakses file audio Anda.", "Give Nusa access to your audio files."),
+                                                color = Color(0xFF9D9D9D),
+                                                fontSize = 14.sp
+                                            )
+                                            Spacer(Modifier.height(12.dp))
+                                            FilledIconButton(onClick = onRequestPermission) {
+                                                Icon(
+                                                    Icons.Default.FolderOpen,
+                                                    contentDescription = nusaText("Izinkan akses musik", "Allow music access")
                                                 )
                                             }
                                         }
-
-                                        else -> {
+                                    }
+                                } else {
+                                    item(span = { GridItemSpan(maxLineSpan) }) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(top = 80.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
                                             Text(
-                                                text = nusaText(
-                                                    "Biografi artis belum tersedia.",
-                                                    "Artist biography is not available."
-                                                ),
-                                                fontSize = 17.sp,
-                                                lineHeight = 28.sp,
-                                                fontWeight = FontWeight.Medium,
-                                                color =
-                                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                                nusaText("Tidak ada musik lokal", "No local music found"),
+                                                color = Color(0xFF9D9D9D),
+                                                fontSize = 14.sp
                                             )
                                         }
                                     }
                                 }
+                            }
+
+                            var alphabetScrollJob by remember {
+                                mutableStateOf<Job?>(null)
+                            }
+
+                            fun requestAlphabetScroll(targetIndex: Int) {
+                                if (targetIndex < 0) return
+
+                                alphabetScrollJob?.cancel()
+                                alphabetScrollJob = scope.launch {
+                                    libraryListState.animateScrollToItem(
+                                        index = targetIndex,
+                                        scrollOffset = 0
+                                    )
+                                }
+                            }
+
+                            val alphabetIndexModifier = Modifier
+                                .fillMaxHeight()
+                                .padding(
+                                    top = 88.dp,
+                                    bottom = 122.dp,
+                                    end = 2.dp
+                                )
+                                .width(22.dp)
+                                .pointerInput(alphabetTargets, filtered) {
+                                    var lastDragTarget = -1
+
+                                    detectDragGestures(
+                                        onDragStart = { offset ->
+                                            val slotHeight =
+                                                size.height / alphabet.size.toFloat()
+                                            val slot = (offset.y / slotHeight)
+                                                .toInt()
+                                                .coerceIn(0, alphabet.lastIndex)
+                                            val targetIndex =
+                                                alphabetTargets[alphabet[slot]] ?: -1
+
+                                            if (targetIndex >= 0) {
+                                                lastDragTarget = targetIndex
+                                                requestAlphabetScroll(targetIndex)
+                                            }
+                                        },
+                                        onDrag = { change, _ ->
+                                            change.consume()
+
+                                            val slotHeight =
+                                                size.height / alphabet.size.toFloat()
+                                            val slot = (change.position.y / slotHeight)
+                                                .toInt()
+                                                .coerceIn(0, alphabet.lastIndex)
+                                            val targetIndex =
+                                                alphabetTargets[alphabet[slot]] ?: -1
+
+                                            if (
+                                                targetIndex >= 0 &&
+                                                targetIndex != lastDragTarget
+                                            ) {
+                                                lastDragTarget = targetIndex
+                                                requestAlphabetScroll(targetIndex)
+                                            }
+                                        },
+                                        onDragEnd = {
+                                            lastDragTarget = -1
+                                        },
+                                        onDragCancel = {
+                                            lastDragTarget = -1
+                                        }
+                                    )
+                                }
+
+                            Box(
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                Column(
+                                    modifier = alphabetIndexModifier.align(Alignment.CenterEnd),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.SpaceEvenly
+                                ) {
+                                    alphabet.forEach { letter ->
+                                    val targetIndex = alphabetTargets[letter] ?: -1
+                                    val available = targetIndex >= 0
+
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .weight(1f)
+                                            .clickable(enabled = available) {
+                                                requestAlphabetScroll(targetIndex)
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = letter.toString(),
+                                            fontSize = 9.sp,
+                                            fontWeight = if (available) {
+                                                FontWeight.Bold
+                                            } else {
+                                                FontWeight.Normal
+                                            },
+                                            color = if (available) {
+                                                Color.White.copy(alpha = 0.78f)
+                                            } else {
+                                                Color.White.copy(alpha = 0.18f)
+                                            }
+                                        )
+                                    }
+                                    }
+                                }
+                            }
+
+                            val showFloatingControls by remember {
+                                derivedStateOf {
+                                    libraryListState.firstVisibleItemIndex >= 4
+                                }
+                            }
+                            val showBackToPlayer by remember {
+                                derivedStateOf {
+                                    libraryListState.firstVisibleItemIndex >= 8
+                                }
+                            }
+
+                            val floatingAlpha by animateFloatAsState(
+                                targetValue = if (showFloatingControls) 1f else 0f,
+                                animationSpec = tween(320),
+                                label = "libraryFloatingAlpha"
+                            )
+                            val floatingOffset by animateFloatAsState(
+                                targetValue = if (showFloatingControls) 0f else 28f,
+                                animationSpec = tween(360),
+                                label = "libraryFloatingOffset"
+                            )
+
+                            Box(
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(50),
+                                    color = MaterialTheme.colorScheme.surfaceVariant,
+                                    tonalElevation = 3.dp,
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .padding(bottom = 18.dp)
+                                        .graphicsLayer {
+                                            alpha = floatingAlpha
+                                            translationY = floatingOffset
+                                        }
+                                ) {
+                                Row(
+                                    modifier = Modifier.padding(3.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    val shuffleActiveColor by animateColorAsState(
+                                        targetValue = if (shuffleEnabled) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            Color.Transparent
+                                        },
+                                        animationSpec = tween(180),
+                                        label = "shuffleBackground"
+                                    )
+                                    val shuffleIconColor by animateColorAsState(
+                                        targetValue = if (shuffleEnabled) {
+                                            MaterialTheme.colorScheme.onPrimary
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
+                                        animationSpec = tween(180),
+                                        label = "shuffleIcon"
+                                    )
+
+                                    Box(
+                                        modifier = Modifier
+                                            .size(46.dp)
+                                            .clip(CircleShape)
+                                            .background(shuffleActiveColor)
+                                            .clickable(onClick = onToggleShuffle),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Shuffle,
+                                            contentDescription = nusaText("Acak", "Shuffle"),
+                                            tint = shuffleIconColor
+                                        )
+                                    }
+
+                                    val repeatActive = repeatMode != Player.REPEAT_MODE_OFF
+                                    val repeatActiveColor by animateColorAsState(
+                                        targetValue = if (repeatActive) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            Color.Transparent
+                                        },
+                                        animationSpec = tween(180),
+                                        label = "repeatBackground"
+                                    )
+                                    val repeatIconColor by animateColorAsState(
+                                        targetValue = if (repeatActive) {
+                                            MaterialTheme.colorScheme.onPrimary
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
+                                        animationSpec = tween(180),
+                                        label = "repeatIcon"
+                                    )
+
+                                    Box(
+                                        modifier = Modifier
+                                            .size(46.dp)
+                                            .clip(CircleShape)
+                                            .background(repeatActiveColor)
+                                            .clickable(onClick = onToggleRepeat),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            if (repeatMode == Player.REPEAT_MODE_ONE) {
+                                                Icons.Default.RepeatOne
+                                            } else {
+                                                Icons.Default.Repeat
+                                            },
+                                            contentDescription = nusaText("Ulangi", "Repeat"),
+                                            tint = repeatIconColor
+                                        )
+                                    }
+                                }
+                            }
+                            }
+
+                            val backAlpha by animateFloatAsState(
+                                targetValue = if (showBackToPlayer) 1f else 0f,
+                                animationSpec = tween(280),
+                                label = "backPlayerAlpha"
+                            )
+                            val backOffset by animateFloatAsState(
+                                targetValue = if (showBackToPlayer) 0f else 26f,
+                                animationSpec = tween(320),
+                                label = "backPlayerOffset"
+                            )
+
+                            Box(
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(50),
+                                    color = MaterialTheme.colorScheme.surfaceVariant,
+                                    tonalElevation = 3.dp,
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(top = 82.dp, end = 14.dp)
+                                        .graphicsLayer {
+                                            alpha = backAlpha
+                                            translationY = backOffset
+                                        }
+                                        .clickable {
+                                            scope.launch {
+                                                pagerState.animateScrollToPage(0)
+                                            }
+                                        }
+                                ) {
+                                Row(
+                                    modifier = Modifier.padding(
+                                        horizontal = 12.dp,
+                                        vertical = 8.dp
+                                    ),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Default.KeyboardArrowDown,
+                                        contentDescription = nusaText("Kembali ke pemutar", "Back to player"),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(
+                                        nusaText("Pemutar", "Player"),
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
                             }
                         }
                     }
