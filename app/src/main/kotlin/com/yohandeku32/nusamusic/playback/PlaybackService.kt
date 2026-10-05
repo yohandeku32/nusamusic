@@ -23,12 +23,14 @@ class PlaybackService : MediaSessionService() {
 
     private val crossfadeHandler = Handler(Looper.getMainLooper())
     private var crossfadeActive = false
+    private var expectedPrimaryMediaId: String? = null
     private var expectedNextMediaId: String? = null
+    private var handoffDone = false
 
     private val crossfadeTick = object : Runnable {
         override fun run() {
             updateCrossfade()
-            crossfadeHandler.postDelayed(this, 50L)
+            crossfadeHandler.postDelayed(this, 40L)
         }
     }
 
@@ -63,18 +65,15 @@ class PlaybackService : MediaSessionService() {
 
         player.addListener(object : Player.Listener {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                handlePrimaryTransition(mediaItem, reason)
-            }
-
-            override fun onIsPlayingChanged(isPlaying: Boolean) {
-                if (!isPlaying && crossfadeActive) {
+                // A manual next/previous or an unexpected automatic transition
+                // invalidates the in-flight crossfade. The normal transition
+                // caused by our explicit handoff is already handled by
+                // completeCrossfadeHandoff().
+                if (crossfadeActive &&
+                    !handoffDone &&
+                    mediaItem?.mediaId != expectedPrimaryMediaId
+                ) {
                     cancelCrossfade(restorePrimaryVolume = true)
-                }
-            }
-
-            override fun onPlaybackStateChanged(playbackState: Int) {
-                if (playbackState == Player.STATE_ENDED && crossfadeActive) {
-                    finishCrossfadeAtEnd()
                 }
             }
         })
@@ -114,25 +113,53 @@ class PlaybackService : MediaSessionService() {
             return
         }
 
-        if (!primary.isPlaying || crossfadeActive) {
-            if (crossfadeActive && primary.currentMediaItem == null) {
-                cancelCrossfade(restorePrimaryVolume = true)
-            } else if (crossfadeActive) {
-                applyCrossfadeVolumes(primary, secondary, durationMs)
-            }
+        val currentItem = primary.currentMediaItem
+        if (currentItem == null) {
+            cancelCrossfade(restorePrimaryVolume = true)
             return
         }
 
+        if (crossfadeActive) {
+            // A user action such as pause/seek/next/previous cancels the
+            // transition. Buffering does not, because playWhenReady remains true.
+            if (!primary.playWhenReady) {
+                cancelCrossfade(restorePrimaryVolume = true)
+                return
+            }
+
+            if (currentItem.mediaId != expectedPrimaryMediaId) {
+                cancelCrossfade(restorePrimaryVolume = true)
+                return
+            }
+
+            val duration = primary.duration
+            if (duration <= 0L || duration == androidx.media3.common.C.TIME_UNSET) {
+                cancelCrossfade(restorePrimaryVolume = true)
+                return
+            }
+
+            val remaining = duration - primary.currentPosition
+
+            if (remaining <= 60L) {
+                completeCrossfadeHandoff(primary, secondary)
+            } else {
+                applyCrossfadeVolumes(primary, secondary, durationMs)
+            }
+
+            return
+        }
+
+        if (!primary.isPlaying || !primary.playWhenReady) return
         if (primary.repeatMode == Player.REPEAT_MODE_ONE) return
 
         val duration = primary.duration
-        if (duration <= 0L) return
+        if (duration <= 0L || duration == androidx.media3.common.C.TIME_UNSET) return
 
         val nextIndex = primary.nextMediaItemIndex
         if (nextIndex < 0 || nextIndex >= primary.mediaItemCount) return
 
         val remaining = duration - primary.currentPosition
-        if (remaining <= durationMs) {
+        if (remaining in 1L..durationMs) {
             startCrossfade(primary, secondary, nextIndex, durationMs)
         }
     }
@@ -145,8 +172,14 @@ class PlaybackService : MediaSessionService() {
     ) {
         if (crossfadeActive) return
 
+        val currentItem = primary.currentMediaItem ?: return
         val nextItem = primary.getMediaItemAt(nextIndex)
+
+        if (currentItem.mediaId == nextItem.mediaId) return
+
+        expectedPrimaryMediaId = currentItem.mediaId
         expectedNextMediaId = nextItem.mediaId
+        handoffDone = false
 
         secondary.stop()
         secondary.clearMediaItems()
@@ -164,11 +197,14 @@ class PlaybackService : MediaSessionService() {
         secondary: ExoPlayer,
         durationMs: Long
     ) {
+        if (!secondary.playWhenReady) return
+
         val duration = primary.duration
-        if (duration <= 0L) return
+        if (duration <= 0L || duration == androidx.media3.common.C.TIME_UNSET) return
 
         val remaining = (duration - primary.currentPosition)
             .coerceIn(0L, durationMs)
+
         val progress = 1f - (remaining.toFloat() / durationMs.toFloat())
         val fadeIn = progress.coerceIn(0f, 1f)
         val fadeOut = 1f - fadeIn
@@ -177,69 +213,61 @@ class PlaybackService : MediaSessionService() {
         secondary.volume = fadeIn
     }
 
-    private fun handlePrimaryTransition(mediaItem: MediaItem?, reason: Int) {
-        if (!crossfadeActive) return
+    private fun completeCrossfadeHandoff(
+        primary: ExoPlayer,
+        secondary: ExoPlayer
+    ) {
+        if (!crossfadeActive || handoffDone) return
 
-        val expectedId = expectedNextMediaId
-        if (expectedId != null && expectedId == mediaItem?.mediaId) {
-            val primary = primaryPlayer ?: return
-            val secondary = crossfadePlayer ?: return
-
-            if (secondary.playbackState == Player.STATE_READY ||
-                secondary.playbackState == Player.STATE_BUFFERING
-            ) {
-                val handoffPosition = secondary.currentPosition.coerceAtLeast(0L)
-
-                primary.volume = 0f
-                primary.seekTo(handoffPosition)
-                primary.volume = 1f
-                primary.play()
-
-                secondary.volume = 0f
-                secondary.pause()
-                secondary.stop()
-                secondary.clearMediaItems()
-            }
-
-            crossfadeActive = false
-            expectedNextMediaId = null
-            primary.volume = 1f
-        } else {
+        val expectedNextId = expectedNextMediaId ?: return
+        val secondaryItem = secondary.currentMediaItem ?: return
+        if (secondaryItem.mediaId != expectedNextId) {
             cancelCrossfade(restorePrimaryVolume = true)
+            return
         }
 
-        @Suppress("UNUSED_PARAMETER")
-        val ignoredReason = reason
-    }
-
-    private fun finishCrossfadeAtEnd() {
-        val primary = primaryPlayer ?: return
-        val secondary = crossfadePlayer ?: return
-
-        if (!crossfadeActive) return
-
-        if (secondary.playbackState == Player.STATE_READY ||
-            secondary.playbackState == Player.STATE_BUFFERING
+        if (secondary.playbackState != Player.STATE_READY &&
+            secondary.playbackState != Player.STATE_BUFFERING
         ) {
-            val handoffPosition = secondary.currentPosition.coerceAtLeast(0L)
-            primary.seekTo(handoffPosition)
-            primary.volume = 1f
-            primary.play()
-
-            secondary.volume = 0f
-            secondary.pause()
-            secondary.stop()
-            secondary.clearMediaItems()
+            return
         }
+
+        val nextIndex = primary.mediaItemCount.let { count ->
+            (0 until count).firstOrNull {
+                primary.getMediaItemAt(it).mediaId == expectedNextId
+            }
+        } ?: run {
+            cancelCrossfade(restorePrimaryVolume = true)
+            return
+        }
+
+        val nextPosition = secondary.currentPosition.coerceAtLeast(0L)
+
+        handoffDone = true
+
+        // Explicitly jump the session player onto the next item at the exact
+        // position the transition player has reached. This avoids waiting for
+        // ExoPlayer's automatic playlist transition event.
+        primary.seekTo(nextIndex, nextPosition)
+        primary.volume = 1f
+        primary.play()
+
+        secondary.volume = 0f
+        secondary.pause()
+        secondary.stop()
+        secondary.clearMediaItems()
 
         crossfadeActive = false
+        expectedPrimaryMediaId = null
         expectedNextMediaId = null
-        primary.volume = 1f
+        handoffDone = false
     }
 
     private fun cancelCrossfade(restorePrimaryVolume: Boolean) {
         crossfadeActive = false
+        expectedPrimaryMediaId = null
         expectedNextMediaId = null
+        handoffDone = false
 
         crossfadePlayer?.let { secondary ->
             secondary.volume = 0f
