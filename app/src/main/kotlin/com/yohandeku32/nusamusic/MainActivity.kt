@@ -1006,6 +1006,21 @@ private fun NusaMusicApp(
     var titleFontSize by remember {
         mutableStateOf(uiPrefs.getFloat("title_font_size", 34f))
     }
+    var titleFontName by remember {
+        mutableStateOf(
+            uiPrefs.getString("title_font_family", "Serif") ?: "Serif"
+        )
+    }
+
+    val titleFontFamily = remember(titleFontName) {
+        when (titleFontName) {
+            "Sans Serif" -> FontFamily.SansSerif
+            "Monospace" -> FontFamily.Monospace
+            "Cursive" -> FontFamily.Cursive
+            "Default" -> FontFamily.Default
+            else -> FontFamily.Serif
+        }
+    }
     var realisticControls by remember {
         mutableStateOf(uiPrefs.getBoolean("realistic_controls", true))
     }
@@ -1192,6 +1207,119 @@ private fun NusaMusicApp(
                     lineHeight = 18.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+
+                Spacer(Modifier.height(22.dp))
+
+                Text(
+                    nusaText("FONT JUDUL LAGU", "TITLE FONT"),
+                    fontSize = 11.sp,
+                    letterSpacing = 1.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(8.dp))
+
+                var titleFontMenuExpanded by remember {
+                    mutableStateOf(false)
+                }
+
+                Box {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        onClick = {
+                            titleFontMenuExpanded = true
+                        }
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(
+                                    horizontal = 16.dp,
+                                    vertical = 14.dp
+                                ),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(
+                                    text = titleFontName,
+                                    fontFamily = titleFontFamily,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    nusaText(
+                                        "Hanya memengaruhi judul lagu di halaman utama.",
+                                        "Only affects the song title on the main player."
+                                    ),
+                                    fontSize = 11.sp,
+                                    lineHeight = 16.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+
+                            Icon(
+                                Icons.Default.KeyboardArrowDown,
+                                contentDescription = nusaText(
+                                    "Pilih font",
+                                    "Choose font"
+                                ),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    DropdownMenu(
+                        expanded = titleFontMenuExpanded,
+                        onDismissRequest = {
+                            titleFontMenuExpanded = false
+                        }
+                    ) {
+                        listOf(
+                            "Default",
+                            "Sans Serif",
+                            "Serif",
+                            "Monospace",
+                            "Cursive"
+                        ).forEach { fontName ->
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = fontName,
+                                        fontFamily = when (fontName) {
+                                            "Sans Serif" -> FontFamily.SansSerif
+                                            "Monospace" -> FontFamily.Monospace
+                                            "Cursive" -> FontFamily.Cursive
+                                            "Default" -> FontFamily.Default
+                                            else -> FontFamily.Serif
+                                        },
+                                        fontWeight = if (
+                                            fontName == titleFontName
+                                        ) {
+                                            FontWeight.Bold
+                                        } else {
+                                            FontWeight.Normal
+                                        }
+                                    )
+                                },
+                                onClick = {
+                                    titleFontName = fontName
+                                    uiPrefs.edit()
+                                        .putString(
+                                            "title_font_family",
+                                            fontName
+                                        )
+                                        .apply()
+                                    titleFontMenuExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
 
                 Spacer(Modifier.height(22.dp))
 
@@ -1691,7 +1819,7 @@ private fun NusaMusicApp(
 
                                             Text(
                                                 titleText,
-                                                fontFamily = FontFamily.Serif,
+                                                fontFamily = titleFontFamily,
                                                 fontWeight = FontWeight.Bold,
                                                 fontSize = titleSize,
                                                 lineHeight = titleLineHeight,
