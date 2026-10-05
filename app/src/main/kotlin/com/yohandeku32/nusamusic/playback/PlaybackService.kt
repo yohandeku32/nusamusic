@@ -57,28 +57,7 @@ class PlaybackService : MediaSessionService() {
             .setLoadControl(loadControl)
             .build()
 
-        val audioAttributes = AudioAttributes.Builder()
-            .setUsage(C.USAGE_MEDIA)
-            .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
-            .build()
-
-        val transitionPlayer = ExoPlayer.Builder(
-            this,
-            DefaultRenderersFactory(this)
-        )
-            .setAudioAttributes(audioAttributes, false)
-            .setLoadControl(loadControl)
-            .build()
-
         primaryPlayer = player
-        crossfadePlayer = transitionPlayer
-
-        transitionPlayer.addListener(object : Player.Listener {
-            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                Log.e("NusaCrossfade", "SECONDARY PLAYER ERROR", error)
-                cancelCrossfade(restorePrimaryVolume = true)
-            }
-        })
 
         player.addListener(object : Player.Listener {
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
@@ -98,12 +77,6 @@ class PlaybackService : MediaSessionService() {
                     cancelCrossfade(restorePrimaryVolume = true)
                 }
 
-                if (!handoffDone &&
-                    getSharedPreferences("playback_preferences", MODE_PRIVATE)
-                        .getBoolean("crossfade_enabled", false)
-                ) {
-                    preloadNext(primaryPlayer, crossfadePlayer)
-                }
             }
         })
 
@@ -188,67 +161,54 @@ class PlaybackService : MediaSessionService() {
         val nextIndex = primary.nextMediaItemIndex
         if (nextIndex < 0 || nextIndex >= primary.mediaItemCount) return
 
-        // Prepare the next item well before the actual fade window. This is
-        // important for local FLAC/ALAC files where decoder setup may take
-        // longer than the configured crossfade duration.
-        preloadNext(primary, secondary)
-
         val remaining = duration - primary.currentPosition
-        if (remaining in 1L..durationMs &&
-            preloadedNextMediaId == primary.getMediaItemAt(nextIndex).mediaId &&
-            secondary.playbackState == Player.STATE_READY
-        ) {
+        if (remaining in 1L..durationMs) {
             startCrossfade(primary, secondary, nextIndex, durationMs)
         }
     }
 
-    private fun preloadNext(
-        primary: ExoPlayer?,
-        secondary: ExoPlayer?
-    ) {
-        if (primary == null || secondary == null) return
+    private fun ensureCrossfadePlayer(): ExoPlayer {
+        crossfadePlayer?.let { return it }
 
-        if (!getSharedPreferences("playback_preferences", MODE_PRIVATE)
-                .getBoolean("crossfade_enabled", false)
-        ) {
-            return
-        }
-        if (!primary.hasNextMediaItem()) return
-        if (primary.repeatMode == Player.REPEAT_MODE_ONE) return
+        val audioAttributes = AudioAttributes.Builder()
+            .setUsage(C.USAGE_MEDIA)
+            .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+            .build()
 
-        val nextIndex = primary.nextMediaItemIndex
-        if (nextIndex < 0 || nextIndex >= primary.mediaItemCount) return
-
-        val nextItem = primary.getMediaItemAt(nextIndex)
-        val currentSecondaryId = secondary.currentMediaItem?.mediaId
-
-        if (currentSecondaryId == nextItem.mediaId &&
-            secondary.playbackState != Player.STATE_IDLE
-        ) {
-            preloadedNextMediaId = nextItem.mediaId
-            return
-        }
-
-        secondary.stop()
-        secondary.clearMediaItems()
-        secondary.setMediaItem(nextItem)
-        secondary.volume = 0f
-        secondary.prepare()
-        preloadedNextMediaId = nextItem.mediaId
-
-        Log.d(
-            "NusaCrossfade",
-            "PRELOAD next=" + nextItem.mediaId
+        return ExoPlayer.Builder(
+            this,
+            DefaultRenderersFactory(this)
         )
+            // The secondary player must never compete for audio focus.
+            .setAudioAttributes(audioAttributes, false)
+            .build()
+            .also { secondary ->
+                secondary.volume = 0f
+                secondary.addListener(object : Player.Listener {
+                    override fun onPlayerError(
+                        error: androidx.media3.common.PlaybackException
+                    ) {
+                        Log.e(
+                            "NusaCrossfade",
+                            "SECONDARY PLAYER ERROR",
+                            error
+                        )
+                        cancelCrossfade(restorePrimaryVolume = true)
+                    }
+                })
+                crossfadePlayer = secondary
+            }
     }
 
     private fun startCrossfade(
         primary: ExoPlayer,
-        secondary: ExoPlayer,
+        @Suppress("UNUSED_PARAMETER") secondaryPlaceholder: ExoPlayer,
         nextIndex: Int,
         durationMs: Long
     ) {
         if (crossfadeActive) return
+
+        val secondary = ensureCrossfadePlayer()
 
         val currentItem = primary.currentMediaItem ?: return
         val nextItem = primary.getMediaItemAt(nextIndex)
@@ -259,17 +219,11 @@ class PlaybackService : MediaSessionService() {
         expectedNextMediaId = nextItem.mediaId
         handoffDone = false
 
-        if (secondary.currentMediaItem?.mediaId != nextItem.mediaId) {
-            preloadNext(primary, secondary)
-        }
-
-        if (secondary.currentMediaItem?.mediaId != nextItem.mediaId ||
-            secondary.playbackState != Player.STATE_READY
-        ) {
-            return
-        }
-
+        secondary.stop()
+        secondary.clearMediaItems()
+        secondary.setMediaItem(nextItem)
         secondary.volume = 0f
+        secondary.prepare()
         secondary.play()
 
         crossfadeActive = true
