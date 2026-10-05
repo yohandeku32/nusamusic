@@ -2071,9 +2071,9 @@ private fun NusaMusicApp(
                                                     }
                                                 }
                                         ) {
-                                            WornCoverArtwork(
+                                            ArtworkView(
                                                 song = song,
-                                                maxSizePx = 760,
+                                                maxSizePx = 720,
                                                 modifier = Modifier
                                                     .fillMaxSize()
                                                     .clip(
