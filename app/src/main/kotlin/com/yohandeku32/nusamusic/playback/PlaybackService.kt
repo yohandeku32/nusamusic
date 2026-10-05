@@ -365,8 +365,10 @@ class PlaybackService : MediaSessionService() {
         }
 
         if (restorePrimaryVolume) {
+            if (restorePrimaryVolume) {
             primaryPlayer?.volume = 1f
         }
+        preloadedNextMediaId = null
     }
 
     override fun onGetSession(
