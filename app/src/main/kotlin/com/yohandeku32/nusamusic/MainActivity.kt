@@ -660,14 +660,33 @@ class MainActivity : ComponentActivity() {
 
     private fun playSong(song: Song) {
         controller?.let { c ->
-            val index = songs.indexOfFirst { it.id == song.id }
-            if (index >= 0) {
-                c.setMediaItems(songs.map(::mediaItemFor), index, 0L)
+            val targetIndex = songs.indexOfFirst { it.id == song.id }
+            if (targetIndex < 0) return@let
+
+            // Swiping between tracks should not rebuild the entire Media3 queue.
+            // Rebuilding the queue resets the decoder and can replay the first
+            // few milliseconds of the selected track. Reuse the current queue
+            // whenever it already contains the same library.
+            val queueMatches = c.mediaItemCount == songs.size &&
+                songs.indices.all { index ->
+                    c.getMediaItemAt(index).mediaId == songs[index].id.toString()
+                }
+
+            if (queueMatches) {
+                c.seekTo(targetIndex, 0L)
+                c.play()
+            } else {
+                c.setMediaItems(
+                    songs.map(::mediaItemFor),
+                    targetIndex,
+                    0L
+                )
                 c.prepare()
                 c.play()
-                currentSong = song
-                isPlaying = true
             }
+
+            currentSong = song
+            isPlaying = true
         }
     }
 
@@ -2272,6 +2291,18 @@ private fun MyMusicArtworkCard(
             )
         }
 
+        // Shadow sits behind the sleeve to make the cover look physically
+        // raised from the record instead of pasted flat onto it.
+        Box(
+            modifier = Modifier
+                .fillMaxHeight(0.82f)
+                .aspectRatio(1f)
+                .align(Alignment.CenterStart)
+                .offset(x = 2.dp, y = 7.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color.Black.copy(alpha = 0.26f))
+        )
+
         // Square 1:1 album sleeve in front of the record.
         Box(
             modifier = Modifier
@@ -2280,9 +2311,9 @@ private fun MyMusicArtworkCard(
                 .align(Alignment.CenterStart)
                 .clip(RoundedCornerShape(8.dp))
                 .graphicsLayer {
-                    shadowElevation = 12.dp.toPx()
+                    shadowElevation = 18.dp.toPx()
                     shape = RoundedCornerShape(8.dp)
-                    clip = true
+                    clip = false
                 }
         ) {
             WornCoverArtwork(
