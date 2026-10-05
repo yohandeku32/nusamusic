@@ -2064,8 +2064,10 @@ private fun NusaMusicApp(
                                                 else -> 0.42f
                                             }
 
+                                            // More breathing room between covers so
+                                            // each album reads as a separate sleeve.
                                             val verticalOffset =
-                                                relative * 54f
+                                                relative * 92f
 
                                             val cover = albumStack[
                                                 albumIndex
@@ -2074,7 +2076,7 @@ private fun NusaMusicApp(
                                             Box(
                                                 modifier = Modifier
                                                     .align(Alignment.Center)
-                                                    .width(320.dp)
+                                                    .width(304.dp)
                                                     .aspectRatio(1f)
                                                     .graphicsLayer {
                                                         scaleX = scale
