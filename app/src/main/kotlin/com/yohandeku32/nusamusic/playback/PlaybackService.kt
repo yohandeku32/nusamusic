@@ -269,53 +269,51 @@ class PlaybackService : MediaSessionService() {
     }
 
     private fun completeCrossfadeHandoff(
-        primary: ExoPlayer,
-        secondary: ExoPlayer
+        active: ExoPlayer,
+        fadingIn: ExoPlayer
     ) {
         if (!crossfadeActive || handoffDone) return
 
         val expectedNextId = expectedNextMediaId ?: return
-        val secondaryItem = secondary.currentMediaItem ?: return
-        if (secondaryItem.mediaId != expectedNextId) {
+        val nextItem = fadingIn.currentMediaItem ?: return
+
+        if (nextItem.mediaId != expectedNextId) {
             cancelCrossfade(restorePrimaryVolume = true)
             return
         }
 
-        if (secondary.playbackState != Player.STATE_READY &&
-            secondary.playbackState != Player.STATE_BUFFERING
+        if (fadingIn.playbackState != Player.STATE_READY &&
+            fadingIn.playbackState != Player.STATE_BUFFERING
         ) {
             return
         }
 
-        val nextIndex = primary.mediaItemCount.let { count ->
-            (0 until count).firstOrNull {
-                primary.getMediaItemAt(it).mediaId == expectedNextId
-            }
-        } ?: run {
-            cancelCrossfade(restorePrimaryVolume = true)
-            return
-        }
-
-        val nextPosition = secondary.currentPosition.coerceAtLeast(0L)
-
         handoffDone = true
 
-        // Explicitly jump the session player onto the next item at the exact
-        // position the transition player has reached. This avoids waiting for
-        // ExoPlayer's automatic playlist transition event.
-        primary.seekTo(nextIndex, nextPosition)
-        primary.volume = 1f
-        primary.play()
+        // The transition player is already producing the next track's audio.
+        // Make it the session player first, then stop the old player. This
+        // avoids the old gap caused by stopping the next track and restarting
+        // the primary player.
+        mediaSession?.setPlayer(fadingIn)
 
-        secondary.volume = 0f
-        secondary.pause()
-        secondary.stop()
-        secondary.clearMediaItems()
+        fadingIn.volume = 1f
+        fadingIn.play()
+
+        active.volume = 0f
+        active.pause()
+        active.stop()
+        active.clearMediaItems()
+
+        // Swap roles: the player that just became active remains the session
+        // player, while the old player becomes the standby player for the next
+        // transition.
+        primaryPlayer = fadingIn
+        crossfadePlayer = active
 
         Log.d(
             "NusaCrossfade",
-            "HANDOFF next=" + expectedNextId +
-                " position=" + nextPosition + "ms"
+            "SEAMLESS HANDOFF next=" + expectedNextId +
+                " position=" + fadingIn.currentPosition + "ms"
         )
 
         crossfadeActive = false
