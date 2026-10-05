@@ -1896,141 +1896,93 @@ private fun NusaMusicApp(
                     }
 
                     1 -> {
-                        val stackAlbums = remember(filtered) {
-                            val grouped = linkedMapOf<String, MutableList<Song>>()
-
-                            filtered.forEach { song ->
-                                val key = if (song.albumId != 0L) {
-                                    "albumId:" + song.albumId
-                                } else {
-                                    "album:" +
-                                        song.album.trim().lowercase(Locale.ROOT) +
-                                        "|artist:" +
-                                        song.artist.trim().lowercase(Locale.ROOT)
-                                }
-
-                                grouped.getOrPut(key) {
-                                    mutableListOf()
-                                }.add(song)
-                            }
-
-                            grouped.map { (key, tracks) ->
-                                val first = tracks.first()
-                                StackAlbum(
-                                    key = key,
-                                    title = first.album.ifBlank {
-                                        nusaText(
-                                            "Album tanpa judul",
-                                            "Untitled album"
-                                        )
-                                    },
-                                    artist = ArtistNameUtils.firstArtist(
-                                        first.artist
-                                    ).ifBlank {
-                                        nusaText(
-                                            "Artis tidak dikenal",
-                                            "Unknown artist"
-                                        )
-                                    },
-                                    coverSong = first,
-                                    tracks = tracks.toList()
-                                )
-                            }
+                        // Physical album-stack layout:
+                        // the selected cover is the front/bottom cover, while
+                        // previous covers rise behind it like a real stack.
+                        val stackSongs = remember(filtered) {
+                            filtered.toList()
                         }
 
                         var selectedStackIndex by remember(
-                            stackAlbums,
-                            currentSong?.albumId,
-                            currentSong?.album
+                            stackSongs,
+                            currentSong?.id
                         ) {
-                            val currentAlbum = currentSong?.album
-                                ?.trim()
-                                ?.lowercase(Locale.ROOT)
-
-                            val target = stackAlbums.indexOfFirst { album ->
-                                album.coverSong.albumId == currentSong?.albumId &&
-                                    album.title.trim().lowercase(Locale.ROOT) ==
-                                    currentAlbum
-                            }
-
-                            mutableIntStateOf(target.coerceAtLeast(0))
+                            mutableIntStateOf(
+                                currentSong?.let { song ->
+                                    stackSongs.indexOfFirst { it.id == song.id }
+                                }?.takeIf { it >= 0 } ?: 0
+                            )
                         }
 
-                        var selectedAlbumForPlayback by remember {
-                            mutableStateOf<StackAlbum?>(null)
+                        var selectedSongForPlayback by remember {
+                            mutableStateOf<Song?>(null)
                         }
 
                         LaunchedEffect(
-                            currentSong?.albumId,
-                            currentSong?.album,
-                            stackAlbums
+                            currentSong?.id,
+                            stackSongs
                         ) {
-                            if (stackAlbums.isEmpty()) return@LaunchedEffect
+                            if (stackSongs.isEmpty()) return@LaunchedEffect
 
-                            val currentAlbum = currentSong?.album
-                                ?.trim()
-                                ?.lowercase(Locale.ROOT)
+                            val target = currentSong?.let { song ->
+                                stackSongs.indexOfFirst { it.id == song.id }
+                            } ?: -1
 
-                            val target = stackAlbums.indexOfFirst { album ->
-                                album.coverSong.albumId == currentSong?.albumId &&
-                                    album.title.trim().lowercase(Locale.ROOT) ==
-                                    currentAlbum
-                            }
-
-                            if (target >= 0 &&
-                                target != selectedStackIndex
-                            ) {
+                            if (target >= 0) {
                                 selectedStackIndex = target
                             }
                         }
 
-                        fun chooseStackAlbum(index: Int) {
-                            val target = index.coerceIn(
+                        fun chooseStack(index: Int) {
+                            if (stackSongs.isEmpty()) return
+
+                            val safeIndex = index.coerceIn(
                                 0,
-                                (stackAlbums.lastIndex).coerceAtLeast(0)
+                                stackSongs.lastIndex
                             )
 
-                            if (stackAlbums.isEmpty()) return
-
-                            selectedStackIndex = target
-                            selectedAlbumForPlayback = stackAlbums[target]
+                            selectedStackIndex = safeIndex
+                            selectedSongForPlayback = stackSongs[safeIndex]
                         }
 
                         val stackGesture = Modifier.pointerInput(
-                            stackAlbums.size,
+                            stackSongs.size,
                             selectedStackIndex
                         ) {
-                            var dragY = 0f
+                            var dragDistance = 0f
 
                             detectDragGestures(
                                 onDragStart = {
-                                    dragY = 0f
+                                    dragDistance = 0f
                                 },
                                 onDrag = { change, dragAmount ->
                                     change.consume()
-                                    dragY += dragAmount.y
+                                    dragDistance += dragAmount.y
                                 },
                                 onDragEnd = {
-                                    if (kotlin.math.abs(dragY) >= 55f &&
-                                        stackAlbums.isNotEmpty()
+                                    if (
+                                        kotlin.math.abs(dragDistance) >= 55f &&
+                                        stackSongs.isNotEmpty()
                                     ) {
-                                        val nextIndex = if (dragY < 0f) {
-                                            (selectedStackIndex + 1)
-                                                .coerceAtMost(stackAlbums.lastIndex)
+                                        val next = if (dragDistance < 0f) {
+                                            // Swipe up: bring the next cover
+                                            // forward.
+                                            selectedStackIndex + 1
                                         } else {
-                                            (selectedStackIndex - 1)
-                                                .coerceAtLeast(0)
+                                            // Swipe down: bring the previous
+                                            // cover forward.
+                                            selectedStackIndex - 1
                                         }
 
-                                        if (nextIndex != selectedStackIndex) {
-                                            chooseStackAlbum(nextIndex)
+                                        if (next in stackSongs.indices) {
+                                            chooseStack(next)
                                         }
                                     }
 
-                                    dragY = 0f
+                                    dragDistance = 0f
                                 },
                                 onDragCancel = {
-                                    dragY = 0f
+                                    dragDistance = 0f
                                 }
                             )
                         }
@@ -2038,7 +1990,9 @@ private fun NusaMusicApp(
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(MaterialTheme.colorScheme.background)
+                                .background(
+                                    MaterialTheme.colorScheme.background
+                                )
                         ) {
                             Text(
                                 text = "MY MUSIC",
@@ -2053,7 +2007,7 @@ private fun NusaMusicApp(
                                 )
                             )
 
-                            if (stackAlbums.isEmpty()) {
+                            if (stackSongs.isEmpty()) {
                                 Box(
                                     modifier = Modifier.fillMaxSize(),
                                     contentAlignment = Alignment.Center
@@ -2070,109 +2024,117 @@ private fun NusaMusicApp(
                             } else {
                                 Box(
                                     modifier = Modifier
-                                        .fillMaxWidth()
-                                        .fillMaxHeight()
+                                        .fillMaxSize()
                                         .padding(
-                                            top = 100.dp,
-                                            bottom = 20.dp
+                                            top = 112.dp,
+                                            bottom = 0.dp
                                         )
                                         .then(stackGesture),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    // Lightweight stack: only 5 covers are in
-                                    // composition at any moment.
-                                    val visibleOffsets = intArrayOf(
-                                        -2,
-                                        -1,
-                                        0,
-                                        1,
-                                        2
-                                    )
+                                    /*
+                                     * Reference-matched album stack.
+                                     *
+                                     * The front cover sits low on the screen.
+                                     * Every cover behind it is lifted by a fixed
+                                     * amount, so its top edge remains visible.
+                                     * Width/scale increases toward the front to
+                                     * create the same depth illusion as the
+                                     * supplied reference.
+                                     */
+                                    val visibleBehind = 5
+                                    val firstIndex = (
+                                        selectedStackIndex - visibleBehind
+                                    ).coerceAtLeast(0)
+                                    val lastIndex = selectedStackIndex
 
-                                    // Back cards first, active card last.
-                                    for (relative in visibleOffsets) {
-                                        val albumIndex =
-                                            selectedStackIndex + relative
-
-                                        if (albumIndex !in stackAlbums.indices) {
-                                            continue
-                                        }
-
-                                        val album = stackAlbums[albumIndex]
+                                    for (index in firstIndex..lastIndex) {
                                         val distance =
-                                            kotlin.math.abs(relative)
+                                            selectedStackIndex - index
+                                        val song = stackSongs[index]
 
                                         val scale = when (distance) {
-                                            0 -> 1f
-                                            1 -> 0.92f
-                                            else -> 0.84f
+                                            0 -> 1.00f
+                                            1 -> 0.95f
+                                            2 -> 0.90f
+                                            3 -> 0.85f
+                                            4 -> 0.80f
+                                            else -> 0.75f
                                         }
 
                                         val verticalOffset =
-                                            when (relative) {
-                                                -2 -> -250.dp
-                                                -1 -> -125.dp
-                                                0 -> 0.dp
-                                                1 -> 125.dp
-                                                2 -> 250.dp
-                                                else -> 0.dp
-                                            }
+                                            -(distance * 78f).dp
 
-                                        val z = (20 - distance * 2).toFloat()
+                                        val widthFraction = when (distance) {
+                                            0 -> 0.88f
+                                            1 -> 0.84f
+                                            2 -> 0.81f
+                                            3 -> 0.78f
+                                            4 -> 0.75f
+                                            else -> 0.72f
+                                        }
 
                                         Box(
                                             modifier = Modifier
                                                 .align(Alignment.Center)
-                                                .fillMaxWidth(0.72f)
+                                                .fillMaxWidth(
+                                                    widthFraction
+                                                )
                                                 .aspectRatio(1f)
+                                                .offset(
+                                                    y = verticalOffset
+                                                )
                                                 .graphicsLayer {
                                                     scaleX = scale
                                                     scaleY = scale
-                                                    translationY =
-                                                        verticalOffset.toPx()
                                                     alpha = 1f
+                                                    rotationZ = when {
+                                                        distance >= 4 -> -0.5f
+                                                        distance >= 2 -> -0.25f
+                                                        else -> 0f
+                                                    }
                                                     shadowElevation =
-                                                        if (relative == 0) {
-                                                            20.dp.toPx()
+                                                        if (distance == 0) {
+                                                            18.dp.toPx()
                                                         } else {
-                                                            8.dp.toPx()
+                                                            6.dp.toPx()
                                                         }
                                                     shape =
                                                         RoundedCornerShape(8.dp)
-                                                    clip = true
-                                                    rotationZ =
-                                                        when {
-                                                            relative == -2 -> -0.7f
-                                                            relative == 2 -> 0.7f
-                                                            else -> 0f
-                                                        }
+                                                    clip = false
                                                 }
-                                                .zIndex(z)
+                                                .zIndex(
+                                                    (20 - distance).toFloat()
+                                                )
                                                 .clickable {
-                                                    if (relative == 0) {
-                                                        selectedAlbumForPlayback =
-                                                            album
+                                                    if (distance == 0) {
+                                                        selectedSongForPlayback =
+                                                            song
                                                     } else {
-                                                        chooseStackAlbum(albumIndex)
+                                                        chooseStack(index)
                                                     }
                                                 }
                                         ) {
                                             ArtworkView(
-                                                song = album.coverSong,
-                                                maxSizePx = 620,
-                                                modifier = Modifier.fillMaxSize()
+                                                song = song,
+                                                maxSizePx = 720,
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .clip(
+                                                        RoundedCornerShape(8.dp)
+                                                    )
                                             )
                                         }
                                     }
                                 }
                             }
 
-                            // "Pick the cassette first": no playback occurs
-                            // until the user confirms it in this dialog.
-                            selectedAlbumForPlayback?.let { album ->
+                            // Pick the cassette first; play only after the
+                            // selected cover is confirmed.
+                            selectedSongForPlayback?.let { song ->
                                 androidx.compose.ui.window.Dialog(
                                     onDismissRequest = {
-                                        selectedAlbumForPlayback = null
+                                        selectedSongForPlayback = null
                                     },
                                     properties =
                                         androidx.compose.ui.window.DialogProperties(
@@ -2185,34 +2147,37 @@ private fun NusaMusicApp(
                                         modifier = Modifier
                                             .widthIn(
                                                 min = 280.dp,
-                                                max = 360.dp
+                                                max = 350.dp
                                             )
                                             .padding(horizontal = 20.dp),
                                         shape = RoundedCornerShape(24.dp),
-                                        color = MaterialTheme.colorScheme.surface,
+                                        color =
+                                            MaterialTheme.colorScheme.surface,
                                         tonalElevation = 8.dp,
                                         shadowElevation = 20.dp
                                     ) {
                                         Column(
-                                            modifier = Modifier.padding(18.dp),
+                                            modifier = Modifier.padding(
+                                                18.dp
+                                            ),
                                             horizontalAlignment =
                                                 Alignment.CenterHorizontally
                                         ) {
                                             ArtworkView(
-                                                song = album.coverSong,
-                                                maxSizePx = 480,
+                                                song = song,
+                                                maxSizePx = 420,
                                                 modifier = Modifier
-                                                    .size(150.dp)
+                                                    .size(148.dp)
                                                     .clip(
                                                         RoundedCornerShape(10.dp)
                                                     )
                                             )
 
-                                            Spacer(Modifier.height(14.dp))
+                                            Spacer(Modifier.height(13.dp))
 
                                             Text(
-                                                text = album.title,
-                                                fontSize = 19.sp,
+                                                text = song.title,
+                                                fontSize = 18.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 maxLines = 2,
                                                 textAlign = TextAlign.Center,
@@ -2220,43 +2185,38 @@ private fun NusaMusicApp(
                                                     androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                             )
 
-                                            Spacer(Modifier.height(4.dp))
+                                            Spacer(Modifier.height(3.dp))
 
                                             Text(
-                                                text = album.artist,
+                                                text = ArtistNameUtils.firstArtist(
+                                                    song.artist
+                                                ),
                                                 fontSize = 13.sp,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                color =
+                                                    MaterialTheme.colorScheme.onSurfaceVariant,
                                                 maxLines = 1,
                                                 textAlign = TextAlign.Center,
                                                 overflow =
                                                     androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                             )
 
-                                            Spacer(Modifier.height(5.dp))
-
-                                            Text(
-                                                text = nusaText(
-                                                    "${album.tracks.size} lagu",
-                                                    "${album.tracks.size} tracks"
-                                                ),
-                                                fontSize = 11.sp,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-
                                             Spacer(Modifier.height(16.dp))
 
                                             Row(
-                                                modifier = Modifier.fillMaxWidth(),
+                                                modifier =
+                                                    Modifier.fillMaxWidth(),
                                                 horizontalArrangement =
                                                     Arrangement.spacedBy(10.dp)
                                             ) {
                                                 Surface(
-                                                    modifier = Modifier.weight(1f),
+                                                    modifier =
+                                                        Modifier.weight(1f),
                                                     shape =
                                                         RoundedCornerShape(16.dp),
-                                                    color = MaterialTheme.colorScheme.surfaceVariant,
+                                                    color =
+                                                        MaterialTheme.colorScheme.surfaceVariant,
                                                     onClick = {
-                                                        selectedAlbumForPlayback =
+                                                        selectedSongForPlayback =
                                                             null
                                                     }
                                                 ) {
@@ -2280,24 +2240,23 @@ private fun NusaMusicApp(
                                                 }
 
                                                 Surface(
-                                                    modifier = Modifier.weight(1f),
+                                                    modifier =
+                                                        Modifier.weight(1f),
                                                     shape =
                                                         RoundedCornerShape(16.dp),
-                                                    color = MaterialTheme.colorScheme.primary,
+                                                    color =
+                                                        MaterialTheme.colorScheme.primary,
                                                     contentColor =
                                                         MaterialTheme.colorScheme.onPrimary,
                                                     onClick = {
-                                                        album.tracks.firstOrNull()
-                                                            ?.let { song ->
-                                                                selectedAlbumForPlayback =
-                                                                    null
-                                                                onPlay(song)
-                                                            }
+                                                        selectedSongForPlayback =
+                                                            null
+                                                        onPlay(song)
                                                     }
                                                 ) {
                                                     Row(
                                                         modifier = Modifier.padding(
-                                                            horizontal = 18.dp,
+                                                            horizontal = 16.dp,
                                                             vertical = 12.dp
                                                         ),
                                                         verticalAlignment =
@@ -2312,11 +2271,12 @@ private fun NusaMusicApp(
                                                                     "Putar",
                                                                     "Play"
                                                                 ),
-                                                            modifier = Modifier.size(
-                                                                20.dp
-                                                            )
+                                                            modifier =
+                                                                Modifier.size(20.dp)
                                                         )
-                                                        Spacer(Modifier.width(5.dp))
+                                                        Spacer(
+                                                            Modifier.width(5.dp)
+                                                        )
                                                         Text(
                                                             nusaText(
                                                                 "Putar",
