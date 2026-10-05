@@ -1895,90 +1895,51 @@ private fun NusaMusicApp(
                     }
 
                     1 -> {
-                        // Physical album-stack layout:
-                        // the selected cover is the front/bottom cover, while
-                        // previous covers rise behind it like a real stack.
-                        val stackSongs = remember(filtered) {
-                            filtered.toList()
-                        }
-
-                        var selectedStackIndex by remember(
-                            stackSongs,
-                            currentSong?.id
-                        ) {
-                            mutableIntStateOf(
-                                currentSong?.let { song ->
-                                    stackSongs.indexOfFirst { it.id == song.id }
-                                }?.takeIf { it >= 0 } ?: 0
+                        val songPagerState =
+                            androidx.compose.foundation.pager.rememberPagerState(
+                                initialPage = remember(filtered, currentSong?.id) {
+                                    currentSong?.let { song ->
+                                        filtered.indexOfFirst { it.id == song.id }
+                                    }?.takeIf { it >= 0 } ?: 0
+                                },
+                                pageCount = { filtered.size.coerceAtLeast(1) }
                             )
-                        }
 
-                        LaunchedEffect(
-                            currentSong?.id,
-                            stackSongs
-                        ) {
-                            if (stackSongs.isEmpty()) return@LaunchedEffect
+                        // Keep the pager aligned with the currently playing
+                        // song, but do not rebuild the media queue.
+                        LaunchedEffect(currentSong?.id, filtered) {
+                            if (filtered.isEmpty()) return@LaunchedEffect
 
                             val target = currentSong?.let { song ->
-                                stackSongs.indexOfFirst { it.id == song.id }
+                                filtered.indexOfFirst { it.id == song.id }
                             } ?: -1
 
-                            if (target >= 0) {
-                                selectedStackIndex = target
+                            if (target >= 0 &&
+                                target != songPagerState.currentPage
+                            ) {
+                                songPagerState.animateScrollToPage(target)
                             }
                         }
 
-                        fun chooseStack(index: Int) {
-                            if (stackSongs.isEmpty()) return
+                        // Swiping is the only action that changes the selected
+                        // track from this page. The settled page is played.
+                        LaunchedEffect(songPagerState, filtered) {
+                            var initial = true
 
-                            val safeIndex = index.coerceIn(
-                                0,
-                                stackSongs.lastIndex
-                            )
-
-                            selectedStackIndex = safeIndex
-                        }
-
-                        val stackGesture = Modifier.pointerInput(
-                            stackSongs.size,
-                            selectedStackIndex
-                        ) {
-                            var dragDistance = 0f
-
-                            detectDragGestures(
-                                onDragStart = {
-                                    dragDistance = 0f
-                                },
-                                onDrag = { change, dragAmount ->
-                                    change.consume()
-                                    dragDistance += dragAmount.y
-                                },
-                                onDragEnd = {
-                                    if (
-                                        kotlin.math.abs(dragDistance) >= 55f &&
-                                        stackSongs.isNotEmpty()
-                                    ) {
-                                        val next = if (dragDistance < 0f) {
-                                            // Swipe up: bring the next cover
-                                            // forward.
-                                            selectedStackIndex + 1
-                                        } else {
-                                            // Swipe down: bring the previous
-                                            // cover forward.
-                                            selectedStackIndex - 1
-                                        }
-
-                                        if (next in stackSongs.indices) {
-                                            chooseStack(next)
-                                        }
-                                    }
-
-                                    dragDistance = 0f
-                                },
-                                onDragCancel = {
-                                    dragDistance = 0f
+                            androidx.compose.runtime.snapshotFlow {
+                                songPagerState.settledPage
+                            }.collect { page ->
+                                if (initial) {
+                                    initial = false
+                                    return@collect
                                 }
-                            )
+
+                                filtered.getOrNull(page)?.let { song ->
+                                    if (song.id != currentSong?.id) {
+                                        onPlay(song)
+                                    }
+                                }
+                            }
                         }
 
                         Box(
@@ -1988,177 +1949,334 @@ private fun NusaMusicApp(
                                     MaterialTheme.colorScheme.background
                                 )
                         ) {
-                            Text(
-                                text = "MY MUSIC",
-                                fontSize = 32.sp,
-                                lineHeight = 36.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                letterSpacing = (-0.8).sp,
-                                color = MaterialTheme.colorScheme.onBackground,
-                                modifier = Modifier.padding(
-                                    start = 28.dp,
-                                    top = 28.dp
-                                )
-                            )
-
-                            if (stackSongs.isEmpty()) {
-                                Box(
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentAlignment = Alignment.Center
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(
+                                            start = 28.dp,
+                                            end = 28.dp,
+                                            top = 28.dp,
+                                            bottom = 18.dp
+                                        ),
+                                    verticalAlignment =
+                                        Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        nusaText(
-                                            "Tidak ada musik lokal",
-                                            "No local music found"
-                                        ),
-                                        fontSize = 14.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        text = "MY MUSIC",
+                                        fontSize = 34.sp,
+                                        lineHeight = 38.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        letterSpacing = (-1.0).sp,
+                                        color =
+                                            MaterialTheme.colorScheme.onBackground
                                     )
                                 }
-                            } else {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(
-                                            top = 112.dp,
-                                            bottom = 0.dp
+
+                                if (filtered.isEmpty()) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(340.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            nusaText(
+                                                "Tidak ada musik lokal",
+                                                "No local music found"
+                                            ),
+                                            fontSize = 14.sp,
+                                            color =
+                                                MaterialTheme.colorScheme.onSurfaceVariant
                                         )
-                                        .then(stackGesture),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    /*
-                                     * Reference-matched album stack.
-                                     *
-                                     * The front cover sits low on the screen.
-                                     * Every cover behind it is lifted by a fixed
-                                     * amount, so its top edge remains visible.
-                                     * Width/scale increases toward the front to
-                                     * create the same depth illusion as the
-                                     * supplied reference.
-                                     */
-                                    val visibleBehind = 5
-                                    val firstIndex = (
-                                        selectedStackIndex - visibleBehind
-                                    ).coerceAtLeast(0)
-                                    val lastIndex = selectedStackIndex
-
-                                    for (index in firstIndex..lastIndex) {
-                                        val distance =
-                                            selectedStackIndex - index
-                                        val song = stackSongs[index]
-
-                                        val scale = when (distance) {
-                                            0 -> 1.00f
-                                            1 -> 0.95f
-                                            2 -> 0.90f
-                                            3 -> 0.85f
-                                            4 -> 0.80f
-                                            else -> 0.75f
-                                        }
-
-                                        val verticalOffset =
-                                            -(distance * 78f).dp
-
-                                        val widthFraction = when (distance) {
-                                            0 -> 0.88f
-                                            1 -> 0.84f
-                                            2 -> 0.81f
-                                            3 -> 0.78f
-                                            4 -> 0.75f
-                                            else -> 0.72f
-                                        }
+                                    }
+                                } else {
+                                    androidx.compose.foundation.pager.HorizontalPager(
+                                        state = songPagerState,
+                                        pageSize =
+                                            androidx.compose.foundation.pager.PageSize.Fixed(
+                                                304.dp
+                                            ),
+                                        contentPadding = PaddingValues(
+                                            horizontal = 32.dp
+                                        ),
+                                        pageSpacing = 18.dp,
+                                        beyondViewportPageCount = 1,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(344.dp)
+                                    ) { page ->
+                                        val song = filtered[page]
+                                        val pageDistance =
+                                            abs(
+                                                (songPagerState.currentPage - page) +
+                                                    songPagerState.currentPageOffsetFraction
+                                            )
+                                        val emphasis =
+                                            (1f - pageDistance.coerceIn(0f, 1f))
+                                        val scale =
+                                            0.84f + (0.16f * emphasis)
+                                        val alpha =
+                                            0.48f + (0.52f * emphasis)
 
                                         Box(
                                             modifier = Modifier
-                                                .align(Alignment.Center)
-                                                .fillMaxWidth(
-                                                    widthFraction
-                                                )
-                                                .aspectRatio(1f)
-                                                .offset(
-                                                    y = verticalOffset
-                                                )
+                                                .fillMaxSize()
                                                 .graphicsLayer {
                                                     scaleX = scale
                                                     scaleY = scale
-                                                    alpha = 1f
-                                                    rotationZ = when {
-                                                        distance >= 4 -> -0.5f
-                                                        distance >= 2 -> -0.25f
-                                                        else -> 0f
-                                                    }
-                                                    shadowElevation =
-                                                        if (distance == 0) {
-                                                            18.dp.toPx()
-                                                        } else {
-                                                            6.dp.toPx()
-                                                        }
-                                                    shape =
-                                                        RoundedCornerShape(8.dp)
-                                                    clip = false
+                                                    this.alpha = alpha
                                                 }
-                                                .zIndex(
-                                                    (20 - distance).toFloat()
-                                                )
                                                 .clickable {
-                                                    if (distance == 0) {
-                                                        onPlay(song)
-                                                    } else {
-                                                        chooseStack(index)
-                                                    }
-                                                }
+                                                    onPlay(song)
+                                                },
+                                            contentAlignment = Alignment.Center
                                         ) {
-                                            ArtworkView(
+                                            PrototypeAlbumRecordCard(
                                                 song = song,
-                                                maxSizePx = 720,
                                                 modifier = Modifier
-                                                    .fillMaxSize()
-                                                    .clip(
-                                                        RoundedCornerShape(8.dp)
-                                                    )
+                                                    .fillMaxWidth()
+                                                    .aspectRatio(1f)
                                             )
+                                        }
+                                    }
+                                }
 
-                                            if (distance == 0) {
-                                                Box(
-                                                    modifier = Modifier.fillMaxSize(),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .size(64.dp)
-                                                            .clip(CircleShape)
-                                                            .background(
-                                                                Color.Black.copy(
-                                                                    alpha = 0.55f
-                                                                )
-                                                            )
-                                                            .clickable {
-                                                                onPlay(song)
-                                                            },
-                                                        contentAlignment = Alignment.Center
-                                                    ) {
-                                                        Icon(
-                                                            Icons.Default.PlayArrow,
-                                                            contentDescription = nusaText(
-                                                                "Putar",
-                                                                "Play"
-                                                            ),
-                                                            tint = Color.White,
-                                                            modifier = Modifier.size(38.dp)
-                                                        )
-                                                    }
-                                                }
+                                Spacer(Modifier.height(30.dp))
+
+                                androidx.compose.material3.HorizontalDivider(
+                                    modifier = Modifier.padding(
+                                        horizontal = 30.dp
+                                    ),
+                                    thickness = 1.5.dp,
+                                    color =
+                                        MaterialTheme.colorScheme.onSurface.copy(
+                                            alpha = 0.58f
+                                        )
+                                )
+
+                                Text(
+                                    text = "BIOGRAPHY",
+                                    fontSize = 20.sp,
+                                    lineHeight = 24.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    letterSpacing = 0.2.sp,
+                                    color =
+                                        MaterialTheme.colorScheme.onBackground,
+                                    modifier = Modifier.padding(
+                                        start = 150.dp,
+                                        top = 20.dp,
+                                        bottom = 14.dp
+                                    )
+                                )
+
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .weight(1f)
+                                        .background(
+                                            MaterialTheme.colorScheme.surfaceVariant.copy(
+                                                alpha = 0.34f
+                                            )
+                                        )
+                                        .verticalScroll(
+                                            androidx.compose.foundation.rememberScrollState()
+                                        )
+                                        .padding(
+                                            horizontal = 150.dp,
+                                            vertical = 24.dp
+                                        )
+                                ) {
+                                    when {
+                                        biographyLoading -> {
+                                            Text(
+                                                text = nusaText(
+                                                    "Memuat biografi artis…",
+                                                    "Loading artist biography…"
+                                                ),
+                                                fontSize = 17.sp,
+                                                lineHeight = 28.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                color =
+                                                    MaterialTheme.colorScheme.onSurface
+                                            )
+                                        }
+
+                                        artistBiography != null -> {
+                                            Column {
+                                                Text(
+                                                    text = artistBiography!!.text,
+                                                    fontSize = 17.sp,
+                                                    lineHeight = 28.sp,
+                                                    fontWeight = FontWeight.Medium,
+                                                    color =
+                                                        MaterialTheme.colorScheme.onSurface
+                                                )
+
+                                                Spacer(Modifier.height(18.dp))
+
+                                                Text(
+                                                    text = nusaText(
+                                                        "Sumber: Last.fm",
+                                                        "Source: Last.fm"
+                                                    ),
+                                                    fontSize = 11.sp,
+                                                    lineHeight = 16.sp,
+                                                    color =
+                                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
                                             }
+                                        }
+
+                                        else -> {
+                                            Text(
+                                                text = nusaText(
+                                                    "Biografi artis belum tersedia.",
+                                                    "Artist biography is not available."
+                                                ),
+                                                fontSize = 17.sp,
+                                                lineHeight = 28.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                color =
+                                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
                                         }
                                     }
                                 }
                             }
-
-
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun PrototypeAlbumRecordCard(
+    song: Song,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+    ) {
+        Canvas(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            val radius = size.minDimension * 0.40f
+            val center = androidx.compose.ui.geometry.Offset(
+                x = size.width * 0.68f,
+                y = size.height * 0.50f
+            )
+
+            // Vinyl shadow.
+            drawCircle(
+                color = Color.Black.copy(alpha = 0.22f),
+                radius = radius * 1.035f,
+                center = center.copy(
+                    y = center.y + size.minDimension * 0.012f
+                )
+            )
+
+            // Realistic dark disc base.
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        Color(0xFF303030),
+                        Color(0xFF111111),
+                        Color(0xFF050505)
+                    ),
+                    center = androidx.compose.ui.geometry.Offset(
+                        center.x - radius * 0.20f,
+                        center.y - radius * 0.28f
+                    ),
+                    radius = radius * 1.15f
+                ),
+                radius = radius,
+                center = center
+            )
+
+            // Fine grooves.
+            for (ring in 1..26) {
+                val ringRadius = radius * (
+                    0.28f + ring * 0.025f
+                )
+                if (ringRadius < radius * 0.97f) {
+                    drawCircle(
+                        color = if (ring % 2 == 0) {
+                            Color.White.copy(alpha = 0.028f)
+                        } else {
+                            Color.Black.copy(alpha = 0.17f)
+                        },
+                        radius = ringRadius,
+                        center = center,
+                        style =
+                            androidx.compose.ui.graphics.drawscope.Stroke(
+                                width = 0.65f
+                            )
+                    )
+                }
+            }
+
+            // Lacquer highlight.
+            drawArc(
+                color = Color.White.copy(alpha = 0.13f),
+                startAngle = 205f,
+                sweepAngle = 72f,
+                useCenter = false,
+                topLeft = androidx.compose.ui.geometry.Offset(
+                    center.x - radius,
+                    center.y - radius
+                ),
+                size = androidx.compose.ui.geometry.Size(
+                    radius * 2f,
+                    radius * 2f
+                ),
+                style =
+                    androidx.compose.ui.graphics.drawscope.Stroke(
+                        width = radius * 0.045f
+                    )
+            )
+
+            // Center label.
+            drawCircle(
+                color = Color(0xFF363636),
+                radius = radius * 0.18f,
+                center = center
+            )
+            drawCircle(
+                color = Color(0xFFB42E2A),
+                radius = radius * 0.115f,
+                center = center
+            )
+            drawCircle(
+                color = Color.Black,
+                radius = radius * 0.035f,
+                center = center
+            )
+        }
+
+        // Square album artwork in front of the record.
+        Box(
+            modifier = Modifier
+                .fillMaxHeight(0.82f)
+                .aspectRatio(1f)
+                .align(Alignment.CenterStart)
+                .clip(RoundedCornerShape(8.dp))
+                .graphicsLayer {
+                    shadowElevation = 14.dp.toPx()
+                    shape = RoundedCornerShape(8.dp)
+                    clip = false
+                }
+        ) {
+            ArtworkView(
+                song = song,
+                maxSizePx = 700,
+                modifier = Modifier.fillMaxSize()
+            )
         }
     }
 }
