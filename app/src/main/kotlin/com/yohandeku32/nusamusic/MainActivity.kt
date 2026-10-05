@@ -943,15 +943,16 @@ private enum class LibrarySortOption(
     val indonesianLabel: String,
     val englishLabel: String
 ) {
-    TITLE_ASC("Judul A–Z", "Title A–Z"),
-    TITLE_DESC("Judul Z–A", "Title Z–A"),
-    ARTIST_ASC("Artis A–Z", "Artist A–Z"),
+    TITLE_ASC("Title A–Z", "Title A–Z"),
+    TITLE_DESC("Title Z–A", "Title Z–A"),
+    ARTIST_ASC("Artist A–Z", "Artist A–Z"),
+    RECENTLY_ADDED("Recently Added", "Recently Added"),
     ALBUM_ASC("Album A–Z", "Album A–Z"),
-    DURATION_ASC("Durasi terpendek", "Shortest duration"),
-    DURATION_DESC("Durasi terpanjang", "Longest duration");
+    DURATION_ASC("Shortest duration", "Shortest duration"),
+    DURATION_DESC("Longest duration", "Longest duration");
 
     val label: String
-        get() = nusaText(indonesianLabel, englishLabel)
+        get() = englishLabel
 }
 
 private data class StackAlbum(
@@ -1042,6 +1043,9 @@ private fun NusaMusicApp(
                 songs.sortedBy {
                     it.artist.lowercase(Locale.ROOT)
                 }
+
+            LibrarySortOption.RECENTLY_ADDED ->
+                songs.sortedByDescending { it.dateAddedMs }
 
             LibrarySortOption.ALBUM_ASC ->
                 songs.sortedBy {
