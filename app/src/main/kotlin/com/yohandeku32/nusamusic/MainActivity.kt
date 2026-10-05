@@ -2153,10 +2153,12 @@ private fun MyMusicArtworkCard(
             modifier = Modifier.fillMaxSize()
         ) {
             val center = androidx.compose.ui.geometry.Offset(
-                x = size.width * 0.67f,
+                x = size.width * 0.65f,
                 y = size.height * 0.50f
             )
-            val radius = size.minDimension * 0.335f
+            // Keep the whole record inside the card. The sleeve covers the
+            // left portion, while the entire circular disc remains visible.
+            val radius = size.minDimension * 0.30f
 
             // Soft drop shadow under the record.
             drawCircle(
@@ -2235,7 +2237,7 @@ private fun MyMusicArtworkCard(
         // record, with a physically raised edge so it reads like a real sleeve.
         Box(
             modifier = Modifier
-                .fillMaxHeight(0.78f)
+                .fillMaxHeight(0.76f)
                 .aspectRatio(1f)
                 .align(Alignment.CenterStart)
                 .clip(RoundedCornerShape(8.dp))
