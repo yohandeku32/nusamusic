@@ -2047,16 +2047,14 @@ private fun NusaMusicApp(
                                 }
                             }
 
-                            var alphabetScrollJob by remember {
-                                mutableStateOf<Job?>(null)
-                            }
-
                             fun requestAlphabetScroll(targetIndex: Int) {
                                 if (targetIndex < 0) return
 
-                                alphabetScrollJob?.cancel()
-                                alphabetScrollJob = scope.launch {
-                                    libraryListState.animateScrollToItem(
+                                // Follow the finger immediately instead of
+                                // starting a new animation on every alphabet
+                                // slot crossed.
+                                scope.launch {
+                                    libraryListState.scrollToItem(
                                         index = targetIndex,
                                         scrollOffset = 0
                                     )
@@ -5061,27 +5059,34 @@ private fun LibrarySongRow(
                 text = song.title,
                 maxLines = 1,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                fontSize = if (selected) 13.sp else 12.sp,
-                lineHeight = 13.sp,
-                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                fontSize = if (selected) 13.sp else 12.5.sp,
+                lineHeight = 15.sp,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
                 color = Color.White,
                 textAlign = TextAlign.Center,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 4.dp)
+                    .padding(horizontal = 6.dp)
             )
 
             Text(
-                text = song.artist,
+                text = song.artist.ifBlank {
+                    nusaText("Artis tidak dikenal", "Unknown artist")
+                },
                 maxLines = 1,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                fontSize = 9.5.sp,
-                lineHeight = 10.sp,
-                color = if (selected) Color(0xFFD2D2D2) else Color(0xFFAAAAAA),
+                fontSize = if (selected) 10.5.sp else 10.sp,
+                lineHeight = 12.sp,
+                fontWeight = FontWeight.Medium,
+                color = if (selected) {
+                    Color(0xFFD2D2D2)
+                } else {
+                    Color(0xFFAAAAAA)
+                },
                 textAlign = TextAlign.Center,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 4.dp)
+                    .padding(horizontal = 6.dp)
             )
         }
     }
