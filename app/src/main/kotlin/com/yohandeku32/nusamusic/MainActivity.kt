@@ -2067,7 +2067,7 @@ private fun NusaMusicApp(
                                             // More breathing room between covers so
                                             // each album reads as a separate sleeve.
                                             val verticalOffset =
-                                                relative * 92f
+                                                relative * 155f
 
                                             val cover = albumStack[
                                                 albumIndex
