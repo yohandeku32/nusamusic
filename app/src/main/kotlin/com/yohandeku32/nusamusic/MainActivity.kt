@@ -499,6 +499,17 @@ class MainActivity : ComponentActivity() {
                             )
                         )
                     },
+                    onClearCustomTitleFont = {
+                        val oldPath = customTitleFontPath
+                        customTitleFontPath = null
+                        customTitleFontName = null
+
+                        if (oldPath != null) {
+                            runCatching {
+                                java.io.File(oldPath).delete()
+                            }
+                        }
+                    },
                     onResetCustomTitleFont = {
                         val oldPath = customTitleFontPath
                         customTitleFontPath = null
@@ -1153,6 +1164,7 @@ private fun NusaMusicApp(
     customTitleFontPath: String?,
     customTitleFontName: String?,
     onChooseCustomTitleFont: () -> Unit,
+    onClearCustomTitleFont: () -> Unit,
     onResetCustomTitleFont: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
@@ -1507,10 +1519,7 @@ private fun NusaMusicApp(
                                 },
                                 onClick = {
                                     titleFontName = fontName
-
-                                    val oldPath = customTitleFontPath
-                                    customTitleFontPath = null
-                                    customTitleFontName = null
+                                    onClearCustomTitleFont()
 
                                     uiPrefs.edit()
                                         .remove("custom_title_font_path")
@@ -1520,12 +1529,6 @@ private fun NusaMusicApp(
                                             fontName
                                         )
                                         .apply()
-
-                                    if (oldPath != null) {
-                                        runCatching {
-                                            java.io.File(oldPath).delete()
-                                        }
-                                    }
 
                                     titleFontMenuExpanded = false
                                 }
