@@ -23,7 +23,6 @@ import android.view.View
 import android.view.WindowInsets
 import android.view.WindowInsetsController
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.WindowCompat
@@ -490,7 +489,15 @@ class MainActivity : ComponentActivity() {
                     customTitleFontPath = customTitleFontPath,
                     customTitleFontName = customTitleFontName,
                     onChooseCustomTitleFont = {
-                        titleFontPicker.launch(arrayOf("*/*"))
+                        titleFontPicker.launch(
+                            arrayOf(
+                                "font/ttf",
+                                "font/otf",
+                                "application/x-font-ttf",
+                                "application/octet-stream",
+                                "*/*"
+                            )
+                        )
                     },
                     onResetCustomTitleFont = {
                         val oldPath = customTitleFontPath
