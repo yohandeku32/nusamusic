@@ -145,7 +145,7 @@ class PlaybackService : MediaSessionService() {
 
             val remaining = duration - primary.currentPosition
 
-            if (remaining <= 60L) {
+            if (remaining <= 250L) {
                 completeCrossfadeHandoff(primary, secondary)
             } else {
                 applyCrossfadeVolumes(primary, secondary, durationMs)
