@@ -81,6 +81,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
@@ -1350,6 +1351,7 @@ private fun NusaMusicApp(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .verticalScroll(androidx.compose.foundation.rememberScrollState())
                     .padding(horizontal = 24.dp)
                     .padding(bottom = 24.dp)
             ) {
@@ -1802,12 +1804,12 @@ private fun NusaMusicApp(
                             modifier = Modifier.weight(1f)
                         ) {
                             Text(
-                                nusaText("Pilih folder musik", "Choose music folder"),
+                                nusaText("Scan folder musik", "Scan music folder"),
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
                             Text(
-                                nusaText("Berikan akses ke folder lokal yang ingin dipindai.", "Grant access to a local folder to scan."),
+                                nusaText("Pilih folder lokal yang berisi musik untuk dipindai.", "Choose a local folder containing music to scan."),
                                 fontSize = 12.sp,
                                 lineHeight = 17.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -2399,8 +2401,13 @@ private fun NusaMusicApp(
                                 }
                             }
 
-                            LazyColumn(
-                                state = libraryListState,
+                            PullToRefreshBox(
+                                isRefreshing = isScanningMusic,
+                                onRefresh = onScanMusic,
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                LazyColumn(
+                                    state = libraryListState,
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .padding(top = 76.dp),
@@ -2474,6 +2481,8 @@ private fun NusaMusicApp(
                                         }
                                     }
                                 }
+                                }
+
                             }
 
                             fun requestAlphabetScroll(targetIndex: Int) {
