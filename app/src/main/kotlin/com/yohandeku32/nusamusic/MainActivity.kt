@@ -3831,12 +3831,6 @@ private fun VinylRecord(
         }
     }
 
-    val progress = if (durationMs > 0L) {
-        (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
-    } else {
-        0f
-    }
-
     Box(
         modifier = modifier,
         contentAlignment = Alignment.Center
@@ -4130,95 +4124,115 @@ private fun VinylRecord(
                 )
             }
 
-            // Distributed lacquer reflections. A real vinyl catches light
-            // across several parts of the rotating surface rather than in one
-            // fixed bright spot.
-            val reflections = arrayOf(
-                floatArrayOf(-92f, 27f, 0.20f, 7.5f),
-                floatArrayOf(-28f, 24f, 0.105f, 5.0f),
-                floatArrayOf(34f, 31f, 0.075f, 4.0f),
-                floatArrayOf(103f, 22f, 0.115f, 5.5f),
-                floatArrayOf(162f, 30f, 0.065f, 4.2f),
-                floatArrayOf(224f, 26f, 0.095f, 4.8f),
-                floatArrayOf(286f, 32f, 0.055f, 3.6f)
+            // Broad diagonal lacquer reflection inspired by a real vinyl
+            // under a single soft light source. The reflection is spread across
+            // many radii so it reads as one wide highlight band instead of
+            // several isolated bright spots.
+            val reflectionBand = listOf(
+                0.28f to 0.020f,
+                0.34f to 0.028f,
+                0.40f to 0.040f,
+                0.46f to 0.055f,
+                0.52f to 0.075f,
+                0.58f to 0.095f,
+                0.64f to 0.120f,
+                0.70f to 0.145f,
+                0.76f to 0.165f,
+                0.82f to 0.150f,
+                0.88f to 0.115f,
+                0.93f to 0.080f,
+                0.97f to 0.045f
             )
 
-            reflections.forEach { mark ->
+            reflectionBand.forEach { (radiusFactor, alpha) ->
+                val reflectionDiameter = size.minDimension * radiusFactor
                 drawArc(
-                    color = Color.White.copy(alpha = mark[2]),
-                    startAngle = mark[0],
-                    sweepAngle = mark[1],
+                    color = Color.White.copy(alpha = alpha),
+                    startAngle = -58f,
+                    sweepAngle = 47f,
                     useCenter = false,
                     topLeft = androidx.compose.ui.geometry.Offset(
-                        size.width * 0.045f,
-                        size.height * 0.045f
+                        centerX - reflectionDiameter / 2f,
+                        centerY - reflectionDiameter / 2f
                     ),
                     size = androidx.compose.ui.geometry.Size(
-                        size.width * 0.91f,
-                        size.height * 0.91f
+                        reflectionDiameter,
+                        reflectionDiameter
                     ),
                     style = androidx.compose.ui.graphics.drawscope.Stroke(
-                        width = mark[3]
+                        width = maxOf(2.0f, size.minDimension * 0.012f)
                     )
                 )
             }
 
-            // Secondary reflection bands at different radii create a wider,
-            // broken reflection pattern across the record.
-            val secondaryBands = arrayOf(
-                floatArrayOf(-72f, 34f, 0.075f, 0.94f, 8f),
-                floatArrayOf(18f, 48f, 0.052f, 0.82f, 5.5f),
-                floatArrayOf(118f, 30f, 0.048f, 0.88f, 7f),
-                floatArrayOf(198f, 42f, 0.038f, 0.76f, 4.5f),
-                floatArrayOf(292f, 26f, 0.045f, 0.70f, 6f)
-            )
-
-            secondaryBands.forEach { mark ->
-                val diameter = size.minDimension * mark[3]
+            // Softer outer halo around the same diagonal band. This extends
+            // the reflected light onto the surrounding vinyl without making
+            // the whole disc look glossy.
+            listOf(
+                0.74f to 0.028f,
+                0.84f to 0.022f,
+                0.94f to 0.016f
+            ).forEach { (radiusFactor, alpha) ->
+                val haloDiameter = size.minDimension * radiusFactor
                 drawArc(
-                    color = Color.White.copy(alpha = mark[2]),
-                    startAngle = mark[0],
-                    sweepAngle = mark[1],
+                    color = Color.White.copy(alpha = alpha),
+                    startAngle = -63f,
+                    sweepAngle = 58f,
                     useCenter = false,
                     topLeft = androidx.compose.ui.geometry.Offset(
-                        centerX - diameter / 2f,
-                        centerY - diameter / 2f
+                        centerX - haloDiameter / 2f,
+                        centerY - haloDiameter / 2f
                     ),
                     size = androidx.compose.ui.geometry.Size(
-                        diameter,
-                        diameter
+                        haloDiameter,
+                        haloDiameter
                     ),
                     style = androidx.compose.ui.graphics.drawscope.Stroke(
-                        width = mark[4]
+                        width = maxOf(6f, size.minDimension * 0.022f)
                     )
                 )
             }
 
-            // Very soft diffuse catches spread over the face.
-            val diffuseSpots = arrayOf(
-                androidx.compose.ui.geometry.Offset(size.width * 0.24f, size.height * 0.19f),
-                androidx.compose.ui.geometry.Offset(size.width * 0.76f, size.height * 0.25f),
-                androidx.compose.ui.geometry.Offset(size.width * 0.84f, size.height * 0.63f),
-                androidx.compose.ui.geometry.Offset(size.width * 0.59f, size.height * 0.84f),
-                androidx.compose.ui.geometry.Offset(size.width * 0.22f, size.height * 0.68f)
+            // A narrow specular core gives the wide reflection a natural hot
+            // center, similar to the sharpest part of a real light catch.
+            drawArc(
+                color = Color.White.copy(alpha = 0.19f),
+                startAngle = -54f,
+                sweepAngle = 31f,
+                useCenter = false,
+                topLeft = androidx.compose.ui.geometry.Offset(
+                    centerX - size.minDimension * 0.79f / 2f,
+                    centerY - size.minDimension * 0.79f / 2f
+                ),
+                size = androidx.compose.ui.geometry.Size(
+                    size.minDimension * 0.79f,
+                    size.minDimension * 0.79f
+                ),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(
+                    width = maxOf(1.5f, size.minDimension * 0.008f)
+                )
             )
 
-            diffuseSpots.forEachIndexed { index, spot ->
-                val spotRadius = radius * (0.20f + index * 0.015f)
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            Color.White.copy(alpha = 0.020f + index * 0.002f),
-                            Color.White.copy(alpha = 0.007f),
-                            Color.Transparent
-                        ),
-                        center = spot,
-                        radius = spotRadius
-                    ),
-                    radius = spotRadius,
-                    center = spot
+            // Subtle reflected band on the opposite side keeps the lacquer
+            // from looking digitally flat while remaining much weaker than
+            // the main light source.
+            drawArc(
+                color = Color.White.copy(alpha = 0.028f),
+                startAngle = 118f,
+                sweepAngle = 42f,
+                useCenter = false,
+                topLeft = androidx.compose.ui.geometry.Offset(
+                    centerX - size.minDimension * 0.88f / 2f,
+                    centerY - size.minDimension * 0.88f / 2f
+                ),
+                size = androidx.compose.ui.geometry.Size(
+                    size.minDimension * 0.88f,
+                    size.minDimension * 0.88f
+                ),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(
+                    width = maxOf(2.5f, size.minDimension * 0.010f)
                 )
-            }
+            )
 
             // Dark falloff on the far side of the disc.
             drawArc(
