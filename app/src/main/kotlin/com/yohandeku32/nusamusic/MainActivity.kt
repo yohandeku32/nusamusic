@@ -3816,21 +3816,6 @@ private fun VinylRecord(
         }
     }
 
-    // A second deterministic set of marks gives the PVC a used, physical feel:
-    // faint hairline scuffs, sleeve rubs and small circular scratches.
-    val scratches = remember {
-        val random = Random(918)
-        List(54) {
-            floatArrayOf(
-                random.nextFloat() * 360f,
-                4f + random.nextFloat() * 18f,
-                0.35f + random.nextFloat() * 0.58f,
-                0.15f + random.nextFloat() * 0.75f,
-                0.30f + random.nextFloat() * 1.8f
-            )
-        }
-    }
-
     val progress = if (durationMs > 0L) {
         (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
     } else {
@@ -4048,63 +4033,6 @@ private fun VinylRecord(
                 }
             }
 
-            // -------------------------------------------------------------
-            // REAL-WORLD SCRATCHES / SLEEVE RUB
-            // -------------------------------------------------------------
-            // Mostly radial/circular micro-scuffs. They are intentionally
-            // faint: they should appear when the record catches light, not
-            // make it look dirty.
-            for (mark in scratches) {
-                val angle = mark[0]
-                val radiusFactor = mark[2]
-                val sweep = mark[1]
-                val lengthJitter = mark[3]
-                val width = mark[4] * 0.32f
-
-                val arcRadius = radius * radiusFactor
-                val startAngle = angle
-                val sweepAngle = sweep * (0.55f + lengthJitter * 0.55f)
-
-                drawArc(
-                    color = Color.White.copy(alpha = 0.010f + lengthJitter * 0.010f),
-                    startAngle = startAngle,
-                    sweepAngle = sweepAngle,
-                    useCenter = false,
-                    topLeft = androidx.compose.ui.geometry.Offset(
-                        centerX - arcRadius,
-                        centerY - arcRadius
-                    ),
-                    size = androidx.compose.ui.geometry.Size(
-                        arcRadius * 2f,
-                        arcRadius * 2f
-                    ),
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(
-                        width = width.coerceAtLeast(0.45f)
-                    )
-                )
-            }
-
-            // A few very fine directional hairlines break the otherwise
-            // mathematically perfect surface.
-            for (i in 0 until 14) {
-                val angle = Math.toRadians((i * 43f + 17f).toDouble())
-                val inner = radius * (0.40f + (i % 4) * 0.075f)
-                val outer = (inner + radius * (0.075f + (i % 5) * 0.022f))
-                    .coerceAtMost(radius * 0.94f)
-
-                val x1 = centerX + kotlin.math.cos(angle).toFloat() * inner
-                val y1 = centerY + kotlin.math.sin(angle).toFloat() * inner
-                val x2 = centerX + kotlin.math.cos(angle).toFloat() * outer
-                val y2 = centerY + kotlin.math.sin(angle).toFloat() * outer
-
-                drawLine(
-                    color = Color.White.copy(alpha = 0.017f),
-                    start = androidx.compose.ui.geometry.Offset(x1, y1),
-                    end = androidx.compose.ui.geometry.Offset(x2, y2),
-                    strokeWidth = 0.55f
-                )
-            }
-
             // Broken micro-reflections across the groove bands.
             for (i in 0 until 30) {
                 val startAngle = (i * 137f + (i % 7) * 9f) % 360f
@@ -4303,7 +4231,7 @@ private fun VinylRecord(
         // fibers and subtle crease marks.
         val paperTexture = remember {
             val random = Random(2047)
-            List(150) {
+            List(260) {
                 floatArrayOf(
                     random.nextFloat(),
                     random.nextFloat(),
@@ -4356,7 +4284,8 @@ private fun VinylRecord(
                     )
                 )
 
-                // Fine paper grain.
+                // Fine paper grain. The album cover keeps a tactile printed-paper
+                // feel without adding scratches or distressed surface marks.
                 for (sample in paperTexture) {
                     val x = sample[0] * size.width
                     val y = sample[1] * size.height
@@ -4377,8 +4306,8 @@ private fun VinylRecord(
                     }
                 }
 
-                // Very subtle fibers/wrinkles following a natural paper surface.
-                for (i in 0 until 14) {
+                // Very subtle fibers following a natural paper surface.
+                for (i in 0 until 22) {
                     val startX = size.width * (0.10f + (i % 5) * 0.17f)
                     val startY = size.height * (0.18f + (i % 7) * 0.095f)
                     val endX = startX + size.width * (0.12f + (i % 4) * 0.055f)
@@ -4440,7 +4369,44 @@ private fun VinylRecord(
                     .size(18.dp)
                     .clip(CircleShape)
                     .background(Color(0xFF080808))
-            )
+            ) {
+                // Subtle pressed-metal texture inside the small center cap.
+                Canvas(Modifier.fillMaxSize()) {
+                    val spindleCenter = androidx.compose.ui.geometry.Offset(
+                        size.width / 2f,
+                        size.height / 2f
+                    )
+                    drawCircle(
+                        color = Color.White.copy(alpha = 0.045f),
+                        radius = size.minDimension * 0.33f,
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(
+                            width = 0.7f
+                        )
+                    )
+                    drawCircle(
+                        color = Color.Black.copy(alpha = 0.34f),
+                        radius = size.minDimension * 0.43f,
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(
+                            width = 0.7f
+                        )
+                    )
+                    for (i in 0 until 12) {
+                        val angle = Math.toRadians((i * 31f + 7f).toDouble())
+                        val distance = size.minDimension * (0.20f + (i % 3) * 0.08f)
+                        val x = spindleCenter.x + kotlin.math.cos(angle).toFloat() * distance
+                        val y = spindleCenter.y + kotlin.math.sin(angle).toFloat() * distance
+                        drawCircle(
+                            color = if (i % 2 == 0) {
+                                Color.White.copy(alpha = 0.018f)
+                            } else {
+                                Color.Black.copy(alpha = 0.022f)
+                            },
+                            radius = 0.55f,
+                            center = androidx.compose.ui.geometry.Offset(x, y)
+                        )
+                    }
+                }
+            }
             Box(
                 modifier = Modifier
                     .size(5.dp)
