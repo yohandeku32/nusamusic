@@ -4134,7 +4134,7 @@ private fun VinylRecord(
                     center.x - radius * 0.994f,
                     center.y - radius * 0.994f
                 ),
-                size = androidx.compose.ui.graphics.Size(
+                size = androidx.compose.ui.geometry.Size(
                     radius * 1.988f,
                     radius * 1.988f
                 ),
