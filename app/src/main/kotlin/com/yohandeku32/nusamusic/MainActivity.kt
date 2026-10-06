@@ -2509,15 +2509,20 @@ private fun NusaMusicApp(
                                 }
                             }
 
-                            suspend fun followAlphabetDrag(targetIndex: Int) {
+                            var alphabetDragJob: Job? = null
+
+                            fun followAlphabetDrag(targetIndex: Int) {
                                 if (targetIndex < 0) return
 
-                                // Dragging the index follows the finger directly
-                                // without queueing one coroutine per move event.
-                                libraryListState.scrollToItem(
-                                    index = targetIndex,
-                                    scrollOffset = 0
-                                )
+                                // Keep only the latest drag request so rapid
+                                // alphabet movement does not build a coroutine backlog.
+                                alphabetDragJob?.cancel()
+                                alphabetDragJob = scope.launch {
+                                    libraryListState.scrollToItem(
+                                        index = targetIndex,
+                                        scrollOffset = 0
+                                    )
+                                }
                             }
 
                             val alphabetIndexModifier = Modifier
