@@ -1252,7 +1252,18 @@ private fun NusaMusicApp(
         )
     }
     var sortMenuExpanded by remember { mutableStateOf(false) }
-    var librarySortOption by remember { mutableStateOf(LibrarySortOption.TITLE_ASC) }
+    var librarySortOption by remember {
+        mutableStateOf(
+            runCatching {
+                LibrarySortOption.valueOf(
+                    uiPrefs.getString(
+                        "library_sort_option",
+                        LibrarySortOption.TITLE_ASC.name
+                    ) ?: LibrarySortOption.TITLE_ASC.name
+                )
+            }.getOrDefault(LibrarySortOption.TITLE_ASC)
+        )
+    }
 
     val filtered = remember(
         songs,
@@ -2399,6 +2410,12 @@ private fun NusaMusicApp(
                                                 },
                                                 onClick = {
                                                     librarySortOption = option
+                                                    uiPrefs.edit()
+                                                        .putString(
+                                                            "library_sort_option",
+                                                            option.name
+                                                        )
+                                                        .apply()
                                                     sortMenuExpanded = false
 
                                                     if (
@@ -3800,32 +3817,37 @@ private fun VinylRecord(
         rotationSpeed.animateTo(
             targetValue = targetSpeed,
             animationSpec = tween(
-                durationMillis = 560,
+                durationMillis = 950,
                 easing = androidx.compose.animation.core.FastOutSlowInEasing
             )
         )
     }
 
-    LaunchedEffect(isPlaying) {
-        if (!isPlaying) return@LaunchedEffect
-
+    LaunchedEffect(Unit) {
         var lastFrameNanos = 0L
 
         while (isActive) {
-            val frameNanos = androidx.compose.runtime.withFrameNanos { it }
+            if (isPlaying || rotationSpeed.value > 0.01f) {
+                val frameNanos = androidx.compose.runtime.withFrameNanos { it }
 
-            if (lastFrameNanos != 0L) {
-                val deltaSeconds =
-                    ((frameNanos - lastFrameNanos).coerceAtMost(100_000_000L)) /
-                        1_000_000_000f
+                if (lastFrameNanos != 0L) {
+                    val deltaSeconds =
+                        ((frameNanos - lastFrameNanos).coerceAtMost(100_000_000L)) /
+                            1_000_000_000f
 
-                val nextRotation =
-                    (rotation.value + rotationSpeed.value * deltaSeconds) % 360f
+                    val nextRotation =
+                        (rotation.value + rotationSpeed.value * deltaSeconds) % 360f
 
-                rotation.snapTo(nextRotation)
+                    rotation.snapTo(nextRotation)
+                }
+
+                lastFrameNanos = frameNanos
+            } else {
+                // No playback and no residual rotation: avoid a continuous
+                // 60 FPS loop while the record is idle.
+                lastFrameNanos = 0L
+                delay(120L)
             }
-
-            lastFrameNanos = frameNanos
         }
     }
 
@@ -4517,6 +4539,28 @@ private fun VinylTonearm(
             pivot = pivot
         ) {
             val softShadow = Color.Black.copy(alpha = 0.12f)
+
+            // A soft radial shadow grounds the pivot against the turntable
+            // surface before the metal bearing is drawn over it.
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        Color.Black.copy(alpha = 0.16f),
+                        Color.Black.copy(alpha = 0.08f),
+                        Color.Transparent
+                    ),
+                    center = androidx.compose.ui.geometry.Offset(
+                        x(153.5f),
+                        y(176f)
+                    ),
+                    radius = 58f * designScale
+                ),
+                radius = 58f * designScale,
+                center = androidx.compose.ui.geometry.Offset(
+                    x(153.5f),
+                    y(176f)
+                )
+            )
 
             // Pivot contact shadow: several soft offset layers make the
             // bearing look seated above the white turntable surface.
