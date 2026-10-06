@@ -4129,7 +4129,7 @@ private fun VinylRecord(
 
         Box(
             modifier = Modifier
-                .fillMaxHeight(0.30f)
+.fillMaxHeight(0.34f)
                 .aspectRatio(1f)
                 .clip(CircleShape)
                 .graphicsLayer {
