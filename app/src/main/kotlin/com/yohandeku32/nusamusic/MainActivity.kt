@@ -2325,21 +2325,13 @@ private fun NusaMusicApp(
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(
-                                    Brush.verticalGradient(
-                                        colors = listOf(
-                                            Color(0xFF18191B),
-                                            Color(0xFF0D0E10),
-                                            Color(0xFF070708)
-                                        )
-                                    )
-                                )
+                                .background(MaterialTheme.colorScheme.background)
                         ) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(76.dp)
-                                    .background(Color.Black.copy(alpha = 0.18f))
+                                    .background(MaterialTheme.colorScheme.background)
                                     .padding(horizontal = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -2353,7 +2345,7 @@ private fun NusaMusicApp(
                                     Icon(
                                         Icons.Default.ArrowBack,
                                         contentDescription = nusaText("Kembali ke pemutar", "Back to player"),
-                                        tint = Color.White
+                                        tint = MaterialTheme.colorScheme.onBackground
                                     )
                                 }
 
@@ -2363,7 +2355,7 @@ private fun NusaMusicApp(
                                     textAlign = TextAlign.Center,
                                     fontSize = 21.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color.White
+                                    color = MaterialTheme.colorScheme.onBackground
                                 )
 
                                 Box {
@@ -2373,7 +2365,7 @@ private fun NusaMusicApp(
                                             Icon(
                                                 Icons.Default.Sort,
                                                 contentDescription = nusaText("Urutkan lagu", "Sort songs"),
-                                                tint = Color.White
+                                                tint = MaterialTheme.colorScheme.onBackground
                                             )
                                         }
 
@@ -5460,7 +5452,7 @@ private fun LibrarySongListRow(
                 .background(Color(0xFF0A0A0A))
                 .padding(2.dp)
         ) {
-            WornCoverArtwork(
+            ArtworkView(
                 song = song,
                 maxSizePx = 160,
                 modifier = Modifier.fillMaxSize()
@@ -5486,7 +5478,7 @@ private fun LibrarySongListRow(
                 color = if (selected) {
                     MaterialTheme.colorScheme.primary
                 } else {
-                    MaterialTheme.colorScheme.onBackground
+                    MaterialTheme.colorScheme.onSurface
                 }
             )
 
