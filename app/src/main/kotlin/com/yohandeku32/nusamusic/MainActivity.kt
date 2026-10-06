@@ -3816,21 +3816,6 @@ private fun VinylRecord(
         }
     }
 
-    // A second deterministic set of marks gives the PVC a used, physical feel:
-    // faint hairline scuffs, sleeve rubs and small circular scratches.
-    val scratches = remember {
-        val random = Random(918)
-        List(54) {
-            floatArrayOf(
-                random.nextFloat() * 360f,
-                4f + random.nextFloat() * 18f,
-                0.35f + random.nextFloat() * 0.58f,
-                0.15f + random.nextFloat() * 0.75f,
-                0.30f + random.nextFloat() * 1.8f
-            )
-        }
-    }
-
     val progress = if (durationMs > 0L) {
         (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
     } else {
@@ -3966,126 +3951,109 @@ private fun VinylRecord(
             }
 
             // -------------------------------------------------------------
-            // REALISTIC SURFACE VARIATION
+            // BROAD REALISTIC LIGHT REFLECTION
             // -------------------------------------------------------------
-            // Very fine circular scuffs. They stay almost invisible until
-            // the simulated light passes over them.
-            for (mark in scratches) {
-                val arcRadius = radius * mark[2]
-                val startAngle = mark[0]
-                val sweepAngle = mark[1] * (0.55f + mark[3] * 0.52f)
-
-                drawArc(
-                    color = Color.White.copy(
-                        alpha = 0.006f + mark[3] * 0.011f
-                    ),
-                    startAngle = startAngle,
-                    sweepAngle = sweepAngle,
-                    useCenter = false,
-                    topLeft = androidx.compose.ui.geometry.Offset(
-                        center.x - arcRadius,
-                        center.y - arcRadius
-                    ),
-                    size = androidx.compose.ui.geometry.Size(
-                        arcRadius * 2f,
-                        arcRadius * 2f
-                    ),
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(
-                        width = (mark[4] * 0.24f).coerceAtLeast(0.40f)
-                    )
-                )
-            }
-
-            // Fine radial manufacturing marks.
-            for (i in 0 until 20) {
-                val angle = Math.toRadians(
-                    (i * 29f + 8f).toDouble()
-                )
-                val inner = radius * (0.36f + (i % 4) * 0.075f)
-                val outer = (inner + radius * (0.045f + (i % 5) * 0.025f))
-                    .coerceAtMost(radius * 0.94f)
-
-                drawLine(
-                    color = Color.White.copy(alpha = 0.012f),
-                    start = androidx.compose.ui.geometry.Offset(
-                        center.x + kotlin.math.cos(angle).toFloat() * inner,
-                        center.y + kotlin.math.sin(angle).toFloat() * inner
-                    ),
-                    end = androidx.compose.ui.geometry.Offset(
-                        center.x + kotlin.math.cos(angle).toFloat() * outer,
-                        center.y + kotlin.math.sin(angle).toFloat() * outer
-                    ),
-                    strokeWidth = 0.50f
-                )
-            }
-
-            // -------------------------------------------------------------
-            // BROAD REFLECTED LIGHT
-            // -------------------------------------------------------------
-            // The reference has a broad diagonal light catch across the
-            // grooves, not a single point highlight. Two soft light zones
-            // are combined so the reflection breaks naturally over the disc.
-            val lightZones = listOf(
-                // upper-right reflection
-                Triple(316f, 76f, 0.18f),
-                Triple(302f, 64f, 0.11f),
-                Triple(328f, 54f, 0.070f),
-                // lower-left reflection
-                Triple(136f, 86f, 0.105f),
-                Triple(151f, 68f, 0.070f),
-                Triple(122f, 54f, 0.045f)
+            // Real vinyl reflects a light source as a broad, curved band.
+            // The band is built from many soft arcs with changing opacity,
+            // so the grooves remain visible through it instead of getting
+            // covered by a single flat white shape.
+            val reflectionLayers = listOf(
+                Triple(0.82f, 0.16f, 13f),
+                Triple(0.86f, 0.13f, 11f),
+                Triple(0.90f, 0.10f, 9f),
+                Triple(0.94f, 0.075f, 7f),
+                Triple(0.975f, 0.045f, 5f)
             )
 
-            lightZones.forEach { zone ->
-                val diameterFactor = 0.95f
+            reflectionLayers.forEach { (radiusFactor, alpha, width) ->
+                val reflectionRadius = radius * radiusFactor
+
                 drawArc(
-                    color = Color.White.copy(alpha = zone.third),
-                    startAngle = zone.first,
-                    sweepAngle = zone.second,
+                    color = Color.White.copy(alpha = alpha),
+                    startAngle = -72f,
+                    sweepAngle = 82f,
                     useCenter = false,
                     topLeft = androidx.compose.ui.geometry.Offset(
-                        center.x - radius * diameterFactor,
-                        center.y - radius * diameterFactor
+                        center.x - reflectionRadius,
+                        center.y - reflectionRadius
                     ),
                     size = androidx.compose.ui.geometry.Size(
-                        radius * diameterFactor * 2f,
-                        radius * diameterFactor * 2f
+                        reflectionRadius * 2f,
+                        reflectionRadius * 2f
                     ),
                     style = androidx.compose.ui.graphics.drawscope.Stroke(
-                        width = radius * when {
-                            zone.third >= 0.15f -> 0.050f
-                            zone.third >= 0.10f -> 0.030f
-                            else -> 0.018f
-                        }
+                        width = width
                     )
                 )
             }
 
-            // Several much weaker inner highlights make the reflection appear
-            // to sit inside the groove field instead of on top of it.
-            for (i in 0 until 8) {
-                val startAngle = 308f + i * 4.5f
-                val arcRadius = radius * (0.54f + i * 0.050f)
+            // Smaller inner band gives the reflection a natural taper toward
+            // the center of the record.
+            listOf(
+                Triple(0.58f, 0.050f, 5.5f),
+                Triple(0.66f, 0.070f, 6.5f),
+                Triple(0.73f, 0.085f, 7.0f)
+            ).forEach { (radiusFactor, alpha, width) ->
+                val reflectionRadius = radius * radiusFactor
+
                 drawArc(
-                    color = Color.White.copy(
-                        alpha = 0.014f + (7 - i) * 0.002f
-                    ),
-                    startAngle = startAngle,
-                    sweepAngle = 30f,
+                    color = Color.White.copy(alpha = alpha),
+                    startAngle = -66f,
+                    sweepAngle = 68f,
                     useCenter = false,
                     topLeft = androidx.compose.ui.geometry.Offset(
-                        center.x - arcRadius,
-                        center.y - arcRadius
+                        center.x - reflectionRadius,
+                        center.y - reflectionRadius
                     ),
                     size = androidx.compose.ui.geometry.Size(
-                        arcRadius * 2f,
-                        arcRadius * 2f
+                        reflectionRadius * 2f,
+                        reflectionRadius * 2f
                     ),
                     style = androidx.compose.ui.graphics.drawscope.Stroke(
-                        width = 1.4f
+                        width = width
                     )
                 )
             }
+
+            // Diffuse glow around the reflection softens the edge and makes
+            // the surface feel lacquered rather than metallic.
+            drawArc(
+                color = Color.White.copy(alpha = 0.026f),
+                startAngle = -84f,
+                sweepAngle = 112f,
+                useCenter = false,
+                topLeft = androidx.compose.ui.geometry.Offset(
+                    center.x - radius * 0.99f,
+                    center.y - radius * 0.99f
+                ),
+                size = androidx.compose.ui.geometry.Size(
+                    radius * 1.98f,
+                    radius * 1.98f
+                ),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(
+                    width = radius * 0.055f
+                )
+            )
+
+            // A shorter bright core creates the specular center of the light
+            // without turning the reflection into a hard white line.
+            drawArc(
+                color = Color.White.copy(alpha = 0.18f),
+                startAngle = -63f,
+                sweepAngle = 38f,
+                useCenter = false,
+                topLeft = androidx.compose.ui.geometry.Offset(
+                    center.x - radius * 0.91f,
+                    center.y - radius * 0.91f
+                ),
+                size = androidx.compose.ui.geometry.Size(
+                    radius * 1.82f,
+                    radius * 1.82f
+                ),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(
+                    width = radius * 0.018f
+                )
+            )
 
             // Dark side falloff increases the depth of the opposite half.
             drawArc(
