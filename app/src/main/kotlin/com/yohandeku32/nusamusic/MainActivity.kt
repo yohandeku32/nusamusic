@@ -41,10 +41,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.animation.Crossfade
@@ -1307,7 +1303,7 @@ private fun NusaMusicApp(
     val playerScrollState =
         androidx.compose.foundation.lazy.rememberLazyListState()
     val libraryListState =
-        androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+        androidx.compose.foundation.lazy.rememberLazyListState()
     val scope = rememberCoroutineScope()
     val density = androidx.compose.ui.platform.LocalDensity.current
     val revealPlayerCurve by remember {
@@ -1317,10 +1313,7 @@ private fun NusaMusicApp(
     }
 
 
-    // Center the currently playing song only after the pager has settled.
-    // Because every grid card has a fixed height, the target offset is
-    // deterministic and can be applied in one operation without a second
-    // corrective scroll.
+    // Bring the currently playing song into view when opening the song list.
     LaunchedEffect(pagerState) {
         androidx.compose.runtime.snapshotFlow { pagerState.settledPage }
             .collect { settledPage ->
@@ -1329,19 +1322,7 @@ private fun NusaMusicApp(
 
                     if (index >= 0) {
                         kotlinx.coroutines.yield()
-
-                        val viewportHeight =
-                            libraryListState.layoutInfo.viewportEndOffset -
-                                libraryListState.layoutInfo.viewportStartOffset
-                        val cardHeightPx =
-                            with(density) { 194.dp.roundToPx() }
-                        val centerOffset =
-                            -((viewportHeight - cardHeightPx) / 2).coerceAtLeast(0)
-
-                        libraryListState.scrollToItem(
-                            index = index,
-                            scrollOffset = centerOffset
-                        )
+                        libraryListState.animateScrollToItem(index)
                     }
                 }
             }
@@ -2426,36 +2407,36 @@ private fun NusaMusicApp(
                                 }
                             }
 
-                            LazyVerticalGrid(
-                                columns = GridCells.Fixed(2),
+                            LazyColumn(
                                 state = libraryListState,
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .padding(top = 76.dp),
                                 contentPadding = PaddingValues(
-                                    top = 10.dp,
-                                    start = 6.dp,
-                                    end = 6.dp,
+                                    top = 8.dp,
+                                    start = 12.dp,
+                                    end = 12.dp,
                                     bottom = 140.dp
                                 ),
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
                             ) {
-                                if ((permissionGranted || selectedMusicFolders.isNotEmpty()) && filtered.isNotEmpty()) {
+                                if (
+                                    (permissionGranted || selectedMusicFolders.isNotEmpty()) &&
+                                    filtered.isNotEmpty()
+                                ) {
                                     items(
                                         items = filtered,
                                         key = { song -> song.id },
-                                        span = { GridItemSpan(1) },
                                         contentType = { "library-song" }
                                     ) { song ->
-                                        LibrarySongRow(
+                                        LibrarySongListRow(
                                             song = song,
                                             selected = currentSong?.id == song.id,
                                             onPlay = onPlay
                                         )
                                     }
                                 } else if (!permissionGranted && selectedMusicFolders.isEmpty()) {
-                                    item(span = { GridItemSpan(maxLineSpan) }) {
+                                    item {
                                         Column(
                                             modifier = Modifier
                                                 .fillMaxWidth()
@@ -2463,7 +2444,10 @@ private fun NusaMusicApp(
                                             horizontalAlignment = Alignment.CenterHorizontally
                                         ) {
                                             Text(
-                                                nusaText("Izinkan Nusa mengakses file audio Anda.", "Give Nusa access to your audio files."),
+                                                nusaText(
+                                                    "Izinkan Nusa mengakses file audio Anda.",
+                                                    "Give Nusa access to your audio files."
+                                                ),
                                                 color = Color(0xFF9D9D9D),
                                                 fontSize = 14.sp
                                             )
@@ -2471,13 +2455,16 @@ private fun NusaMusicApp(
                                             FilledIconButton(onClick = onRequestPermission) {
                                                 Icon(
                                                     Icons.Default.FolderOpen,
-                                                    contentDescription = nusaText("Izinkan akses musik", "Allow music access")
+                                                    contentDescription = nusaText(
+                                                        "Izinkan akses musik",
+                                                        "Allow music access"
+                                                    )
                                                 )
                                             }
                                         }
                                     }
                                 } else {
-                                    item(span = { GridItemSpan(maxLineSpan) }) {
+                                    item {
                                         Box(
                                             modifier = Modifier
                                                 .fillMaxWidth()
@@ -2485,7 +2472,10 @@ private fun NusaMusicApp(
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Text(
-                                                nusaText("Tidak ada musik lokal", "No local music found"),
+                                                nusaText(
+                                                    "Tidak ada musik lokal",
+                                                    "No local music found"
+                                                ),
                                                 color = Color(0xFF9D9D9D),
                                                 fontSize = 14.sp
                                             )
@@ -5447,84 +5437,60 @@ private fun WornCoverArtwork(
 }
 
 @Composable
-private fun LibrarySongRow(
+private fun LibrarySongListRow(
     song: Song,
     selected: Boolean,
     onPlay: (Song) -> Unit
 ) {
-    // Fixed height keeps grid rows stable when the active track changes.
-    val cardHeight = 194.dp
-    val artworkSize = if (selected) 160.dp else 148.dp
-    val artworkAreaHeight = 164.dp
-
-    Box(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(cardHeight)
-            .clip(RoundedCornerShape(16.dp))
-            .then(
-                if (selected) {
-                    Modifier
-                        .background(
-                            brush = Brush.verticalGradient(
-                                colors = listOf(
-                                    Color(0xFF292B2E),
-                                    Color(0xFF151618)
-                                )
-                            ),
-                            shape = RoundedCornerShape(16.dp)
-                        )
-                        .graphicsLayer {
-                            scaleX = 1.012f
-                            scaleY = 1.012f
-                        }
-                } else {
-                    Modifier
-                }
-            )
+            .clip(RoundedCornerShape(12.dp))
             .clickable { onPlay(song) }
-            .padding(horizontal = 4.dp, vertical = 6.dp)
+            .padding(
+                horizontal = 8.dp,
+                vertical = 7.dp
+            ),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally
+        Box(
+            modifier = Modifier
+                .size(58.dp)
+                .clip(RoundedCornerShape(7.dp))
+                .background(Color(0xFF0A0A0A))
+                .padding(2.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .height(artworkAreaHeight)
-                    .fillMaxWidth(),
-                contentAlignment = Alignment.Center
-            ) {
+            WornCoverArtwork(
+                song = song,
+                maxSizePx = 160,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
 
+        Spacer(Modifier.width(12.dp))
 
-                Box(
-                    modifier = Modifier
-                        .size(artworkSize)
-                        .clip(RoundedCornerShape(7.dp))
-                        .background(Color(0xFF0A0A0A))
-                        .padding(2.dp)
-                ) {
-                    WornCoverArtwork(
-                        song = song,
-                        maxSizePx = 320,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-            }
-
+        Column(
+            modifier = Modifier.weight(1f)
+        ) {
             Text(
                 text = song.title,
                 maxLines = 1,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                fontSize = if (selected) 13.sp else 12.5.sp,
-                lineHeight = 15.sp,
-                fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
-                color = Color.White,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 6.dp)
+                fontSize = 15.sp,
+                lineHeight = 19.sp,
+                fontWeight = if (selected) {
+                    FontWeight.Bold
+                } else {
+                    FontWeight.Medium
+                },
+                color = if (selected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onBackground
+                }
             )
+
+            Spacer(Modifier.height(2.dp))
 
             Text(
                 text = song.artist.ifBlank {
@@ -5532,22 +5498,14 @@ private fun LibrarySongRow(
                 },
                 maxLines = 1,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                fontSize = if (selected) 10.5.sp else 10.sp,
-                lineHeight = 12.sp,
-                fontWeight = FontWeight.Medium,
-                color = if (selected) {
-                    Color(0xFFD2D2D2)
-                } else {
-                    Color(0xFFAAAAAA)
-                },
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 6.dp)
+                fontSize = 12.5.sp,
+                lineHeight = 16.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
 }
+
 private fun formatTime(ms: Long): String {
     val totalSeconds = (ms / 1000L).coerceAtLeast(0L)
     val minutes = totalSeconds / 60L
