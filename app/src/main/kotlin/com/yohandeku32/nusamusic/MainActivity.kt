@@ -3831,6 +3831,12 @@ private fun VinylRecord(
         }
     }
 
+    val progress = if (durationMs > 0L) {
+        (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
+    } else {
+        0f
+    }
+
     Box(
         modifier = modifier,
         contentAlignment = Alignment.Center
