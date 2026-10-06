@@ -1,90 +1,68 @@
 # Nusa
 
-Nusa adalah **Android local music player** yang dirancang untuk pemutaran musik lokal/offline dengan antarmuka yang bersih, vinyl player yang realistis, dan kontrol playback yang halus.
+Nusa is a local music player for Android, built with Kotlin and Jetpack Compose.
 
-> **Project status:** Active development / pre-release  
-> **Current version:** `3.9.2`  
-> **versionCode:** `36`  
+The project started as a simple local music player and has grown into a more complete music app with a custom vinyl-style player, library management, crossfade, artist information, and custom fonts.
+
+> **Status:** Active development  
+> **Version:** 3.9.2  
+> **versionCode:** 36  
 > **Branch:** `main`  
 > **Last updated:** 6 October 2026
 
----
+## Current Progress
 
-## Sejauh Mana Project Ini Berjalan?
+Most of the core player features are already working. The project is now mainly focused on UI polish, playback stability, performance, and testing before a proper release.
 
-Nusa sudah berkembang jauh dari prototype awal. **Fungsi inti music player sudah berjalan**, termasuk pemutaran musik lokal, background playback, MediaSession, library musik, folder scanning, shuffle/repeat, playback persistence, crossfade, metadata audio, artist information, serta pengaturan tampilan.
-
-Saat ini project berada pada tahap **advanced development / pre-release validation**.
-
-Artinya, fondasi aplikasi sudah terbentuk dan dapat digunakan, sedangkan pengembangan berikutnya lebih banyak berfokus pada:
-
-- stabilitas playback
-- penyempurnaan UI/UX
-- optimasi performa
-- regression testing
-- penyempurnaan fitur audio
-- persiapan release production
-
-## Progress Utama
-
-| Area | Status | Keterangan |
-|---|---|---|
-| Local music playback | ✅ | Pemutaran musik lokal |
-| Background playback | ✅ | Playback tetap berjalan saat aplikasi di background |
-| MediaSession | ✅ | Integrasi kontrol media Android |
-| Notification controls | ✅ | Kontrol playback melalui media notification |
-| Shuffle | ✅ | Mode acak |
-| Repeat | ✅ | Repeat mode Media3 |
-| Crossfade | ✅ | Transisi antar lagu 1–12 detik |
-| Crossfade queue | ✅ | Next / Previous tetap bekerja setelah handoff |
-| Playback persistence | ✅ | Lagu, posisi, shuffle dan repeat disimpan |
-| MediaStore scanning | ✅ | Memindai musik yang tersedia di MediaStore |
-| Folder scanning | ✅ | Folder lokal dapat dipilih manual |
-| Recursive scanning | ✅ | Subfolder ikut dipindai |
-| Minimum track filter | ✅ | Lagu < 10 detik dikeluarkan |
-| Automatic library refresh | ✅ | Perubahan MediaStore dipantau |
-| Album artwork | ✅ | Artwork loading + caching |
-| Main player | ✅ | Player utama dengan desain vinyl |
-| Vinyl animation | ✅ | Rotasi halus dengan tonearm |
-| Song library | ✅ | Mode list |
-| Active song indicator | ✅ | Highlight lembut pada lagu aktif |
-| A–Z index | ✅ | Tap + drag untuk navigasi alfabet |
-| Sorting | ✅ | Title, Artist, Recently Added, Album, Duration |
-| Artist portrait | ✅ | Lookup + caching |
-| Artist biography | ✅ | Last.fm, bahasa Indonesia |
-| Multi-artist handling | ✅ | Artist pertama digunakan untuk lookup |
-| Share | ✅ | Berbagi informasi lagu |
-| Favorite | ✅ | Favorite control |
-| Lossless / Hi-Res badge | ✅ | Berdasarkan metadata codec dan bit depth |
-| Hi-Res information dialog | ✅ | Informasi kualitas audio |
-| System title fonts | ✅ | Beberapa pilihan font sistem |
-| Custom title font | ✅ | Mendukung `.TTF` dan `.OTF` |
-| Device language | ✅ | Indonesian / English mengikuti bahasa perangkat |
-| USB DAC playback | ⏸️ | Saat ini belum aktif pada build utama |
-| Bit-perfect validation | ⏳ | Belum dilakukan |
-| Production release | ⏳ | Masih dalam tahap validasi |
-
----
-
-# UI Saat Ini
+| Feature | Status |
+|---|---|
+| Local music playback | ✅ Working |
+| Background playback | ✅ Working |
+| MediaSession | ✅ Working |
+| Notification controls | ✅ Working |
+| Shuffle / Repeat | ✅ Working |
+| Crossfade | ✅ Working |
+| Crossfade queue / Previous / Next | ✅ Working |
+| Playback state restore | ✅ Working |
+| MediaStore music scan | ✅ Working |
+| Manual folder access | ✅ Working |
+| Recursive folder scan | ✅ Working |
+| Ignore tracks under 10 seconds | ✅ Working |
+| Automatic library refresh | ✅ Working |
+| Album artwork | ✅ Working |
+| Main player UI | ✅ Working |
+| Rotating vinyl player | ✅ Working |
+| Tonearm / playback position | ✅ Working |
+| Song library | ✅ Working |
+| A–Z index | ✅ Working |
+| Sorting | ✅ Working |
+| Artist portrait | ✅ Working |
+| Artist biography | ✅ Working |
+| Multi-artist handling | ✅ Working |
+| Share | ✅ Working |
+| Favorite | ✅ Working |
+| Lossless / Hi-Res badge | ✅ Working |
+| Hi-Res information dialog | ✅ Working |
+| System title fonts | ✅ Working |
+| Custom TTF / OTF fonts | ✅ Working |
+| Device language support | ✅ Working |
+| USB DAC playback | ⏸️ Paused |
+| Bit-perfect hardware testing | ⏳ Not done |
+| Production release | ⏳ Not ready |
 
 ## Main Player
 
-Halaman utama menggunakan vinyl sebagai elemen utama player.
+The main screen is built around a rotating vinyl record.
 
-Fitur visual yang sudah tersedia:
+Current player features include:
 
-- realistic rotating vinyl
-- physical shadow
-- visible vinyl thickness
-- pressed grooves
-- PVC grain
-- micro-scuff dan hairline details
-- reflected light pada permukaan vinyl
-- album artwork pada label vinyl
-- tonearm yang mengikuti posisi playback
-- song title
-- artist name
+- rotating vinyl
+- physical-looking grooves and surface detail
+- vinyl shadow and edge thickness
+- light reflections
+- album artwork inside the record label
+- tonearm movement based on playback progress
+- song title and artist
 - progress bar
 - playback controls
 - Lossless / Hi-Res badge
@@ -92,35 +70,35 @@ Fitur visual yang sudah tersedia:
 - artist biography
 - settings
 
-Vinyl masih terus disempurnakan secara visual agar pantulan cahaya dan materialnya semakin mendekati vinyl fisik.
+The vinyl rendering is still being refined. The goal is to make the material, grooves, and light reflections feel closer to a real record without making the UI too heavy.
 
 ## Song Library
 
-Library sudah diubah dari grid menjadi **list view**.
+The library is currently a **list view**.
 
-Setiap item menampilkan:
+Each item shows:
 
 ```text
 [Artwork]  Song Title
            Artist
 ```
 
-Lagu yang sedang aktif diberi **active-tab style** dengan background ber-opacity rendah sehingga tidak terlalu mencolok.
+The current song is shown with a subtle active-tab style so it is easy to see which track is playing.
 
-Background library menggunakan warna yang sama dengan halaman utama.
+The library also has:
 
-### A–Z Index
+- A–Z index on the right
+- tap and drag alphabet navigation
+- sorting
+- Recently Added
+- album / artist / title / duration sorting
+- plain album artwork without the extra worn-cover effect
 
-Index alfabet berada di sisi kanan dan dapat digunakan dengan:
+The library background uses the same light background as the main player.
 
-- tap huruf
-- drag secara vertikal
+## Sorting
 
-Navigasi dibuat langsung agar responsif ketika pengguna menggeser index.
-
-### Sorting
-
-Pilihan sorting saat ini:
+Available sorting options:
 
 ```text
 Title A–Z
@@ -132,23 +110,13 @@ Shortest duration
 Longest duration
 ```
 
----
+## Music Scanning
 
-# Music Scanning
+Nusa can load music from Android MediaStore and from folders selected by the user.
 
-Nusa memiliki dua sumber library:
+Folder scanning is recursive, so subfolders are included.
 
-### 1. Android MediaStore
-
-Musik yang sudah diindeks Android dapat dibaca langsung oleh Nusa.
-
-### 2. Manual Folder Access
-
-Pengguna dapat memilih folder musik melalui Android Storage Access Framework.
-
-Folder dipindai secara recursive sehingga musik di dalam subfolder juga dapat ditemukan.
-
-Format audio yang dikenali:
+Supported formats include:
 
 ```text
 AAC
@@ -162,121 +130,101 @@ WAV
 WMA
 ```
 
-Lagu dengan durasi di bawah **10 detik** tidak dimasukkan ke library.
+Tracks shorter than 10 seconds are ignored.
 
----
+When new music is found, the library can refresh without rebuilding the active playback queue.
 
-# Playback & Crossfade
+## Crossfade
 
-Playback menggunakan **AndroidX Media3 / ExoPlayer**.
-
-Crossfade menggunakan dua player selama transisi:
+Crossfade uses two ExoPlayer instances during the transition.
 
 ```text
-Current song
-    ↓
-Primary player  → fade out
-                     ↘
-                      overlap
-                     ↗
-Secondary player → fade in
-    ↓
-Seamless handoff
+Current track
+      ↓
+   Fade out
+      ↘
+       overlap
+      ↗
+   Fade in
+      ↓
+Next track
 ```
 
-Durasi crossfade dapat diatur dari:
+Crossfade can be set from 1 to 12 seconds, with 5 seconds as the default.
 
-```text
-1–12 seconds
-Default: 5 seconds
-```
+The queue is restored after the handoff so that:
 
-Queue playlist dipulihkan setelah handoff agar:
+- Next keeps working
+- Previous keeps working
+- Repeat keeps working
+- Shuffle order is preserved
 
-- Next tetap bekerja
-- Previous tetap bekerja
-- Repeat tetap bekerja
-- Shuffle order tetap dipertahankan
+A bug where **Previous stopped working after a crossfade handoff** has already been fixed.
 
-Crossfade sudah melalui beberapa perbaikan stabilitas, termasuk perbaikan kasus **Previous setelah lagu hasil crossfade selesai**.
+## Playback State
 
----
+Nusa saves:
 
-# Playback Persistence
-
-Nusa menyimpan:
-
-- current media ID
+- current song
 - playback position
 - play/pause state
 - shuffle mode
 - repeat mode
 
-Saat aplikasi dibuka kembali, playback dapat dilanjutkan dari lagu dan posisi terakhir yang tersimpan.
+When the app is opened again, it can restore the previous playback state.
 
----
+## Artist Information
 
-# Artist Information
+### Biography
 
-## Artist Biography
+Artist biographies are loaded from Last.fm.
 
-Biografi artis menggunakan Last.fm.
+The current behavior is:
 
-Untuk saat ini:
+- use the first artist from multi-artist metadata
+- request the Indonesian biography
+- do not fall back to English
+- show long biographies in a scrollable area
 
-- biography diarahkan ke bahasa Indonesia
-- tidak fallback ke biography bahasa Inggris
-- artist pertama digunakan untuk lookup ketika metadata memiliki beberapa artist
-- biography panjang dapat discroll di dalam panel
-
-API key disimpan melalui `local.properties`:
+Set the Last.fm key in `local.properties`:
 
 ```properties
 LASTFM_API_KEY=YOUR_LASTFM_API_KEY
 ```
 
-Jangan commit `local.properties` ke repository.
+Do not commit `local.properties`.
 
-## Artist Portrait
+### Artist Portrait
 
-Artist portrait menggunakan lookup artist dan caching lokal.
+Artist portraits are looked up and cached locally.
 
-Pada metadata multi-artist, artist pertama digunakan sebagai sumber pencarian portrait.
+For multiple artists, the first artist is used for the lookup.
 
----
+## Audio Quality
 
-# Audio Quality
-
-Nusa membaca metadata audio untuk menampilkan indikasi:
+Nusa reads the audio metadata and shows:
 
 ```text
 Lossless
 Hi-Res
 ```
 
-Contoh klasifikasi:
+The current Hi-Res classification uses codec and bit depth metadata.
+
+For example:
 
 ```text
 Apple Lossless → Lossless / Hi-Res
 FLAC           → Lossless / Hi-Res
 ```
 
-Saat ini:
+A Hi-Res badge only describes the file metadata. It does not prove that the output path is bit-perfect.
 
-```text
-< 24-bit → Lossless
-≥ 24-bit → Hi-Res
-```
+## Custom Title Font
 
-**Catatan:** badge Hi-Res merupakan klasifikasi berdasarkan metadata file. Badge tersebut tidak otomatis berarti output Android sedang berjalan secara bit-perfect.
+The title on the main player can use a different font.
 
----
-
-# Custom Title Font
-
-Nusa sudah mendukung penggantian font khusus untuk **judul lagu pada halaman utama**.
-
-Font sistem yang tersedia:
+System options:
 
 ```text
 Default
@@ -286,87 +234,62 @@ Monospace
 Cursive
 ```
 
-Selain itu pengguna dapat memilih file font sendiri:
+Custom font files are also supported:
 
 ```text
 .TTF
 .OTF
 ```
 
-Font custom disalin ke storage internal aplikasi dan dapat digunakan kembali setelah aplikasi dibuka ulang.
+The selected custom font is stored in the app's private storage and is restored when the app starts again.
 
----
+## Performance
 
-# Performance
+Performance work has included:
 
-Optimasi performa sudah dilakukan pada beberapa bagian utama:
-
-- Lazy list rendering
+- lazy list rendering
 - stable item keys
 - artwork caching
 - background artwork loading
-- downsampled artwork decoding
+- downsampled image decoding
+- smoother A–Z scrolling
 - reduced unnecessary recomposition
-- pager optimization
-- optimized A–Z scrolling
-- lightweight custom vinyl rendering
 - Media3 buffering configuration
 
-Fokus berikutnya adalah menjaga kestabilan dan frame-rate saat digunakan dengan library musik yang besar.
+There is still more testing to do with large music libraries and long playback sessions.
 
----
+## USB DAC / Hi-Res
 
-# Hi-Res / USB DAC
+A USB Hi-Res playback path was experimented with earlier in the project, including Decent USB Audio integration.
 
-Integrasi USB Hi-Res menggunakan engine eksternal sempat diuji di repository, tetapi **jalur USB playback saat ini dipause dan tidak menjadi bagian dari build utama Nusa 3.9.2**.
+For now, the USB playback path is **paused** and is not part of the active Nusa 3.9.2 playback flow.
 
-Karena itu Nusa saat ini **belum mengklaim USB DAC atau bit-perfect playback sebagai fitur production-ready**.
+That means USB DAC and bit-perfect playback are not marked as production-ready.
 
-Statusnya:
+Hardware testing is still needed before this part of the project is brought back.
 
-```text
-USB engine experiment → Pernah diintegrasikan
-Current main build    → Tidak aktif
-Hardware validation   → Belum dilakukan
-```
+## Known Remaining Work
 
-Pengembangan USB DAC dapat dilanjutkan setelah core playback dan UI dianggap cukup stabil.
+### Recently Added
 
----
+The app already reads `dateAdded` information while scanning. The cached library data still needs a small update so **Recently Added** stays fully consistent after an app restart.
 
-# Known Remaining Work
+### UI
 
-Project belum mencapai final release.
+The vinyl material and light reflections are still being refined.
 
-Pekerjaan yang masih tersisa:
+### Testing
 
-### UI / UX
+More testing is still needed for:
 
-Penyempurnaan visual vinyl, reflection, typography dan spacing masih berlangsung.
+- different Android devices
+- large music libraries
+- long playback sessions
+- folder permission recovery
+- crossfade edge cases
+- release builds
 
-### Recently Added persistence
-
-Metadata `dateAdded` sudah dikumpulkan saat scanning. Persistence pada cache library masih perlu dirapikan agar sorting **Recently Added** tetap konsisten setelah restart.
-
-### Audio / USB
-
-Jalur USB DAC perlu diuji kembali pada hardware nyata sebelum dapat dianggap production-ready.
-
-### Release hardening
-
-Masih diperlukan pengujian:
-
-- beberapa perangkat Android
-- library musik besar
-- playback jangka panjang
-- permission recovery
-- crossfade regression
-- folder scanning edge cases
-- release APK
-
----
-
-# Technology Stack
+## Tech Stack
 
 - Kotlin
 - Jetpack Compose
@@ -391,9 +314,7 @@ Media3      = 1.9.3
 Compose BOM = 2025.10.01
 ```
 
----
-
-# Project Structure
+## Project Structure
 
 ```text
 app/
@@ -411,32 +332,22 @@ app/
       └─ PlaybackService.kt
 ```
 
-Package:
+## Development Stage
 
-```text
-com.yohandeku32.nusamusic
-```
+Nusa is currently in **active development / pre-release**.
 
----
-
-# Development Stage
-
-Saat ini Nusa berada pada:
-
-> **Advanced development / pre-release validation**
-
-Gambaran keseluruhan:
+The core player is working. Most of the remaining work is refinement and testing rather than building the basic player from scratch.
 
 ```text
 Core playback         → ✅
 Background playback   → ✅
-MediaSession           → ✅
+MediaSession          → ✅
 Library               → ✅
 Folder scanning       → ✅
 Sorting & A–Z         → ✅
 Playback persistence  → ✅
 Crossfade             → ✅
-Artist metadata       → ✅
+Artist information    → ✅
 Custom fonts          → ✅
 Performance           → 🟡 Ongoing
 Vinyl realism         → 🟡 Ongoing
@@ -445,37 +356,24 @@ Hardware validation   → ⏳ Pending
 Production release    → ⏳ Pending
 ```
 
-Fokus project sekarang adalah **membuat fitur yang sudah ada semakin stabil dan matang**, bukan sekadar menambah banyak fitur baru.
+## Next Steps
 
-## Roadmap Berikutnya
+The next phase is mostly about polishing what is already there:
 
-```text
-UI refinement
-    ↓
-Playback / queue stability
-    ↓
-Library refinement
-    ↓
-Performance testing
-    ↓
-Audio / USB validation
-    ↓
-Release hardening
-    ↓
-Production release
-```
+1. Finish the library and player UI details.
+2. Keep crossfade and queue behavior stable.
+3. Test performance with larger libraries.
+4. Fix the remaining cache issue for Recently Added.
+5. Continue USB DAC work when hardware testing is available.
+6. Prepare a proper release build.
 
----
-
-# Repository
-
-GitHub:
+## Repository
 
 https://github.com/yohandeku32/nusamusic
 
-Current branch:
+Package:
 
-`main`
+`com.yohandeku32.nusamusic`
 
 Current version:
 
