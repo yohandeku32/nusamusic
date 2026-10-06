@@ -344,56 +344,68 @@ class PlaybackService : MediaSessionService() {
             return
         }
 
-        val currentId = sourcePlayer.getMediaItemAt(currentIndex).mediaId
+        if (
+            currentIndex < 0 ||
+            currentIndex >= sourcePlayer.mediaItemCount
+        ) {
+            cancelCrossfade(restorePrimaryVolume = true)
+            return
+        }
 
-        val remainingItems = (0 until sourcePlayer.mediaItemCount)
-            .filter { it != currentIndex }
+        val sourceItems = (0 until sourcePlayer.mediaItemCount)
             .map { sourcePlayer.getMediaItemAt(it) }
 
-        targetPlayer.addMediaItems(remainingItems)
+        val currentId = sourceItems[currentIndex].mediaId
 
-        // Preserve the exact playback order that was active before the
-        // crossfade. This matters when shuffle mode is enabled.
+        // The fading player is already playing the next item. Keep that
+        // player/item untouched so the audio remains seamless, then rebuild
+        // the queue around it. The previous item must exist BEFORE the current
+        // item in the queue; otherwise Previous immediately after a crossfade
+        // has nowhere to go.
+        val itemsBeforeCurrent = sourceItems.subList(0, currentIndex)
+        val itemsAfterCurrent = sourceItems.subList(
+            currentIndex + 1,
+            sourceItems.size
+        )
+
+        if (itemsBeforeCurrent.isNotEmpty()) {
+            targetPlayer.addMediaItems(
+                0,
+                itemsBeforeCurrent
+            )
+        }
+
+        if (itemsAfterCurrent.isNotEmpty()) {
+            targetPlayer.addMediaItems(itemsAfterCurrent)
+        }
+
+        // Target indices now match the original source indices, so rebuild the
+        // same shuffle permutation without moving the currently playing item.
         if (sourcePlayer.shuffleModeEnabled) {
-            val newIndexByMediaId = buildMap {
-                put(currentId, 0)
-                var newIndex = 1
-                for (index in 0 until sourcePlayer.mediaItemCount) {
-                    if (index == currentIndex) continue
-                    put(sourcePlayer.getMediaItemAt(index).mediaId, newIndex)
-                    newIndex++
-                }
-            }
-
             val shuffledIndices = mutableListOf<Int>()
-            var originalIndex = currentIndex
+            var originalIndex =
+                sourcePlayer.getShuffleOrder().getFirstIndex()
             val visited = mutableSetOf<Int>()
 
-            while (originalIndex != androidx.media3.common.C.INDEX_UNSET &&
+            while (
+                originalIndex != androidx.media3.common.C.INDEX_UNSET &&
                 visited.add(originalIndex)
             ) {
-                val mediaId = sourcePlayer.getMediaItemAt(originalIndex).mediaId
-                newIndexByMediaId[mediaId]?.let { shuffledIndices.add(it) }
-
+                shuffledIndices.add(originalIndex)
                 originalIndex = sourcePlayer
                     .getShuffleOrder()
                     .getNextIndex(originalIndex)
             }
 
-            if (shuffledIndices.size < targetPlayer.mediaItemCount) {
-                for (index in 0 until targetPlayer.mediaItemCount) {
-                    if (index !in shuffledIndices) {
-                        shuffledIndices.add(index)
-                    }
-                }
+            if (shuffledIndices.size == targetPlayer.mediaItemCount) {
+                targetPlayer.setShuffleOrder(
+                    ShuffleOrder.DefaultShuffleOrder(
+                        shuffledIndices.toIntArray(),
+                        System.nanoTime()
+                    )
+                )
             }
 
-            targetPlayer.setShuffleOrder(
-                ShuffleOrder.DefaultShuffleOrder(
-                    shuffledIndices.toIntArray(),
-                    System.nanoTime()
-                )
-            )
             targetPlayer.shuffleModeEnabled = true
         } else {
             targetPlayer.shuffleModeEnabled = false
@@ -404,6 +416,8 @@ class PlaybackService : MediaSessionService() {
         Log.d(
             "NusaCrossfade",
             "RESTORE QUEUE count=" + targetPlayer.mediaItemCount +
+                " current=" + currentId +
+                " currentIndex=" + currentIndex +
                 " shuffle=" + sourcePlayer.shuffleModeEnabled +
                 " repeat=" + sourcePlayer.repeatMode
         )
