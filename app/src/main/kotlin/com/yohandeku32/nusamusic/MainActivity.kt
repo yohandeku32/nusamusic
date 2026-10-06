@@ -5438,6 +5438,16 @@ private fun LibrarySongListRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
+            .then(
+                if (selected) {
+                    Modifier.background(
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.07f),
+                        RoundedCornerShape(12.dp)
+                    )
+                } else {
+                    Modifier
+                }
+            )
             .clickable { onPlay(song) }
             .padding(
                 horizontal = 8.dp,
@@ -5449,8 +5459,6 @@ private fun LibrarySongListRow(
             modifier = Modifier
                 .size(58.dp)
                 .clip(RoundedCornerShape(7.dp))
-                .background(Color(0xFF0A0A0A))
-                .padding(2.dp)
         ) {
             ArtworkView(
                 song = song,
