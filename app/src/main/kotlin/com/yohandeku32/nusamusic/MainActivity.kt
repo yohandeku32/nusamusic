@@ -2584,9 +2584,9 @@ private fun NusaMusicApp(
                                                 FontWeight.Normal
                                             },
                                             color = if (available) {
-                                                Color.White.copy(alpha = 0.78f)
+                                                Color.Black.copy(alpha = 0.78f)
                                             } else {
-                                                Color.White.copy(alpha = 0.18f)
+                                                Color.Black.copy(alpha = 0.22f)
                                             }
                                         )
                                     }
@@ -2599,12 +2599,6 @@ private fun NusaMusicApp(
                                     libraryListState.firstVisibleItemIndex >= 4
                                 }
                             }
-                            val showBackToPlayer by remember {
-                                derivedStateOf {
-                                    libraryListState.firstVisibleItemIndex >= 8
-                                }
-                            }
-
                             val floatingAlpha by animateFloatAsState(
                                 targetValue = if (showFloatingControls) 1f else 0f,
                                 animationSpec = tween(320),
@@ -2711,58 +2705,6 @@ private fun NusaMusicApp(
                             }
                             }
 
-                            val backAlpha by animateFloatAsState(
-                                targetValue = if (showBackToPlayer) 1f else 0f,
-                                animationSpec = tween(280),
-                                label = "backPlayerAlpha"
-                            )
-                            val backOffset by animateFloatAsState(
-                                targetValue = if (showBackToPlayer) 0f else 26f,
-                                animationSpec = tween(320),
-                                label = "backPlayerOffset"
-                            )
-
-                            Box(
-                                modifier = Modifier.fillMaxSize()
-                            ) {
-                                Surface(
-                                    shape = RoundedCornerShape(50),
-                                    color = MaterialTheme.colorScheme.surfaceVariant,
-                                    tonalElevation = 3.dp,
-                                    modifier = Modifier
-                                        .align(Alignment.TopEnd)
-                                        .padding(top = 82.dp, end = 14.dp)
-                                        .graphicsLayer {
-                                            alpha = backAlpha
-                                            translationY = backOffset
-                                        }
-                                        .clickable {
-                                            scope.launch {
-                                                pagerState.animateScrollToPage(0)
-                                            }
-                                        }
-                                ) {
-                                Row(
-                                    modifier = Modifier.padding(
-                                        horizontal = 12.dp,
-                                        vertical = 8.dp
-                                    ),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        Icons.Default.KeyboardArrowDown,
-                                        contentDescription = nusaText("Kembali ke pemutar", "Back to player"),
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Spacer(Modifier.width(4.dp))
-                                    Text(
-                                        nusaText("Pemutar", "Player"),
-                                        fontSize = 12.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                            }
                         }
                     }
                 }
@@ -4188,99 +4130,95 @@ private fun VinylRecord(
                 )
             }
 
-            // Broad glossy highlight that travels with the rotating record.
-            // A paired soft shadow makes the lacquered surface read as a
-            // physical object while the whole record spins.
-            drawArc(
-                color = Color.Black.copy(alpha = 0.18f),
-                startAngle = 32f,
-                sweepAngle = 72f,
-                useCenter = false,
-                topLeft = androidx.compose.ui.geometry.Offset(
-                    size.width * 0.035f,
-                    size.height * 0.035f
-                ),
-                size = androidx.compose.ui.geometry.Size(
-                    size.width * 0.93f,
-                    size.height * 0.93f
-                ),
-                style = androidx.compose.ui.graphics.drawscope.Stroke(
-                    width = 12f
-                )
+            // Distributed lacquer reflections. A real vinyl catches light
+            // across several parts of the rotating surface rather than in one
+            // fixed bright spot.
+            val reflections = arrayOf(
+                floatArrayOf(-92f, 27f, 0.20f, 7.5f),
+                floatArrayOf(-28f, 24f, 0.105f, 5.0f),
+                floatArrayOf(34f, 31f, 0.075f, 4.0f),
+                floatArrayOf(103f, 22f, 0.115f, 5.5f),
+                floatArrayOf(162f, 30f, 0.065f, 4.2f),
+                floatArrayOf(224f, 26f, 0.095f, 4.8f),
+                floatArrayOf(286f, 32f, 0.055f, 3.6f)
             )
 
-            drawArc(
-                color = Color.White.copy(alpha = 0.23f),
-                startAngle = -80f,
-                sweepAngle = 36f,
-                useCenter = false,
-                topLeft = androidx.compose.ui.geometry.Offset(
-                    size.width * 0.015f,
-                    size.height * 0.015f
-                ),
-                size = androidx.compose.ui.geometry.Size(
-                    size.width * 0.97f,
-                    size.height * 0.97f
-                ),
-                style = androidx.compose.ui.graphics.drawscope.Stroke(
-                    width = 9.5f
+            reflections.forEach { mark ->
+                drawArc(
+                    color = Color.White.copy(alpha = mark[2]),
+                    startAngle = mark[0],
+                    sweepAngle = mark[1],
+                    useCenter = false,
+                    topLeft = androidx.compose.ui.geometry.Offset(
+                        size.width * 0.045f,
+                        size.height * 0.045f
+                    ),
+                    size = androidx.compose.ui.geometry.Size(
+                        size.width * 0.91f,
+                        size.height * 0.91f
+                    ),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(
+                        width = mark[3]
+                    )
                 )
+            }
+
+            // Secondary reflection bands at different radii create a wider,
+            // broken reflection pattern across the record.
+            val secondaryBands = arrayOf(
+                floatArrayOf(-72f, 34f, 0.075f, 0.94f, 8f),
+                floatArrayOf(18f, 48f, 0.052f, 0.82f, 5.5f),
+                floatArrayOf(118f, 30f, 0.048f, 0.88f, 7f),
+                floatArrayOf(198f, 42f, 0.038f, 0.76f, 4.5f),
+                floatArrayOf(292f, 26f, 0.045f, 0.70f, 6f)
             )
 
-            drawArc(
-                color = Color.White.copy(alpha = 0.115f),
-                startAngle = -68f,
-                sweepAngle = 62f,
-                useCenter = false,
-                topLeft = androidx.compose.ui.geometry.Offset(
-                    size.width * 0.065f,
-                    size.height * 0.065f
-                ),
-                size = androidx.compose.ui.geometry.Size(
-                    size.width * 0.87f,
-                    size.height * 0.87f
-                ),
-                style = androidx.compose.ui.graphics.drawscope.Stroke(
-                    width = 4.5f
+            secondaryBands.forEach { mark ->
+                val diameter = size.minDimension * mark[3]
+                drawArc(
+                    color = Color.White.copy(alpha = mark[2]),
+                    startAngle = mark[0],
+                    sweepAngle = mark[1],
+                    useCenter = false,
+                    topLeft = androidx.compose.ui.geometry.Offset(
+                        centerX - diameter / 2f,
+                        centerY - diameter / 2f
+                    ),
+                    size = androidx.compose.ui.geometry.Size(
+                        diameter,
+                        diameter
+                    ),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(
+                        width = mark[4]
+                    )
                 )
+            }
+
+            // Very soft diffuse catches spread over the face.
+            val diffuseSpots = arrayOf(
+                androidx.compose.ui.geometry.Offset(size.width * 0.24f, size.height * 0.19f),
+                androidx.compose.ui.geometry.Offset(size.width * 0.76f, size.height * 0.25f),
+                androidx.compose.ui.geometry.Offset(size.width * 0.84f, size.height * 0.63f),
+                androidx.compose.ui.geometry.Offset(size.width * 0.59f, size.height * 0.84f),
+                androidx.compose.ui.geometry.Offset(size.width * 0.22f, size.height * 0.68f)
             )
 
-            drawArc(
-                color = Color.White.copy(alpha = 0.052f),
-                startAngle = -52f,
-                sweepAngle = 88f,
-                useCenter = false,
-                topLeft = androidx.compose.ui.geometry.Offset(
-                    size.width * 0.15f,
-                    size.height * 0.15f
-                ),
-                size = androidx.compose.ui.geometry.Size(
-                    size.width * 0.70f,
-                    size.height * 0.70f
-                ),
-                style = androidx.compose.ui.graphics.drawscope.Stroke(
-                    width = 2.3f
+            diffuseSpots.forEachIndexed { index, spot ->
+                val spotRadius = radius * (0.20f + index * 0.015f)
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.020f + index * 0.002f),
+                            Color.White.copy(alpha = 0.007f),
+                            Color.Transparent
+                        ),
+                        center = spot,
+                        radius = spotRadius
+                    ),
+                    radius = spotRadius,
+                    center = spot
                 )
-            )
-
-            // Thin specular streak.
-            drawArc(
-                color = Color.White.copy(alpha = 0.14f),
-                startAngle = -72f,
-                sweepAngle = 18f,
-                useCenter = false,
-                topLeft = androidx.compose.ui.geometry.Offset(
-                    size.width * 0.09f,
-                    size.height * 0.09f
-                ),
-                size = androidx.compose.ui.geometry.Size(
-                    size.width * 0.82f,
-                    size.height * 0.82f
-                ),
-                style = androidx.compose.ui.graphics.drawscope.Stroke(
-                    width = 1.7f
-                )
-            )
+            }
 
             // Dark falloff on the far side of the disc.
             drawArc(
