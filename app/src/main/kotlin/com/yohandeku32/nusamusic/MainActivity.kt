@@ -189,6 +189,7 @@ class MainActivity : ComponentActivity() {
             super.onChange(selfChange, uri)
 
             if (!permissionGranted) return
+            if (isScanningMusic) return
 
             automaticMusicScanJob?.cancel()
             automaticMusicScanJob = lifecycleScope.launch {
@@ -2561,7 +2562,7 @@ private fun NusaMusicApp(
                                                 targetIndex != lastDragTarget
                                             ) {
                                                 lastDragTarget = targetIndex
-                                                requestAlphabetScroll(targetIndex)
+                                                followAlphabetDrag(targetIndex)
                                             }
                                         },
                                         onDragEnd = {
