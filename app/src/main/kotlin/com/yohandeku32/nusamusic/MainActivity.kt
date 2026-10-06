@@ -164,6 +164,7 @@ class MainActivity : ComponentActivity() {
     private var isPlaying by mutableStateOf(false)
     private var positionMs by mutableLongStateOf(0L)
     private var durationMs by mutableLongStateOf(0L)
+    private var playerPageVisible = true
     private var permissionGranted by mutableStateOf(false)
     private var shuffleEnabled by mutableStateOf(false)
     private var repeatMode by mutableIntStateOf(Player.REPEAT_MODE_OFF)
@@ -455,8 +456,10 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             while (isActive) {
                 controller?.let { c ->
-                    positionMs = c.currentPosition.coerceAtLeast(0L)
-                    durationMs = c.duration.coerceAtLeast(0L)
+                    if (playerPageVisible) {
+                        positionMs = c.currentPosition.coerceAtLeast(0L)
+                        durationMs = c.duration.coerceAtLeast(0L)
+                    }
                     isPlaying = c.isPlaying
                     syncCurrentSong(c)
 
@@ -470,7 +473,7 @@ class MainActivity : ComponentActivity() {
                         persistPlaybackState(c)
                     }
                 }
-                delay(if (isPlaying) 250L else 500L)
+                delay(if (isPlaying && playerPageVisible) 250L else 1_000L)
             }
         }
 
@@ -539,6 +542,7 @@ class MainActivity : ComponentActivity() {
                     repeatMode = repeatMode,
                     isScanningMusic = isScanningMusic,
                     selectedMusicFolders = selectedMusicFolders,
+                    onPlayerPageVisibilityChanged = ::setPlayerPageVisible,
                     onScanMusic = ::scanMusic,
                     onSelectMusicFolder = ::openMusicFolderPicker,
                     onRemoveMusicFolder = ::removeMusicFolder,
@@ -558,6 +562,17 @@ class MainActivity : ComponentActivity() {
     private fun syncCurrentSong(c: MediaController) {
         val id = c.currentMediaItem?.mediaId?.toLongOrNull() ?: return
         songs.firstOrNull { it.id == id }?.let { currentSong = it }
+    }
+
+    private fun setPlayerPageVisible(visible: Boolean) {
+        playerPageVisible = visible
+        if (!visible) return
+
+        controller?.let { c ->
+            positionMs = c.currentPosition.coerceAtLeast(0L)
+            durationMs = c.duration.coerceAtLeast(0L)
+            isPlaying = c.isPlaying
+        }
     }
 
     private fun persistPlaybackState(
@@ -1177,6 +1192,7 @@ private fun NusaMusicApp(
     repeatMode: Int,
     isScanningMusic: Boolean,
     selectedMusicFolders: List<String>,
+    onPlayerPageVisibilityChanged: (Boolean) -> Unit,
     onScanMusic: () -> Unit,
     onSelectMusicFolder: () -> Unit,
     onRemoveMusicFolder: (String) -> Unit,
@@ -1336,6 +1352,7 @@ private fun NusaMusicApp(
     LaunchedEffect(pagerState) {
         androidx.compose.runtime.snapshotFlow { pagerState.settledPage }
             .collect { settledPage ->
+                onPlayerPageVisibilityChanged(settledPage == 0)
                 if (settledPage == 1 && currentSong != null) {
                     val index = filtered.indexOfFirst { it.id == currentSong.id }
 
@@ -2091,6 +2108,7 @@ private fun NusaMusicApp(
                                         VinylRecord(
                                             song = currentSong,
                                             isPlaying = isPlaying,
+                                            isVisible = page == pagerState.settledPage,
                                             positionMs = positionMs,
                                             durationMs = durationMs,
                                             modifier = Modifier
@@ -3798,6 +3816,7 @@ private fun RealisticControlButton(
 private fun VinylRecord(
     song: Song?,
     isPlaying: Boolean,
+    isVisible: Boolean,
     positionMs: Long,
     durationMs: Long,
     modifier: Modifier = Modifier
@@ -3808,7 +3827,12 @@ private fun VinylRecord(
     val rotation = remember { mutableFloatStateOf(0f) }
     val rotationSpeed = remember { Animatable(0f) }
 
-    LaunchedEffect(isPlaying) {
+    LaunchedEffect(isPlaying, isVisible) {
+        if (!isVisible) {
+            rotationSpeed.snapTo(0f)
+            return@LaunchedEffect
+        }
+
         val targetSpeed = if (isPlaying) {
             360f / 6.5f
         } else {
@@ -3824,11 +3848,11 @@ private fun VinylRecord(
         )
     }
 
-    LaunchedEffect(isPlaying) {
+    LaunchedEffect(isPlaying, isVisible) {
         var lastFrameNanos = 0L
 
         while (isActive) {
-            if (isPlaying || rotationSpeed.value > 0.01f) {
+            if (isVisible && (isPlaying || rotationSpeed.value > 0.01f)) {
                 val frameNanos = androidx.compose.runtime.withFrameNanos { it }
 
                 if (lastFrameNanos != 0L) {
@@ -3847,7 +3871,7 @@ private fun VinylRecord(
                 // No playback and no residual rotation: avoid a continuous
                 // 60 FPS loop while the record is idle.
                 lastFrameNanos = 0L
-                delay(120L)
+                delay(if (isVisible) 120L else 500L)
             }
         }
     }
