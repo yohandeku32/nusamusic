@@ -680,7 +680,8 @@ class MainActivity : ComponentActivity() {
                             album = item.getString("album"),
                             uri = item.getString("uri"),
                             durationMs = item.getLong("durationMs"),
-                            albumId = item.getLong("albumId")
+                            albumId = item.getLong("albumId"),
+                            dateAddedMs = item.optLong("dateAddedMs", 0L)
                         )
                     )
                 }
@@ -704,6 +705,7 @@ class MainActivity : ComponentActivity() {
                     put("uri", song.uri)
                     put("durationMs", song.durationMs)
                     put("albumId", song.albumId)
+                    put("dateAddedMs", song.dateAddedMs)
                 }
             )
         }
@@ -1268,7 +1270,10 @@ private fun NusaMusicApp(
                 }
 
             LibrarySortOption.RECENTLY_ADDED ->
-                songs.sortedByDescending { it.dateAddedMs }
+                songs.sortedWith(
+                    compareByDescending<Song> { it.dateAddedMs }
+                        .thenBy { it.title.lowercase(Locale.ROOT) }
+                )
 
             LibrarySortOption.ALBUM_ASC ->
                 songs.sortedBy {
@@ -2394,6 +2399,13 @@ private fun NusaMusicApp(
                                                 onClick = {
                                                     librarySortOption = option
                                                     sortMenuExpanded = false
+
+                                                    if (
+                                                        option == LibrarySortOption.RECENTLY_ADDED &&
+                                                        songs.any { it.dateAddedMs <= 0L }
+                                                    ) {
+                                                        onScanMusic()
+                                                    }
                                                 }
                                             )
                                         }
@@ -2496,17 +2508,15 @@ private fun NusaMusicApp(
                                 }
                             }
 
-                            fun followAlphabetDrag(targetIndex: Int) {
+                            suspend fun followAlphabetDrag(targetIndex: Int) {
                                 if (targetIndex < 0) return
 
-                                // Dragging the index should follow the finger
-                                // directly; no competing animations.
-                                scope.launch {
-                                    libraryListState.scrollToItem(
-                                        index = targetIndex,
-                                        scrollOffset = 0
-                                    )
-                                }
+                                // Dragging the index follows the finger directly
+                                // without queueing one coroutine per move event.
+                                libraryListState.scrollToItem(
+                                    index = targetIndex,
+                                    scrollOffset = 0
+                                )
                             }
 
                             val alphabetIndexModifier = Modifier
@@ -3790,7 +3800,9 @@ private fun VinylRecord(
         )
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(isPlaying) {
+        if (!isPlaying) return@LaunchedEffect
+
         var lastFrameNanos = 0L
 
         while (isActive) {
