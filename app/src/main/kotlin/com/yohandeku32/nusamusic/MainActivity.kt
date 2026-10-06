@@ -98,6 +98,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -3804,7 +3805,7 @@ private fun VinylRecord(
     // Keep the physical angle continuous while changing rotation speed.
     // Playback starts and stops with a gentle acceleration/deceleration instead
     // of an abrupt jump.
-    val rotation = remember { Animatable(0f) }
+    val rotation = remember { mutableFloatStateOf(0f) }
     val rotationSpeed = remember { Animatable(0f) }
 
     LaunchedEffect(isPlaying) {
@@ -3823,7 +3824,7 @@ private fun VinylRecord(
         )
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(isPlaying) {
         var lastFrameNanos = 0L
 
         while (isActive) {
@@ -3836,9 +3837,9 @@ private fun VinylRecord(
                             1_000_000_000f
 
                     val nextRotation =
-                        (rotation.value + rotationSpeed.value * deltaSeconds) % 360f
+                        (rotation.floatValue + rotationSpeed.value * deltaSeconds) % 360f
 
-                    rotation.snapTo(nextRotation)
+                    rotation.floatValue = nextRotation
                 }
 
                 lastFrameNanos = frameNanos
@@ -3879,7 +3880,7 @@ private fun VinylRecord(
             modifier = Modifier
                 .fillMaxSize()
                 .graphicsLayer {
-                    rotationZ = rotation.value
+                    rotationZ = rotation.floatValue
                     shadowElevation = 25.dp.toPx()
                     shape = CircleShape
                     clip = false
