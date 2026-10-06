@@ -3951,30 +3951,78 @@ private fun VinylRecord(
             }
 
             // -------------------------------------------------------------
-            // BROAD REALISTIC LIGHT REFLECTION
+            // REALISTIC LIGHT REFLECTION
             // -------------------------------------------------------------
-            // Real vinyl reflects a light source as a broad, curved band.
-            // The band is built from many soft arcs with changing opacity,
-            // so the grooves remain visible through it instead of getting
-            // covered by a single flat white shape.
-            val reflectionLayers = listOf(
-                Triple(0.82f, 0.16f, 13f),
-                Triple(0.86f, 0.13f, 11f),
-                Triple(0.90f, 0.10f, 9f),
-                Triple(0.94f, 0.075f, 7f),
-                Triple(0.975f, 0.045f, 5f)
-            )
+            // Instead of drawing a few identical arcs, build the reflection
+            // from a soft diagonal light patch plus irregular curved groove
+            // catches. This gives the surface the uneven sheen of real vinyl.
+            rotate(
+                degrees = -18f,
+                pivot = center
+            ) {
+                drawOval(
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            Color.White.copy(alpha = 0.010f),
+                            Color.White.copy(alpha = 0.036f),
+                            Color.White.copy(alpha = 0.075f),
+                            Color.White.copy(alpha = 0.105f),
+                            Color.White.copy(alpha = 0.060f),
+                            Color.White.copy(alpha = 0.020f),
+                            Color.Transparent
+                        ),
+                        start = androidx.compose.ui.geometry.Offset(
+                            size.width * 0.08f,
+                            size.height * 0.52f
+                        ),
+                        end = androidx.compose.ui.geometry.Offset(
+                            size.width * 0.94f,
+                            size.height * 0.48f
+                        )
+                    ),
+                    topLeft = androidx.compose.ui.geometry.Offset(
+                        center.x - radius * 0.88f,
+                        center.y - radius * 0.30f
+                    ),
+                    size = androidx.compose.ui.geometry.Size(
+                        radius * 1.76f,
+                        radius * 0.62f
+                    )
+                )
+            }
 
-            reflectionLayers.forEach { (radiusFactor, alpha, width) ->
-                val reflectionRadius = radius * radiusFactor
+            // Curved groove catches inside the broad light patch. Each ring
+            // is slightly different so the highlight does not look stamped
+            // onto the record.
+            for (i in 0 until 30) {
+                val t = i / 29f
+                val reflectionRadius = radius * (0.38f + t * 0.58f)
+
+                val centerDrift =
+                    kotlin.math.sin(t * Math.PI).toFloat() * radius * 0.035f
+                val angle =
+                    -74f +
+                        kotlin.math.sin(t * 10.0f).toFloat() * 2.8f +
+                        t * 7.5f
+                val sweep =
+                    24f +
+                        (1f - kotlin.math.abs(t - 0.52f) * 1.65f)
+                            .coerceIn(0f, 1f) * 36f
+
+                val distanceFromHotCenter = kotlin.math.abs(t - 0.53f)
+                val alpha =
+                    (0.018f +
+                        (1f - distanceFromHotCenter * 1.85f)
+                            .coerceIn(0f, 1f) * 0.090f)
 
                 drawArc(
                     color = Color.White.copy(alpha = alpha),
-                    startAngle = -72f,
-                    sweepAngle = 82f,
+                    startAngle = angle,
+                    sweepAngle = sweep,
                     useCenter = false,
                     topLeft = androidx.compose.ui.geometry.Offset(
-                        center.x - reflectionRadius,
+                        center.x - reflectionRadius + centerDrift,
                         center.y - reflectionRadius
                     ),
                     size = androidx.compose.ui.geometry.Size(
@@ -3982,78 +4030,82 @@ private fun VinylRecord(
                         reflectionRadius * 2f
                     ),
                     style = androidx.compose.ui.graphics.drawscope.Stroke(
-                        width = width
+                        width = 1.0f + (1f - distanceFromHotCenter)
+                            .coerceIn(0f, 1f) * 2.8f
                     )
                 )
             }
 
-            // Smaller inner band gives the reflection a natural taper toward
-            // the center of the record.
-            listOf(
-                Triple(0.58f, 0.050f, 5.5f),
-                Triple(0.66f, 0.070f, 6.5f),
-                Triple(0.73f, 0.085f, 7.0f)
-            ).forEach { (radiusFactor, alpha, width) ->
-                val reflectionRadius = radius * radiusFactor
-
-                drawArc(
-                    color = Color.White.copy(alpha = alpha),
-                    startAngle = -66f,
-                    sweepAngle = 68f,
-                    useCenter = false,
+            // Fine specular streak through the center of the reflection.
+            rotate(
+                degrees = -18f,
+                pivot = center
+            ) {
+                drawOval(
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            Color.White.copy(alpha = 0.030f),
+                            Color.White.copy(alpha = 0.115f),
+                            Color.White.copy(alpha = 0.180f),
+                            Color.White.copy(alpha = 0.095f),
+                            Color.White.copy(alpha = 0.025f),
+                            Color.Transparent
+                        ),
+                        start = androidx.compose.ui.geometry.Offset(
+                            size.width * 0.26f,
+                            size.height * 0.50f
+                        ),
+                        end = androidx.compose.ui.geometry.Offset(
+                            size.width * 0.82f,
+                            size.height * 0.50f
+                        )
+                    ),
                     topLeft = androidx.compose.ui.geometry.Offset(
-                        center.x - reflectionRadius,
-                        center.y - reflectionRadius
+                        center.x - radius * 0.64f,
+                        center.y - radius * 0.045f
                     ),
                     size = androidx.compose.ui.geometry.Size(
-                        reflectionRadius * 2f,
-                        reflectionRadius * 2f
-                    ),
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(
-                        width = width
+                        radius * 1.28f,
+                        radius * 0.090f
                     )
                 )
             }
 
-            // Diffuse glow around the reflection softens the edge and makes
-            // the surface feel lacquered rather than metallic.
-            drawArc(
-                color = Color.White.copy(alpha = 0.026f),
-                startAngle = -84f,
-                sweepAngle = 112f,
-                useCenter = false,
-                topLeft = androidx.compose.ui.geometry.Offset(
-                    center.x - radius * 0.99f,
-                    center.y - radius * 0.99f
-                ),
-                size = androidx.compose.ui.geometry.Size(
-                    radius * 1.98f,
-                    radius * 1.98f
-                ),
-                style = androidx.compose.ui.graphics.drawscope.Stroke(
-                    width = radius * 0.055f
+            // Very soft secondary reflection. It is much weaker than the
+            // main patch and helps the vinyl read as curved, glossy plastic.
+            rotate(
+                degrees = 18f,
+                pivot = center
+            ) {
+                drawOval(
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            Color.White.copy(alpha = 0.006f),
+                            Color.White.copy(alpha = 0.018f),
+                            Color.White.copy(alpha = 0.030f),
+                            Color.Transparent
+                        ),
+                        start = androidx.compose.ui.geometry.Offset(
+                            size.width * 0.18f,
+                            size.height * 0.52f
+                        ),
+                        end = androidx.compose.ui.geometry.Offset(
+                            size.width * 0.76f,
+                            size.height * 0.48f
+                        )
+                    ),
+                    topLeft = androidx.compose.ui.geometry.Offset(
+                        center.x - radius * 0.78f,
+                        center.y + radius * 0.26f
+                    ),
+                    size = androidx.compose.ui.geometry.Size(
+                        radius * 1.56f,
+                        radius * 0.22f
+                    )
                 )
-            )
-
-            // A shorter bright core creates the specular center of the light
-            // without turning the reflection into a hard white line.
-            drawArc(
-                color = Color.White.copy(alpha = 0.18f),
-                startAngle = -63f,
-                sweepAngle = 38f,
-                useCenter = false,
-                topLeft = androidx.compose.ui.geometry.Offset(
-                    center.x - radius * 0.91f,
-                    center.y - radius * 0.91f
-                ),
-                size = androidx.compose.ui.geometry.Size(
-                    radius * 1.82f,
-                    radius * 1.82f
-                ),
-                style = androidx.compose.ui.graphics.drawscope.Stroke(
-                    width = radius * 0.018f
-                )
-            )
+            }
 
             // Dark side falloff increases the depth of the opposite half.
             drawArc(
