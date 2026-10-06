@@ -4315,8 +4315,7 @@ private fun VinylRecord(
 
         Box(
             modifier = Modifier
-                .fillMaxHeight(0.34f)
-                .aspectRatio(1f)
+                .size(142.dp)
                 .clip(CircleShape)
                 .graphicsLayer {
                     shadowElevation = 3.dp.toPx()
