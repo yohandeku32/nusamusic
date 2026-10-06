@@ -2108,7 +2108,6 @@ private fun NusaMusicApp(
                                         VinylRecord(
                                             song = currentSong,
                                             isPlaying = isPlaying,
-                                            isVisible = page == pagerState.settledPage,
                                             positionMs = positionMs,
                                             durationMs = durationMs,
                                             modifier = Modifier
@@ -3816,7 +3815,6 @@ private fun RealisticControlButton(
 private fun VinylRecord(
     song: Song?,
     isPlaying: Boolean,
-    isVisible: Boolean,
     positionMs: Long,
     durationMs: Long,
     modifier: Modifier = Modifier
@@ -3827,12 +3825,7 @@ private fun VinylRecord(
     val rotation = remember { mutableFloatStateOf(0f) }
     val rotationSpeed = remember { Animatable(0f) }
 
-    LaunchedEffect(isPlaying, isVisible) {
-        if (!isVisible) {
-            rotationSpeed.snapTo(0f)
-            return@LaunchedEffect
-        }
-
+    LaunchedEffect(isPlaying) {
         val targetSpeed = if (isPlaying) {
             360f / 6.5f
         } else {
@@ -3848,11 +3841,11 @@ private fun VinylRecord(
         )
     }
 
-    LaunchedEffect(isPlaying, isVisible) {
+    LaunchedEffect(isPlaying) {
         var lastFrameNanos = 0L
 
         while (isActive) {
-            if (isVisible && (isPlaying || rotationSpeed.value > 0.01f)) {
+            if (isPlaying || rotationSpeed.value > 0.01f) {
                 val frameNanos = androidx.compose.runtime.withFrameNanos { it }
 
                 if (lastFrameNanos != 0L) {
@@ -3871,7 +3864,7 @@ private fun VinylRecord(
                 // No playback and no residual rotation: avoid a continuous
                 // 60 FPS loop while the record is idle.
                 lastFrameNanos = 0L
-                delay(if (isVisible) 120L else 500L)
+                delay(120L)
             }
         }
     }
