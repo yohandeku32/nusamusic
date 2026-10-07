@@ -79,9 +79,11 @@ The library is currently a **list view**.
 Each item shows:
 
 ```text
-[Artwork]  Song Title
+[Artwork]  Song Title                    [Hi-Res]
            Artist
 ```
+
+The Hi-Res marker appears only when the audio metadata reports a bit depth of 24-bit or higher.
 
 The current song is shown with a subtle active-tab style so it is easy to see which track is playing.
 
@@ -209,7 +211,7 @@ Lossless
 Hi-Res
 ```
 
-The current Hi-Res classification uses codec and bit depth metadata.
+The player badge uses codec and bit depth metadata. In the song list, the Hi-Res marker is shown only when the reported bit depth is 24-bit or higher; unknown bit depth does not show the marker. The app reads metadata rather than inferring quality from the filename extension.
 
 For example:
 
