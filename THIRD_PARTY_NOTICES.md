@@ -18,3 +18,11 @@ complete license and notice files.
 
 The engine is downloaded by Gradle at build time from the pinned GitHub
 release asset URLs and cached under the Gradle build directory.
+
+## Hi-Res Audio logo
+
+`app/src/main/res/drawable-nodpi/hi_res_audio_logo.png` is a bundled thumbnail
+of the [Hi-Res Audio logo](https://en.wikipedia.org/wiki/File:Hi-Res_Audio_(logo).svg).
+Wikimedia identifies the logo as public domain because it is ineligible for
+copyright; attribution is not required. The logo is trademarked and is used
+only to identify Hi-Res audio.

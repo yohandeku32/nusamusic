@@ -5518,11 +5518,10 @@ private fun LibrarySongListRow(
                 horizontalArrangement = Arrangement.Center
             ) {
                 Image(
-                    painter = painterResource(id = R.drawable.apple_lossless_logo),
+                    painter = painterResource(id = R.drawable.hi_res_audio_logo),
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
-                    colorFilter = ColorFilter.tint(Color(0xFF3D3728)),
-                    modifier = Modifier.size(width = 16.dp, height = 9.dp)
+                    modifier = Modifier.size(18.dp)
                 )
                 Spacer(Modifier.width(4.dp))
                 Text(
