@@ -141,6 +141,8 @@ import com.yohandeku32.nusamusic.data.ArtistNameUtils
 import com.yohandeku32.nusamusic.data.MusicRepository
 import com.yohandeku32.nusamusic.model.Song
 import com.yohandeku32.nusamusic.playback.PlaybackService
+import com.yohandeku32.nusamusic.player.CDCasePlayerStyle
+import com.yohandeku32.nusamusic.player.PlayerStyle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -1275,6 +1277,13 @@ private fun NusaMusicApp(
     var realisticControls by remember {
         mutableStateOf(uiPrefs.getBoolean("realistic_controls", true))
     }
+    var playerStyle by remember {
+        mutableStateOf(
+            PlayerStyle.fromKey(
+                uiPrefs.getString("player_style", PlayerStyle.VINYL.key)
+            )
+        )
+    }
     val playbackPrefs = remember(context) {
         context.getSharedPreferences(
             "playback_preferences",
@@ -1453,6 +1462,54 @@ private fun NusaMusicApp(
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(Modifier.height(18.dp))
+
+                Text(
+                    nusaText("GAYA PEMUTAR UTAMA", "MAIN PLAYER STYLE"),
+                    fontSize = 11.sp,
+                    letterSpacing = 1.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    PlayerButtonStyleOption(
+                        title = nusaText("Vinyl", "Vinyl"),
+                        subtitle = nusaText(
+                            "Piringan hitam dengan tonearm.",
+                            "Rotating record with tonearm."
+                        ),
+                        selected = playerStyle == PlayerStyle.VINYL,
+                        onClick = {
+                            playerStyle = PlayerStyle.VINYL
+                            uiPrefs.edit()
+                                .putString("player_style", PlayerStyle.VINYL.key)
+                                .apply()
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    PlayerButtonStyleOption(
+                        title = nusaText("CD Case", "CD Case"),
+                        subtitle = nusaText(
+                            "CD berputar di dalam casing transparan.",
+                            "Rotating CD inside a clear jewel case."
+                        ),
+                        selected = playerStyle == PlayerStyle.CD_CASE,
+                        onClick = {
+                            playerStyle = PlayerStyle.CD_CASE
+                            uiPrefs.edit()
+                                .putString("player_style", PlayerStyle.CD_CASE.key)
+                                .apply()
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                Spacer(Modifier.height(22.dp))
 
                 Text(
                     nusaText("UKURAN JUDUL LAGU", "SONG TITLE SIZE"),
@@ -2162,15 +2219,29 @@ private fun NusaMusicApp(
                                     ) {
                                         Spacer(Modifier.height(2.dp))
 
-                                        VinylRecord(
-                                            song = currentSong,
-                                            isPlaying = isPlaying,
-                                            positionMsState = positionMsState,
-                                            durationMs = durationMs,
-                                            modifier = Modifier
-                                                .fillMaxWidth(0.84f)
-                                                .aspectRatio(1f)
-                                        )
+                                        when (playerStyle) {
+                                            PlayerStyle.VINYL -> {
+                                                VinylRecord(
+                                                    song = currentSong,
+                                                    isPlaying = isPlaying,
+                                                    positionMsState = positionMsState,
+                                                    durationMs = durationMs,
+                                                    modifier = Modifier
+                                                        .fillMaxWidth(0.84f)
+                                                        .aspectRatio(1f)
+                                                )
+                                            }
+
+                                            PlayerStyle.CD_CASE -> {
+                                                CDCasePlayerStyle(
+                                                    artwork = null,
+                                                    isPlaying = isPlaying,
+                                                    modifier = Modifier
+                                                        .fillMaxWidth(0.84f)
+                                                        .aspectRatio(1f)
+                                                )
+                                            }
+                                        }
 
                                         Spacer(Modifier.height(24.dp))
 
