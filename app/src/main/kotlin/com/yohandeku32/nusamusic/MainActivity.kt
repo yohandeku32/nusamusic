@@ -143,6 +143,8 @@ import com.yohandeku32.nusamusic.model.Song
 import com.yohandeku32.nusamusic.playback.PlaybackService
 import com.yohandeku32.nusamusic.player.CDCasePlayerStyle
 import com.yohandeku32.nusamusic.player.PlayerStyle
+import com.yohandeku32.nusamusic.player.CDCasePlayerStyle
+import com.yohandeku32.nusamusic.player.PlayerStyle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -1284,6 +1286,13 @@ private fun NusaMusicApp(
             )
         )
     }
+    var playerStyle by remember {
+        mutableStateOf(
+            PlayerStyle.fromKey(
+                uiPrefs.getString("player_style", PlayerStyle.VINYL.key)
+            )
+        )
+    }
     val playbackPrefs = remember(context) {
         context.getSharedPreferences(
             "playback_preferences",
@@ -2234,7 +2243,14 @@ private fun NusaMusicApp(
 
                                             PlayerStyle.CD_CASE -> {
                                                 CDCasePlayerStyle(
-                                                    artwork = null,
+                                                    artwork = currentSong?.let { song ->
+                                                        ArtworkLoader.load(
+                                                            context = context,
+                                                            uriString = song.uri,
+                                                            maxSize = 512,
+                                                            cacheKey = song.albumId.takeIf { albumId -> albumId > 0L }?.toString()
+                                                        )
+                                                    },
                                                     isPlaying = isPlaying,
                                                     modifier = Modifier
                                                         .fillMaxWidth(0.84f)
