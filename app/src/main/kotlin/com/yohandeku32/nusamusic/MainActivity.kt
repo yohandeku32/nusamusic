@@ -3504,7 +3504,8 @@ private fun PlaybackProgress(
             positionMs = positionMs,
             durationMs = durationMs,
             enabled = enabled,
-            onSeek = onSeek
+            onSeek = onSeek,
+            modifier = Modifier.fillMaxWidth()
         )
         Row(
             modifier = Modifier.fillMaxWidth(),
