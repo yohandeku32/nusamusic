@@ -143,8 +143,6 @@ import com.yohandeku32.nusamusic.model.Song
 import com.yohandeku32.nusamusic.playback.PlaybackService
 import com.yohandeku32.nusamusic.player.CDCasePlayerStyle
 import com.yohandeku32.nusamusic.player.PlayerStyle
-import com.yohandeku32.nusamusic.player.CDCasePlayerStyle
-import com.yohandeku32.nusamusic.player.PlayerStyle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
