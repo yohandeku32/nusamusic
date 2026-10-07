@@ -1284,6 +1284,21 @@ private fun NusaMusicApp(
             )
         )
     }
+
+    var cdArtwork by remember(currentSong?.uri) {
+        mutableStateOf<Bitmap?>(null)
+    }
+
+    LaunchedEffect(currentSong?.uri) {
+        cdArtwork = currentSong?.let { song ->
+            ArtworkLoader.load(
+                context = context,
+                uriString = song.uri,
+                maxSize = 512,
+                cacheKey = song.albumId.takeIf { albumId -> albumId > 0L }?.toString()
+            )
+        }
+    }
     val playbackPrefs = remember(context) {
         context.getSharedPreferences(
             "playback_preferences",
@@ -2234,14 +2249,7 @@ private fun NusaMusicApp(
 
                                             PlayerStyle.CD_CASE -> {
                                                 CDCasePlayerStyle(
-                                                    artwork = currentSong?.let { song ->
-                                                        ArtworkLoader.load(
-                                                            context = context,
-                                                            uriString = song.uri,
-                                                            maxSize = 512,
-                                                            cacheKey = song.albumId.takeIf { albumId -> albumId > 0L }?.toString()
-                                                        )
-                                                    },
+                                                    artwork = cdArtwork,
                                                     isPlaying = isPlaying,
                                                     modifier = Modifier
                                                         .fillMaxWidth(0.84f)
