@@ -2089,8 +2089,6 @@ private fun NusaMusicApp(
             ) { page ->
                 when (page) {
                     0 -> {
-                        val positionMs by positionMsState
-
                         LazyColumn(
                             state = playerScrollState,
                             modifier = Modifier
@@ -2167,7 +2165,7 @@ private fun NusaMusicApp(
                                         VinylRecord(
                                             song = currentSong,
                                             isPlaying = isPlaying,
-                                            positionMs = positionMs,
+                                            positionMsState = positionMsState,
                                             durationMs = durationMs,
                                             modifier = Modifier
                                                 .fillMaxWidth(0.84f)
@@ -2233,8 +2231,8 @@ private fun NusaMusicApp(
 
                                         Spacer(Modifier.height(16.dp))
 
-                                        SimpleProgressBar(
-                                            positionMs = positionMs,
+                                        PlaybackProgress(
+                                            positionMsState = positionMsState,
                                             durationMs = durationMs,
                                             enabled = currentSong != null && durationMs > 0L,
                                             onSeek = onSeek,
@@ -2242,16 +2240,6 @@ private fun NusaMusicApp(
                                                 .fillMaxWidth()
                                                 .padding(horizontal = 12.dp)
                                         )
-
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(horizontal = 12.dp),
-                                            horizontalArrangement = Arrangement.SpaceBetween
-                                        ) {
-                                            Text(formatTime(positionMs), fontSize = 12.sp)
-                                            Text(formatTime(durationMs), fontSize = 12.sp)
-                                        }
 
                                         Spacer(Modifier.height(5.dp))
 
@@ -3502,6 +3490,33 @@ private fun SimpleProgressBar(
 }
 
 @Composable
+private fun PlaybackProgress(
+    positionMsState: State<Long>,
+    durationMs: Long,
+    enabled: Boolean,
+    onSeek: (Long) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val positionMs by positionMsState
+
+    Column(modifier = modifier) {
+        SimpleProgressBar(
+            positionMs = positionMs,
+            durationMs = durationMs,
+            enabled = enabled,
+            onSeek = onSeek
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(formatTime(positionMs), fontSize = 12.sp)
+            Text(formatTime(durationMs), fontSize = 12.sp)
+        }
+    }
+}
+
+@Composable
 private fun PlayerButtonStyleOption(
     title: String,
     subtitle: String,
@@ -3894,7 +3909,7 @@ private fun RealisticControlButton(
 private fun VinylRecord(
     song: Song?,
     isPlaying: Boolean,
-    positionMs: Long,
+    positionMsState: State<Long>,
     durationMs: Long,
     modifier: Modifier = Modifier
 ) {
@@ -3960,12 +3975,6 @@ private fun VinylRecord(
                 random.nextFloat()
             )
         }
-    }
-
-    val progress = if (durationMs > 0L) {
-        (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
-    } else {
-        0f
     }
 
     Box(
@@ -4564,7 +4573,8 @@ private fun VinylRecord(
         VinylTonearm(
             isPlaying = isPlaying,
             hasSong = song != null,
-            progress = progress,
+            positionMsState = positionMsState,
+            durationMs = durationMs,
             modifier = Modifier.fillMaxSize()
         )
     }
@@ -4574,13 +4584,19 @@ private fun VinylRecord(
 private fun VinylTonearm(
     isPlaying: Boolean,
     hasSong: Boolean,
-    progress: Float,
+    positionMsState: State<Long>,
+    durationMs: Long,
     modifier: Modifier = Modifier
 ) {
     // The tonearm is drawn entirely with Compose Canvas.
     // This keeps the proportions locked to one coordinate system, so the
     // artwork cannot be stretched/squashed by Image content scaling.
-    val trackProgress = progress.coerceIn(0f, 1f)
+    val positionMs by positionMsState
+    val trackProgress = if (durationMs > 0L) {
+        (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
+    } else {
+        0f
+    }
 
     // The stylus is physically mounted down-right from the pivot in the
     // Canvas artwork. A small angle puts the stylus at the outer groove;
