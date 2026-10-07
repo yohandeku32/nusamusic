@@ -96,6 +96,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -163,7 +164,8 @@ class MainActivity : ComponentActivity() {
     private var songs by mutableStateOf<List<Song>>(emptyList())
     private var currentSong by mutableStateOf<Song?>(null)
     private var isPlaying by mutableStateOf(false)
-    private var positionMs by mutableLongStateOf(0L)
+    private val playbackPositionState = mutableLongStateOf(0L)
+    private var positionMs by playbackPositionState
     private var durationMs by mutableLongStateOf(0L)
     private var playerPageVisible = true
     private var permissionGranted by mutableStateOf(false)
@@ -484,7 +486,7 @@ class MainActivity : ComponentActivity() {
                     songs = songs,
                     currentSong = currentSong,
                     isPlaying = isPlaying,
-                    positionMs = positionMs,
+                    positionMsState = playbackPositionState,
                     durationMs = durationMs,
                     permissionGranted = permissionGranted,
                     onPlay = ::playSong,
@@ -1193,7 +1195,7 @@ private fun NusaMusicApp(
     songs: List<Song>,
     currentSong: Song?,
     isPlaying: Boolean,
-    positionMs: Long,
+    positionMsState: State<Long>,
     durationMs: Long,
     permissionGranted: Boolean,
     onPlay: (Song) -> Unit,
@@ -2087,6 +2089,8 @@ private fun NusaMusicApp(
             ) { page ->
                 when (page) {
                     0 -> {
+                        val positionMs by positionMsState
+
                         LazyColumn(
                             state = playerScrollState,
                             modifier = Modifier
@@ -2677,6 +2681,12 @@ private fun NusaMusicApp(
                                     )
                                 }
 
+                            val alphabetAlpha by animateFloatAsState(
+                                targetValue = if (alphabetVisible) 1f else 0f,
+                                animationSpec = tween(220),
+                                label = "alphabetIndexAlpha"
+                            )
+
                             Box(
                                 modifier = Modifier.fillMaxSize()
                             ) {
@@ -2684,7 +2694,7 @@ private fun NusaMusicApp(
                                     modifier = alphabetIndexModifier
                                         .align(Alignment.CenterEnd)
                                         .graphicsLayer {
-                                            alpha = if (alphabetVisible) 1f else 0f
+                                            alpha = alphabetAlpha
                                         },
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                     verticalArrangement = Arrangement.SpaceEvenly
