@@ -32,6 +32,7 @@ Most of the core player features are already working. The project is now mainly 
 | Album artwork | ✅ Working |
 | Main player UI | ✅ Working |
 | Rotating vinyl player | ✅ Working |
+| Selectable CD jewel-case player | ✅ Working |
 | Tonearm / playback position | ✅ Working |
 | Song library | ✅ Working |
 | A–Z index | ✅ Working |
@@ -52,11 +53,12 @@ Most of the core player features are already working. The project is now mainly 
 
 ## Main Player
 
-The main screen is built around a rotating vinyl record.
+The main screen supports selectable physical-media styles: a rotating vinyl record or a rotating CD inside a transparent jewel case.
 
 Current player features include:
 
 - rotating vinyl
+- CD jewel-case style with a rotating disc inside a fixed transparent shell
 - physical-looking grooves and surface detail
 - vinyl shadow and edge thickness
 - light reflections
@@ -70,7 +72,7 @@ Current player features include:
 - artist biography
 - settings
 
-The vinyl rendering is still being refined. The goal is to make the material, grooves, and light reflections feel closer to a real record without making the UI too heavy.
+The vinyl and CD case renderers are drawn with Compose Canvas layers so the physical material, reflections, and rotation stay lightweight. The CD case keeps its clear shell fixed while only the disc rotates.
 
 ## Song Library
 
