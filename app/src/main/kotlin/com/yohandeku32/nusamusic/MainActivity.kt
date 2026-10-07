@@ -3021,7 +3021,7 @@ private fun AudioQualityPill(song: Song?) {
 
     val info = codecInfo
     val isLossless = info?.codecName == "Apple Lossless" || info?.codecName == "FLAC"
-    val isHiRes = isLossless && (info?.bitDepth ?: 16) >= 24
+    val isHiRes = isLossless && info?.isHiRes == true
 
     androidx.compose.animation.AnimatedVisibility(
         visible = isLossless,
@@ -5427,6 +5427,16 @@ private fun LibrarySongListRow(
     selected: Boolean,
     onPlay: (Song) -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var codecInfo by remember(song.uri) { mutableStateOf<AudioCodecInfo?>(null) }
+
+    LaunchedEffect(context, song.uri) {
+        codecInfo = AudioCodecLoader.load(
+            context = context,
+            uriString = song.uri
+        )
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -5495,6 +5505,34 @@ private fun LibrarySongListRow(
                 lineHeight = 16.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+
+        if (codecInfo?.isHiRes == true) {
+            Spacer(Modifier.width(8.dp))
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(Color(0xFFB5A77C).copy(alpha = 0.42f))
+                    .padding(horizontal = 7.dp, vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.apple_lossless_logo),
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    colorFilter = ColorFilter.tint(Color(0xFF3D3728)),
+                    modifier = Modifier.size(width = 16.dp, height = 9.dp)
+                )
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    text = "Hi-Res",
+                    fontSize = 9.sp,
+                    lineHeight = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFF3D3728)
+                )
+            }
         }
     }
 }

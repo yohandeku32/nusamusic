@@ -9,7 +9,10 @@ data class AudioCodecInfo(
     val codecName: String,
     val sampleRateHz: Int?,
     val bitDepth: Int?
-)
+) {
+    val isHiRes: Boolean
+        get() = bitDepth != null && bitDepth >= 24
+}
 
 object AudioCodecLoader {
 
