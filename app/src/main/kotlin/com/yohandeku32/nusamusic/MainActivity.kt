@@ -1284,13 +1284,6 @@ private fun NusaMusicApp(
             )
         )
     }
-    var playerStyle by remember {
-        mutableStateOf(
-            PlayerStyle.fromKey(
-                uiPrefs.getString("player_style", PlayerStyle.VINYL.key)
-            )
-        )
-    }
     val playbackPrefs = remember(context) {
         context.getSharedPreferences(
             "playback_preferences",
