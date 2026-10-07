@@ -18,6 +18,7 @@ import android.os.Bundle
 import android.graphics.Typeface
 import android.content.SharedPreferences
 import org.json.JSONArray
+import java.text.Normalizer
 import kotlin.math.abs
 import android.view.View
 import android.view.WindowInsets
@@ -1158,6 +1159,26 @@ private enum class LibrarySortOption(
         get() = englishLabel
 }
 
+private fun alphabetIndexKey(title: String): Char {
+    val normalizedTitle = Normalizer.normalize(
+        title.trim(),
+        Normalizer.Form.NFD
+    )
+    val firstBaseCharacter = normalizedTitle.firstOrNull { character ->
+        when (Character.getType(character)) {
+            Character.NON_SPACING_MARK.toInt(),
+            Character.COMBINING_SPACING_MARK.toInt(),
+            Character.ENCLOSING_MARK.toInt() -> false
+            else -> true
+        }
+    } ?: return '#'
+
+    return firstBaseCharacter
+        .uppercaseChar()
+        .takeIf { it in 'A'..'Z' }
+        ?: '#'
+}
+
 private data class StackAlbum(
     val key: String,
     val title: String,
@@ -1318,15 +1339,16 @@ private fun NusaMusicApp(
     }
 
     val alphabet = remember {
-        ('A'..'Z').toList()
+        listOf('#') + ('A'..'Z')
     }
 
     val alphabetTargets = remember(filtered) {
-        alphabet.associateWith { letter ->
-            filtered.indexOfFirst { song ->
-                song.title.trim()
-                    .firstOrNull()
-                    ?.uppercaseChar() == letter
+        buildMap {
+            filtered.forEachIndexed { index, song ->
+                val key = alphabetIndexKey(song.title)
+                if (key !in this) {
+                    put(key, index)
+                }
             }
         }
     }
@@ -1340,6 +1362,9 @@ private fun NusaMusicApp(
     val libraryListState =
         androidx.compose.foundation.lazy.rememberLazyListState()
     val scope = rememberCoroutineScope()
+    var alphabetVisible by remember { mutableStateOf(false) }
+    var alphabetDragging by remember { mutableStateOf(false) }
+    var alphabetHideJob by remember { mutableStateOf<Job?>(null) }
     val density = androidx.compose.ui.platform.LocalDensity.current
     val revealPlayerCurve by remember {
         derivedStateOf {
@@ -1347,6 +1372,36 @@ private fun NusaMusicApp(
         }
     }
 
+    fun revealAlphabet() {
+        alphabetVisible = true
+        alphabetHideJob?.cancel()
+        alphabetHideJob = null
+    }
+
+    fun scheduleAlphabetHide() {
+        alphabetHideJob?.cancel()
+        if (alphabetDragging || libraryListState.isScrollInProgress) return
+
+        alphabetHideJob = scope.launch {
+            delay(3_000)
+            if (!alphabetDragging && !libraryListState.isScrollInProgress) {
+                alphabetVisible = false
+            }
+            alphabetHideJob = null
+        }
+    }
+
+    LaunchedEffect(libraryListState) {
+        androidx.compose.runtime.snapshotFlow {
+            libraryListState.isScrollInProgress
+        }.collect { isScrolling ->
+            if (isScrolling) {
+                revealAlphabet()
+            } else if (alphabetVisible) {
+                scheduleAlphabetHide()
+            }
+        }
+    }
 
     // Bring the currently playing song into view when opening the song list.
     LaunchedEffect(pagerState) {
@@ -2573,6 +2628,9 @@ private fun NusaMusicApp(
 
                                     detectDragGestures(
                                         onDragStart = { offset ->
+                                            alphabetDragging = true
+                                            revealAlphabet()
+
                                             val slotHeight =
                                                 size.height / alphabet.size.toFloat()
                                             val slot = (offset.y / slotHeight)
@@ -2588,6 +2646,7 @@ private fun NusaMusicApp(
                                         },
                                         onDrag = { change, _ ->
                                             change.consume()
+                                            revealAlphabet()
 
                                             val slotHeight =
                                                 size.height / alphabet.size.toFloat()
@@ -2606,10 +2665,14 @@ private fun NusaMusicApp(
                                             }
                                         },
                                         onDragEnd = {
+                                            alphabetDragging = false
                                             lastDragTarget = -1
+                                            scheduleAlphabetHide()
                                         },
                                         onDragCancel = {
+                                            alphabetDragging = false
                                             lastDragTarget = -1
+                                            scheduleAlphabetHide()
                                         }
                                     )
                                 }
@@ -2618,7 +2681,11 @@ private fun NusaMusicApp(
                                 modifier = Modifier.fillMaxSize()
                             ) {
                                 Column(
-                                    modifier = alphabetIndexModifier.align(Alignment.CenterEnd),
+                                    modifier = alphabetIndexModifier
+                                        .align(Alignment.CenterEnd)
+                                        .graphicsLayer {
+                                            alpha = if (alphabetVisible) 1f else 0f
+                                        },
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                     verticalArrangement = Arrangement.SpaceEvenly
                                 ) {
@@ -2631,7 +2698,9 @@ private fun NusaMusicApp(
                                             .fillMaxWidth()
                                             .weight(1f)
                                             .clickable(enabled = available) {
+                                                revealAlphabet()
                                                 requestAlphabetScroll(targetIndex)
+                                                scheduleAlphabetHide()
                                             },
                                         contentAlignment = Alignment.Center
                                     ) {
