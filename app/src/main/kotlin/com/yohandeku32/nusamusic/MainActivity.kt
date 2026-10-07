@@ -4382,15 +4382,6 @@ private fun VinylRecord(
             )
         }
 
-        androidx.compose.foundation.Image(
-            painter = painterResource(R.drawable.vinyl),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .fillMaxSize()
-                .clip(CircleShape)
-        )
-
         // Center label/artwork is treated as a real paper label adhered
         // to the vinyl: slightly warm paper base, soft edge shading, grain,
         // fibers and subtle crease marks.
