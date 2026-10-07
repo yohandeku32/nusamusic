@@ -5509,29 +5509,12 @@ private fun LibrarySongListRow(
 
         if (codecInfo?.isHiRes == true) {
             Spacer(Modifier.width(8.dp))
-            Row(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(50))
-                    .background(Color(0xFFB5A77C).copy(alpha = 0.42f))
-                    .padding(horizontal = 7.dp, vertical = 5.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Image(
-                    painter = painterResource(id = R.drawable.hi_res_audio_logo),
-                    contentDescription = null,
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(Modifier.width(4.dp))
-                Text(
-                    text = "Hi-Res",
-                    fontSize = 9.sp,
-                    lineHeight = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color(0xFF3D3728)
-                )
-            }
+            Image(
+                painter = painterResource(id = R.drawable.hi_res_audio_logo),
+                contentDescription = "Hi-Res Audio",
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.size(22.dp)
+            )
         }
     }
 }
