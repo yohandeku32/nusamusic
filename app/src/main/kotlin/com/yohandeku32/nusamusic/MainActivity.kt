@@ -133,6 +133,7 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.yohandeku32.nusamusic.data.ArtworkLoader
+import com.yohandeku32.nusamusic.data.SpotifyCanvasLoader
 import com.yohandeku32.nusamusic.data.AudioCodecInfo
 import com.yohandeku32.nusamusic.data.AudioCodecLoader
 import com.yohandeku32.nusamusic.data.ArtistImageLoader
@@ -5442,15 +5443,36 @@ private fun ImmersiveArtwork(
     song: Song?,
     modifier: Modifier = Modifier
 ) {
+    var canvasUrl by remember(song?.id, song?.uri) { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(song?.id, song?.title, song?.artist, BuildConfig.CANVAS_API_BASE_URL) {
+        canvasUrl = song?.let { SpotifyCanvasLoader.loadCanvasUrl(it) }
+    }
+
     Box(
         modifier = modifier
             .background(Color(0xFF121212))
     ) {
+        // Keep album artwork underneath the video at all times. It remains visible while
+        // Canvas loads and immediately becomes the fallback if the video fails to play.
         ArtworkView(
             song = song,
             maxSizePx = 1_600,
             modifier = Modifier.fillMaxSize()
         )
+
+        val activeCanvasUrl = canvasUrl
+        if (activeCanvasUrl != null) {
+            CanvasVideoBackground(
+                url = activeCanvasUrl,
+                modifier = Modifier.fillMaxSize(),
+                onUnavailable = {
+                    if (canvasUrl == activeCanvasUrl) {
+                        canvasUrl = null
+                    }
+                }
+            )
+        }
 
         Box(
             modifier = Modifier
@@ -5470,6 +5492,65 @@ private fun ImmersiveArtwork(
                 )
         )
     }
+}
+
+@Composable
+private fun CanvasVideoBackground(
+    url: String,
+    modifier: Modifier = Modifier,
+    onUnavailable: () -> Unit
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var videoReady by remember(url) { mutableStateOf(false) }
+
+    val player = remember(url) {
+        androidx.media3.exoplayer.ExoPlayer.Builder(context).build().apply {
+            volume = 0f
+            repeatMode = Player.REPEAT_MODE_ONE
+            setMediaItem(MediaItem.fromUri(url))
+            playWhenReady = true
+            prepare()
+        }
+    }
+
+    androidx.compose.runtime.DisposableEffect(player, url) {
+        val listener = object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == Player.STATE_READY) {
+                    videoReady = true
+                }
+            }
+
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                onUnavailable()
+            }
+        }
+
+        player.addListener(listener)
+        onDispose {
+            player.removeListener(listener)
+            player.release()
+        }
+    }
+
+    androidx.compose.ui.viewinterop.AndroidView(
+        factory = { viewContext ->
+            androidx.media3.ui.PlayerView(viewContext).apply {
+                useController = false
+                resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                setShutterBackgroundColor(android.graphics.Color.BLACK)
+                setBackgroundColor(android.graphics.Color.BLACK)
+                player = player
+            }
+        },
+        update = { playerView ->
+            if (playerView.player !== player) playerView.player = player
+        },
+        modifier = modifier.graphicsLayer {
+            // Keep the still artwork visible until the first video frame is ready.
+            alpha = if (videoReady) 1f else 0f
+        }
+    )
 }
 
 @Composable
