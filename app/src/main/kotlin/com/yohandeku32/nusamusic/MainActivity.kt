@@ -2227,17 +2227,21 @@ private fun NusaMusicApp(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .fillParentMaxHeight()
-                                        .clip(
-                                            RoundedCornerShape(
-                                                bottomStart = 34.dp,
-                                                bottomEnd = 34.dp
-                                            )
-                                        )
                                         .then(
-                                            if (playerPresentationMode == PlayerPresentationMode.VINYL) {
-                                                Modifier.background(MaterialTheme.colorScheme.background)
+                                            if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
+                                                // Keep the immersive player edge square and fully black so
+                                                // rounded-corner antialiasing cannot reveal a light-colored seam
+                                                // between the player and the biography section.
+                                                Modifier.background(Color.Black)
                                             } else {
                                                 Modifier
+                                                    .clip(
+                                                        RoundedCornerShape(
+                                                            bottomStart = 34.dp,
+                                                            bottomEnd = 34.dp
+                                                        )
+                                                    )
+                                                    .background(MaterialTheme.colorScheme.background)
                                             }
                                         )
                                 ) {
