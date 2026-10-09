@@ -5502,7 +5502,7 @@ private fun ImmersiveArtworkGlassBackdrop(
                         )
                     }
                 }
-                .blur(68.dp)
+                .blur(76.dp)
         )
     }
 
