@@ -133,7 +133,7 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.yohandeku32.nusamusic.data.ArtworkLoader
-import com.yohandeku32.nusamusic.data.SpotifyCanvasLoader
+import com.yohandeku32.nusamusic.data.AppleMusicAnimatedArtworkLoader
 import com.yohandeku32.nusamusic.data.AudioCodecInfo
 import com.yohandeku32.nusamusic.data.AudioCodecLoader
 import com.yohandeku32.nusamusic.data.ArtistImageLoader
@@ -5443,10 +5443,10 @@ private fun ImmersiveArtwork(
     song: Song?,
     modifier: Modifier = Modifier
 ) {
-    var canvasUrl by remember(song?.id, song?.uri) { mutableStateOf<String?>(null) }
+    var animatedArtworkUrl by remember(song?.id, song?.uri) { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(song?.id, song?.title, song?.artist, BuildConfig.CANVAS_API_BASE_URL) {
-        canvasUrl = song?.let { SpotifyCanvasLoader.loadCanvasUrl(it) }
+    LaunchedEffect(song?.id, song?.title, song?.artist, song?.album) {
+        animatedArtworkUrl = song?.let { AppleMusicAnimatedArtworkLoader.loadAnimatedArtworkUrl(it) }
     }
 
     Box(
@@ -5461,14 +5461,14 @@ private fun ImmersiveArtwork(
             modifier = Modifier.fillMaxSize()
         )
 
-        val activeCanvasUrl = canvasUrl
-        if (activeCanvasUrl != null) {
-            CanvasVideoBackground(
-                url = activeCanvasUrl,
+        val activeAnimatedArtworkUrl = animatedArtworkUrl
+        if (activeAnimatedArtworkUrl != null) {
+            AnimatedArtworkVideoBackground(
+                url = activeAnimatedArtworkUrl,
                 modifier = Modifier.fillMaxSize(),
                 onUnavailable = {
-                    if (canvasUrl == activeCanvasUrl) {
-                        canvasUrl = null
+                    if (animatedArtworkUrl == activeAnimatedArtworkUrl) {
+                        animatedArtworkUrl = null
                     }
                 }
             )
@@ -5495,7 +5495,7 @@ private fun ImmersiveArtwork(
 }
 
 @Composable
-private fun CanvasVideoBackground(
+private fun AnimatedArtworkVideoBackground(
     url: String,
     modifier: Modifier = Modifier,
     onUnavailable: () -> Unit
@@ -5507,7 +5507,12 @@ private fun CanvasVideoBackground(
         androidx.media3.exoplayer.ExoPlayer.Builder(context).build().apply {
             volume = 0f
             repeatMode = Player.REPEAT_MODE_ONE
-            setMediaItem(MediaItem.fromUri(url))
+            setMediaItem(
+                MediaItem.Builder()
+                    .setUri(url)
+                    .setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8)
+                    .build()
+            )
         }
     }
 
