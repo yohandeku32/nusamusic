@@ -5535,15 +5535,14 @@ private fun CanvasVideoBackground(
 
     androidx.compose.ui.viewinterop.AndroidView(
         factory = { viewContext ->
-            (viewContext.getSystemService(android.content.Context.LAYOUT_INFLATER_SERVICE)
-                as android.view.LayoutInflater)
+            val canvasPlayerView = android.view.LayoutInflater.from(viewContext)
                 .inflate(
                     R.layout.immersive_canvas_player_view,
                     null,
                     false
-                ).also { view ->
-                    (view as androidx.media3.ui.PlayerView).player = player
-                } as androidx.media3.ui.PlayerView
+                ) as androidx.media3.ui.PlayerView
+            canvasPlayerView.player = player
+            canvasPlayerView
         },
         update = { playerView ->
             if (playerView.player !== player) playerView.player = player
