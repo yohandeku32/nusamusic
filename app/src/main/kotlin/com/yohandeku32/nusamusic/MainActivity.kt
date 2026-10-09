@@ -423,6 +423,9 @@ class MainActivity : ComponentActivity() {
             musicContentObserver
         )
 
+        // Restore the last track before Compose draws the first frame. The full
+        // library and Media3 controller can finish initializing in the background.
+        currentSong = readLastSongForLaunch()
         loadCachedSongs()
         if (!permissionGranted) {
             permissionLauncher.launch(permission)
@@ -574,6 +577,62 @@ class MainActivity : ComponentActivity() {
         songs.firstOrNull { it.id == id }?.let { currentSong = it }
     }
 
+    /**
+     * Resolves the previous track from a small persisted snapshot first. On
+     * upgrades where that snapshot does not yet exist, fall back to the cached
+     * library and extract only the matching song rather than parsing every row.
+     */
+    private fun readLastSongForLaunch(): Song? {
+        val mediaId = playbackPrefs.getString("media_id", null) ?: return null
+        val snapshotId = playbackPrefs.getString("last_song_id", null)
+
+        if (
+            snapshotId == mediaId &&
+            !playbackPrefs.getString("last_song_uri", null).isNullOrBlank()
+        ) {
+            return runCatching {
+                Song(
+                    id = snapshotId.toLong(),
+                    title = playbackPrefs.getString("last_song_title", null)
+                        ?: nusaText("Judul tidak diketahui", "Unknown title"),
+                    artist = playbackPrefs.getString("last_song_artist", null)
+                        ?: nusaText("Artis tidak diketahui", "Unknown artist"),
+                    album = playbackPrefs.getString("last_song_album", null)
+                        ?: nusaText("Album tidak diketahui", "Unknown album"),
+                    uri = requireNotNull(playbackPrefs.getString("last_song_uri", null)),
+                    durationMs = playbackPrefs.getLong("last_song_duration_ms", 0L),
+                    albumId = playbackPrefs.getLong("last_song_album_id", 0L),
+                    dateAddedMs = playbackPrefs.getLong("last_song_date_added_ms", 0L)
+                )
+            }.getOrNull()
+        }
+
+        // One-time migration path for existing installs that only have the
+        // older songs_cache_json + media_id values.
+        val raw = libraryPrefs.getString("songs_cache_json", null) ?: return null
+        return runCatching {
+            val array = JSONArray(raw)
+            var match: Song? = null
+            for (index in 0 until array.length()) {
+                val item = array.getJSONObject(index)
+                if (item.optString("id") != mediaId) continue
+
+                match = Song(
+                    id = item.getLong("id"),
+                    title = item.getString("title"),
+                    artist = item.getString("artist"),
+                    album = item.getString("album"),
+                    uri = item.getString("uri"),
+                    durationMs = item.getLong("durationMs"),
+                    albumId = item.getLong("albumId"),
+                    dateAddedMs = item.optLong("dateAddedMs", 0L)
+                )
+                break
+            }
+            match
+        }.getOrNull()
+    }
+
     private fun setPlayerPageVisible(visible: Boolean) {
         playerPageVisible = visible
         if (!visible) return
@@ -599,14 +658,31 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        playbackPrefs.edit()
+        val snapshotSong = currentSong?.takeIf { it.id.toString() == mediaId }
+            ?: songs.firstOrNull { it.id.toString() == mediaId }
+
+        val editor = playbackPrefs.edit()
             .putString("media_id", mediaId)
             .putLong("position_ms", currentPosition)
             .putBoolean("is_playing", c.isPlaying)
             .putBoolean("shuffle_enabled", c.shuffleModeEnabled)
             .putInt("repeat_mode", c.repeatMode)
-            .apply()
 
+        // Keep a compact snapshot of the active song so the player can render
+        // it immediately on the next cold start, without waiting for library JSON.
+        snapshotSong?.let { song ->
+            editor
+                .putString("last_song_id", song.id.toString())
+                .putString("last_song_title", song.title)
+                .putString("last_song_artist", song.artist)
+                .putString("last_song_album", song.album)
+                .putString("last_song_uri", song.uri)
+                .putLong("last_song_duration_ms", song.durationMs)
+                .putLong("last_song_album_id", song.albumId)
+                .putLong("last_song_date_added_ms", song.dateAddedMs)
+        }
+
+        editor.apply()
         lastPersistedPosition = currentPosition
     }
 
