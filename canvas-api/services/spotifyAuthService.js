@@ -17,7 +17,7 @@ const FETCH_INTERVAL = 60 * 60 * 1000; // 1 hour in milliseconds
 initializeTOTPSecrets();
 
 // Set up periodic updates
-setInterval(updateTOTPSecrets, FETCH_INTERVAL);
+const secretRefreshTimer = setInterval(updateTOTPSecrets, FETCH_INTERVAL);\nsecretRefreshTimer.unref?.();
 
 async function initializeTOTPSecrets() {
   try {
