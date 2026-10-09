@@ -3545,7 +3545,7 @@ private fun AudioQualityPill(
                     .clip(RoundedCornerShape(50))
                     .background(
                         color = if (immersive) {
-                            Color.White.copy(alpha = 0.68f)
+                            Color.White
                         } else if (hiRes) {
                             Color(0xFFB5A77C).copy(alpha = 0.42f)
                         } else {
@@ -5733,6 +5733,11 @@ private fun AnimatedArtworkVideoBackground(
             if (playerView.player !== player) playerView.player = player
         },
         modifier = modifier.graphicsLayer {
+            // Slightly overscan and raise only the animated layer to hide the
+            // thin black strip at the top without changing static artwork or controls.
+            translationY = -8.dp.toPx()
+            scaleX = 1.02f
+            scaleY = 1.02f
             // Keep the still artwork visible until the first video frame is ready.
             alpha = if (videoReady) 1f else 0f
         }
