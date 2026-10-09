@@ -5447,14 +5447,26 @@ private fun ImmersiveArtwork(
         ArtworkView(
             song = song,
             maxSizePx = 1_600,
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    translationY = -12.dp.toPx()
+                    scaleX = 1.04f
+                    scaleY = 1.04f
+                }
         )
 
         val activeAnimatedArtworkUrl = animatedArtworkUrl
         if (activeAnimatedArtworkUrl != null) {
             AnimatedArtworkVideoBackground(
                 url = activeAnimatedArtworkUrl,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        translationY = -12.dp.toPx()
+                        scaleX = 1.04f
+                        scaleY = 1.04f
+                    },
                 onUnavailable = {
                     if (animatedArtworkUrl == activeAnimatedArtworkUrl) {
                         animatedArtworkUrl = null
@@ -5480,17 +5492,20 @@ private fun ImmersiveArtworkGlassBackdrop(
             maxSizePx = 1_600,
             modifier = modifier
                 .graphicsLayer {
+                    translationY = -12.dp.toPx()
+                    scaleX = 1.04f
+                    scaleY = 1.04f
                     compositingStrategy = CompositingStrategy.Offscreen
                 }
                 .drawWithCache {
                     val blurMask = Brush.verticalGradient(
                         colorStops = arrayOf(
                             0.00f to Color.Transparent,
-                            0.32f to Color.Transparent,
-                            0.40f to Color.White.copy(alpha = 0.08f),
-                            0.49f to Color.White.copy(alpha = 0.42f),
-                            0.58f to Color.White.copy(alpha = 0.82f),
-                            0.66f to Color.White,
+                            0.20f to Color.Transparent,
+                            0.27f to Color.White.copy(alpha = 0.08f),
+                            0.35f to Color.White.copy(alpha = 0.42f),
+                            0.43f to Color.White.copy(alpha = 0.82f),
+                            0.52f to Color.White,
                             1.00f to Color.White
                         )
                     )
@@ -5502,7 +5517,7 @@ private fun ImmersiveArtworkGlassBackdrop(
                         )
                     }
                 }
-                .blur(76.dp)
+                .blur(88.dp)
         )
     }
 
@@ -5513,11 +5528,12 @@ private fun ImmersiveArtworkGlassBackdrop(
             Brush.verticalGradient(
                 colorStops = arrayOf(
                     0.00f to Color.Transparent,
-                    0.34f to Color.Transparent,
-                    0.43f to Color(0xFF08090D).copy(alpha = 0.18f),
-                    0.54f to Color(0xFF08090D).copy(alpha = 0.38f),
-                    0.68f to Color(0xFF07080B).copy(alpha = 0.58f),
-                    1.00f to Color(0xFF050609).copy(alpha = 0.70f)
+                    0.22f to Color.Transparent,
+                    0.29f to Color(0xFF08090D).copy(alpha = 0.12f),
+                    0.37f to Color(0xFF08090D).copy(alpha = 0.34f),
+                    0.46f to Color(0xFF07080B).copy(alpha = 0.58f),
+                    0.54f to Color(0xFF050609).copy(alpha = 0.72f),
+                    1.00f to Color(0xFF050609).copy(alpha = 0.76f)
                 )
             )
         )
