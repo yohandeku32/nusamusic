@@ -5502,7 +5502,7 @@ private fun ImmersiveArtworkGlassBackdrop(
                         )
                     }
                 }
-                .blur(44.dp)
+                .blur(68.dp)
         )
     }
 
@@ -5514,10 +5514,10 @@ private fun ImmersiveArtworkGlassBackdrop(
                 colorStops = arrayOf(
                     0.00f to Color.Transparent,
                     0.34f to Color.Transparent,
-                    0.43f to Color(0xFF151820).copy(alpha = 0.08f),
-                    0.54f to Color(0xFF11131A).copy(alpha = 0.22f),
-                    0.68f to Color(0xFF10131A).copy(alpha = 0.34f),
-                    1.00f to Color(0xFF0A0B10).copy(alpha = 0.42f)
+                    0.43f to Color(0xFF08090D).copy(alpha = 0.18f),
+                    0.54f to Color(0xFF08090D).copy(alpha = 0.38f),
+                    0.68f to Color(0xFF07080B).copy(alpha = 0.58f),
+                    1.00f to Color(0xFF050609).copy(alpha = 0.70f)
                 )
             )
         )
