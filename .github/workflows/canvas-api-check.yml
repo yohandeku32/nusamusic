@@ -1,0 +1,29 @@
+name: Canvas API syntax check
+
+on:
+  push:
+    branches:
+      - fix/immersive-artwork-offset-20261009
+    paths:
+      - "canvas-api/**"
+      - ".github/workflows/canvas-api-check.yml"
+  pull_request:
+    paths:
+      - "canvas-api/**"
+      - ".github/workflows/canvas-api-check.yml"
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Check backend JavaScript syntax
+        working-directory: canvas-api
+        run: |
+          node --check api/canvas.js
+          node --check services/spotifyAuthService.js
+          node --check services/spotifyCanvasService.js
+          node --check proto/_canvas_pb.cjs
