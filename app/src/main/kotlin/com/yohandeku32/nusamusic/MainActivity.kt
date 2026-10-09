@@ -63,7 +63,6 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.SkipNext
@@ -2410,18 +2409,9 @@ private fun NusaMusicApp(
                                             )
                                         },
                                         actions = {
-                                            IconButton(onClick = {}) {
-                                                Icon(
-                                                    Icons.Default.MoreHoriz,
-                                                    contentDescription = nusaText("Lainnya", "More"),
-                                                    tint = if (
-                                                        playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
-                                                    ) Color.White else MaterialTheme.colorScheme.onSurface
-                                                )
-                                            }
                                             IconButton(onClick = { showSettings = true }) {
                                                 Icon(
-                                                    Icons.Default.Settings,
+                                                    Icons.Default.MoreHoriz,
                                                     contentDescription = nusaText("Pengaturan", "Settings"),
                                                     tint = if (
                                                         playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
