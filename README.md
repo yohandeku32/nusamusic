@@ -4,11 +4,11 @@ Nusa is a local music player for Android, built with Kotlin and Jetpack Compose.
 
 The project started as a simple local music player and has grown into a more complete music app with a custom vinyl-style player, library management, crossfade, artist information, and custom fonts.
 
-> **Status:** Active development  
-> **Version:** 3.9.2  
-> **versionCode:** 36  
-> **Branch:** `main`  
-> **Last updated:** 6 October 2026
+> **Status:** Active development / pre-release  
+> **Version:** 3.13.4  
+> **versionCode:** 46  
+> **Default branch:** `main`  
+> **Last updated:** 9 October 2026
 
 ## Current Progress
 
@@ -33,6 +33,9 @@ Most of the core player features are already working. The project is now mainly 
 | Main player UI | ✅ Working |
 | Rotating vinyl player | ✅ Working |
 | Vinyl / immersive artwork presentation setting | ✅ Working |
+| Optional Animated Artwork ON/OFF setting | ✅ Working |
+| Silent looping Apple Music animated artwork (experimental) | ✅ Working |
+| Animated artwork playback limits / static-cover fallback | ✅ Working |
 | Tonearm / playback position | ✅ Working |
 | Song library | ✅ Working |
 | A–Z index | ✅ Working |
@@ -53,12 +56,16 @@ Most of the core player features are already working. The project is now mainly 
 
 ## Main Player
 
-The main screen can use either the existing rotating vinyl record or immersive artwork filling the player background, with the title, progress, playback controls, and actions layered over subtle top and bottom scrims. The Hi-Res badge remains on a light pill for contrast. Choose the presentation in Settings; vinyl remains the default.
+The main screen supports two presentation modes: the rotating vinyl record and Immersive Artwork. Immersive Artwork reaches the top edge and extends down close to the playback controls, while the title, progress bar, and controls keep their existing layout. A dark frosted-glass fade helps the lower artwork blend behind the controls. In immersive mode, the Lossless / Hi-Res badge uses a solid white pill for contrast.
+
+Choose the presentation in Settings. The Animated Artwork switch independently enables or disables the moving cover without changing the rest of the player UI.
 
 Current player features include:
 
 - rotating vinyl
-- immersive album artwork with subtle scrims behind controls and player actions
+- immersive album artwork that reaches the top edge and blends toward playback controls
+- optional animated album artwork with a static-cover fallback
+- dark frosted-glass fade behind the lower player controls
 - physical-looking grooves and surface detail
 - vinyl shadow and edge thickness
 - light reflections
@@ -224,8 +231,11 @@ feature. The public API is community-run, not an official Apple API, and may be
 rate-limited or change. For that reason, the feature is optional and static cover
 art remains the default fallback.
 
-Apple Music artwork lookup is performed only while Immersive Artwork is shown.
-Results are cached in memory to avoid repeatedly querying the service for the same album.
+Animated Artwork can be enabled or disabled with the **Animated Artwork** switch in Settings. When disabled, Nusa keeps showing the regular static album cover. The animation is only displayed while the Immersive Artwork player page is visible; the video layer is removed when the user moves to the song library.
+
+To reduce the chance of audio stutter, the animated-video player is silent and its audio track is disabled. Video selection is capped at 720 × 1280, 30 fps, and 4 Mbps. The static cover stays visible while the animation loads and remains the fallback if playback fails.
+
+Apple Music artwork lookup is performed only while Immersive Artwork is shown and the feature is enabled. Results are cached in memory to avoid repeatedly querying the service for the same album.
 
 ## Audio Quality
 
@@ -274,22 +284,23 @@ The selected custom font is stored in the app's private storage and is restored 
 
 Performance work has included:
 
-- lazy list rendering
-- stable item keys
-- artwork caching
-- background artwork loading
+- lazy list rendering and stable item keys
+- artwork caching and background artwork loading
 - downsampled image decoding
 - smoother A–Z scrolling
 - reduced unnecessary recomposition
 - Media3 buffering configuration
+- limiting animated artwork to 720 × 1280, 30 fps, and 4 Mbps
+- disabling the animated video's audio track and releasing the animation when its player page is not visible
+- using a smaller artwork source for the frosted-glass blur layer
 
-There is still more testing to do with large music libraries and long playback sessions.
+There is still more testing to do with large music libraries, long playback sessions, and animated artwork on a range of Android devices. Video limits can reduce workload, but actual playback smoothness still depends on the device, network, and source stream.
 
 ## USB DAC / Hi-Res
 
 A USB Hi-Res playback path was experimented with earlier in the project, including Decent USB Audio integration.
 
-For now, the USB playback path is **paused** and is not part of the active Nusa 3.9.2 playback flow.
+For now, the USB playback path is **paused** and is not part of the active Nusa 3.13.4 playback flow.
 
 That means USB DAC and bit-perfect playback are not marked as production-ready.
 
@@ -377,6 +388,7 @@ Crossfade             → ✅
 Artist information    → ✅
 Custom fonts          → ✅
 Performance           → 🟡 Ongoing
+Animated artwork      → ✅ Optional / configurable
 Vinyl realism         → 🟡 Ongoing
 USB DAC               → ⏸️ Paused
 Hardware validation   → ⏳ Pending
@@ -387,12 +399,13 @@ Production release    → ⏳ Pending
 
 The next phase is mostly about polishing what is already there:
 
-1. Finish the library and player UI details.
+1. Preserve the current player UI while addressing any remaining visual defects.
 2. Keep crossfade and queue behavior stable.
-3. Test performance with larger libraries.
-4. Fix the remaining cache issue for Recently Added.
-5. Continue USB DAC work when hardware testing is available.
-6. Prepare a proper release build.
+3. Test animated artwork and audio stability on different devices.
+4. Test performance with larger music libraries.
+5. Fix the remaining cache issue for Recently Added.
+6. Continue USB DAC work when hardware testing is available.
+7. Prepare a proper release build.
 
 ## Repository
 
@@ -404,4 +417,4 @@ Package:
 
 Current version:
 
-`3.9.2`
+`3.13.4`
