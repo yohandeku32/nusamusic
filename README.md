@@ -207,6 +207,30 @@ Artist portraits are looked up and cached locally.
 
 For multiple artists, the first artist is used for the lookup.
 
+## Spotify Canvas (Experimental)
+
+Immersive Artwork can optionally show Spotify Canvas as a silent looping video.
+Local album artwork remains underneath as a fallback when Canvas is unavailable,
+the song cannot be confidently matched, the network request fails, or the backend
+has not been configured.
+
+The Canvas service is a separate Vercel deployment from the Android app. Follow
+[`canvas-api/README.md`](canvas-api/README.md) to deploy it with Vercel's Root
+Directory set to `canvas-api`.
+
+After deployment, put these values in the project `local.properties` file:
+
+```properties
+CANVAS_API_BASE_URL=https://YOUR-CANVAS-PROJECT.vercel.app
+CANVAS_API_KEY=the-same-random-key-configured-in-vercel
+```
+
+Re-sync Gradle and rebuild. If the settings are blank, Canvas lookup stays
+disabled and Immersive Artwork behaves as before. The API key is bundled in an
+Android APK and therefore can be extracted; this setup is intended for personal
+testing, not a publicly shared backend. The backend also relies on an
+undocumented Spotify endpoint and may stop working if Spotify changes it.
+
 ## Audio Quality
 
 Nusa reads the audio metadata and shows:
