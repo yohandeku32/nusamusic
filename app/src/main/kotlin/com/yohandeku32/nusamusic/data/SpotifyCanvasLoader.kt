@@ -63,16 +63,17 @@ object SpotifyCanvasLoader {
             val endpoint = URL(
                 "$baseUrl/api/canvas?title=${Uri.encode(title)}&artist=${Uri.encode(artist)}"
             )
-            connection = endpoint.openConnection() as? HttpsURLConnection
+            val httpsConnection = endpoint.openConnection() as? HttpsURLConnection
                 ?: return@withContext null
-            connection.connectTimeout = 4_500
-            connection.readTimeout = 6_500
-            connection.requestMethod = "GET"
-            connection.setRequestProperty("Accept", "application/json")
-            connection.setRequestProperty("X-API-Key", apiKey)
+            connection = httpsConnection
+            httpsConnection.connectTimeout = 4_500
+            httpsConnection.readTimeout = 6_500
+            httpsConnection.requestMethod = "GET"
+            httpsConnection.setRequestProperty("Accept", "application/json")
+            httpsConnection.setRequestProperty("X-API-Key", apiKey)
 
-            if (connection.responseCode == HttpURLConnection.HTTP_OK) {
-                val payload = connection.inputStream.bufferedReader(Charsets.UTF_8).use {
+            if (httpsConnection.responseCode == HttpURLConnection.HTTP_OK) {
+                val payload = httpsConnection.inputStream.bufferedReader(Charsets.UTF_8).use {
                     it.readText()
                 }
                 val candidate = JSONObject(payload).optString("canvasUrl")
