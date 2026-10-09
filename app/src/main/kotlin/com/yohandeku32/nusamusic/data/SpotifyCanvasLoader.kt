@@ -105,8 +105,7 @@ object SpotifyCanvasLoader {
         return try {
             val parsed = URL(value)
             parsed.protocol.equals("https", ignoreCase = true) &&
-                (parsed.host.equals("canvaz.scdn.co", ignoreCase = true) ||
-                    parsed.host.endsWith(".scdn.co", ignoreCase = true))
+                (parsed.host.equals("canvaz.scdn.co", ignoreCase = true))
         } catch (_: Exception) {
             false
         }
