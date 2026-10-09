@@ -2172,8 +2172,7 @@ private fun NusaMusicApp(
                                                 .aspectRatio(1f)
                                         )
 
-                                        // Lower the whole playback-info block consistently.
-                                        Spacer(Modifier.height(48.dp))
+                                        Spacer(Modifier.height(24.dp))
 
                                         Box(
                                             modifier = Modifier
