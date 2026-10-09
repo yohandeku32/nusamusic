@@ -2262,7 +2262,7 @@ private fun NusaMusicApp(
                                                             0.60f to Color.Black.copy(alpha = 0.62f),
                                                             0.74f to Color.Black.copy(alpha = 0.84f),
                                                             0.88f to Color.Black.copy(alpha = 0.95f),
-                                                            1.00f to Color.Black.copy(alpha = 0.99f)
+                                                            1.00f to Color.Black
                                                         )
                                                     )
                                                 )
