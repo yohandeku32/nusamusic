@@ -5513,10 +5513,8 @@ private fun CanvasVideoBackground(
 
     androidx.compose.runtime.DisposableEffect(player, url) {
         val listener = object : Player.Listener {
-            override fun onPlaybackStateChanged(playbackState: Int) {
-                if (playbackState == Player.STATE_READY) {
-                    videoReady = true
-                }
+            override fun onRenderedFirstFrame() {
+                videoReady = true
             }
 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
