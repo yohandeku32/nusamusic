@@ -112,9 +112,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
@@ -2250,15 +2248,22 @@ private fun NusaMusicApp(
                                         )
                                 ) {
                                     if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
+                                        // Blur the complete artwork/video layer so no album-cover
+                                        // details remain recognizable behind the frosted-glass UI.
                                         ImmersiveArtwork(
                                             song = currentSong,
-                                            modifier = Modifier.fillMaxSize()
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .then(
+                                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                                        Modifier.blur(56.dp)
+                                                    } else {
+                                                        Modifier
+                                                    }
+                                                )
                                         )
 
-                                        // Apple Music-inspired frosted artwork backdrop keeps the
-                                        // artwork's colors visible while softly separating controls.
                                         ImmersiveArtworkGlassBackdrop(
-                                            song = currentSong,
                                             modifier = Modifier.fillMaxSize()
                                         )
                                     }
@@ -5463,73 +5468,23 @@ private fun ImmersiveArtwork(
             )
         }
 
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colorStops = arrayOf(
-                            0f to Color.Black.copy(alpha = 0.48f),
-                            0.16f to Color.Black.copy(alpha = 0.30f),
-                            0.34f to Color.Transparent,
-                            1f to Color.Transparent
-                        )
-                    )
-                )
-        )
     }
 }
 
 @Composable
 private fun ImmersiveArtworkGlassBackdrop(
-    song: Song?,
     modifier: Modifier = Modifier
 ) {
-    // This copy of the cover is blurred and alpha-masked from clear to opaque so
-    // the transition into the glass area is gradual rather than a hard horizontal seam.
-    // Compose blur uses platform rendering support available from Android 12.
-    // Older versions keep the lightweight tinted backdrop below, without layering
-    // a second sharp copy of the album cover over the animated artwork.
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        ArtworkView(
-            song = song,
-            maxSizePx = 1_600,
-            modifier = modifier
-                .graphicsLayer {
-                    compositingStrategy = CompositingStrategy.Offscreen
-                }
-                .drawWithCache {
-                    val blurMask = Brush.verticalGradient(
-                        colorStops = arrayOf(
-                            0.00f to Color.Transparent,
-                            0.38f to Color.Transparent,
-                            0.54f to Color.White.copy(alpha = 0.46f),
-                            0.74f to Color.White.copy(alpha = 0.86f),
-                            1.00f to Color.White
-                        )
-                    )
-                    onDrawWithContent {
-                        drawContent()
-                        drawRect(
-                            brush = blurMask,
-                            blendMode = BlendMode.DstIn
-                        )
-                    }
-                }
-                .blur(30.dp)
-        )
-    }
-
+    // A substantial cool-tinted glass layer makes the strong blur read as a
+    // frosted surface rather than as an out-of-focus album cover.
     Box(
         modifier = modifier.background(
             Brush.verticalGradient(
                 colorStops = arrayOf(
-                    0.00f to Color.Transparent,
-                    0.42f to Color.Transparent,
-                    0.54f to Color.Black.copy(alpha = 0.06f),
-                    0.68f to Color.Black.copy(alpha = 0.13f),
-                    0.84f to Color.Black.copy(alpha = 0.24f),
-                    1.00f to Color.Black.copy(alpha = 0.34f)
+                    0.00f to Color(0xFF11141B).copy(alpha = 0.60f),
+                    0.32f to Color(0xFF151820).copy(alpha = 0.64f),
+                    0.62f to Color(0xFF11131A).copy(alpha = 0.70f),
+                    1.00f to Color(0xFF0A0B10).copy(alpha = 0.80f)
                 )
             )
         )
