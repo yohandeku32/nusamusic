@@ -5508,8 +5508,6 @@ private fun CanvasVideoBackground(
             volume = 0f
             repeatMode = Player.REPEAT_MODE_ONE
             setMediaItem(MediaItem.fromUri(url))
-            playWhenReady = true
-            prepare()
         }
     }
 
@@ -5527,6 +5525,8 @@ private fun CanvasVideoBackground(
         }
 
         player.addListener(listener)
+        player.prepare()
+        player.playWhenReady = true
         onDispose {
             player.removeListener(listener)
             player.release()
@@ -5535,13 +5535,15 @@ private fun CanvasVideoBackground(
 
     androidx.compose.ui.viewinterop.AndroidView(
         factory = { viewContext ->
-            androidx.media3.ui.PlayerView(viewContext).apply {
-                useController = false
-                resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                setShutterBackgroundColor(android.graphics.Color.BLACK)
-                setBackgroundColor(android.graphics.Color.BLACK)
-                player = player
-            }
+            (viewContext.getSystemService(android.content.Context.LAYOUT_INFLATER_SERVICE)
+                as android.view.LayoutInflater)
+                .inflate(
+                    R.layout.immersive_canvas_player_view,
+                    null,
+                    false
+                ).also { view ->
+                    (view as androidx.media3.ui.PlayerView).player = player
+                } as androidx.media3.ui.PlayerView
         },
         update = { playerView ->
             if (playerView.player !== player) playerView.player = player
