@@ -109,9 +109,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
@@ -2252,25 +2255,11 @@ private fun NusaMusicApp(
                                             modifier = Modifier.fillMaxSize()
                                         )
 
-                                        // Keep the cover artwork visible while gradually darkening
-                                        // the area behind the title and playback controls.
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .background(
-                                                    Brush.verticalGradient(
-                                                        colorStops = arrayOf(
-                                                            0.00f to Color.Transparent,
-                                                            0.32f to Color.Transparent,
-                                                            0.40f to Color.Black.copy(alpha = 0.12f),
-                                                            0.48f to Color.Black.copy(alpha = 0.32f),
-                                                            0.60f to Color.Black.copy(alpha = 0.62f),
-                                                            0.74f to Color.Black.copy(alpha = 0.84f),
-                                                            0.88f to Color.Black.copy(alpha = 0.95f),
-                                                            1.00f to Color.Black
-                                                        )
-                                                    )
-                                                )
+                                        // Apple Music-inspired frosted artwork backdrop keeps the
+                                        // artwork's colors visible while softly separating controls.
+                                        ImmersiveArtworkGlassBackdrop(
+                                            song = currentSong,
+                                            modifier = Modifier.fillMaxSize()
                                         )
                                     }
 
@@ -3438,7 +3427,7 @@ private fun AudioQualityPill(
                     .clip(RoundedCornerShape(50))
                     .background(
                         color = if (immersive) {
-                            Color.White.copy(alpha = 0.94f)
+                            Color.White.copy(alpha = 0.68f)
                         } else if (hiRes) {
                             Color(0xFFB5A77C).copy(alpha = 0.42f)
                         } else {
@@ -5453,8 +5442,8 @@ private fun ImmersiveArtwork(
         modifier = modifier
             .background(Color(0xFF121212))
     ) {
-        // Keep album artwork underneath the video at all times. It remains visible while
-        // Canvas loads and immediately becomes the fallback if the video fails to play.
+        // Keep album artwork underneath the animated stream at all times. It remains
+        // visible while the stream loads and becomes the fallback if playback fails.
         ArtworkView(
             song = song,
             maxSizePx = 1_600,
@@ -5483,15 +5472,63 @@ private fun ImmersiveArtwork(
                             0f to Color.Black.copy(alpha = 0.48f),
                             0.16f to Color.Black.copy(alpha = 0.30f),
                             0.34f to Color.Transparent,
-                            0.55f to Color.Transparent,
-                            0.72f to Color.Black.copy(alpha = 0.25f),
-                            0.88f to Color.Black.copy(alpha = 0.60f),
-                            1f to Color.Black.copy(alpha = 0.78f)
+                            1f to Color.Transparent
                         )
                     )
                 )
         )
     }
+}
+
+@Composable
+private fun ImmersiveArtworkGlassBackdrop(
+    song: Song?,
+    modifier: Modifier = Modifier
+) {
+    // This copy of the cover is blurred and alpha-masked from clear to opaque so
+    // the transition into the glass area is gradual rather than a hard horizontal seam.
+    ArtworkView(
+        song = song,
+        maxSizePx = 1_600,
+        modifier = modifier
+            .graphicsLayer {
+                compositingStrategy = CompositingStrategy.Offscreen
+            }
+            .drawWithCache {
+                val blurMask = Brush.verticalGradient(
+                    colorStops = arrayOf(
+                        0.00f to Color.Transparent,
+                        0.38f to Color.Transparent,
+                        0.54f to Color.White.copy(alpha = 0.46f),
+                        0.74f to Color.White.copy(alpha = 0.86f),
+                        1.00f to Color.White
+                    )
+                )
+                onDrawWithContent {
+                    drawContent()
+                    drawRect(
+                        brush = blurMask,
+                        blendMode = BlendMode.DstIn
+                    )
+                }
+            }
+            .blur(30.dp)
+    )
+
+    Box(
+        modifier = modifier.background(
+            Brush.verticalGradient(
+                colorStops = arrayOf(
+                    0.00f to Color.Transparent,
+                    0.42f to Color.Transparent,
+                    0.54f to Color.Black.copy(alpha = 0.06f),
+                    0.68f to Color.Black.copy(alpha = 0.13f),
+                    0.84f to Color.Black.copy(alpha = 0.24f),
+                    1.00f to Color.Black.copy(alpha = 0.34f)
+                )
+            )
+        )
+    )
 }
 
 @Composable
