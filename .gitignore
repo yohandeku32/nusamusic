@@ -18,3 +18,11 @@ captures/
 # OS
 .DS_Store
 Thumbs.db
+
+# Canvas backend secrets (never commit these)
+.env
+.env.*
+!*.env.example
+canvas-api/.env
+canvas-api/.env.*
+!canvas-api/.env.example
