@@ -71,7 +71,7 @@ async function findMatchingTrack(title, artist) {
   const q = `track:"${title}" artist:"${artist}"`;
   const response = await axios.get("https://api.spotify.com/v1/search", {
     timeout: 8000,
-    params: { q, type: "track", limit: 10, market: "from_token" },
+    params: { q, type: "track", limit: 10 },
     headers: { Authorization: "Bearer " + token }
   });
 
