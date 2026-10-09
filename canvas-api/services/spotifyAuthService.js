@@ -142,7 +142,7 @@ async function generateAuthPayload(reason, productType) {
     productType,
     totp: generateTOTP(localTime),
     totpVer: currentTotpVersion || "19",
-    totpServer: generateTOTP(Math.floor(serverTime / 30))
+    totpServer: generateTOTP(serverTime)
   };
 }
 
