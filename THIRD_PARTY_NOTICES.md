@@ -26,12 +26,3 @@ of the [Hi-Res Audio logo](https://en.wikipedia.org/wiki/File:Hi-Res_Audio_(logo
 Wikimedia identifies the logo as public domain because it is ineligible for
 copyright; attribution is not required. The logo is trademarked and is used
 only to identify Hi-Res audio.
-
-
-## Optional Spotify Canvas backend
-
-The separately deployable `canvas-api/` component includes code adapted from
-[Paxsenix0/Spotify-Canvas-API](https://github.com/Paxsenix0/Spotify-Canvas-API).
-That upstream repository's checked-in `LICENSE` is GNU GPL v3. The applicable
-license is included at `canvas-api/LICENSE`. This backend is experimental and
-uses undocumented Spotify endpoints; it is not endorsed by Spotify.
