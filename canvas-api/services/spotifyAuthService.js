@@ -11,23 +11,29 @@ const SECRETS_URL = "https://raw.githubusercontent.com/xyloflake/spot-secrets-go
 let currentTotp = null;
 let currentTotpVersion = null;
 let lastFetchTime = 0;
-const FETCH_INTERVAL = 60 * 60 * 1000; // 1 hour in milliseconds
+const FETCH_INTERVAL = 60 * 60 * 1000;
+let initializationPromise = null;
 
-// Initialize TOTP secrets on startup
-initializeTOTPSecrets();
-
-// Set up periodic updates
-const secretRefreshTimer = setInterval(updateTOTPSecrets, FETCH_INTERVAL);\nsecretRefreshTimer.unref?.();
-
-async function initializeTOTPSecrets() {
-  try {
-    await updateTOTPSecrets();
-  } catch (error) {
-    console.error('Failed to initialize TOTP secrets:', error);
-    // Fallback to the original hardcoded secret
-    useFallbackSecret();
-  }
+function initializeTOTPSecrets() {
+  if (initializationPromise) return initializationPromise;
+  initializationPromise = updateTOTPSecrets()
+    .catch((error) => {
+      console.error("Failed to initialize TOTP secrets:", error?.message ?? error);
+      if (!currentTotp) useFallbackSecret();
+    })
+    .finally(() => {
+      initializationPromise = null;
+    });
+  return initializationPromise;
 }
+
+// Best-effort initialization. getToken awaits the same promise if needed.
+void initializeTOTPSecrets();
+
+const secretRefreshTimer = setInterval(() => {
+  void updateTOTPSecrets();
+}, FETCH_INTERVAL);
+secretRefreshTimer.unref?.();
 
 async function updateTOTPSecrets() {
   try {
@@ -69,7 +75,7 @@ async function updateTOTPSecrets() {
 async function fetchSecretsFromGitHub() {
   try {
     const response = await axios.get(SECRETS_URL, {
-      timeout: 10000,
+      timeout: 8000,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
       }
@@ -116,12 +122,15 @@ export async function getToken(reason = "init", productType = "mobile-web-player
     await initializeTOTPSecrets();
   }
 
+  if (!SP_DC) throw new Error("Missing SP_DC environment variable");
+
   const payload = await generateAuthPayload(reason, productType);
 
   const url = new URL("https://open.spotify.com/api/token");
   Object.entries(payload).forEach(([key, value]) => url.searchParams.append(key, value));
 
   const response = await axios.get(url.toString(), {
+    timeout: 8000,
     headers: {
       'User-Agent': userAgent(),
       'Origin': 'https://open.spotify.com/',
@@ -149,6 +158,7 @@ async function generateAuthPayload(reason, productType) {
 async function getServerTime() {
   try {
     const { data } = await axios.get("https://open.spotify.com/api/server-time", {
+      timeout: 5000,
       headers: {
         'User-Agent': userAgent(),
         'Origin': 'https://open.spotify.com/',
