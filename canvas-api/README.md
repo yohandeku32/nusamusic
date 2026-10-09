@@ -17,6 +17,8 @@ Required environment variables:
 - `SPOTIFY_CLIENT_SECRET`: the corresponding app secret, kept only on the backend.
 - `SP_DC`: the `sp_dc` session cookie from a signed-in Spotify web session, required by the unofficial Canvas endpoint.
 
+Create the Spotify app at [Spotify for Developers](https://developer.spotify.com/dashboard). Spotify's current Development Mode rules require the app owner to have Premium and limit the app to a small allowlist; check the dashboard and Spotify's [current Development Mode docs](https://developer.spotify.com/documentation/web-api/concepts/quota-modes) before setup.
+
 **Security and availability:** `SP_DC` is a sensitive login-session credential. Never commit it to GitHub, include it in the APK, or send it to anyone. Configure it only in Vercel's encrypted environment variables. If it expires, Canvas lookups will fail until you update it. This backend uses undocumented Spotify endpoints, which may change and may be restricted by Spotify. Spotify Client ID/Secret are used only for official catalog search.
 
 ## Configure the Android build
