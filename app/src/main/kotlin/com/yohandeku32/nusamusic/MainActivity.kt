@@ -2191,6 +2191,27 @@ private fun NusaMusicApp(
                                             song = currentSong,
                                             modifier = Modifier.fillMaxSize()
                                         )
+
+                                        // Keep the cover artwork visible while gradually darkening
+                                        // the area behind the title and playback controls.
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .background(
+                                                    Brush.verticalGradient(
+                                                        colorStops = arrayOf(
+                                                            0.00f to Color.Transparent,
+                                                            0.36f to Color.Transparent,
+                                                            0.43f to Color.Black.copy(alpha = 0.08f),
+                                                            0.52f to Color.Black.copy(alpha = 0.24f),
+                                                            0.64f to Color.Black.copy(alpha = 0.52f),
+                                                            0.78f to Color.Black.copy(alpha = 0.76f),
+                                                            0.90f to Color.Black.copy(alpha = 0.90f),
+                                                            1.00f to Color.Black.copy(alpha = 0.96f)
+                                                        )
+                                                    )
+                                                )
+                                        )
                                     }
 
                                     Column(
