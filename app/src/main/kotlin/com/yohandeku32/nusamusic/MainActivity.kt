@@ -2501,13 +2501,13 @@ private fun NusaMusicApp(
                                                 IconButton(
                                                     onClick = onPrevious,
                                                     enabled = currentSong != null,
-                                                    modifier = Modifier.size(68.dp)
+                                                    modifier = Modifier.size(76.dp)
                                                 ) {
                                                     Icon(
                                                         Icons.Rounded.FastRewind,
                                                         contentDescription = nusaText("Sebelumnya", "Previous"),
                                                         tint = Color.White,
-                                                        modifier = Modifier.size(40.dp)
+                                                        modifier = Modifier.size(48.dp)
                                                     )
                                                 }
                                             } else {
@@ -2520,13 +2520,13 @@ private fun NusaMusicApp(
                                                 )
                                             }
 
-                                            Spacer(Modifier.width(12.dp))
+                                            Spacer(Modifier.width(if (immersiveArtworkMode) 8.dp else 12.dp))
 
                                             if (immersiveArtworkMode) {
                                                 IconButton(
                                                     onClick = if (currentSong == null) onRequestPermission else onTogglePlay,
                                                     enabled = true,
-                                                    modifier = Modifier.size(96.dp)
+                                                    modifier = Modifier.size(104.dp)
                                                 ) {
                                                     Icon(
                                                         imageVector = if (isPlaying) {
@@ -2540,7 +2540,7 @@ private fun NusaMusicApp(
                                                             nusaText("Putar", "Play")
                                                         },
                                                         tint = Color.White,
-                                                        modifier = Modifier.size(60.dp)
+                                                        modifier = Modifier.size(72.dp)
                                                     )
                                                 }
                                             } else {
@@ -2567,19 +2567,19 @@ private fun NusaMusicApp(
                                                 )
                                             }
 
-                                            Spacer(Modifier.width(12.dp))
+                                            Spacer(Modifier.width(if (immersiveArtworkMode) 8.dp else 12.dp))
 
                                             if (immersiveArtworkMode) {
                                                 IconButton(
                                                     onClick = onNext,
                                                     enabled = currentSong != null,
-                                                    modifier = Modifier.size(68.dp)
+                                                    modifier = Modifier.size(76.dp)
                                                 ) {
                                                     Icon(
                                                         Icons.Rounded.FastForward,
                                                         contentDescription = nusaText("Berikutnya", "Next"),
                                                         tint = Color.White,
-                                                        modifier = Modifier.size(40.dp)
+                                                        modifier = Modifier.size(48.dp)
                                                     )
                                                 }
                                             } else {
