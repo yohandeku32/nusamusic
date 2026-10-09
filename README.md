@@ -207,29 +207,25 @@ Artist portraits are looked up and cached locally.
 
 For multiple artists, the first artist is used for the lookup.
 
-## Spotify Canvas (Experimental)
+## Apple Music Animated Artwork (Experimental)
 
-Immersive Artwork can optionally show Spotify Canvas as a silent looping video.
-Local album artwork remains underneath as a fallback when Canvas is unavailable,
-the song cannot be confidently matched, the network request fails, or the backend
-has not been configured.
+Immersive Artwork can optionally show Apple Music's animated album cover as a
+silent looping video. It uses the community-maintained
+[Apple Music Animated Artworks API](https://github.com/m8tec/apple-music-animated-artworks)
+at `https://artwork.m8tec.top`.
 
-The Canvas service is a separate Vercel deployment from the Android app. Follow
-[`canvas-api/README.md`](canvas-api/README.md) to deploy it with Vercel's Root
-Directory set to `canvas-api`.
+Nusa searches by the local song's artist, album, and title. It prefers the tall
+artwork variant for immersive playback and falls back to the square variant if
+needed. Local album artwork stays visible while animation loads and remains the
+fallback when no animated artwork exists, the API is unavailable, or playback fails.
 
-After deployment, put these values in the project `local.properties` file:
+No Spotify Developer account or Canvas backend setup is required for this
+feature. The public API is community-run, not an official Apple API, and may be
+rate-limited or change. For that reason, the feature is optional and static cover
+art remains the default fallback.
 
-```properties
-CANVAS_API_BASE_URL=https://YOUR-CANVAS-PROJECT.vercel.app
-CANVAS_API_KEY=the-same-random-key-configured-in-vercel
-```
-
-Re-sync Gradle and rebuild. If the settings are blank, Canvas lookup stays
-disabled and Immersive Artwork behaves as before. The API key is bundled in an
-Android APK and therefore can be extracted; this setup is intended for personal
-testing, not a publicly shared backend. The backend also relies on an
-undocumented Spotify endpoint and may stop working if Spotify changes it.
+Apple Music artwork lookup is performed only while Immersive Artwork is shown.
+Results are cached in memory to avoid repeatedly querying the service for the same album.
 
 ## Audio Quality
 
