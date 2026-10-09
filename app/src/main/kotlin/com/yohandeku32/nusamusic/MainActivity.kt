@@ -491,6 +491,7 @@ class MainActivity : ComponentActivity() {
                     durationMs = durationMs,
                     permissionGranted = permissionGranted,
                     onPlay = ::playSong,
+                    onPlaybackOrderChanged = ::updatePlaybackOrder,
                     onTogglePlay = ::togglePlay,
                     customTitleFontPath = customTitleFontPath,
                     customTitleFontName = customTitleFontName,
@@ -865,18 +866,18 @@ class MainActivity : ComponentActivity() {
             )
             .build()
 
-    private fun playSong(song: Song) {
+    private fun playSong(song: Song, orderedSongs: List<Song>) {
         controller?.let { c ->
-            val targetIndex = songs.indexOfFirst { it.id == song.id }
+            // Use the list's selected sort order for the Media3 queue as well as
+            // the visible library. This keeps Next/Previous aligned with sorting.
+            val queueSongs = orderedSongs.ifEmpty { songs }
+            val targetIndex = queueSongs.indexOfFirst { it.id == song.id }
             if (targetIndex < 0) return@let
 
-            // Swiping between tracks should not rebuild the entire Media3 queue.
-            // Rebuilding the queue resets the decoder and can replay the first
-            // few milliseconds of the selected track. Reuse the current queue
-            // whenever it already contains the same library.
-            val queueMatches = c.mediaItemCount == songs.size &&
-                songs.indices.all { index ->
-                    c.getMediaItemAt(index).mediaId == songs[index].id.toString()
+            // Avoid resetting the decoder when the queue already uses this exact order.
+            val queueMatches = c.mediaItemCount == queueSongs.size &&
+                queueSongs.indices.all { index ->
+                    c.getMediaItemAt(index).mediaId == queueSongs[index].id.toString()
                 }
 
             if (queueMatches) {
@@ -884,7 +885,7 @@ class MainActivity : ComponentActivity() {
                 c.play()
             } else {
                 c.setMediaItems(
-                    songs.map(::mediaItemFor),
+                    queueSongs.map(::mediaItemFor),
                     targetIndex,
                     0L
                 )
@@ -895,6 +896,55 @@ class MainActivity : ComponentActivity() {
             currentSong = song
             isPlaying = true
         }
+    }
+
+    private fun updatePlaybackOrder(orderedSongs: List<Song>) {
+        if (orderedSongs.isEmpty()) return
+
+        val c = controller ?: return
+        val currentMediaId = c.currentMediaItem?.mediaId ?: return
+        val orderedIds = orderedSongs.map { it.id.toString() }
+        val currentIds = (0 until c.mediaItemCount)
+            .map { index -> c.getMediaItemAt(index).mediaId }
+
+        if (
+            currentIds.size == orderedIds.size &&
+            currentIds.toSet() == orderedIds.toSet()
+        ) {
+            // Reorder existing queue entries in place to preserve the active
+            // decoder, current position and ongoing playback.
+            orderedIds.forEachIndexed { targetIndex, targetId ->
+                val sourceIndex = (targetIndex until c.mediaItemCount)
+                    .firstOrNull { index ->
+                        c.getMediaItemAt(index).mediaId == targetId
+                    } ?: return@forEachIndexed
+
+                if (sourceIndex != targetIndex) {
+                    c.moveMediaItem(sourceIndex, targetIndex)
+                }
+            }
+            return
+        }
+
+        // If the library membership changed, keep the current track and position
+        // while synchronizing the queue to the newly sorted library.
+        val currentIndex = orderedIds.indexOf(currentMediaId)
+        if (currentIndex < 0) return
+
+        val wasPlayWhenReady = c.playWhenReady
+        val positionMs = c.currentPosition.coerceAtLeast(0L)
+        val savedRepeatMode = c.repeatMode
+        val savedShuffleEnabled = c.shuffleModeEnabled
+
+        c.setMediaItems(
+            orderedSongs.map(::mediaItemFor),
+            currentIndex,
+            positionMs
+        )
+        c.repeatMode = savedRepeatMode
+        c.shuffleModeEnabled = savedShuffleEnabled
+        c.prepare()
+        if (wasPlayWhenReady) c.play() else c.pause()
     }
 
     private fun togglePlay() {
@@ -1201,7 +1251,8 @@ private fun NusaMusicApp(
     positionMsState: State<Long>,
     durationMs: Long,
     permissionGranted: Boolean,
-    onPlay: (Song) -> Unit,
+    onPlay: (Song, List<Song>) -> Unit,
+    onPlaybackOrderChanged: (List<Song>) -> Unit,
     onTogglePlay: () -> Unit,
     customTitleFontPath: String?,
     customTitleFontName: String?,
@@ -1348,6 +1399,10 @@ private fun NusaMusicApp(
             LibrarySortOption.DURATION_DESC ->
                 songs.sortedByDescending { it.durationMs }
         }
+    }
+
+    LaunchedEffect(filtered) {
+        onPlaybackOrderChanged(filtered)
     }
 
     val alphabet = remember {
@@ -2301,7 +2356,7 @@ private fun NusaMusicApp(
                                                     .screenHeightDp.dp
                                             Spacer(
                                                 Modifier.height(
-                                                    (screenHeight * 0.30f).coerceIn(160.dp, 250.dp)
+                                                    ((screenHeight * 0.30f).coerceIn(160.dp, 250.dp) + 16.dp)
                                                 )
                                             )
                                         }
@@ -2702,7 +2757,9 @@ private fun NusaMusicApp(
                                         LibrarySongListRow(
                                             song = song,
                                             selected = currentSong?.id == song.id,
-                                            onPlay = onPlay
+                                            onPlay = { selectedSong ->
+                                                onPlay(selectedSong, filtered)
+                                            }
                                         )
                                     }
                                 } else if (!permissionGranted && selectedMusicFolders.isEmpty()) {
