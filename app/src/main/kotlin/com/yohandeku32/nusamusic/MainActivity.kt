@@ -122,6 +122,8 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -1308,6 +1310,23 @@ private fun NusaMusicApp(
             )
         )
     }
+    // Measure the artwork frame and transport row so only the artwork can extend
+    // down to just above the playback buttons without moving any player controls.
+    var immersivePlayerFrameTopPx by remember { mutableFloatStateOf(Float.NaN) }
+    var immersiveTransportRowTopPx by remember { mutableFloatStateOf(Float.NaN) }
+    val immersiveArtworkHeight = if (
+        immersivePlayerFrameTopPx.isFinite() &&
+        immersiveTransportRowTopPx.isFinite() &&
+        immersiveTransportRowTopPx > immersivePlayerFrameTopPx
+    ) {
+        with(androidx.compose.ui.platform.LocalDensity.current) {
+            (immersiveTransportRowTopPx - immersivePlayerFrameTopPx + 8.dp.toPx())
+                .coerceAtLeast(1f)
+                .toDp()
+        }
+    } else {
+        null
+    }
 
     var customTitleTypeface by remember {
         mutableStateOf<Typeface?>(null)
@@ -2233,6 +2252,21 @@ private fun NusaMusicApp(
                                         .fillParentMaxHeight()
                                         .then(
                                             if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
+                                                Modifier.onGloballyPositioned { coordinates ->
+                                                    val frameTop = coordinates.positionInRoot().y
+                                                    if (
+                                                        !immersivePlayerFrameTopPx.isFinite() ||
+                                                        abs(immersivePlayerFrameTopPx - frameTop) > 0.5f
+                                                    ) {
+                                                        immersivePlayerFrameTopPx = frameTop
+                                                    }
+                                                }
+                                            } else {
+                                                Modifier
+                                            }
+                                        )
+                                        .then(
+                                            if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
                                                 // Keep the immersive player edge square and fully black so
                                                 // rounded-corner antialiasing cannot reveal a light-colored seam
                                                 // between the player and the biography section.
@@ -2256,7 +2290,10 @@ private fun NusaMusicApp(
                                             song = currentSong,
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .aspectRatio(1f)
+                                                .then(
+                                                    immersiveArtworkHeight?.let { Modifier.height(it) }
+                                                        ?: Modifier.fillMaxHeight(0.62f)
+                                                )
                                                 .align(Alignment.TopCenter)
                                                 .offset(y = (-16).dp)
                                         )
@@ -2486,7 +2523,23 @@ private fun NusaMusicApp(
                                         Spacer(Modifier.height(5.dp))
 
                                         Row(
-                                            modifier = Modifier.fillMaxWidth(),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .then(
+                                                    if (immersiveArtworkMode) {
+                                                        Modifier.onGloballyPositioned { coordinates ->
+                                                            val rowTop = coordinates.positionInRoot().y
+                                                            if (
+                                                                !immersiveTransportRowTopPx.isFinite() ||
+                                                                abs(immersiveTransportRowTopPx - rowTop) > 0.5f
+                                                            ) {
+                                                                immersiveTransportRowTopPx = rowTop
+                                                            }
+                                                        }
+                                                    } else {
+                                                        Modifier
+                                                    }
+                                                ),
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.Center
                                         ) {
