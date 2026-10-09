@@ -3012,7 +3012,10 @@ private fun ArtistBiographySection(
                     if (ArtistBiographyLoader.isConfigured()) {
                         nusaText("Biografi tidak tersedia", "Biography not available")
                     } else {
-                        "Add LASTFM_API_KEY to local.properties"
+                        nusaText(
+                            "Atur LASTFM_API_KEY di local.properties atau environment",
+                            "Set LASTFM_API_KEY in local.properties or the environment"
+                        )
                     },
                     color = Color(0xFF8A8A8A),
                     fontSize = 14.sp,

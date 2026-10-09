@@ -13,7 +13,15 @@ if (localPropertiesFile.exists()) {
     }
 }
 
-val lastFmApiKey = localProperties.getProperty("LASTFM_API_KEY", "")
+val lastFmApiKey = sequenceOf(
+    localProperties.getProperty("LASTFM_API_KEY"),
+    providers.gradleProperty("LASTFM_API_KEY").orNull,
+    providers.environmentVariable("LASTFM_API_KEY").orNull
+)
+    .filterNotNull()
+    .map { it.trim() }
+    .firstOrNull { it.isNotEmpty() && it != "YOUR_LASTFM_API_KEY" }
+    .orEmpty()
     .replace("\\", "\\\\")
     .replace("\"", "\\\"")
 

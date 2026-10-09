@@ -188,13 +188,16 @@ The current behavior is:
 - do not fall back to English
 - show long biographies in a scrollable area
 
-Set the Last.fm key in `local.properties`:
+Configure the Last.fm API key using the first non-empty value found here:
 
 ```properties
 LASTFM_API_KEY=YOUR_LASTFM_API_KEY
 ```
 
-Do not commit `local.properties`.
+You can set it in the project `local.properties`, as a Gradle project property
+(`-PLASTFM_API_KEY=...` or `~/.gradle/gradle.properties`), or in the
+`LASTFM_API_KEY` environment variable. The value is bundled into the app at
+build time. Do not commit API keys or `local.properties`.
 
 ### Artist Portrait
 
