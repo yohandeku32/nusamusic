@@ -5487,33 +5487,38 @@ private fun ImmersiveArtworkGlassBackdrop(
 ) {
     // This copy of the cover is blurred and alpha-masked from clear to opaque so
     // the transition into the glass area is gradual rather than a hard horizontal seam.
-    ArtworkView(
-        song = song,
-        maxSizePx = 1_600,
-        modifier = modifier
-            .graphicsLayer {
-                compositingStrategy = CompositingStrategy.Offscreen
-            }
-            .drawWithCache {
-                val blurMask = Brush.verticalGradient(
-                    colorStops = arrayOf(
-                        0.00f to Color.Transparent,
-                        0.38f to Color.Transparent,
-                        0.54f to Color.White.copy(alpha = 0.46f),
-                        0.74f to Color.White.copy(alpha = 0.86f),
-                        1.00f to Color.White
-                    )
-                )
-                onDrawWithContent {
-                    drawContent()
-                    drawRect(
-                        brush = blurMask,
-                        blendMode = BlendMode.DstIn
-                    )
+    // Compose blur uses platform rendering support available from Android 12.
+    // Older versions keep the lightweight tinted backdrop below, without layering
+    // a second sharp copy of the album cover over the animated artwork.
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        ArtworkView(
+            song = song,
+            maxSizePx = 1_600,
+            modifier = modifier
+                .graphicsLayer {
+                    compositingStrategy = CompositingStrategy.Offscreen
                 }
-            }
-            .blur(30.dp)
-    )
+                .drawWithCache {
+                    val blurMask = Brush.verticalGradient(
+                        colorStops = arrayOf(
+                            0.00f to Color.Transparent,
+                            0.38f to Color.Transparent,
+                            0.54f to Color.White.copy(alpha = 0.46f),
+                            0.74f to Color.White.copy(alpha = 0.86f),
+                            1.00f to Color.White
+                        )
+                    )
+                    onDrawWithContent {
+                        drawContent()
+                        drawRect(
+                            brush = blurMask,
+                            blendMode = BlendMode.DstIn
+                        )
+                    }
+                }
+                .blur(30.dp)
+        )
+    }
 
     Box(
         modifier = modifier.background(
