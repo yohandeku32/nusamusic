@@ -2377,7 +2377,7 @@ private fun NusaMusicApp(
                                             androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
                                         val estimatedTitleLines = remember(titleText, titleSize, screenWidthDp) {
                                             val availableWidthDp = (screenWidthDp - 52f).coerceAtLeast(120f)
-                                            val estimatedCharacterWidthDp = (titleSize.value * 0.52f).coerceAtLeast(1f)
+                                            val estimatedCharacterWidthDp = (titleSize.value * 0.60f).coerceAtLeast(1f)
                                             val estimatedCharactersPerLine =
                                                 (availableWidthDp / estimatedCharacterWidthDp).coerceAtLeast(1f)
                                             kotlin.math.ceil(
