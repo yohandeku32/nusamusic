@@ -70,5 +70,6 @@ dependencies {
     implementation("androidx.media3:media3-session:1.9.3")
     implementation("androidx.media3:media3-ui:1.9.3")
     implementation("androidx.media3:media3-inspector:1.9.3")
+    testImplementation("junit:junit:4.13.2")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

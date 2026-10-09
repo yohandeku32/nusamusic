@@ -32,6 +32,7 @@ Most of the core player features are already working. The project is now mainly 
 | Album artwork | ✅ Working |
 | Main player UI | ✅ Working |
 | Rotating vinyl player | ✅ Working |
+| Vinyl / immersive artwork presentation setting | ✅ Working |
 | Tonearm / playback position | ✅ Working |
 | Song library | ✅ Working |
 | A–Z index | ✅ Working |
@@ -52,11 +53,12 @@ Most of the core player features are already working. The project is now mainly 
 
 ## Main Player
 
-The main screen is built around a rotating vinyl record.
+The main screen can use either the existing rotating vinyl record or immersive artwork filling the player background, with the title, progress, playback controls, and actions layered over subtle top and bottom scrims. The Hi-Res badge remains on a light pill for contrast. Choose the presentation in Settings; vinyl remains the default.
 
 Current player features include:
 
 - rotating vinyl
+- immersive album artwork with subtle scrims behind controls and player actions
 - physical-looking grooves and surface detail
 - vinyl shadow and edge thickness
 - light reflections

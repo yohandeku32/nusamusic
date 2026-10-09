@@ -139,6 +139,7 @@ import com.yohandeku32.nusamusic.data.ArtistImageLoader
 import com.yohandeku32.nusamusic.data.ArtistBiographyLoader
 import com.yohandeku32.nusamusic.data.ArtistNameUtils
 import com.yohandeku32.nusamusic.data.MusicRepository
+import com.yohandeku32.nusamusic.model.PlayerPresentationMode
 import com.yohandeku32.nusamusic.model.Song
 import com.yohandeku32.nusamusic.playback.PlaybackService
 import kotlinx.coroutines.Dispatchers
@@ -1050,10 +1051,9 @@ private fun ChatGptStyleShareIcon(
 
 @Composable
 private fun BiographyArrowIcon(
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    color: Color = androidx.compose.material3.LocalContentColor.current
 ) {
-    val color = androidx.compose.material3.LocalContentColor.current
-
     Canvas(modifier = modifier) {
         val stroke = size.minDimension * 0.105f
         val centerX = size.width / 2f
@@ -1080,10 +1080,13 @@ private fun BiographyArrowIcon(
 @Composable
 private fun NusaFavoriteIcon(
     selected: Boolean,
+    color: Color = Color.Unspecified,
     modifier: Modifier = Modifier
 ) {
-    val color = if (selected) {
+    val resolvedColor = if (selected) {
         Color(0xFFFF4F6D)
+    } else if (color != Color.Unspecified) {
+        color
     } else {
         androidx.compose.material3.LocalContentColor.current
     }
@@ -1129,12 +1132,12 @@ private fun NusaFavoriteIcon(
         if (selected) {
             drawPath(
                 path = path,
-                color = color
+                color = resolvedColor
             )
         } else {
             drawPath(
                 path = path,
-                color = color,
+                color = resolvedColor,
                 style = androidx.compose.ui.graphics.drawscope.Stroke(
                     width = size.minDimension * 0.075f,
                     cap = androidx.compose.ui.graphics.StrokeCap.Round,
@@ -1241,6 +1244,13 @@ private fun NusaMusicApp(
     var titleFontName by remember {
         mutableStateOf(
             uiPrefs.getString("title_font_family", "Serif") ?: "Serif"
+        )
+    }
+    var playerPresentationMode by remember {
+        mutableStateOf(
+            PlayerPresentationMode.fromPreference(
+                uiPrefs.getString("player_presentation_mode", null)
+            )
         )
     }
 
@@ -1714,6 +1724,59 @@ private fun NusaMusicApp(
                 Spacer(Modifier.height(22.dp))
 
                 Text(
+                    nusaText("TAMPILAN PEMUTAR", "PLAYER PRESENTATION"),
+                    fontSize = 11.sp,
+                    letterSpacing = 1.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    PlayerButtonStyleOption(
+                        title = "Vinyl",
+                        subtitle = nusaText(
+                            "Piringan hitam berputar.",
+                            "Rotating vinyl record."
+                        ),
+                        selected = playerPresentationMode == PlayerPresentationMode.VINYL,
+                        onClick = {
+                            playerPresentationMode = PlayerPresentationMode.VINYL
+                            uiPrefs.edit()
+                                .putString(
+                                    "player_presentation_mode",
+                                    PlayerPresentationMode.VINYL.preferenceValue
+                                )
+                                .apply()
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                    PlayerButtonStyleOption(
+                        title = nusaText("Sampul imersif", "Immersive art"),
+                        subtitle = nusaText(
+                            "Sampul album layar penuh.",
+                            "Full-cover album artwork."
+                        ),
+                        selected = playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK,
+                        onClick = {
+                            playerPresentationMode = PlayerPresentationMode.IMMERSIVE_ARTWORK
+                            uiPrefs.edit()
+                                .putString(
+                                    "player_presentation_mode",
+                                    PlayerPresentationMode.IMMERSIVE_ARTWORK.preferenceValue
+                                )
+                                .apply()
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                Spacer(Modifier.height(22.dp))
+
+                Text(
                     nusaText("GAYA TOMBOL PEMUTARAN", "PLAYER BUTTON STYLE"),
                     fontSize = 11.sp,
                     letterSpacing = 1.5.sp,
@@ -2094,7 +2157,9 @@ private fun NusaMusicApp(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .background(
-                                    if (revealPlayerCurve) {
+                                    if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK ||
+                                        revealPlayerCurve
+                                    ) {
                                         Color.Black
                                     } else {
                                         MaterialTheme.colorScheme.background
@@ -2103,7 +2168,7 @@ private fun NusaMusicApp(
                             contentPadding = PaddingValues(0.dp)
                         ) {
                             item {
-                                Column(
+                                Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .fillParentMaxHeight()
@@ -2113,9 +2178,33 @@ private fun NusaMusicApp(
                                                 bottomEnd = 34.dp
                                             )
                                         )
-                                        .background(MaterialTheme.colorScheme.background),
-                                    horizontalAlignment = Alignment.CenterHorizontally
+                                        .then(
+                                            if (playerPresentationMode == PlayerPresentationMode.VINYL) {
+                                                Modifier.background(MaterialTheme.colorScheme.background)
+                                            } else {
+                                                Modifier
+                                            }
+                                        )
                                 ) {
+                                    if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
+                                        ImmersiveArtwork(
+                                            song = currentSong,
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                    }
+
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .then(
+                                                if (playerPresentationMode == PlayerPresentationMode.VINYL) {
+                                                    Modifier.background(MaterialTheme.colorScheme.background)
+                                                } else {
+                                                    Modifier
+                                                }
+                                            ),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
                                     Spacer(
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -2125,8 +2214,18 @@ private fun NusaMusicApp(
                                     TopAppBar(
                                         title = { },
                                         colors = TopAppBarDefaults.topAppBarColors(
-                                            containerColor = MaterialTheme.colorScheme.background,
-                                            scrolledContainerColor = MaterialTheme.colorScheme.background
+                                            containerColor = if (
+                                                playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
+                                            ) Color.Transparent else MaterialTheme.colorScheme.background,
+                                            scrolledContainerColor = if (
+                                                playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
+                                            ) Color.Transparent else MaterialTheme.colorScheme.background,
+                                            actionIconContentColor = if (
+                                                playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
+                                            ) Color.White else MaterialTheme.colorScheme.onSurface,
+                                            navigationIconContentColor = if (
+                                                playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
+                                            ) Color.White else MaterialTheme.colorScheme.onSurface
                                         ),
                                         windowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
                                         navigationIcon = {
@@ -2142,13 +2241,19 @@ private fun NusaMusicApp(
                                             IconButton(onClick = {}) {
                                                 Icon(
                                                     Icons.Default.MoreHoriz,
-                                                    contentDescription = nusaText("Lainnya", "More")
+                                                    contentDescription = nusaText("Lainnya", "More"),
+                                                    tint = if (
+                                                        playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
+                                                    ) Color.White else MaterialTheme.colorScheme.onSurface
                                                 )
                                             }
                                             IconButton(onClick = { showSettings = true }) {
                                                 Icon(
                                                     Icons.Default.Settings,
-                                                    contentDescription = nusaText("Pengaturan", "Settings")
+                                                    contentDescription = nusaText("Pengaturan", "Settings"),
+                                                    tint = if (
+                                                        playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
+                                                    ) Color.White else MaterialTheme.colorScheme.onSurface
                                                 )
                                             }
                                         }
@@ -2157,22 +2262,44 @@ private fun NusaMusicApp(
                                     Column(
                                         modifier = Modifier
                                             .fillMaxWidth()
+                                            .then(
+                                                if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
+                                                    Modifier.weight(1f)
+                                                } else {
+                                                    Modifier
+                                                }
+                                            )
                                             .padding(horizontal = 22.dp),
                                         horizontalAlignment = Alignment.CenterHorizontally
                                     ) {
-                                        Spacer(Modifier.height(2.dp))
+                                        if (playerPresentationMode == PlayerPresentationMode.VINYL) {
+                                            Spacer(Modifier.height(2.dp))
+                                        } else {
+                                            val screenHeight =
+                                                androidx.compose.ui.platform.LocalConfiguration.current
+                                                    .screenHeightDp.dp
+                                            Spacer(
+                                                Modifier.height(
+                                                    (screenHeight * 0.30f).coerceIn(160.dp, 250.dp)
+                                                )
+                                            )
+                                        }
 
-                                        VinylRecord(
-                                            song = currentSong,
-                                            isPlaying = isPlaying,
-                                            positionMsState = positionMsState,
-                                            durationMs = durationMs,
-                                            modifier = Modifier
-                                                .fillMaxWidth(0.84f)
-                                                .aspectRatio(1f)
-                                        )
+                                        if (playerPresentationMode == PlayerPresentationMode.VINYL) {
+                                            VinylRecord(
+                                                song = currentSong,
+                                                isPlaying = isPlaying,
+                                                positionMsState = positionMsState,
+                                                durationMs = durationMs,
+                                                modifier = Modifier
+                                                    .fillMaxWidth(0.84f)
+                                                    .aspectRatio(1f)
+                                            )
+                                        }
 
-                                        Spacer(Modifier.height(24.dp))
+                                        if (playerPresentationMode == PlayerPresentationMode.VINYL) {
+                                            Spacer(Modifier.height(24.dp))
+                                        }
 
                                         Box(
                                             modifier = Modifier
@@ -2216,6 +2343,9 @@ private fun NusaMusicApp(
                                                 maxLines = 3,
                                                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                                 modifier = Modifier.padding(horizontal = 4.dp),
+                                                color = if (
+                                                    playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
+                                                ) Color.White else MaterialTheme.colorScheme.onBackground,
                                                 textAlign = TextAlign.Center
                                             )
                                         }
@@ -2226,7 +2356,13 @@ private fun NusaMusicApp(
                                             fontSize = 14.sp,
                                             maxLines = 1,
                                             textAlign = TextAlign.Center,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            color = if (
+                                                playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
+                                            ) {
+                                                Color.White.copy(alpha = 0.82f)
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                            }
                                         )
 
                                         Spacer(Modifier.height(16.dp))
@@ -2236,6 +2372,7 @@ private fun NusaMusicApp(
                                             durationMs = durationMs,
                                             enabled = currentSong != null && durationMs > 0L,
                                             onSeek = onSeek,
+                                            immersive = playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK,
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .padding(horizontal = 12.dp)
@@ -2339,7 +2476,10 @@ private fun NusaMusicApp(
                                                         .size(25.dp)
                                                         .graphicsLayer {
                                                             rotationZ = biographyArrowRotation
-                                                        }
+                                                        },
+                                                    color = if (
+                                                        playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
+                                                    ) Color.White else MaterialTheme.colorScheme.onSurface
                                                 )
                                             }
 
@@ -2351,7 +2491,10 @@ private fun NusaMusicApp(
                                                 modifier = Modifier.size(42.dp)
                                             ) {
                                                 ChatGptStyleShareIcon(
-                                                    modifier = Modifier.size(22.dp)
+                                                    modifier = Modifier.size(22.dp),
+                                                    color = if (
+                                                        playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
+                                                    ) Color.White else Color.Unspecified
                                                 )
                                             }
 
@@ -2362,13 +2505,24 @@ private fun NusaMusicApp(
                                             ) {
                                                 NusaFavoriteIcon(
                                                     selected = isFavorite,
+                                                    color = if (
+                                                        playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
+                                                    ) Color.White else Color.Unspecified,
                                                     modifier = Modifier.size(22.dp)
                                                 )
                                             }
                                         }
 
-                                        Spacer(Modifier.height(8.dp))
-                                        AudioQualityPill(song = currentSong)
+                                        if (playerPresentationMode == PlayerPresentationMode.VINYL) {
+                                            Spacer(Modifier.height(8.dp))
+                                            AudioQualityPill(song = currentSong)
+                                        } else {
+                                            Spacer(Modifier.height(8.dp))
+                                            AudioQualityPill(
+                                                song = currentSong,
+                                                immersive = true
+                                            )
+                                        }
 
                                         if (!permissionGranted) {
                                             Text(
@@ -2392,6 +2546,7 @@ private fun NusaMusicApp(
                                         }
                                     }
                                 }
+                            }
                             }
 
                             // Artist biography section.
@@ -3075,7 +3230,10 @@ private fun ArtistBiographySection(
 }
 
 @Composable
-private fun AudioQualityPill(song: Song?) {
+private fun AudioQualityPill(
+    song: Song?,
+    immersive: Boolean = false
+) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var codecInfo by remember { mutableStateOf<AudioCodecInfo?>(null) }
     var showMetadataDialog by remember { mutableStateOf(false) }
@@ -3109,10 +3267,12 @@ private fun AudioQualityPill(song: Song?) {
         ) { hiRes ->
             Box(
                 modifier = Modifier
-                    .padding(top = 4.dp)
+                    .padding(top = if (immersive) 0.dp else 4.dp)
                     .clip(RoundedCornerShape(50))
                     .background(
-                        color = if (hiRes) {
+                        color = if (immersive) {
+                            Color.White.copy(alpha = 0.94f)
+                        } else if (hiRes) {
                             Color(0xFFB5A77C).copy(alpha = 0.42f)
                         } else {
                             MaterialTheme.colorScheme.surfaceVariant
@@ -3158,7 +3318,7 @@ private fun AudioQualityPill(song: Song?) {
         }
     }
 
-    if (isLossless) {
+    if (isLossless && !immersive) {
         Spacer(Modifier.height(4.dp))
     }
 
@@ -3432,6 +3592,7 @@ private fun SimpleProgressBar(
     durationMs: Long,
     enabled: Boolean,
     onSeek: (Long) -> Unit,
+    immersive: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val fraction = if (durationMs > 0L) {
@@ -3439,7 +3600,7 @@ private fun SimpleProgressBar(
     } else {
         0f
     }
-    val primary = MaterialTheme.colorScheme.primary
+    val primary = if (immersive) Color.White else MaterialTheme.colorScheme.primary
 
     androidx.compose.foundation.Canvas(
         modifier = modifier
@@ -3477,7 +3638,11 @@ private fun SimpleProgressBar(
         val stroke = 3.0.dp.toPx()
 
         drawLine(
-            color = Color(0xFFD0CDC6),
+            color = if (immersive) {
+                Color.White.copy(alpha = 0.48f)
+            } else {
+                Color(0xFFD0CDC6)
+            },
             start = androidx.compose.ui.geometry.Offset(0f, y),
             end = androidx.compose.ui.geometry.Offset(size.width, y),
             strokeWidth = stroke
@@ -3498,6 +3663,7 @@ private fun PlaybackProgress(
     durationMs: Long,
     enabled: Boolean,
     onSeek: (Long) -> Unit,
+    immersive: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val positionMs by positionMsState
@@ -3508,14 +3674,16 @@ private fun PlaybackProgress(
             durationMs = durationMs,
             enabled = enabled,
             onSeek = onSeek,
+            immersive = immersive,
             modifier = Modifier.fillMaxWidth()
         )
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(formatTime(positionMs), fontSize = 12.sp)
-            Text(formatTime(durationMs), fontSize = 12.sp)
+            val textColor = if (immersive) Color.White else MaterialTheme.colorScheme.onBackground
+            Text(formatTime(positionMs), fontSize = 12.sp, color = textColor)
+            Text(formatTime(durationMs), fontSize = 12.sp, color = textColor)
         }
     }
 }
@@ -5102,6 +5270,41 @@ private data class GrainFiber(
     val alpha: Float,
     val dark: Boolean
 )
+
+@Composable
+private fun ImmersiveArtwork(
+    song: Song?,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .background(Color(0xFF121212))
+    ) {
+        ArtworkView(
+            song = song,
+            maxSizePx = 1_600,
+            modifier = Modifier.fillMaxSize()
+        )
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colorStops = arrayOf(
+                            0f to Color.Black.copy(alpha = 0.48f),
+                            0.16f to Color.Black.copy(alpha = 0.30f),
+                            0.34f to Color.Transparent,
+                            0.55f to Color.Transparent,
+                            0.72f to Color.Black.copy(alpha = 0.25f),
+                            0.88f to Color.Black.copy(alpha = 0.60f),
+                            1f to Color.Black.copy(alpha = 0.78f)
+                        )
+                    )
+                )
+        )
+    }
+}
 
 @Composable
 private fun ArtworkView(
