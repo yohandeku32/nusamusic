@@ -117,6 +117,8 @@ function getCanvasEntries(response) {
     [];
 }
 
+export const config = { maxDuration: 30 };
+
 export default async function handler(req, res) {
   if (req.method === "OPTIONS") return respond(res, 204, {});
   if (req.method !== "GET") {
@@ -135,6 +137,10 @@ export default async function handler(req, res) {
   const title = String(req.query?.title ?? "").trim().slice(0, 160);
   const artist = String(req.query?.artist ?? "").trim().slice(0, 160);
   const trackId = String(req.query?.trackId ?? "").trim();
+
+  if (trackId && !/^[A-Za-z0-9]{22}$/.test(trackId)) {
+    return respond(res, 400, { error: "Invalid Spotify trackId" });
+  }
 
   if (!trackId && (!title || !artist)) {
     return respond(res, 400, { error: "Provide title and artist, or a Spotify trackId" });
