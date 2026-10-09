@@ -2254,7 +2254,11 @@ private fun NusaMusicApp(
                                         // in from the old gradient area toward the song title.
                                         ImmersiveArtwork(
                                             song = currentSong,
-                                            modifier = Modifier.fillMaxSize()
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .aspectRatio(1f)
+                                                .align(Alignment.TopCenter)
+                                                .offset(y = (-16).dp)
                                         )
 
                                         ImmersiveArtworkGlassBackdrop(
@@ -5447,26 +5451,14 @@ private fun ImmersiveArtwork(
         ArtworkView(
             song = song,
             maxSizePx = 1_600,
-            modifier = Modifier
-                .fillMaxSize()
-                .graphicsLayer {
-                    translationY = -12.dp.toPx()
-                    scaleX = 1.04f
-                    scaleY = 1.04f
-                }
+            modifier = Modifier.fillMaxSize()
         )
 
         val activeAnimatedArtworkUrl = animatedArtworkUrl
         if (activeAnimatedArtworkUrl != null) {
             AnimatedArtworkVideoBackground(
                 url = activeAnimatedArtworkUrl,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        translationY = -12.dp.toPx()
-                        scaleX = 1.04f
-                        scaleY = 1.04f
-                    },
+                modifier = Modifier.fillMaxSize(),
                 onUnavailable = {
                     if (animatedArtworkUrl == activeAnimatedArtworkUrl) {
                         animatedArtworkUrl = null
