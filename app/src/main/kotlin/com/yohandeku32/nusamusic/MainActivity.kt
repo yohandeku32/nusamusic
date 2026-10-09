@@ -1323,7 +1323,7 @@ private fun NusaMusicApp(
         immersiveTransportRowTopPx > immersivePlayerFrameTopPx
     ) {
         with(androidx.compose.ui.platform.LocalDensity.current) {
-            (immersiveTransportRowTopPx - immersivePlayerFrameTopPx + 8.dp.toPx())
+            (immersiveTransportRowTopPx - immersivePlayerFrameTopPx - 8.dp.toPx())
                 .coerceAtLeast(1f)
                 .toDp()
         }
@@ -1511,30 +1511,20 @@ private fun NusaMusicApp(
         }
     }
 
-    // Keep playback visibility in sync with the page gesture.
+    // Bring the current track into view when the song list is opened,
+    // without forcing it to the center or changing the normal list padding.
     LaunchedEffect(pagerState) {
         androidx.compose.runtime.snapshotFlow { pagerState.settledPage }
             .collect { settledPage ->
                 onPlayerPageVisibilityChanged(settledPage == 0)
-            }
-    }
-
-    // When swiping left to the library, center the playing track in the viewport.
-    // Re-run when the active song or sort order changes while the library is open.
-    LaunchedEffect(currentSong?.id, filtered, pagerState.settledPage) {
-        if (pagerState.settledPage == 1 && currentSong != null) {
-            val index = filtered.indexOfFirst { it.id == currentSong.id }
-            if (index >= 0) {
-                libraryListState.animateScrollToItem(index)
-                val layout = libraryListState.layoutInfo
-                val item = layout.visibleItemsInfo.firstOrNull { it.index == index }
-                if (item != null) {
-                    val viewportCenter = layout.viewportSize.height / 2f
-                    val itemCenter = item.offset + item.size / 2f
-                    libraryListState.animateScrollBy(itemCenter - viewportCenter)
+                if (settledPage == 1 && currentSong != null) {
+                    val index = filtered.indexOfFirst { it.id == currentSong.id }
+                    if (index >= 0) {
+                        kotlinx.coroutines.yield()
+                        libraryListState.animateScrollToItem(index)
+                    }
                 }
             }
-        }
     }
 
     LaunchedEffect(currentSong?.artist) {
@@ -2367,7 +2357,6 @@ private fun NusaMusicApp(
                                                         ?: Modifier.fillMaxHeight(0.62f)
                                                 )
                                                 .align(Alignment.TopCenter)
-                                                .offset(y = (-16).dp)
                                         )
 
                                         ImmersiveArtworkGlassBackdrop(
@@ -2934,12 +2923,6 @@ private fun NusaMusicApp(
                                 }
                             }
 
-                            val libraryPageActive = pagerState.settledPage == 1
-                            val libraryCenterPadding = (
-                                androidx.compose.ui.platform.LocalConfiguration.current
-                                    .screenHeightDp.dp - 76.dp - 32.dp
-                                ) / 2f
-
                             PullToRefreshBox(
                                 isRefreshing = isScanningMusic,
                                 onRefresh = onScanMusic,
@@ -2951,18 +2934,10 @@ private fun NusaMusicApp(
                                         .fillMaxSize()
                                         .padding(top = 76.dp),
                                     contentPadding = PaddingValues(
-                                        top = if (libraryPageActive && currentSong != null) {
-                                            libraryCenterPadding.coerceAtLeast(120.dp)
-                                        } else {
-                                            8.dp
-                                        },
+                                        top = 8.dp,
                                         start = 12.dp,
                                         end = 12.dp,
-                                        bottom = if (libraryPageActive && currentSong != null) {
-                                            libraryCenterPadding.coerceAtLeast(120.dp) + 140.dp
-                                        } else {
-                                            140.dp
-                                        }
+                                        bottom = 140.dp
                                     ),
                                 verticalArrangement = Arrangement.spacedBy(2.dp)
                             ) {
