@@ -2677,7 +2677,7 @@ private fun NusaMusicApp(
                                             Spacer(Modifier.height(8.dp))
                                             AudioQualityPill(song = currentSong)
                                         } else {
-                                            Spacer(Modifier.height(12.dp))
+                                            Spacer(Modifier.height(20.dp))
                                             AudioQualityPill(
                                                 song = currentSong,
                                                 immersive = true
