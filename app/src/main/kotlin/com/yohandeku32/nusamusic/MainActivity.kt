@@ -2256,13 +2256,13 @@ private fun NusaMusicApp(
                                                     Brush.verticalGradient(
                                                         colorStops = arrayOf(
                                                             0.00f to Color.Transparent,
-                                                            0.36f to Color.Transparent,
-                                                            0.43f to Color.Black.copy(alpha = 0.08f),
-                                                            0.52f to Color.Black.copy(alpha = 0.24f),
-                                                            0.64f to Color.Black.copy(alpha = 0.52f),
-                                                            0.78f to Color.Black.copy(alpha = 0.76f),
-                                                            0.90f to Color.Black.copy(alpha = 0.90f),
-                                                            1.00f to Color.Black.copy(alpha = 0.96f)
+                                                            0.32f to Color.Transparent,
+                                                            0.40f to Color.Black.copy(alpha = 0.12f),
+                                                            0.48f to Color.Black.copy(alpha = 0.32f),
+                                                            0.60f to Color.Black.copy(alpha = 0.62f),
+                                                            0.74f to Color.Black.copy(alpha = 0.84f),
+                                                            0.88f to Color.Black.copy(alpha = 0.95f),
+                                                            1.00f to Color.Black.copy(alpha = 0.99f)
                                                         )
                                                     )
                                                 )
@@ -2348,6 +2348,57 @@ private fun NusaMusicApp(
                                             .padding(horizontal = 22.dp),
                                         horizontalAlignment = Alignment.CenterHorizontally
                                     ) {
+                                        val immersiveArtworkMode =
+                                            playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
+                                        val titleText =
+                                            currentSong?.title ?: nusaText("Pilih lagu", "Choose a song")
+                                        val titleWordCount = remember(titleText) {
+                                            titleText.trim()
+                                                .split(Regex("\\s+"))
+                                                .count { it.isNotBlank() }
+                                        }
+                                        val titleSize = remember(titleWordCount, titleFontSize) {
+                                            val scale = titleFontSize / 34f
+                                            when {
+                                                titleWordCount <= 2 -> titleFontSize.sp
+                                                titleWordCount == 3 -> (31f * scale).sp
+                                                else -> (28f * scale).sp
+                                            }
+                                        }
+                                        val titleLineHeight = remember(titleWordCount, titleFontSize) {
+                                            val scale = titleFontSize / 34f
+                                            when {
+                                                titleWordCount <= 2 -> (37f * scale).sp
+                                                titleWordCount == 3 -> (34f * scale).sp
+                                                else -> (31f * scale).sp
+                                            }
+                                        }
+                                        val screenWidthDp =
+                                            androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
+                                        val estimatedTitleLines = remember(titleText, titleSize, screenWidthDp) {
+                                            val availableWidthDp = (screenWidthDp - 52f).coerceAtLeast(120f)
+                                            val estimatedCharacterWidthDp = (titleSize.value * 0.52f).coerceAtLeast(1f)
+                                            val estimatedCharactersPerLine =
+                                                (availableWidthDp / estimatedCharacterWidthDp).coerceAtLeast(1f)
+                                            kotlin.math.ceil(
+                                                titleText.length / estimatedCharactersPerLine
+                                            ).toInt().coerceIn(1, 6)
+                                        }
+                                        val titleLineHeightDp = with(
+                                            androidx.compose.ui.platform.LocalDensity.current
+                                        ) {
+                                            titleLineHeight.toDp()
+                                        }
+                                        val titleBoxHeight = if (immersiveArtworkMode) {
+                                            maxOf(
+                                                82.dp,
+                                                titleLineHeightDp * estimatedTitleLines.toFloat() + 8.dp
+                                            )
+                                        } else {
+                                            82.dp
+                                        }
+                                        val titleExtraHeight = titleBoxHeight - 82.dp
+
                                         if (playerPresentationMode == PlayerPresentationMode.VINYL) {
                                             Spacer(Modifier.height(2.dp))
                                         } else {
@@ -2356,7 +2407,10 @@ private fun NusaMusicApp(
                                                     .screenHeightDp.dp
                                             Spacer(
                                                 Modifier.height(
-                                                    ((screenHeight * 0.30f).coerceIn(160.dp, 250.dp) + 16.dp)
+                                                    (
+                                                        (screenHeight * 0.30f).coerceIn(160.dp, 250.dp) +
+                                                            16.dp - titleExtraHeight
+                                                    ).coerceAtLeast(0.dp)
                                                 )
                                             )
                                         }
@@ -2380,44 +2434,21 @@ private fun NusaMusicApp(
                                         Box(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .height(82.dp),
+                                                .height(titleBoxHeight),
                                             contentAlignment = Alignment.Center
                                         ) {
-                                            val titleText =
-                                                currentSong?.title ?: nusaText("Pilih lagu", "Choose a song")
-
-                                            val titleWordCount = remember(titleText) {
-                                                titleText.trim()
-                                                    .split(Regex("\\s+"))
-                                                    .count { it.isNotBlank() }
-                                            }
-
-                                            val titleSize = remember(titleWordCount, titleFontSize) {
-                                                val scale = titleFontSize / 34f
-                                                when {
-                                                    titleWordCount <= 2 -> titleFontSize.sp
-                                                    titleWordCount == 3 -> (31f * scale).sp
-                                                    else -> (28f * scale).sp
-                                                }
-                                            }
-
-                                            val titleLineHeight = remember(titleWordCount, titleFontSize) {
-                                                val scale = titleFontSize / 34f
-                                                when {
-                                                    titleWordCount <= 2 -> (37f * scale).sp
-                                                    titleWordCount == 3 -> (34f * scale).sp
-                                                    else -> (31f * scale).sp
-                                                }
-                                            }
-
                                             Text(
                                                 titleText,
                                                 fontFamily = titleFontFamily,
                                                 fontWeight = FontWeight.Bold,
                                                 fontSize = titleSize,
                                                 lineHeight = titleLineHeight,
-                                                maxLines = 3,
-                                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                                maxLines = if (immersiveArtworkMode) estimatedTitleLines else 3,
+                                                overflow = if (immersiveArtworkMode) {
+                                                    androidx.compose.ui.text.style.TextOverflow.Clip
+                                                } else {
+                                                    androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                                },
                                                 modifier = Modifier.padding(horizontal = 4.dp),
                                                 color = if (
                                                     playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
@@ -2461,47 +2492,100 @@ private fun NusaMusicApp(
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.Center
                                         ) {
-                                            TransportPillButton(
-                                                icon = Icons.Rounded.FastRewind,
-                                                contentDescription = nusaText("Sebelumnya", "Previous"),
-                                                onClick = onPrevious,
-                                                enabled = currentSong != null,
-                                                realistic = realisticControls
-                                            )
+                                            if (immersiveArtworkMode) {
+                                                IconButton(
+                                                    onClick = onPrevious,
+                                                    enabled = currentSong != null,
+                                                    modifier = Modifier.size(58.dp)
+                                                ) {
+                                                    Icon(
+                                                        Icons.Rounded.FastRewind,
+                                                        contentDescription = nusaText("Sebelumnya", "Previous"),
+                                                        tint = Color.White,
+                                                        modifier = Modifier.size(32.dp)
+                                                    )
+                                                }
+                                            } else {
+                                                TransportPillButton(
+                                                    icon = Icons.Rounded.FastRewind,
+                                                    contentDescription = nusaText("Sebelumnya", "Previous"),
+                                                    onClick = onPrevious,
+                                                    enabled = currentSong != null,
+                                                    realistic = realisticControls
+                                                )
+                                            }
 
                                             Spacer(Modifier.width(16.dp))
 
-                                            PlayerControlButton(
-                                                realistic = realisticControls,
-                                                icon = if (isPlaying) {
-                                                    Icons.Rounded.Pause
-                                                } else {
-                                                    Icons.Rounded.PlayArrow
-                                                },
-                                                contentDescription = if (isPlaying) {
-                                                    nusaText("Jeda", "Pause")
-                                                } else {
-                                                    nusaText("Putar", "Play")
-                                                },
-                                                onClick = if (currentSong == null) {
-                                                    onRequestPermission
-                                                } else {
-                                                    onTogglePlay
-                                                },
-                                                enabled = true,
-                                                modifier = Modifier.size(84.dp),
-                                                iconSize = 40.dp
-                                            )
+                                            if (immersiveArtworkMode) {
+                                                IconButton(
+                                                    onClick = if (currentSong == null) onRequestPermission else onTogglePlay,
+                                                    enabled = true,
+                                                    modifier = Modifier.size(84.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = if (isPlaying) {
+                                                            Icons.Rounded.Pause
+                                                        } else {
+                                                            Icons.Rounded.PlayArrow
+                                                        },
+                                                        contentDescription = if (isPlaying) {
+                                                            nusaText("Jeda", "Pause")
+                                                        } else {
+                                                            nusaText("Putar", "Play")
+                                                        },
+                                                        tint = Color.White,
+                                                        modifier = Modifier.size(48.dp)
+                                                    )
+                                                }
+                                            } else {
+                                                PlayerControlButton(
+                                                    realistic = realisticControls,
+                                                    icon = if (isPlaying) {
+                                                        Icons.Rounded.Pause
+                                                    } else {
+                                                        Icons.Rounded.PlayArrow
+                                                    },
+                                                    contentDescription = if (isPlaying) {
+                                                        nusaText("Jeda", "Pause")
+                                                    } else {
+                                                        nusaText("Putar", "Play")
+                                                    },
+                                                    onClick = if (currentSong == null) {
+                                                        onRequestPermission
+                                                    } else {
+                                                        onTogglePlay
+                                                    },
+                                                    enabled = true,
+                                                    modifier = Modifier.size(84.dp),
+                                                    iconSize = 40.dp
+                                                )
+                                            }
 
                                             Spacer(Modifier.width(16.dp))
 
-                                            TransportPillButton(
-                                                icon = Icons.Rounded.FastForward,
-                                                contentDescription = nusaText("Berikutnya", "Next"),
-                                                onClick = onNext,
-                                                enabled = currentSong != null,
-                                                realistic = realisticControls
-                                            )
+                                            if (immersiveArtworkMode) {
+                                                IconButton(
+                                                    onClick = onNext,
+                                                    enabled = currentSong != null,
+                                                    modifier = Modifier.size(58.dp)
+                                                ) {
+                                                    Icon(
+                                                        Icons.Rounded.FastForward,
+                                                        contentDescription = nusaText("Berikutnya", "Next"),
+                                                        tint = Color.White,
+                                                        modifier = Modifier.size(32.dp)
+                                                    )
+                                                }
+                                            } else {
+                                                TransportPillButton(
+                                                    icon = Icons.Rounded.FastForward,
+                                                    contentDescription = nusaText("Berikutnya", "Next"),
+                                                    onClick = onNext,
+                                                    enabled = currentSong != null,
+                                                    realistic = realisticControls
+                                                )
+                                            }
                                         }
 
                                         Spacer(Modifier.height(10.dp))
