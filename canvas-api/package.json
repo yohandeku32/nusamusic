@@ -1,0 +1,13 @@
+{
+  "name": "nusa-canvas-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Separate Vercel backend for optional Spotify Canvas visuals in NusaMusic",
+  "dependencies": {
+    "axios": "^1.8.4",
+    "dotenv": "^16.4.7",
+    "google-protobuf": "^3.21.4",
+    "otpauth": "^9.3.6"
+  }
+}
