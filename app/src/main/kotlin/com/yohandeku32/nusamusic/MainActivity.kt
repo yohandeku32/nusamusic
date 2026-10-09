@@ -1621,6 +1621,23 @@ private fun NusaMusicApp(
             containerColor = MaterialTheme.colorScheme.background,
             contentColor = MaterialTheme.colorScheme.onBackground
         ) {
+            // ModalBottomSheet is hosted in its own dialog window. Hiding the
+            // Activity status bar alone is not enough because the dialog can
+            // reveal its own system bars while opening.
+            val sheetView = androidx.compose.ui.platform.LocalView.current
+            val sheetWindow = (sheetView.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window
+
+            LaunchedEffect(sheetWindow) {
+                sheetWindow?.let { dialogWindow ->
+                    dialogWindow.addFlags(android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN)
+                    WindowCompat.setDecorFitsSystemWindows(dialogWindow, false)
+                    androidx.core.view.WindowInsetsControllerCompat(
+                        dialogWindow,
+                        dialogWindow.decorView
+                    ).hide(androidx.core.view.WindowInsetsCompat.Type.statusBars())
+                }
+            }
+
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
