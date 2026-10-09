@@ -6,6 +6,7 @@ export async function getCanvases(trackUri) {
   
   try {
     const accessToken = await getToken();
+    if (!accessToken) return null;
 
     const canvasRequest = new CanvasRequest();
     const track = new CanvasRequest.Track();
@@ -19,6 +20,7 @@ export async function getCanvases(trackUri) {
       requestBytes,
       {
         responseType: 'arraybuffer',
+        timeout: 9000,
         headers: {
           'Accept': 'application/protobuf',
           'Content-Type': 'application/x-www-form-urlencoded',
