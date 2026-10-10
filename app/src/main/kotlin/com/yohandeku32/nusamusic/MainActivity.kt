@@ -3766,7 +3766,6 @@ private fun AudioQualityPill(
 
     if ((isLossless || isDolbyAtmos) && !immersive) {
         Spacer(Modifier.height(4.dp))
-    }        Spacer(Modifier.height(4.dp))
     }
 
     if (showMetadataDialog && song != null && info != null) {
