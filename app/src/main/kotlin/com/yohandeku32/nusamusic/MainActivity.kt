@@ -121,6 +121,8 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.googlefonts.GoogleFont
+import androidx.compose.ui.text.googlefonts.Font as GoogleFontFont
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -147,6 +149,87 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+private val GOOGLE_TITLE_FONT_NAMES = listOf(
+    // Modern sans-serif
+    "Inter",
+    "Roboto",
+    "Open Sans",
+    "Lato",
+    "Montserrat",
+    "Poppins",
+    "Nunito",
+    "Nunito Sans",
+    "DM Sans",
+    "Manrope",
+    "Outfit",
+    "Urbanist",
+    "Plus Jakarta Sans",
+    "Rubik",
+    "Work Sans",
+    "Source Sans 3",
+    "Barlow",
+    "Archivo",
+    "IBM Plex Sans",
+    "Roboto Condensed",
+    "Raleway",
+    "Quicksand",
+    "Comfortaa",
+    // Display and geometric
+    "Oswald",
+    "Bebas Neue",
+    "Space Grotesk",
+    "Josefin Sans",
+    "Fira Sans",
+    "Fira Code",
+    "Cinzel",
+    // Serif and editorial
+    "Playfair Display",
+    "Merriweather",
+    "Lora",
+    "Libre Baskerville",
+    "Cormorant Garamond",
+    "Source Serif 4",
+    "Roboto Slab",
+    "Bodoni Moda",
+    // Handwriting and expressive
+    "Dancing Script",
+    "Pacifico",
+    "Lobster",
+    "Kalam",
+    "Caveat",
+    "Permanent Marker"
+)
+
+private val TITLE_FONT_OPTIONS = listOf(
+    "Default",
+    "Sans Serif",
+    "Serif",
+    "Monospace",
+    "Cursive"
+) + GOOGLE_TITLE_FONT_NAMES
+
+/**
+ * Google Fonts are fetched by Android's downloadable-font provider the first
+ * time a selected family is used. Compose falls back to a system font if the
+ * provider cannot deliver the requested family.
+ */
+@Suppress("MentionsGoogle")
+private fun titleFontFamilyFor(fontName: String): FontFamily = when (fontName) {
+    "Default" -> FontFamily.Default
+    "Sans Serif" -> FontFamily.SansSerif
+    "Serif" -> FontFamily.Serif
+    "Monospace" -> FontFamily.Monospace
+    "Cursive" -> FontFamily.Cursive
+    in GOOGLE_TITLE_FONT_NAMES -> {
+        val googleFont = GoogleFont(fontName, bestEffort = true)
+        FontFamily(
+            GoogleFontFont(googleFont, weight = FontWeight.Normal),
+            GoogleFontFont(googleFont, weight = FontWeight.Bold)
+        )
+    }
+    else -> FontFamily.Serif
+}
 
 private fun nusaText(
     indonesian: String,
@@ -736,32 +819,40 @@ class MainActivity : ComponentActivity() {
     }
 
     private suspend fun refreshSongs(): Int {
-        val previousIds = songs.asSequence()
-            .map { it.id }
-            .toSet()
+        // Snapshot Compose state on the main thread, then do indexing, cache
+        // serialization, ID comparison and MediaItem preparation off-thread.
+        val cachedSongs = songs
+        val previousIds = withContext(Dispatchers.Default) {
+            cachedSongs.mapTo(HashSet()) { it.id }
+        }
+        val folderUris = selectedMusicFolders.toSet()
 
         val refreshedSongs = withContext(Dispatchers.IO) {
-            MusicRepository(this@MainActivity).loadSongs(
-                extraFolderUris = selectedMusicFolders.toSet()
-            )
+            MusicRepository(this@MainActivity)
+                .loadSongs(
+                    extraFolderUris = folderUris,
+                    cachedSongs = cachedSongs
+                )
+                .also(::persistCachedSongs)
         }
 
+        val newSongs = withContext(Dispatchers.Default) {
+            if (previousIds.isEmpty()) {
+                emptyList()
+            } else {
+                refreshedSongs.filter { it.id !in previousIds }
+            }
+        }
+
+        // Publish the new library only after its cache has been persisted.
         songs = refreshedSongs
-        persistCachedSongs(refreshedSongs)
-
-        val newSongs = if (previousIds.isEmpty()) {
-            emptyList()
-        } else {
-            refreshedSongs.filter { it.id !in previousIds }
-        }
 
         controller?.let { c ->
             syncCurrentSong(c)
             restorePlaybackStateIfNeeded(c)
 
-            // Never clear or rebuild the current Media3 queue during a scan.
-            // Newly discovered tracks are appended only, so the current
-            // playback/playlist position remains intact.
+            // Keep the current queue intact, but append genuinely new tracks in
+            // small batches so one large refresh cannot monopolize the UI thread.
             if (newSongs.isNotEmpty() && c.mediaItemCount > 0) {
                 val queuedIds = HashSet<Long>(c.mediaItemCount)
                 for (index in 0 until c.mediaItemCount) {
@@ -770,9 +861,16 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                val queueAdditions = newSongs.filter { it.id !in queuedIds }
-                if (queueAdditions.isNotEmpty()) {
-                    c.addMediaItems(queueAdditions.map(::mediaItemFor))
+                val queueAdditions = withContext(Dispatchers.Default) {
+                    newSongs.asSequence()
+                        .filter { it.id !in queuedIds }
+                        .map(::mediaItemFor)
+                        .toList()
+                }
+
+                queueAdditions.chunked(32).forEach { batch ->
+                    c.addMediaItems(batch)
+                    kotlinx.coroutines.yield()
                 }
             }
         }
@@ -1264,13 +1362,7 @@ private fun NusaMusicApp(
     ) {
         customTitleTypeface?.let {
             FontFamily(it)
-        } ?: when (titleFontName) {
-            "Sans Serif" -> FontFamily.SansSerif
-            "Monospace" -> FontFamily.Monospace
-            "Cursive" -> FontFamily.Cursive
-            "Default" -> FontFamily.Default
-            else -> FontFamily.Serif
-        }
+        } ?: titleFontFamilyFor(titleFontName)
     }
     var realisticControls by remember {
         mutableStateOf(uiPrefs.getBoolean("realistic_controls", true))
@@ -1565,24 +1657,11 @@ private fun NusaMusicApp(
                             titleFontMenuExpanded = false
                         }
                     ) {
-                        listOf(
-                            "Default",
-                            "Sans Serif",
-                            "Serif",
-                            "Monospace",
-                            "Cursive"
-                        ).forEach { fontName ->
+                        TITLE_FONT_OPTIONS.forEach { fontName ->
                             DropdownMenuItem(
                                 text = {
                                     Text(
                                         text = fontName,
-                                        fontFamily = when (fontName) {
-                                            "Sans Serif" -> FontFamily.SansSerif
-                                            "Monospace" -> FontFamily.Monospace
-                                            "Cursive" -> FontFamily.Cursive
-                                            "Default" -> FontFamily.Default
-                                            else -> FontFamily.Serif
-                                        },
                                         fontWeight = if (
                                             fontName == titleFontName
                                         ) {
