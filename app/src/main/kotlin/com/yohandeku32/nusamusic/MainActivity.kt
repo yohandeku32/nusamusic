@@ -1658,13 +1658,14 @@ private fun NusaMusicApp(
                 hideSettingsStatusBar()
             }
 
-            LaunchedEffect(sheetWindow, settingsSheetState.currentValue, settingsSheetState.targetValue) {
-                // Re-hide after the sheet's own window animation has settled.
-                hideSettingsStatusBar()
-                delay(350)
-                hideSettingsStatusBar()
-                delay(650)
-                hideSettingsStatusBar()
+            LaunchedEffect(sheetWindow) {
+                // Keep enforcing fullscreen for the entire lifetime of Settings.
+                // The sheet/dialog can restore status-bar visibility after its
+                // entrance animation, so a one-time hide is not reliable.
+                while (kotlinx.coroutines.currentCoroutineContext().isActive) {
+                    hideSettingsStatusBar()
+                    delay(100)
+                }
             }
 
             Column(
