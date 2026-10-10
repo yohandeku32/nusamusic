@@ -1627,15 +1627,44 @@ private fun NusaMusicApp(
             val sheetView = androidx.compose.ui.platform.LocalView.current
             val sheetWindow = (sheetView.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window
 
-            LaunchedEffect(sheetWindow) {
+            // Keep the Settings dialog in fullscreen mode. ModalBottomSheet can
+            // reset system-bar visibility during its entrance/settling animation,
+            // so re-apply the hidden state when its window or sheet state changes.
+            val hideSettingsStatusBar: () -> Unit = {
                 sheetWindow?.let { dialogWindow ->
                     dialogWindow.addFlags(android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN)
                     WindowCompat.setDecorFitsSystemWindows(dialogWindow, false)
+
+                    @Suppress("DEPRECATION")
+                    run {
+                        dialogWindow.decorView.systemUiVisibility =
+                            dialogWindow.decorView.systemUiVisibility or
+                                android.view.View.SYSTEM_UI_FLAG_FULLSCREEN or
+                                android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                    }
+
                     androidx.core.view.WindowInsetsControllerCompat(
                         dialogWindow,
                         dialogWindow.decorView
-                    ).hide(androidx.core.view.WindowInsetsCompat.Type.statusBars())
+                    ).apply {
+                        systemBarsBehavior =
+                            androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                        hide(androidx.core.view.WindowInsetsCompat.Type.statusBars())
+                    }
                 }
+            }
+
+            androidx.compose.runtime.SideEffect {
+                hideSettingsStatusBar()
+            }
+
+            LaunchedEffect(sheetWindow, settingsSheetState.currentValue, settingsSheetState.targetValue) {
+                // Re-hide after the sheet's own window animation has settled.
+                hideSettingsStatusBar()
+                delay(350)
+                hideSettingsStatusBar()
+                delay(650)
+                hideSettingsStatusBar()
             }
 
             Column(
