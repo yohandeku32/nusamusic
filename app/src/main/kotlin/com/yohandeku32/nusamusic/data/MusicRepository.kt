@@ -35,16 +35,21 @@ class MusicRepository(private val context: Context) {
      * local-library behavior is preserved. Manually selected folders are an
      * additional source and are recursively scanned.
      */
-    fun loadSongs(extraFolderUris: Set<String> = emptySet()): List<Song> {
+    fun loadSongs(
+        extraFolderUris: Set<String> = emptySet(),
+        cachedSongs: List<Song> = emptyList()
+    ): List<Song> {
         val songs = loadMediaStoreSongs().toMutableList()
         val existingUris = songs.mapTo(HashSet()) { it.uri }
 
         val existingKeys = songs
             .mapTo(HashSet()) { songFingerprint(it.title, it.artist, it.album, it.durationMs) }
 
+        val cachedSongsByUri = cachedSongs.associateBy { it.uri }
+
         extraFolderUris.forEach { folderUriString ->
             val folderSongs = runCatching {
-                loadFolderSongs(Uri.parse(folderUriString))
+                loadFolderSongs(Uri.parse(folderUriString), cachedSongsByUri)
             }.getOrElse { emptyList() }
 
             for (song in folderSongs) {
@@ -123,7 +128,10 @@ class MusicRepository(private val context: Context) {
         return songs
     }
 
-    private fun loadFolderSongs(treeUri: Uri): List<Song> {
+    private fun loadFolderSongs(
+        treeUri: Uri,
+        cachedSongsByUri: Map<String, Song>
+    ): List<Song> {
         val resolver = context.contentResolver
         val rootDocumentId = DocumentsContract.getTreeDocumentId(treeUri)
         val pendingDocumentIds = ArrayDeque<String>()
@@ -188,13 +196,20 @@ class MusicRepository(private val context: Context) {
                         documentId
                     )
 
-                    readSongFromDocument(
+                    val modifiedTimeMs = cursor.getLong(modifiedCol)
+                    val cachedSong = cachedSongsByUri[documentUri.toString()]
+                    val song = cachedSong?.takeIf {
+                        // SAF providers expose a modified timestamp for most files.
+                        // Reuse parsed tags when the file has not changed; providers
+                        // returning 0 still get a full metadata read for correctness.
+                        modifiedTimeMs > 0L && it.dateAddedMs == modifiedTimeMs
+                    } ?: readSongFromDocument(
                         documentUri = documentUri,
                         displayName = displayName,
-                        modifiedTimeMs = cursor.getLong(modifiedCol)
-                    )?.let { song ->
-                        songs += song
-                    }
+                        modifiedTimeMs = modifiedTimeMs
+                    )
+
+                    song?.let { songs += it }
                 }
             }
         }
