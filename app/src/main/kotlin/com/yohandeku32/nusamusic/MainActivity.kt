@@ -3638,32 +3638,94 @@ private fun AudioQualityPill(
     val isLossless = info?.codecName == "Apple Lossless" || info?.codecName == "FLAC"
     val isHiRes = isLossless && info?.isHiRes == true
 
-    androidx.compose.animation.AnimatedVisibility(
-        visible = isLossless,
-        enter = androidx.compose.animation.fadeIn(
-            animationSpec = tween(durationMillis = 180)
-        ),
-        exit = androidx.compose.animation.fadeOut(
-            animationSpec = tween(durationMillis = 180)
-        )
+    val isDolbyAtmos = info?.codecName == "Dolby Atmos"
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Crossfade(
-            targetState = isHiRes,
-            animationSpec = tween(durationMillis = 180),
-            label = "qualityBadgeCrossfade"
-        ) { hiRes ->
+        androidx.compose.animation.AnimatedVisibility(
+            visible = isLossless,
+            enter = androidx.compose.animation.fadeIn(
+                animationSpec = tween(durationMillis = 180)
+            ),
+            exit = androidx.compose.animation.fadeOut(
+                animationSpec = tween(durationMillis = 180)
+            )
+        ) {
+            Crossfade(
+                targetState = isHiRes,
+                animationSpec = tween(durationMillis = 180),
+                label = "qualityBadgeCrossfade"
+            ) { hiRes ->
+                Box(
+                    modifier = Modifier
+                        .padding(top = if (immersive) 0.dp else 4.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(
+                            color = if (immersive) {
+                                Color.White
+                            } else if (hiRes) {
+                                Color(0xFFB5A77C).copy(alpha = 0.42f)
+                            } else {
+                                MaterialTheme.colorScheme.surfaceVariant
+                            }
+                        )
+                        .clickable(enabled = song != null && info != null) {
+                            showMetadataDialog = true
+                        }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        androidx.compose.foundation.Image(
+                            painter = painterResource(id = R.drawable.apple_lossless_logo),
+                            contentDescription = if (hiRes) "Hi-Res" else "Lossless",
+                            contentScale = ContentScale.Fit,
+                            colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(
+                                if (hiRes) Color(0xFF3D3728) else MaterialTheme.colorScheme.onSurface
+                            ),
+                            modifier = Modifier.size(
+                                width = 20.dp,
+                                height = 11.dp
+                            )
+                        )
+
+                        Spacer(Modifier.width(5.dp))
+
+                        Text(
+                            text = if (hiRes) "Hi-Res" else "Lossless",
+                            fontSize = 10.sp,
+                            lineHeight = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = if (hiRes) {
+                                Color(0xFF3D3728)
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            }
+                        )
+                    }
+                }
+            }
+        }
+
+        androidx.compose.animation.AnimatedVisibility(
+            visible = isDolbyAtmos,
+            enter = androidx.compose.animation.fadeIn(
+                animationSpec = tween(durationMillis = 180)
+            ),
+            exit = androidx.compose.animation.fadeOut(
+                animationSpec = tween(durationMillis = 180)
+            )
+        ) {
             Box(
                 modifier = Modifier
                     .padding(top = if (immersive) 0.dp else 4.dp)
                     .clip(RoundedCornerShape(50))
                     .background(
-                        color = if (immersive) {
-                            Color.White
-                        } else if (hiRes) {
-                            Color(0xFFB5A77C).copy(alpha = 0.42f)
-                        } else {
-                            MaterialTheme.colorScheme.surfaceVariant
-                        }
+                        if (immersive) Color.White else MaterialTheme.colorScheme.surfaceVariant
                     )
                     .clickable(enabled = song != null && info != null) {
                         showMetadataDialog = true
@@ -3674,28 +3736,25 @@ private fun AudioQualityPill(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center
                 ) {
-                    androidx.compose.foundation.Image(
-                        painter = painterResource(id = R.drawable.apple_lossless_logo),
-                        contentDescription = if (hiRes) "Hi-Res" else "Lossless",
+                    Image(
+                        painter = painterResource(id = R.drawable.dolby_atmos_mark),
+                        contentDescription = "Dolby Atmos",
                         contentScale = ContentScale.Fit,
                         colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(
-                            if (hiRes) Color(0xFF3D3728) else MaterialTheme.colorScheme.onSurface
+                            if (immersive) Color(0xFF1B1B1B) else MaterialTheme.colorScheme.onSurface
                         ),
-                        modifier = Modifier.size(
-                            width = 20.dp,
-                            height = 11.dp
-                        )
+                        modifier = Modifier.size(width = 18.dp, height = 11.dp)
                     )
 
                     Spacer(Modifier.width(5.dp))
 
                     Text(
-                        text = if (hiRes) "Hi-Res" else "Lossless",
+                        text = "Dolby Atmos",
                         fontSize = 10.sp,
                         lineHeight = 12.sp,
                         fontWeight = FontWeight.Medium,
-                        color = if (hiRes) {
-                            Color(0xFF3D3728)
+                        color = if (immersive) {
+                            Color(0xFF1B1B1B)
                         } else {
                             MaterialTheme.colorScheme.onSurface
                         }
@@ -3705,8 +3764,9 @@ private fun AudioQualityPill(
         }
     }
 
-    if (isLossless && !immersive) {
+    if ((isLossless || isDolbyAtmos) && !immersive) {
         Spacer(Modifier.height(4.dp))
+    }        Spacer(Modifier.height(4.dp))
     }
 
     if (showMetadataDialog && song != null && info != null) {
