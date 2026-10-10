@@ -150,6 +150,13 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+@Suppress("MentionsGoogle")
+private val GOOGLE_FONT_PROVIDER = GoogleFont.Provider(
+    providerAuthority = "com.google.android.gms.fonts",
+    providerPackage = "com.google.android.gms",
+    certificates = R.array.com_google_android_gms_fonts_certs
+)
+
 private val GOOGLE_TITLE_FONT_NAMES = listOf(
     // Modern sans-serif
     "Inter",
@@ -224,8 +231,8 @@ private fun titleFontFamilyFor(fontName: String): FontFamily = when (fontName) {
     in GOOGLE_TITLE_FONT_NAMES -> {
         val googleFont = GoogleFont(fontName, bestEffort = true)
         FontFamily(
-            GoogleFontFont(googleFont, weight = FontWeight.Normal),
-            GoogleFontFont(googleFont, weight = FontWeight.Bold)
+            GoogleFontFont(googleFont, fontProvider = GOOGLE_FONT_PROVIDER, weight = FontWeight.Normal),
+            GoogleFontFont(googleFont, fontProvider = GOOGLE_FONT_PROVIDER, weight = FontWeight.Bold)
         )
     }
     else -> FontFamily.Serif
