@@ -536,7 +536,9 @@ class MainActivity : ComponentActivity() {
             shuffleEnabled = c.shuffleModeEnabled
             repeatMode = c.repeatMode
             syncCurrentSong(c)
-            restorePlaybackStateIfNeeded(c)
+            lifecycleScope.launch {
+                restorePlaybackStateIfNeeded(c)
+            }
         }, mainExecutor)
 
         lifecycleScope.launch {
@@ -686,11 +688,12 @@ class MainActivity : ComponentActivity() {
         lastPersistedPosition = currentPosition
     }
 
-    private fun restorePlaybackStateIfNeeded(c: MediaController) {
-        if (songs.isEmpty() || c.currentMediaItem != null) return
+    private suspend fun restorePlaybackStateIfNeeded(c: MediaController) {
+        val songSnapshot = songs
+        if (songSnapshot.isEmpty() || c.currentMediaItem != null) return
 
         val mediaId = playbackPrefs.getString("media_id", null) ?: return
-        val index = songs.indexOfFirst { it.id.toString() == mediaId }
+        val index = songSnapshot.indexOfFirst { it.id.toString() == mediaId }
         if (index < 0) return
 
         val savedPosition = playbackPrefs.getLong("position_ms", 0L).coerceAtLeast(0L)
@@ -698,12 +701,45 @@ class MainActivity : ComponentActivity() {
         val savedShuffle = playbackPrefs.getBoolean("shuffle_enabled", false)
         val savedRepeat = playbackPrefs.getInt("repeat_mode", Player.REPEAT_MODE_OFF)
 
-        c.setMediaItems(songs.map(::mediaItemFor), index, savedPosition)
+        // MediaItem construction can be expensive for large libraries. Prepare
+        // the lightweight queue objects off the main thread first.
+        val mediaItems = withContext(Dispatchers.Default) {
+            songSnapshot.map(::mediaItemFor)
+        }
+
+        // A scan may have completed while the queue was being prepared.
+        if (songs !== songSnapshot || c.currentMediaItem != null) return
+
+        val batchSize = 48
+
+        // Start with the saved track, then build the surrounding queue in small
+        // batches. This avoids one large setMediaItems() call freezing the UI.
+        c.shuffleModeEnabled = false
+        c.setMediaItems(listOf(mediaItems[index]), 0, savedPosition)
+
+        var nextIndex = index + 1
+        while (nextIndex < mediaItems.size) {
+            val endIndex = minOf(nextIndex + batchSize, mediaItems.size)
+            c.addMediaItems(mediaItems.subList(nextIndex, endIndex))
+            nextIndex = endIndex
+            kotlinx.coroutines.yield()
+        }
+
+        // Prepend earlier tracks from nearest to farthest so the final queue
+        // retains the same library order with the saved track at its old index.
+        var prefixEnd = index
+        while (prefixEnd > 0) {
+            val prefixStart = (prefixEnd - batchSize).coerceAtLeast(0)
+            c.addMediaItems(0, mediaItems.subList(prefixStart, prefixEnd))
+            prefixEnd = prefixStart
+            kotlinx.coroutines.yield()
+        }
+
         c.shuffleModeEnabled = savedShuffle
         c.repeatMode = savedRepeat
         c.prepare()
 
-        currentSong = songs[index]
+        currentSong = songSnapshot[index]
         shuffleEnabled = savedShuffle
         repeatMode = savedRepeat
 
