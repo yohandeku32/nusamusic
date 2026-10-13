@@ -4994,7 +4994,7 @@ private fun ImmersiveArtwork(
                     compositingStrategy = CompositingStrategy.Offscreen
                 }
                 .drawWithCache {
-                    val painter = ImmersiveArtworkPainter(size, size.height, 192.dp.toPx())
+                    val painter = ImmersiveArtworkPainter(size, size.height, 228.dp.toPx())
                     onDrawWithContent {
                         drawContent()
                         with(painter) { fadeArtwork() }
@@ -5052,7 +5052,7 @@ private fun ImmersiveArtwork(
                 .matchParentSize()
                 .graphicsLayer { alpha = scrimOpacity }
                 .drawWithCache {
-                    val painter = ImmersiveArtworkPainter(size, sharpBottom, 192.dp.toPx())
+                    val painter = ImmersiveArtworkPainter(size, sharpBottom, 228.dp.toPx())
                     onDrawBehind { with(painter) { drawScrim() } }
                 }
         )
