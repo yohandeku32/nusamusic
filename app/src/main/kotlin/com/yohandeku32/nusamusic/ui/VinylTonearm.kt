@@ -33,7 +33,7 @@ fun VinylTonearm(
     } else 0f
 
     // Follow the grooves slowly; the stylus parks outside the disc.
-    val targetAngle = if (isPlaying && hasSong) -8f + progress * 18f else -15f
+    val targetAngle = if (isPlaying && hasSong) -5f + progress * 15f else -15f
     val armAngle by animateFloatAsState(
         targetValue = targetAngle,
         animationSpec = spring(
@@ -92,12 +92,12 @@ fun VinylTonearm(
                 move(0f, 0.042f)
                 curve(0.001f, 0.215f, -0.011f, 0.413f, -0.043f, 0.563f)
             }
-            drawPath(tube, Color.Black.copy(alpha = 0.16f), style = Stroke(unit * 0.025f, cap = StrokeCap.Round))
-            drawPath(tube, Color(0xFF161B1D), style = Stroke(unit * 0.018f, cap = StrokeCap.Round))
+            drawPath(tube, Color.Black.copy(alpha = 0.16f), style = Stroke(unit * 0.029f, cap = StrokeCap.Round))
+            drawPath(tube, Color(0xFF161B1D), style = Stroke(unit * 0.021f, cap = StrokeCap.Round))
             drawPath(
                 tube,
                 Color(0xFF4D565A).copy(alpha = 0.75f),
-                style = Stroke(unit * 0.003f, cap = StrokeCap.Round)
+                style = Stroke(unit * 0.0035f, cap = StrokeCap.Round)
             )
 
             // Small red tube keeper.
