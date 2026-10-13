@@ -232,8 +232,6 @@ fun TurntablePlayer(
                 }.padding(top = 22.dp, bottom = 12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                PlaybackActivity(active = isPlaying && isVisible)
-                Spacer(Modifier.height(8.dp))
                 TurntableProgress(positionMsState, durationMs, hasSong, labels.seek, onSeek)
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),

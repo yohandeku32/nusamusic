@@ -34,7 +34,7 @@ fun VinylTonearm(
     // increasing the angle moves it inward toward the label without crossing
     // onto the album artwork.
     val targetAngle = if (mountedOnDeck) {
-        if (isPlaying && hasSong) 14f + trackProgress * 26f else 0f
+        if (isPlaying && hasSong) 14f + trackProgress * 10f else 0f
     } else if (hasSong) {
         // Start just a little farther outward than the previous position,
         // while keeping the same smooth inward tracking range.
@@ -48,7 +48,7 @@ fun VinylTonearm(
         animationSpec = if (isPlaying && hasSong) {
             androidx.compose.animation.core.spring(
                 dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
-                stiffness = 180f
+                stiffness = 35f
             )
         } else {
             androidx.compose.animation.core.spring(
