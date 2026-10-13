@@ -72,7 +72,16 @@ internal object ArtworkBlur {
             val cropHeight = (playerView.height * height.toFloat() / surface.height)
                 .roundToInt().coerceIn(1, height - top)
             val cropped = Bitmap.createBitmap(frame, left, top, cropWidth, cropHeight)
-            if (cropped !== frame) frame.recycle()
+            if (cropped !== frame) {
+                // TextureView zoom/crop coordinates vary by device. If the
+                // viewport crop is black but the video is visible in the full
+                // texture, use that frame rather than falling back to album art.
+                if (!hasVisibleFrame(cropped) && hasVisibleFrame(frame)) {
+                    cropped.recycle()
+                    return frame
+                }
+                frame.recycle()
+            }
             return cropped
         } catch (_: RuntimeException) {
             frame.recycle()
