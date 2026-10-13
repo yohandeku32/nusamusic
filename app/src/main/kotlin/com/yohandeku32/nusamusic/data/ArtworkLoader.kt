@@ -17,14 +17,20 @@ object ArtworkLoader {
         }
     }
 
+    fun cached(
+        uriString: String,
+        maxSize: Int = 512,
+        cacheKey: String? = null
+    ): Bitmap? = cache.get(resolvedCacheKey(uriString, maxSize, cacheKey))
+
     suspend fun load(
         context: Context,
         uriString: String,
         maxSize: Int = 512,
         cacheKey: String? = null
     ): Bitmap? = withContext(Dispatchers.IO) {
-        val resolvedCacheKey = (cacheKey ?: uriString) + "@" + maxSize
-        cache.get(resolvedCacheKey)?.let { return@withContext it }
+        val memoryKey = resolvedCacheKey(uriString, maxSize, cacheKey)
+        cache.get(memoryKey)?.let { return@withContext it }
 
         val retriever = MediaMetadataRetriever()
         try {
@@ -61,13 +67,17 @@ object ArtworkLoader {
                 decoded.recycle()
             }
 
-            cache.put(resolvedCacheKey, bitmap)
+            cache.put(memoryKey, bitmap)
             bitmap
         } catch (_: Exception) {
             null
         } finally {
             retriever.release()
         }
+    }
+
+    private fun resolvedCacheKey(uriString: String, maxSize: Int, cacheKey: String?): String {
+        return (cacheKey ?: uriString) + "@" + maxSize
     }
 
     private fun calculateInSampleSize(

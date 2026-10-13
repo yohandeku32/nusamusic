@@ -3631,48 +3631,61 @@ private fun ArtistBiographySection(
     }
 }
 
+private enum class AudioQualityBadge {
+    LOSSLESS,
+    HI_RES,
+    DOLBY
+}
+
 @Composable
 private fun AudioQualityPill(
     song: Song?,
     immersive: Boolean = false
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    var codecInfo by remember(song?.uri) { mutableStateOf<AudioCodecInfo?>(null) }
+    var codecInfo by remember { mutableStateOf<AudioCodecInfo?>(null) }
+    var resolvedCodecUri by remember { mutableStateOf<String?>(null) }
     var showMetadataDialog by remember(song?.uri) { mutableStateOf(false) }
 
     LaunchedEffect(song?.uri) {
-        codecInfo = song?.let {
-            AudioCodecLoader.load(
-                context = context,
-                uriString = it.uri
-            )
+        val targetUri = song?.uri
+        if (targetUri == null) {
+            codecInfo = null
+            resolvedCodecUri = null
+            return@LaunchedEffect
         }
+
+        // Keep the previous badge visible while the next file is inspected. Replacing
+        // it only after loading prevents a blank frame when tracks change.
+        val loaded = AudioCodecLoader.load(
+            context = context,
+            uriString = targetUri
+        )
+        codecInfo = loaded
+        resolvedCodecUri = targetUri
     }
 
     val info = codecInfo
     val isLossless = info?.codecName == "Apple Lossless" || info?.codecName == "FLAC"
     val isHiRes = isLossless && info?.isHiRes == true
-
     val isDolby = info?.isDolby == true
+    val badge = when {
+        isDolby -> AudioQualityBadge.DOLBY
+        isHiRes -> AudioQualityBadge.HI_RES
+        isLossless -> AudioQualityBadge.LOSSLESS
+        else -> null
+    }
+    val metadataMatchesSong = song != null && resolvedCodecUri == song.uri
 
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        androidx.compose.animation.AnimatedVisibility(
-            visible = isLossless,
-            enter = androidx.compose.animation.fadeIn(
-                animationSpec = tween(durationMillis = 180)
-            ),
-            exit = androidx.compose.animation.fadeOut(
-                animationSpec = tween(durationMillis = 180)
-            )
-        ) {
-            Crossfade(
-                targetState = isHiRes,
-                animationSpec = tween(durationMillis = 180),
-                label = "qualityBadgeCrossfade"
-            ) { hiRes ->
+    Crossfade(
+        targetState = badge,
+        animationSpec = tween(durationMillis = 240),
+        label = "audioQualityBadge"
+    ) { visibleBadge ->
+        when (visibleBadge) {
+            AudioQualityBadge.LOSSLESS,
+            AudioQualityBadge.HI_RES -> {
+                val hiRes = visibleBadge == AudioQualityBadge.HI_RES
                 Box(
                     modifier = Modifier
                         .padding(top = if (immersive) 0.dp else 4.dp)
@@ -3686,7 +3699,7 @@ private fun AudioQualityPill(
                                 MaterialTheme.colorScheme.surfaceVariant
                             }
                         )
-                        .clickable(enabled = song != null && info != null) {
+                        .clickable(enabled = metadataMatchesSong && info != null) {
                             showMetadataDialog = true
                         }
                 ) {
@@ -3724,45 +3737,20 @@ private fun AudioQualityPill(
                     }
                 }
             }
-        }
-
-        androidx.compose.animation.AnimatedVisibility(
-            visible = isDolby,
-            enter = androidx.compose.animation.fadeIn(
-                animationSpec = tween(durationMillis = 180)
-            ),
-            exit = androidx.compose.animation.fadeOut(
-                animationSpec = tween(durationMillis = 180)
-            )
-        ) {
-            Box(
-                modifier = Modifier
-                    .padding(top = if (immersive) 0.dp else 4.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(
-                        if (immersive) Color.White else MaterialTheme.colorScheme.surfaceVariant
-                    )
-                    .clickable(enabled = song != null && info != null) {
-                        showMetadataDialog = true
-                    }
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
+            AudioQualityBadge.DOLBY -> {
+                Box(
+                    modifier = Modifier
+                        .padding(top = if (immersive) 0.dp else 4.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(
+                            if (immersive) Color.White else MaterialTheme.colorScheme.surfaceVariant
+                        )
+                        .clickable(enabled = metadataMatchesSong && info != null) {
+                            showMetadataDialog = true
+                        }
+                        .padding(horizontal = 12.dp, vertical = 5.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.dolby_atmos_mark),
-                        contentDescription = null,
-                        contentScale = ContentScale.Fit,
-                        colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(
-                            if (immersive) Color(0xFF1B1B1B) else MaterialTheme.colorScheme.onSurface
-                        ),
-                        modifier = Modifier.size(width = 19.dp, height = 10.dp)
-                    )
-
-                    Spacer(Modifier.width(4.dp))
-
                     Text(
                         text = androidx.compose.ui.text.buildAnnotatedString {
                             withStyle(
@@ -3793,10 +3781,11 @@ private fun AudioQualityPill(
                     )
                 }
             }
+            null -> Spacer(Modifier.size(0.dp))
         }
     }
 
-    if ((isLossless || isDolby) && !immersive) {
+    if (badge != null && !immersive) {
         Spacer(Modifier.height(4.dp))
     }
 
@@ -5212,6 +5201,19 @@ private data class GrainFiber(
     val dark: Boolean
 )
 
+private suspend fun prepareImmersiveArtwork(bitmap: Bitmap): Pair<Bitmap, Color> {
+    return withContext(Dispatchers.Default) {
+        val pixels = IntArray(64) { index ->
+            val x = ((index % 8 + 0.5f) / 8f * bitmap.width).toInt()
+                .coerceIn(0, bitmap.width - 1)
+            val y = ((0.55f + (index / 8 + 0.5f) / 8f * 0.40f) * bitmap.height).toInt()
+                .coerceIn(0, bitmap.height - 1)
+            bitmap.getPixel(x, y)
+        }
+        ArtworkBlur.create(bitmap) to artworkBackdropColor(pixels)
+    }
+}
+
 @Composable
 private fun ImmersiveArtwork(
     song: Song?,
@@ -5221,37 +5223,63 @@ private fun ImmersiveArtwork(
     modifier: Modifier = Modifier
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    var artwork by remember(song?.uri, song?.albumId) { mutableStateOf<Bitmap?>(null) }
-    var staticBlur by remember(song?.uri, song?.albumId) { mutableStateOf<Bitmap?>(null) }
-    var backdrop by remember(song?.uri, song?.albumId) { mutableStateOf(Color(0xFF141414)) }
+    // Retain the current frame while the next song's artwork is decoded. Resetting
+    // these states on every URI change briefly exposed the empty placeholder.
+    var artwork by remember { mutableStateOf<Bitmap?>(null) }
+    var staticBlur by remember { mutableStateOf<Bitmap?>(null) }
+    var backdrop by remember { mutableStateOf(Color(0xFF141414)) }
     var animatedArtworkUrl by remember(song?.id, song?.uri) { mutableStateOf<String?>(null) }
     var artworkReloadAttempt by remember(song?.uri) { mutableIntStateOf(0) }
     var frozenAnimatedBlur by remember(song?.uri, animatedArtworkUrl) { mutableStateOf<Bitmap?>(null) }
 
     LaunchedEffect(song?.uri, song?.albumId) {
-        val loaded = song?.let {
-            ArtworkLoader.load(
-                context = context,
-                uriString = it.uri,
-                maxSize = 1_600,
-                cacheKey = it.albumId.takeIf { albumId -> albumId > 0L }?.toString()
-            )
+        val targetSong = song
+        if (targetSong == null) {
+            artwork = null
+            staticBlur = null
+            backdrop = Color(0xFF141414)
+            return@LaunchedEffect
         }
-        val prepared = withContext(Dispatchers.Default) {
-            loaded?.let { bitmap ->
-                val pixels = IntArray(64) { index ->
-                    val x = ((index % 8 + 0.5f) / 8f * bitmap.width).toInt()
-                        .coerceIn(0, bitmap.width - 1)
-                    val y = ((0.55f + (index / 8 + 0.5f) / 8f * 0.40f) * bitmap.height).toInt()
-                        .coerceIn(0, bitmap.height - 1)
-                    bitmap.getPixel(x, y)
-                }
-                ArtworkBlur.create(bitmap) to artworkBackdropColor(pixels)
-            } ?: (null to Color(0xFF141414))
+
+        val albumCacheKey = targetSong.albumId
+            .takeIf { albumId -> albumId > 0L }
+            ?.toString()
+
+        suspend fun publish(bitmap: Bitmap?) {
+            val prepared = bitmap?.let { prepareImmersiveArtwork(it) }
+            artwork = bitmap
+            staticBlur = prepared?.first
+            backdrop = prepared?.second ?: Color(0xFF141414)
         }
-        artwork = loaded
-        staticBlur = prepared.first
-        backdrop = prepared.second
+
+        val cachedFullArtwork = ArtworkLoader.cached(
+            uriString = targetSong.uri,
+            maxSize = 1_600,
+            cacheKey = albumCacheKey
+        )
+        if (cachedFullArtwork != null) {
+            if (cachedFullArtwork !== artwork) publish(cachedFullArtwork)
+            return@LaunchedEffect
+        }
+
+        // The vinyl view normally has a 512 px cover in memory already. Present it
+        // immediately, then crossfade to the full-resolution immersive cover.
+        val cachedPreview = ArtworkLoader.cached(
+            uriString = targetSong.uri,
+            maxSize = 512,
+            cacheKey = albumCacheKey
+        )
+        if (cachedPreview != null && cachedPreview !== artwork) {
+            publish(cachedPreview)
+        }
+
+        val loaded = ArtworkLoader.load(
+            context = context,
+            uriString = targetSong.uri,
+            maxSize = 1_600,
+            cacheKey = albumCacheKey
+        )
+        if (loaded !== artwork) publish(loaded)
     }
 
     LaunchedEffect(
@@ -5277,39 +5305,55 @@ private fun ImmersiveArtwork(
     val activeBlur = if (animatedArtworkEnabled && animatedArtworkUrl != null) {
         frozenAnimatedBlur ?: staticBlur
     } else staticBlur
+    val animatedBackdrop by animateColorAsState(
+        targetValue = backdrop,
+        animationSpec = tween(durationMillis = 360),
+        label = "immersiveBackdrop"
+    )
 
-    BoxWithConstraints(modifier.background(backdrop)) {
+    BoxWithConstraints(modifier.background(animatedBackdrop)) {
         val sharpBottom = resolveArtworkBottom(artistBottomPx, constraints.maxHeight.toFloat())
         val sharpHeight = with(LocalDensity.current) { sharpBottom.toDp() }
 
         // Reuse the sharp cover's crop and top alignment; clamp its blurred edge down the page.
-        Box(
-            Modifier
-                .matchParentSize()
-                .drawWithCache {
-                    val bitmap = activeBlur
-                    val paint = if (bitmap != null && size.width > 0f && sharpBottom > 0f) {
-                        val scale = maxOf(size.width / bitmap.width, sharpBottom / bitmap.height)
-                        val matrix = android.graphics.Matrix().apply {
-                            setScale(scale, scale)
-                            postTranslate((size.width - bitmap.width * scale) / 2f, 0f)
-                        }
-                        val shader = android.graphics.BitmapShader(
-                            bitmap,
-                            android.graphics.Shader.TileMode.CLAMP,
-                            android.graphics.Shader.TileMode.CLAMP
-                        ).apply { setLocalMatrix(matrix) }
-                        android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG).apply {
-                            this.shader = shader
-                        }
-                    } else null
-                    onDrawBehind {
-                        if (paint != null) drawIntoCanvas { canvas ->
-                            canvas.nativeCanvas.drawRect(0f, 0f, size.width, size.height, paint)
+        Crossfade(
+            targetState = activeBlur,
+            animationSpec = tween(durationMillis = 360),
+            label = "immersiveBlur",
+            modifier = Modifier.matchParentSize()
+        ) { blurBitmap ->
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .drawWithCache {
+                        val paint = if (
+                            blurBitmap != null && size.width > 0f && sharpBottom > 0f
+                        ) {
+                            val scale = maxOf(
+                                size.width / blurBitmap.width,
+                                sharpBottom / blurBitmap.height
+                            )
+                            val matrix = android.graphics.Matrix().apply {
+                                setScale(scale, scale)
+                                postTranslate((size.width - blurBitmap.width * scale) / 2f, 0f)
+                            }
+                            val shader = android.graphics.BitmapShader(
+                                blurBitmap,
+                                android.graphics.Shader.TileMode.CLAMP,
+                                android.graphics.Shader.TileMode.CLAMP
+                            ).apply { setLocalMatrix(matrix) }
+                            android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG).apply {
+                                this.shader = shader
+                            }
+                        } else null
+                        onDrawBehind {
+                            if (paint != null) drawIntoCanvas { canvas ->
+                                canvas.nativeCanvas.drawRect(0f, 0f, size.width, size.height, paint)
+                            }
                         }
                     }
-                }
-        )
+            )
+        }
 
         // Static and animated artwork share the same boundary and feathered mask.
         Box(
@@ -5329,22 +5373,28 @@ private fun ImmersiveArtwork(
                     }
                 }
         ) {
-            val cover = artwork
-            if (cover != null) {
-                Image(
-                    bitmap = cover.asImageBitmap(),
-                    contentDescription = song?.title,
-                    contentScale = ContentScale.Crop,
-                    alignment = Alignment.TopCenter,
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                Icon(
-                    Icons.Default.MusicNote,
-                    contentDescription = null,
-                    tint = Color.White.copy(alpha = 0.18f),
-                    modifier = Modifier.size(42.dp).align(Alignment.Center)
-                )
+            Crossfade(
+                targetState = artwork,
+                animationSpec = tween(durationMillis = 360),
+                label = "immersiveCover",
+                modifier = Modifier.fillMaxSize()
+            ) { cover ->
+                if (cover != null) {
+                    Image(
+                        bitmap = cover.asImageBitmap(),
+                        contentDescription = song?.title,
+                        contentScale = ContentScale.Crop,
+                        alignment = Alignment.TopCenter,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Icon(
+                        Icons.Default.MusicNote,
+                        contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.18f),
+                        modifier = Modifier.size(42.dp).align(Alignment.Center)
+                    )
+                }
             }
 
             val activeUrl = animatedArtworkUrl
@@ -5478,6 +5528,12 @@ private fun AnimatedArtworkVideoBackground(
         }
     }
 
+    val videoAlpha by animateFloatAsState(
+        targetValue = if (videoReady) 1f else 0f,
+        animationSpec = tween(durationMillis = 360),
+        label = "animatedArtworkFade"
+    )
+
     androidx.compose.ui.viewinterop.AndroidView(
         factory = { viewContext ->
             val canvasPlayerView = android.view.LayoutInflater.from(viewContext)
@@ -5496,7 +5552,7 @@ private fun AnimatedArtworkVideoBackground(
         },
         modifier = modifier.graphicsLayer {
             // Keep the still artwork visible until the first video frame is ready.
-            alpha = if (videoReady) 1f else 0f
+            alpha = videoAlpha
         }
     )
 }
