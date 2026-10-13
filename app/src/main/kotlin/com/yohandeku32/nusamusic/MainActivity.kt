@@ -152,6 +152,7 @@ import com.yohandeku32.nusamusic.playback.PlaybackService
 import com.yohandeku32.nusamusic.ui.vinylLabelDiameter
 import com.yohandeku32.nusamusic.ui.VinylLabelPainter
 import com.yohandeku32.nusamusic.ui.VinylPainter
+import com.yohandeku32.nusamusic.ui.VinylShadowPainter
 import com.yohandeku32.nusamusic.ui.resolveArtworkBottom
 import com.yohandeku32.nusamusic.ui.ImmersiveArtworkPainter
 import com.yohandeku32.nusamusic.ui.artworkBackdropColor
@@ -4604,12 +4605,10 @@ private fun VinylRecord(
         Box(
             Modifier
                 .fillMaxSize()
-                .graphicsLayer {
-                    shadowElevation = 6.dp.toPx()
-                    shape = CircleShape
-                    clip = false
+                .drawWithCache {
+                    val painter = VinylShadowPainter(size, 16.dp.toPx(), 6.dp.toPx())
+                    onDrawBehind { with(painter) { drawShadow() } }
                 }
-                .background(Color(0xFF0A0C0B), CircleShape)
         )
 
         Box(
