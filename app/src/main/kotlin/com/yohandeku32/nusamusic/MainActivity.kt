@@ -4812,7 +4812,7 @@ private suspend fun prepareImmersiveArtwork(bitmap: Bitmap): Pair<Bitmap, Color>
 }
 
 private fun immersiveScrimOpacity(bitmap: Bitmap?): Float {
-    if (bitmap == null) return 0.12f
+    if (bitmap == null) return 0.08f
     var brightnessSquared = 0f
     for (row in 0 until 8) {
         for (column in 0 until 8) {
@@ -4831,7 +4831,7 @@ private fun immersiveScrimOpacity(bitmap: Bitmap?): Float {
     }
     val brightness = kotlin.math.sqrt(brightnessSquared / 64f)
     // Light tint protection for legibility, not a dark veil over artwork colours.
-    return (0.06f + brightness * 0.18f).coerceIn(0.07f, 0.24f)
+    return (0.03f + brightness * 0.10f).coerceIn(0.04f, 0.14f)
 }
 
 @Composable
@@ -4987,6 +4987,24 @@ private fun ImmersiveArtwork(
                     }
             )
         }
+
+        // A light, gradually increasing glass tint softens the lower area without
+        // hiding the cover or replacing its frozen animated-artwork colours.
+        Box(
+            Modifier
+                .matchParentSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.03f),
+                            Color.White.copy(alpha = 0.06f),
+                            animatedBackdrop.copy(alpha = 0.05f),
+                            Color.White.copy(alpha = 0.16f),
+                            Color.White.copy(alpha = 0.26f)
+                        )
+                    )
+                )
+        )
 
         // Static and animated artwork share the same boundary and feathered mask.
         Box(
