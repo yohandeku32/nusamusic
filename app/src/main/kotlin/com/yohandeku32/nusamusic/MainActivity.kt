@@ -4093,7 +4093,9 @@ private fun SimpleProgressBar(
             }
     ) {
         val y = size.height / 2f
-        val stroke = 3.0.dp.toPx()
+        val stroke = 5.dp.toPx()
+        val startX = stroke / 2f
+        val endX = (size.width - startX).coerceAtLeast(startX)
 
         drawLine(
             color = if (immersive) {
@@ -4101,17 +4103,21 @@ private fun SimpleProgressBar(
             } else {
                 Color(0xFFD0CDC6)
             },
-            start = androidx.compose.ui.geometry.Offset(0f, y),
-            end = androidx.compose.ui.geometry.Offset(size.width, y),
-            strokeWidth = stroke
+            start = androidx.compose.ui.geometry.Offset(startX, y),
+            end = androidx.compose.ui.geometry.Offset(endX, y),
+            strokeWidth = stroke,
+            cap = androidx.compose.ui.graphics.StrokeCap.Round
         )
 
-        drawLine(
-            color = primary,
-            start = androidx.compose.ui.geometry.Offset(0f, y),
-            end = androidx.compose.ui.geometry.Offset(size.width * fraction, y),
-            strokeWidth = stroke
-        )
+        if (fraction > 0f) {
+            drawLine(
+                color = primary,
+                start = androidx.compose.ui.geometry.Offset(startX, y),
+                end = androidx.compose.ui.geometry.Offset(startX + (endX - startX) * fraction, y),
+                strokeWidth = stroke,
+                cap = androidx.compose.ui.graphics.StrokeCap.Round
+            )
+        }
     }
 }
 
