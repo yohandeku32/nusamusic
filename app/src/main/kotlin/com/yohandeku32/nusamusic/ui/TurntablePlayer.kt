@@ -423,7 +423,7 @@ private fun TurntableProgress(positionMsState: State<Long>, durationMs: Long, ha
         return "${seconds / 60}:${(seconds % 60).toString().padStart(2, '0')}"
     }
     Canvas(
-        Modifier.fillMaxWidth().padding(horizontal = 38.dp).height(36.dp)
+        Modifier.fillMaxWidth().padding(horizontal = 38.dp).height(30.dp)
             .semantics {
                 contentDescription = label
                 progressBarRangeInfo = ProgressBarRangeInfo(fraction, 0f..1f)
@@ -456,12 +456,25 @@ private fun TurntableProgress(positionMsState: State<Long>, durationMs: Long, ha
         drawLine(ink.copy(alpha = 0.17f), start, end, stroke, StrokeCap.Round)
         if (fraction > 0f) drawLine(ink.copy(alpha = 0.65f), start, Offset(start.x + (end.x - start.x) * fraction, start.y), stroke, StrokeCap.Round)
     }
-    // Restore the elapsed / duration clock directly BELOW the seek bar.
-    Text(
-        "${time(positionMs)} / ${time(durationMs)}",
-        fontFamily = FontFamily.Monospace,
-        fontWeight = FontWeight.Medium,
-        fontSize = 16.sp,
-        color = ink
-    )
+    // Compact timestamps at the left and right ends, just below the seek bar.
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 38.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = time(positionMs),
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Medium,
+            fontSize = 12.sp,
+            color = ink.copy(alpha = 0.70f)
+        )
+        Text(
+            text = time(durationMs),
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Medium,
+            fontSize = 12.sp,
+            color = ink.copy(alpha = 0.70f)
+        )
+    }
 }
