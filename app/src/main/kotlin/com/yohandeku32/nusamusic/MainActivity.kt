@@ -4831,7 +4831,7 @@ private fun immersiveScrimOpacity(bitmap: Bitmap?): Float {
     }
     val brightness = kotlin.math.sqrt(brightnessSquared / 64f)
     // Light tint protection for legibility, not a dark veil over artwork colours.
-    return (0.03f + brightness * 0.10f).coerceIn(0.04f, 0.14f)
+    return (0.02f + brightness * 0.08f).coerceIn(0.03f, 0.11f)
 }
 
 @Composable
@@ -4988,20 +4988,20 @@ private fun ImmersiveArtwork(
             )
         }
 
-        // Cinematic fade: let the artwork colours breathe above, then gradually
-        // melt them into deep black beneath the title and playback controls.
-        // The blur still uses the artwork/video frame (frozen per song).
+        // Coloured dark fade: let the artwork/video tint remain visible in the
+        // middle, then darken gently towards the playback controls.
         Box(
             Modifier
                 .matchParentSize()
                 .background(
                     Brush.verticalGradient(
                         0.00f to Color.Transparent,
-                        0.38f to Color.Transparent,
-                        0.58f to Color.Black.copy(alpha = 0.16f),
-                        0.75f to Color.Black.copy(alpha = 0.60f),
-                        0.90f to Color.Black.copy(alpha = 0.91f),
-                        1.00f to Color.Black.copy(alpha = 0.98f)
+                        0.28f to Color.Transparent,
+                        0.48f to animatedBackdrop.copy(alpha = 0.10f),
+                        0.62f to animatedBackdrop.copy(alpha = 0.18f),
+                        0.76f to Color.Black.copy(alpha = 0.46f),
+                        0.90f to Color.Black.copy(alpha = 0.78f),
+                        1.00f to Color.Black.copy(alpha = 0.96f)
                     )
                 )
         )
