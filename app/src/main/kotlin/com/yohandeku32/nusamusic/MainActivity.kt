@@ -105,6 +105,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -3634,8 +3635,8 @@ private fun AudioQualityPill(
     immersive: Boolean = false
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    var codecInfo by remember { mutableStateOf<AudioCodecInfo?>(null) }
-    var showMetadataDialog by remember { mutableStateOf(false) }
+    var codecInfo by remember(song?.uri) { mutableStateOf<AudioCodecInfo?>(null) }
+    var showMetadataDialog by remember(song?.uri) { mutableStateOf(false) }
 
     LaunchedEffect(song?.uri) {
         codecInfo = song?.let {
@@ -3650,7 +3651,7 @@ private fun AudioQualityPill(
     val isLossless = info?.codecName == "Apple Lossless" || info?.codecName == "FLAC"
     val isHiRes = isLossless && info?.isHiRes == true
 
-    val isDolbyAtmos = info?.codecName == "Dolby Atmos"
+    val isDolby = info?.isDolby == true
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -3724,7 +3725,7 @@ private fun AudioQualityPill(
         }
 
         androidx.compose.animation.AnimatedVisibility(
-            visible = isDolbyAtmos,
+            visible = isDolby,
             enter = androidx.compose.animation.fadeIn(
                 animationSpec = tween(durationMillis = 180)
             ),
@@ -3750,7 +3751,7 @@ private fun AudioQualityPill(
                 ) {
                     Image(
                         painter = painterResource(id = R.drawable.dolby_atmos_mark),
-                        contentDescription = "Dolby Atmos",
+                        contentDescription = info?.codecName ?: "Dolby",
                         contentScale = ContentScale.Fit,
                         colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(
                             if (immersive) Color(0xFF1B1B1B) else MaterialTheme.colorScheme.onSurface
@@ -3761,7 +3762,7 @@ private fun AudioQualityPill(
                     Spacer(Modifier.width(5.dp))
 
                     Text(
-                        text = "Dolby Atmos",
+                        text = info?.codecName ?: "Dolby",
                         fontSize = 10.sp,
                         lineHeight = 12.sp,
                         fontWeight = FontWeight.Medium,
@@ -3776,7 +3777,7 @@ private fun AudioQualityPill(
         }
     }
 
-    if ((isLossless || isDolbyAtmos) && !immersive) {
+    if ((isLossless || isDolby) && !immersive) {
         Spacer(Modifier.height(4.dp))
     }
 
@@ -5205,6 +5206,7 @@ private fun ImmersiveArtwork(
     var staticBlur by remember(song?.uri, song?.albumId) { mutableStateOf<Bitmap?>(null) }
     var backdrop by remember(song?.uri, song?.albumId) { mutableStateOf(Color(0xFF141414)) }
     var animatedArtworkUrl by remember(song?.id, song?.uri) { mutableStateOf<String?>(null) }
+    var frozenAnimatedBlur by remember(song?.uri, animatedArtworkUrl) { mutableStateOf<Bitmap?>(null) }
 
     LaunchedEffect(song?.uri, song?.albumId) {
         val loaded = song?.let {
@@ -5240,6 +5242,10 @@ private fun ImmersiveArtwork(
         } else null
     }
 
+    val activeBlur = if (animatedArtworkEnabled && animatedArtworkUrl != null) {
+        frozenAnimatedBlur ?: staticBlur
+    } else staticBlur
+
     BoxWithConstraints(modifier.background(backdrop)) {
         val sharpBottom = resolveArtworkBottom(artistBottomPx, constraints.maxHeight.toFloat())
         val sharpHeight = with(LocalDensity.current) { sharpBottom.toDp() }
@@ -5249,7 +5255,7 @@ private fun ImmersiveArtwork(
             Modifier
                 .matchParentSize()
                 .drawWithCache {
-                    val bitmap = staticBlur
+                    val bitmap = activeBlur
                     val paint = if (bitmap != null && size.width > 0f && sharpBottom > 0f) {
                         val scale = maxOf(size.width / bitmap.width, sharpBottom / bitmap.height)
                         val matrix = android.graphics.Matrix().apply {
@@ -5284,7 +5290,7 @@ private fun ImmersiveArtwork(
                     compositingStrategy = CompositingStrategy.Offscreen
                 }
                 .drawWithCache {
-                    val painter = ImmersiveArtworkPainter(size, size.height, 144.dp.toPx())
+                    val painter = ImmersiveArtworkPainter(size, size.height, 192.dp.toPx())
                     onDrawWithContent {
                         drawContent()
                         with(painter) { fadeArtwork() }
@@ -5314,6 +5320,12 @@ private fun ImmersiveArtwork(
                 AnimatedArtworkVideoBackground(
                     url = activeUrl,
                     modifier = Modifier.fillMaxSize(),
+                    captureBackdrop = frozenAnimatedBlur == null,
+                    onBackdropReady = { blurredFrame ->
+                        if (animatedArtworkUrl == activeUrl && frozenAnimatedBlur == null) {
+                            frozenAnimatedBlur = blurredFrame
+                        }
+                    },
                     onUnavailable = {
                         if (animatedArtworkUrl == activeUrl) animatedArtworkUrl = null
                     }
@@ -5325,7 +5337,7 @@ private fun ImmersiveArtwork(
             Modifier
                 .matchParentSize()
                 .drawWithCache {
-                    val painter = ImmersiveArtworkPainter(size, sharpBottom, 144.dp.toPx())
+                    val painter = ImmersiveArtworkPainter(size, sharpBottom, 192.dp.toPx())
                     onDrawBehind { with(painter) { drawScrim() } }
                 }
         )
@@ -5337,10 +5349,14 @@ private fun ImmersiveArtwork(
 private fun AnimatedArtworkVideoBackground(
     url: String,
     modifier: Modifier = Modifier,
+    captureBackdrop: Boolean,
+    onBackdropReady: (Bitmap) -> Unit,
     onUnavailable: () -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var videoReady by remember(url) { mutableStateOf(false) }
+    var artworkPlayerView by remember { mutableStateOf<androidx.media3.ui.PlayerView?>(null) }
+    val onBackdropReadyCallback by rememberUpdatedState(onBackdropReady)
 
     val player = remember(url) {
         val trackSelector = androidx.media3.exoplayer.trackselection.DefaultTrackSelector(context).apply {
@@ -5373,6 +5389,27 @@ private fun AnimatedArtworkVideoBackground(
         }
     }
 
+    LaunchedEffect(player, artworkPlayerView, videoReady, captureBackdrop) {
+        val view = artworkPlayerView ?: return@LaunchedEffect
+        if (!videoReady || !captureBackdrop) return@LaunchedEffect
+        // Wait for the TextureView to receive the rendered frame, then capture once.
+        // A few bounded retries cover a surface that is still being attached.
+        repeat(4) {
+            androidx.compose.runtime.withFrameNanos { }
+            val frame = ArtworkBlur.captureViewport(view)
+            if (frame != null) {
+                val blurred = try {
+                    withContext(Dispatchers.Default) { ArtworkBlur.create(frame) }
+                } finally {
+                    frame.recycle()
+                }
+                onBackdropReadyCallback(blurred)
+                return@LaunchedEffect
+            }
+            delay(80L)
+        }
+    }
+
     androidx.compose.runtime.DisposableEffect(player, url) {
         val listener = object : Player.Listener {
             override fun onRenderedFirstFrame() {
@@ -5402,10 +5439,12 @@ private fun AnimatedArtworkVideoBackground(
                     false
                 ) as androidx.media3.ui.PlayerView
             canvasPlayerView.player = player
+            artworkPlayerView = canvasPlayerView
             canvasPlayerView
         },
         update = { playerView ->
             if (playerView.player !== player) playerView.player = player
+            if (artworkPlayerView !== playerView) artworkPlayerView = playerView
         },
         modifier = modifier.graphicsLayer {
             // Keep the still artwork visible until the first video frame is ready.

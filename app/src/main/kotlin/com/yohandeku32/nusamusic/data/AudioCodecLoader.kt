@@ -5,15 +5,6 @@ import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.net.Uri
 
-data class AudioCodecInfo(
-    val codecName: String,
-    val sampleRateHz: Int?,
-    val bitDepth: Int?
-) {
-    val isHiRes: Boolean
-        get() = bitDepth != null && bitDepth >= 24
-}
-
 object AudioCodecLoader {
 
     suspend fun load(
@@ -58,25 +49,7 @@ object AudioCodecLoader {
                     null
                 }
 
-                val codec = when {
-                    // E-AC-3 JOC is the stream identifier used for Dolby Atmos.
-                    // Do not label generic AC-3/E-AC-3 as Atmos unless the
-                    // extractor exposes the Atmos/JOC marker.
-                    mime.contains("atmos") ||
-                        (mime.contains("eac3") && mime.contains("joc")) -> "Dolby Atmos"
-                    mime.contains("flac") -> "FLAC"
-                    mime.contains("alac") -> "Apple Lossless"
-                    mime.contains("mp4a") || mime.contains("aac") -> "AAC"
-                    mime.contains("mpeg") -> "MP3"
-                    mime.contains("opus") -> "Opus"
-                    mime.contains("vorbis") -> "Vorbis"
-                    mime.contains("pcm") || mime.contains("raw") -> "PCM"
-                    mime.contains("eac3") -> "Dolby Digital+"
-                    mime.contains("ac3") -> "Dolby Digital"
-                    mime.contains("dts") -> "DTS"
-                    mime.contains("amr") -> "AMR"
-                    else -> mime.removePrefix("audio/").uppercase()
-                }
+                val codec = audioCodecName(mime)
 
                 val retrieverBitDepth =
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S && bitDepth == null) {
