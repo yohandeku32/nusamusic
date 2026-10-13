@@ -4996,11 +4996,11 @@ private fun ImmersiveArtwork(
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            Color.Black.copy(alpha = 0.03f),
-                            Color.Black.copy(alpha = 0.06f),
-                            animatedBackdrop.copy(alpha = 0.05f),
-                            Color.Black.copy(alpha = 0.14f),
-                            Color.Black.copy(alpha = 0.24f)
+                            Color.Black.copy(alpha = 0.05f),
+                            Color.Black.copy(alpha = 0.10f),
+                            animatedBackdrop.copy(alpha = 0.07f),
+                            Color.Black.copy(alpha = 0.20f),
+                            Color.Black.copy(alpha = 0.32f)
                         )
                     )
                 )
