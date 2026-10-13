@@ -2569,19 +2569,7 @@ private fun NusaMusicApp(
                                                     Modifier.fillMaxWidth().padding(horizontal = 24.dp),
                                                     verticalAlignment = Alignment.CenterVertically
                                                 ) {
-                                                    IconButton(onClick = {
-                                                        biographyExpanded = !biographyExpanded
-                                                        scope.launch {
-                                                            playerScrollState.animateScrollToItem(if (biographyExpanded) 1 else 0)
-                                                        }
-                                                    }) {
-                                                        BiographyArrowIcon(
-                                                            color = MaterialTheme.colorScheme.onSurface,
-                                                            modifier = Modifier.size(23.dp).graphicsLayer {
-                                                                rotationZ = if (biographyExpanded) 180f else 0f
-                                                            }
-                                                        )
-                                                    }
+                                                    // Settings takes the former arrow position at the left.
                                                     IconButton(onClick = { showSettings = true }) {
                                                         Icon(
                                                             Icons.Default.MoreHoriz,

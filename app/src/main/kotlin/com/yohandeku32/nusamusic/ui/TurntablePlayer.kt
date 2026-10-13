@@ -39,7 +39,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -130,8 +132,56 @@ fun TurntablePlayer(
                         .background(Brush.linearGradient(listOf(surface, page, surface)))
                         .border(1.dp, edge, RoundedCornerShape(18.dp))
                         .drawWithCache {
+                            // Recessed rear connection bay, above and behind the platter.
+                            val rearLeft = size.width * 0.305f
+                            val rearTop = size.height * 0.025f
+                            val rearWidth = size.width * 0.39f
+                            val rearHeight = size.height * 0.075f
+                            val baySize = Size(rearWidth, rearHeight)
+                            val bayCorner = CornerRadius(rearHeight * 0.16f)
+                            val bayFinish = Brush.verticalGradient(
+                                colors = listOf(Color(0xFF596164), Color(0xFF202528)),
+                                startY = rearTop,
+                                endY = rearTop + rearHeight
+                            )
+                            val jackY = rearTop + rearHeight * 0.55f
+                            val jackRadius = rearHeight * 0.245f
                             onDrawBehind {
-                                // Small countersunk fittings belong to the fixed chassis.
+                                drawRoundRect(
+                                    color = Color.Black.copy(alpha = 0.20f),
+                                    topLeft = Offset(rearLeft, rearTop + 2.dp.toPx()),
+                                    size = baySize,
+                                    cornerRadius = bayCorner
+                                )
+                                drawRoundRect(
+                                    brush = bayFinish,
+                                    topLeft = Offset(rearLeft, rearTop),
+                                    size = baySize,
+                                    cornerRadius = bayCorner
+                                )
+                                drawLine(
+                                    color = Color.White.copy(alpha = 0.20f),
+                                    start = Offset(rearLeft + rearHeight * 0.16f, rearTop + rearHeight * 0.12f),
+                                    end = Offset(rearLeft + rearWidth - rearHeight * 0.16f, rearTop + rearHeight * 0.12f),
+                                    strokeWidth = 0.8.dp.toPx()
+                                )
+
+                                // DC input and a pair of silver-rimmed RCA audio jacks.
+                                val dcJack = Offset(rearLeft + rearWidth * 0.22f, jackY)
+                                drawCircle(Color(0xFFAAB1B4), jackRadius, dcJack)
+                                drawCircle(Color(0xFF101315), jackRadius * 0.72f, dcJack)
+                                drawCircle(Color(0xFF50575A), jackRadius * 0.24f, dcJack)
+                                listOf(
+                                    0.56f to Color(0xFFE8EAEB),
+                                    0.80f to Color(0xFFBF443E)
+                                ).forEach { (fraction, accent) ->
+                                    val jack = Offset(rearLeft + rearWidth * fraction, jackY)
+                                    drawCircle(Color(0xFFC1C7CA), jackRadius, jack)
+                                    drawCircle(accent, jackRadius * 0.71f, jack)
+                                    drawCircle(Color(0xFF202528), jackRadius * 0.33f, jack)
+                                }
+
+                                // Small countersunk chassis fittings.
                                 listOf(Offset(size.width * 0.075f, size.height * 0.075f),
                                     Offset(size.width * 0.77f, size.height * 0.075f)).forEach { screw ->
                                     drawCircle(edge, 2.dp.toPx(), screw)
@@ -199,7 +249,7 @@ fun TurntablePlayer(
             }
 
             Column(
-                modifier = Modifier.fillMaxWidth().padding(top = 22.dp, bottom = 12.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 36.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 TurntableProgress(positionMsState, durationMs, hasSong, labels.seek, onSeek)
