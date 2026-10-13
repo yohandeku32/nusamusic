@@ -1641,18 +1641,9 @@ private fun NusaMusicApp(
         }
     }
 
-    // Use the latest track when the library opens. The vinyl list's symmetric
-    // padding places this item in the center; the regular list aligns it at the top.
-    LaunchedEffect(pagerState.settledPage, playerPresentationMode) {
-        val settledPage = pagerState.settledPage
-        onPlayerPageVisibilityChanged(settledPage == 0)
-        if (settledPage == 1 && currentSong != null) {
-            val index = filtered.indexOfFirst { it.id == currentSong.id }
-            if (index >= 0) {
-                kotlinx.coroutines.yield()
-                libraryListState.animateScrollToItem(index)
-            }
-        }
+    // Opening the library must not change the user's manually chosen scroll position.
+    LaunchedEffect(pagerState.settledPage) {
+        onPlayerPageVisibilityChanged(pagerState.settledPage == 0)
     }
 
     LaunchedEffect(currentSong?.artist) {
@@ -4859,7 +4850,9 @@ private fun ImmersiveArtwork(
     var backdrop by remember { mutableStateOf(Color(0xFF141414)) }
     var animatedArtworkUrl by remember(song?.id, song?.uri) { mutableStateOf<String?>(null) }
     var artworkReloadAttempt by remember(song?.uri) { mutableIntStateOf(0) }
-    var frozenAnimatedBlur by remember(song?.uri, animatedArtworkUrl) { mutableStateOf<Bitmap?>(null) }
+    // Freeze the first usable animated frame's colours for the entire song,
+    // including when an unavailable stream switches to an alternative URL.
+    var frozenAnimatedBlur by remember(song?.uri) { mutableStateOf<Bitmap?>(null) }
 
     LaunchedEffect(song?.uri, song?.albumId) {
         val targetSong = song
@@ -5127,8 +5120,9 @@ private fun AnimatedArtworkVideoBackground(
     LaunchedEffect(player, artworkPlayerView, videoReady) {
         val view = artworkPlayerView ?: return@LaunchedEffect
         if (!videoReady) return@LaunchedEffect
-        // Freeze the first visible frame. HLS streams may render black opening
-        // frames even after the first-frame callback has fired.
+        // Freeze a real video frame once, rather than continuously changing the
+        // backdrop with the animation. Allow the opening frames to settle first.
+        delay(280L)
         repeat(30) {
             androidx.compose.runtime.withFrameNanos { }
             val frame = ArtworkBlur.captureViewport(view)
