@@ -4853,6 +4853,7 @@ private fun ImmersiveArtwork(
     // Freeze the first usable animated frame's colours for the entire song,
     // including when an unavailable stream switches to an alternative URL.
     var frozenAnimatedBlur by remember(song?.uri) { mutableStateOf<Bitmap?>(null) }
+    var frozenAnimatedBackdrop by remember(song?.uri) { mutableStateOf<Color?>(null) }
 
     LaunchedEffect(song?.uri, song?.albumId) {
         val targetSong = song
@@ -4933,9 +4934,13 @@ private fun ImmersiveArtwork(
         animationSpec = tween(durationMillis = 360),
         label = "immersiveScrimOpacity"
     )
+    // The animated frame supplies both the frozen blur and its actual colours.
+    // The static album colour is only a fallback until a video frame is captured.
     val animatedBackdrop by animateColorAsState(
-        targetValue = backdrop,
-        animationSpec = tween(durationMillis = 360),
+        targetValue = if (animatedArtworkEnabled && animatedArtworkUrl != null) {
+            frozenAnimatedBackdrop ?: backdrop
+        } else backdrop,
+        animationSpec = tween(durationMillis = 500),
         label = "immersiveBackdrop"
     )
 
@@ -5031,9 +5036,10 @@ private fun ImmersiveArtwork(
                     url = activeUrl,
                     modifier = Modifier.fillMaxSize(),
                     captureBackdrop = frozenAnimatedBlur == null,
-                    onBackdropReady = { blurredFrame ->
+                    onBackdropReady = { blurredFrame, frameColor ->
                         if (animatedArtworkUrl == activeUrl && frozenAnimatedBlur == null) {
                             frozenAnimatedBlur = blurredFrame
+                            frozenAnimatedBackdrop = frameColor
                         }
                     },
                     onUnavailable = {
@@ -5065,7 +5071,7 @@ private fun AnimatedArtworkVideoBackground(
     url: String,
     modifier: Modifier = Modifier,
     captureBackdrop: Boolean,
-    onBackdropReady: (Bitmap) -> Unit,
+    onBackdropReady: (Bitmap, Color) -> Unit,
     onUnavailable: () -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -5117,33 +5123,28 @@ private fun AnimatedArtworkVideoBackground(
         }
     }
 
-    LaunchedEffect(player, artworkPlayerView, videoReady) {
+    LaunchedEffect(player, artworkPlayerView, videoVisible) {
         val view = artworkPlayerView ?: return@LaunchedEffect
-        if (!videoReady) return@LaunchedEffect
-        // Freeze a real video frame once, rather than continuously changing the
-        // backdrop with the animation. Allow the opening frames to settle first.
-        delay(280L)
-        repeat(30) {
+        // Start after the video has actually faded in: hidden TextureViews on
+        // some devices return a black bitmap even when playback has started.
+        if (!videoVisible || !shouldCaptureBackdrop) return@LaunchedEffect
+        delay(450L)
+        repeat(40) {
             androidx.compose.runtime.withFrameNanos { }
             val frame = ArtworkBlur.captureViewport(view)
             if (frame != null) {
                 if (ArtworkBlur.hasVisibleFrame(frame)) {
-                    videoVisible = true
-                    if (shouldCaptureBackdrop) {
-                        val blurred = try {
-                            withContext(Dispatchers.Default) { ArtworkBlur.create(frame) }
-                        } finally {
-                            frame.recycle()
-                        }
-                        onBackdropReadyCallback(blurred)
-                    } else {
+                    val prepared = try {
+                        prepareImmersiveArtwork(frame)
+                    } finally {
                         frame.recycle()
                     }
+                    onBackdropReadyCallback(prepared.first, prepared.second)
                     return@LaunchedEffect
                 }
                 frame.recycle()
             }
-            delay(120L)
+            delay(150L)
         }
     }
 
