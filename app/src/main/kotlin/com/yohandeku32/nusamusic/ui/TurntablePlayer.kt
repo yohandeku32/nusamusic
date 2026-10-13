@@ -294,7 +294,7 @@ fun TurntablePlayer(
             }
 
             Column(
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 36.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 56.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 TurntableProgress(positionMsState, durationMs, hasSong, labels.seek, onSeek)
