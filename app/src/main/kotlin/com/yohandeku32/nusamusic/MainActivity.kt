@@ -2531,8 +2531,6 @@ private fun NusaMusicApp(
                                             repeatMode = repeatMode,
                                             realisticControls = realisticControls,
                                             labels = TurntableLabels(
-                                                library = nusaText("Daftar lagu", "Song library"),
-                                                settings = nusaText("Pengaturan", "Settings"),
                                                 play = nusaText("Putar", "Play"),
                                                 pause = nusaText("Jeda", "Pause"),
                                                 previous = nusaText("Sebelumnya", "Previous"),
@@ -2546,8 +2544,6 @@ private fun NusaMusicApp(
                                                 repeatOne = nusaText("Ulangi satu lagu", "Repeat one"),
                                                 seek = nusaText("Posisi pemutaran", "Playback position")
                                             ),
-                                            onLibrary = { scope.launch { pagerState.animateScrollToPage(1) } },
-                                            onSettings = { showSettings = true },
                                             onPlayPause = {
                                                 when {
                                                     currentSong != null -> onTogglePlay()
@@ -2598,6 +2594,13 @@ private fun NusaMusicApp(
                                                             modifier = Modifier.size(23.dp).graphicsLayer {
                                                                 rotationZ = if (biographyExpanded) 180f else 0f
                                                             }
+                                                        )
+                                                    }
+                                                    IconButton(onClick = { showSettings = true }) {
+                                                        Icon(
+                                                            Icons.Default.MoreHoriz,
+                                                            contentDescription = nusaText("Pengaturan", "Settings"),
+                                                            tint = MaterialTheme.colorScheme.onSurface
                                                         )
                                                     }
                                                     Spacer(Modifier.weight(1f))
