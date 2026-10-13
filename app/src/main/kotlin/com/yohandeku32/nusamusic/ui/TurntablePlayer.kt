@@ -103,7 +103,6 @@ fun TurntablePlayer(
     onShuffle: () -> Unit,
     onRepeat: () -> Unit,
     record: @Composable (Modifier) -> Unit,
-    tonearm: @Composable (Modifier) -> Unit,
     quality: @Composable () -> Unit,
     footer: @Composable () -> Unit,
     emptyState: @Composable () -> Unit,
@@ -142,7 +141,6 @@ fun TurntablePlayer(
                         }
                 ) {
                     record(Modifier.size(deckSize * 0.78f).offset(x = deckSize * 0.10f, y = deckSize * 0.12f))
-                    tonearm(Modifier.fillMaxSize())
                     Row(
                         modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
                             .padding(horizontal = 8.dp, vertical = 6.dp),
