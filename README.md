@@ -1,385 +1,74 @@
 # Nusa
 
-Nusa is a local music player for Android, built with Kotlin and Jetpack Compose.
+Nusa is an Android music player for files stored on your device. It's built with Kotlin and Jetpack Compose, with a vinyl record at the centre of the player screen.
 
-The project started as a simple local music player and has grown into a more complete music app with a custom vinyl-style player, library management, crossfade, artist information, and custom fonts.
+The current version is **3.13.4** (`versionCode 46`). It runs on Android 10 and newer and is still in active development.
 
-> **Status:** Active development  
-> **Version:** 3.9.2  
-> **versionCode:** 36  
-> **Branch:** `main`  
-> **Last updated:** 6 October 2026
+## Features
 
-## Current Progress
+- A vinyl-style player with rotating artwork, a moving tonearm, and playback controls.
+- Background playback, notification controls, shuffle, and repeat through AndroidX Media3.
+- Crossfade from 1 to 12 seconds, with a default of 5 seconds when enabled.
+- A local library with album artwork, A–Z navigation, and sorting by title, artist, album, date added, or duration.
+- Music scanning through MediaStore and folders you select, including subfolders. Tracks shorter than 10 seconds are skipped.
+- Saved playback state, including the current track, position, shuffle, and repeat settings.
+- Artist portraits from Deezer and biographies from Last.fm.
+- System fonts and custom TTF or OTF files for the player title.
 
-Most of the core player features are already working. The project is now mainly focused on UI polish, playback stability, performance, and testing before a proper release.
+The folder scanner recognises AAC, ALAC, FLAC, M4A, MP3, OGG, OPUS, WAV, and WMA files. Playback support depends on the codecs available on the device.
 
-| Feature | Status |
-|---|---|
-| Local music playback | ✅ Working |
-| Background playback | ✅ Working |
-| MediaSession | ✅ Working |
-| Notification controls | ✅ Working |
-| Shuffle / Repeat | ✅ Working |
-| Crossfade | ✅ Working |
-| Crossfade queue / Previous / Next | ✅ Working |
-| Playback state restore | ✅ Working |
-| MediaStore music scan | ✅ Working |
-| Manual folder access | ✅ Working |
-| Recursive folder scan | ✅ Working |
-| Ignore tracks under 10 seconds | ✅ Working |
-| Automatic library refresh | ✅ Working |
-| Album artwork | ✅ Working |
-| Main player UI | ✅ Working |
-| Rotating vinyl player | ✅ Working |
-| Tonearm / playback position | ✅ Working |
-| Song library | ✅ Working |
-| A–Z index | ✅ Working |
-| Sorting | ✅ Working |
-| Artist portrait | ✅ Working |
-| Artist biography | ✅ Working |
-| Multi-artist handling | ✅ Working |
-| Share | ✅ Working |
-| Favorite | ✅ Working |
-| Lossless / Hi-Res badge | ✅ Working |
-| Hi-Res information dialog | ✅ Working |
-| System title fonts | ✅ Working |
-| Custom TTF / OTF fonts | ✅ Working |
-| Device language support | ✅ Working |
-| USB DAC playback | ⏸️ Paused |
-| Bit-perfect hardware testing | ⏳ Not done |
-| Production release | ⏳ Not ready |
+Lossless and Hi-Res labels use audio metadata. The Hi-Res label appears when the reported bit depth is at least 24 bits; it doesn't confirm bit-perfect output to your headphones or DAC.
 
-## Main Player
+## Build
 
-The main screen is built around a rotating vinyl record.
+You'll need:
 
-Current player features include:
+- JDK 17 or newer.
+- Android SDK Platform 36 and Build Tools 36.0.0.
+- Gradle 9.6.0 or newer, as required by Android Gradle Plugin 9.4.0.
 
-- rotating vinyl
-- physical-looking grooves and surface detail
-- vinyl shadow and edge thickness
-- light reflections
-- album artwork inside the record label
-- tonearm movement based on playback progress
-- song title and artist
-- progress bar
-- playback controls
-- Lossless / Hi-Res badge
-- artist portrait
-- artist biography
-- settings
+The project targets Android 16 (API 36), with a minimum of API 29. It uses AGP's built-in Kotlin support and the Compose compiler plugin 2.2.10.
 
-The vinyl rendering is still being refined. The goal is to make the material, grooves, and light reflections feel closer to a real record without making the UI too heavy.
+Open the project in a compatible Android Studio version, or build from the repository root with Gradle. This repository doesn't include a Gradle wrapper.
 
-## Song Library
+Set `ANDROID_HOME` to your SDK directory, or add its path to an ignored `local.properties` file:
 
-The library is currently a **list view**.
-
-Each item shows:
-
-```text
-[Artwork]  Song Title                    [Hi-Res]
-           Artist
+```properties
+sdk.dir=/path/to/android-sdk
 ```
 
-The Hi-Res marker appears only when the audio metadata reports a bit depth of 24-bit or higher.
+Build the debug APK:
 
-The current song is shown with a subtle active-tab style so it is easy to see which track is playing.
-
-The library also has:
-
-- A–Z index on the right
-- tap and drag alphabet navigation
-- sorting
-- Recently Added
-- album / artist / title / duration sorting
-- plain album artwork without the extra worn-cover effect
-
-The library background uses the same light background as the main player.
-
-## Sorting
-
-Available sorting options:
-
-```text
-Title A–Z
-Title Z–A
-Artist A–Z
-Recently Added
-Album A–Z
-Shortest duration
-Longest duration
+```sh
+gradle :app:assembleDebug
 ```
 
-## Music Scanning
+The APK is written to `app/build/outputs/apk/debug/app-debug.apk`. To run Android lint:
 
-Nusa can load music from Android MediaStore and from folders selected by the user.
-
-Folder scanning is recursive, so subfolders are included.
-
-Supported formats include:
-
-```text
-AAC
-ALAC
-FLAC
-M4A
-MP3
-OGG
-OPUS
-WAV
-WMA
+```sh
+gradle :app:lintDebug
 ```
 
-Tracks shorter than 10 seconds are ignored.
+There are no automated unit or instrumentation tests in the repository yet. Playback, folder permissions, and crossfade still need testing on Android devices.
 
-When new music is found, the library can refresh without rebuilding the active playback queue.
+## Last.fm biographies
 
-## Crossfade
+Biographies need a Last.fm API key. Local playback works without one.
 
-Crossfade uses two ExoPlayer instances during the transition.
-
-```text
-Current track
-      ↓
-   Fade out
-      ↘
-       overlap
-      ↗
-   Fade in
-      ↓
-Next track
-```
-
-Crossfade can be set from 1 to 12 seconds, with 5 seconds as the default.
-
-The queue is restored after the handoff so that:
-
-- Next keeps working
-- Previous keeps working
-- Repeat keeps working
-- Shuffle order is preserved
-
-A bug where **Previous stopped working after a crossfade handoff** has already been fixed.
-
-## Playback State
-
-Nusa saves:
-
-- current song
-- playback position
-- play/pause state
-- shuffle mode
-- repeat mode
-
-When the app is opened again, it can restore the previous playback state.
-
-## Artist Information
-
-### Biography
-
-Artist biographies are loaded from Last.fm.
-
-The current behavior is:
-
-- use the first artist from multi-artist metadata
-- request the Indonesian biography
-- do not fall back to English
-- show long biographies in a scrollable area
-
-Configure the Last.fm API key using the first non-empty value found here:
+Add your key to `local.properties`:
 
 ```properties
 LASTFM_API_KEY=YOUR_LASTFM_API_KEY
 ```
 
-You can set it in the project `local.properties`, as a Gradle project property
-(`-PLASTFM_API_KEY=...` or `~/.gradle/gradle.properties`), or in the
-`LASTFM_API_KEY` environment variable. The value is bundled into the app at
-build time. Do not commit API keys or `local.properties`.
+You can also use the `LASTFM_API_KEY` Gradle property or environment variable. The build uses the first non-empty value from `local.properties`, the Gradle property, then the environment variable. Keep keys and `local.properties` out of Git. The key is included in the APK at build time.
 
-### Artist Portrait
+The lookup uses the first artist in a multi-artist tag. It requests an Indonesian biography first and falls back to English if needed.
 
-Artist portraits are looked up and cached locally.
+## Development notes
 
-For multiple artists, the first artist is used for the lookup.
+The app still needs more testing with large libraries, long playback sessions, and folder permissions after a restart. The USB DAC experiment is on hold, and bit-perfect hardware playback hasn't been verified.
 
-## Audio Quality
+Most of the UI lives in `MainActivity.kt`. Music scanning and metadata loading are in `data/`; background playback and crossfade are in `playback/PlaybackService.kt`.
 
-Nusa reads the audio metadata and shows:
-
-```text
-Lossless
-Hi-Res
-```
-
-The player badge uses codec and bit depth metadata. In the song list, the Hi-Res marker is shown only when the reported bit depth is 24-bit or higher; unknown bit depth does not show the marker. The app reads metadata rather than inferring quality from the filename extension.
-
-For example:
-
-```text
-Apple Lossless → Lossless / Hi-Res
-FLAC           → Lossless / Hi-Res
-```
-
-A Hi-Res badge only describes the file metadata. It does not prove that the output path is bit-perfect.
-
-## Custom Title Font
-
-The title on the main player can use a different font.
-
-System options:
-
-```text
-Default
-Sans Serif
-Serif
-Monospace
-Cursive
-```
-
-Custom font files are also supported:
-
-```text
-.TTF
-.OTF
-```
-
-The selected custom font is stored in the app's private storage and is restored when the app starts again.
-
-## Performance
-
-Performance work has included:
-
-- lazy list rendering
-- stable item keys
-- artwork caching
-- background artwork loading
-- downsampled image decoding
-- smoother A–Z scrolling
-- reduced unnecessary recomposition
-- Media3 buffering configuration
-
-There is still more testing to do with large music libraries and long playback sessions.
-
-## USB DAC / Hi-Res
-
-A USB Hi-Res playback path was experimented with earlier in the project, including Decent USB Audio integration.
-
-For now, the USB playback path is **paused** and is not part of the active Nusa 3.9.2 playback flow.
-
-That means USB DAC and bit-perfect playback are not marked as production-ready.
-
-Hardware testing is still needed before this part of the project is brought back.
-
-## Known Remaining Work
-
-### Recently Added
-
-The app already reads `dateAdded` information while scanning. The cached library data still needs a small update so **Recently Added** stays fully consistent after an app restart.
-
-### UI
-
-The vinyl material and light reflections are still being refined.
-
-### Testing
-
-More testing is still needed for:
-
-- different Android devices
-- large music libraries
-- long playback sessions
-- folder permission recovery
-- crossfade edge cases
-- release builds
-
-## Tech Stack
-
-- Kotlin
-- Jetpack Compose
-- Material 3
-- AndroidX Media3
-- ExoPlayer
-- MediaSession
-- Kotlin Coroutines
-- Android MediaStore
-- Storage Access Framework
-- Last.fm API
-- Deezer artist lookup
-
-## Android Configuration
-
-```text
-compileSdk  = 36
-targetSdk   = 36
-minSdk      = 29
-Java        = 17
-Media3      = 1.9.3
-Compose BOM = 2025.10.01
-```
-
-## Project Structure
-
-```text
-app/
-└─ src/main/kotlin/com/yohandeku32/nusamusic/
-   ├─ MainActivity.kt
-   ├─ data/
-   │  ├─ ArtworkLoader.kt
-   │  ├─ ArtistImageLoader.kt
-   │  ├─ ArtistBiographyLoader.kt
-   │  ├─ AudioCodecLoader.kt
-   │  └─ MusicRepository.kt
-   ├─ model/
-   │  └─ Song.kt
-   └─ playback/
-      └─ PlaybackService.kt
-```
-
-## Development Stage
-
-Nusa is currently in **active development / pre-release**.
-
-The core player is working. Most of the remaining work is refinement and testing rather than building the basic player from scratch.
-
-```text
-Core playback         → ✅
-Background playback   → ✅
-MediaSession          → ✅
-Library               → ✅
-Folder scanning       → ✅
-Sorting & A–Z         → ✅
-Playback persistence  → ✅
-Crossfade             → ✅
-Artist information    → ✅
-Custom fonts          → ✅
-Performance           → 🟡 Ongoing
-Vinyl realism         → 🟡 Ongoing
-USB DAC               → ⏸️ Paused
-Hardware validation   → ⏳ Pending
-Production release    → ⏳ Pending
-```
-
-## Next Steps
-
-The next phase is mostly about polishing what is already there:
-
-1. Finish the library and player UI details.
-2. Keep crossfade and queue behavior stable.
-3. Test performance with larger libraries.
-4. Fix the remaining cache issue for Recently Added.
-5. Continue USB DAC work when hardware testing is available.
-6. Prepare a proper release build.
-
-## Repository
-
-https://github.com/yohandeku32/nusamusic
-
-Package:
-
-`com.yohandeku32.nusamusic`
-
-Current version:
-
-`3.9.2`
+The application ID is `com.yohandeku32.nusamusic`. See [third-party notices](THIRD_PARTY_NOTICES.md) for bundled assets and dependency notices.
