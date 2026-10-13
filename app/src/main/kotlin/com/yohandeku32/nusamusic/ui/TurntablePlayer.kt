@@ -44,6 +44,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
@@ -144,6 +146,54 @@ fun TurntablePlayer(
                                 colors = listOf(Color(0xFF80591F), Color(0xFFEAC16D), Color(0xFFAA762A))
                             )
                             onDrawBehind {
+                                // Short real-looking leads curve away BEHIND the upper deck rim.
+                                // Keep the cables outside the record/artwork area.
+                                val dcX = size.width * 0.405f
+                                val dcCable = Path().apply {
+                                    moveTo(dcX, edgeY)
+                                    cubicTo(
+                                        dcX - 1.dp.toPx(), -13.dp.toPx(),
+                                        dcX - 15.dp.toPx(), -19.dp.toPx(),
+                                        dcX - 27.dp.toPx(), -31.dp.toPx()
+                                    )
+                                }
+                                drawPath(
+                                    dcCable, Color.Black.copy(alpha = 0.17f),
+                                    style = Stroke(width = 6.dp.toPx(), cap = StrokeCap.Round)
+                                )
+                                drawPath(
+                                    dcCable, Color(0xFF202629),
+                                    style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
+                                )
+                                drawPath(
+                                    dcCable, Color(0xFF7A8386).copy(alpha = 0.38f),
+                                    style = Stroke(width = 0.8.dp.toPx(), cap = StrokeCap.Round)
+                                )
+
+                                listOf(0.535f, 0.575f).forEachIndexed { index, fraction ->
+                                    val x = size.width * fraction
+                                    val bend = (15 + index * 8).dp.toPx()
+                                    val rcaCable = Path().apply {
+                                        moveTo(x, -pinHeight)
+                                        cubicTo(
+                                            x + 2.dp.toPx(), -13.dp.toPx(),
+                                            x + bend * 0.65f, -20.dp.toPx(),
+                                            x + bend, -32.dp.toPx()
+                                        )
+                                    }
+                                    drawPath(
+                                        rcaCable, Color.Black.copy(alpha = 0.14f),
+                                        style = Stroke(width = 4.4.dp.toPx(), cap = StrokeCap.Round)
+                                    )
+                                    drawPath(
+                                        rcaCable, Color(0xFF35393C),
+                                        style = Stroke(width = 2.7.dp.toPx(), cap = StrokeCap.Round)
+                                    )
+                                    drawPath(
+                                        rcaCable, Color(0xFF90969A).copy(alpha = 0.35f),
+                                        style = Stroke(width = 0.55.dp.toPx(), cap = StrokeCap.Round)
+                                    )
+                                }
                                 // Low-profile black power connector, partially hidden by the rim.
                                 drawRoundRect(
                                     brush = rearBlack,
@@ -372,15 +422,8 @@ private fun TurntableProgress(positionMsState: State<Long>, durationMs: Long, ha
         val seconds = ms.coerceAtLeast(0L) / 1000L
         return "${seconds / 60}:${(seconds % 60).toString().padStart(2, '0')}"
     }
-    Text(
-        "${time(positionMs)} / ${time(durationMs)}",
-        fontFamily = FontFamily.Monospace,
-        fontWeight = FontWeight.Medium,
-        fontSize = 16.sp,
-        color = ink
-    )
     Canvas(
-        Modifier.fillMaxWidth().padding(horizontal = 38.dp).height(48.dp)
+        Modifier.fillMaxWidth().padding(horizontal = 38.dp).height(36.dp)
             .semantics {
                 contentDescription = label
                 progressBarRangeInfo = ProgressBarRangeInfo(fraction, 0f..1f)
@@ -413,4 +456,12 @@ private fun TurntableProgress(positionMsState: State<Long>, durationMs: Long, ha
         drawLine(ink.copy(alpha = 0.17f), start, end, stroke, StrokeCap.Round)
         if (fraction > 0f) drawLine(ink.copy(alpha = 0.65f), start, Offset(start.x + (end.x - start.x) * fraction, start.y), stroke, StrokeCap.Round)
     }
+    // Restore the elapsed / duration clock directly BELOW the seek bar.
+    Text(
+        "${time(positionMs)} / ${time(durationMs)}",
+        fontFamily = FontFamily.Monospace,
+        fontWeight = FontWeight.Medium,
+        fontSize = 16.sp,
+        color = ink
+    )
 }
