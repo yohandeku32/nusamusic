@@ -153,7 +153,6 @@ import com.yohandeku32.nusamusic.ui.vinylLabelDiameter
 import com.yohandeku32.nusamusic.ui.VinylLabelPainter
 import com.yohandeku32.nusamusic.ui.VinylPainter
 import com.yohandeku32.nusamusic.ui.VinylShadowPainter
-import com.yohandeku32.nusamusic.ui.VinylTonearm
 import com.yohandeku32.nusamusic.ui.TurntablePlayer
 import com.yohandeku32.nusamusic.ui.TurntableLabels
 import com.yohandeku32.nusamusic.ui.VinylSongList
@@ -2561,20 +2560,7 @@ private fun NusaMusicApp(
                                                 VinylRecord(
                                                     song = currentSong,
                                                     isPlaying = isPlaying && pagerState.settledPage == 0,
-                                                    positionMsState = positionMsState,
-                                                    durationMs = durationMs,
-                                                    showTonearm = false,
                                                     modifier = recordModifier
-                                                )
-                                            },
-                                            tonearm = { armModifier ->
-                                                VinylTonearm(
-                                                    isPlaying = isPlaying && pagerState.settledPage == 0,
-                                                    hasSong = currentSong != null,
-                                                    positionMsState = positionMsState,
-                                                    durationMs = durationMs,
-                                                    mountedOnDeck = true,
-                                                    modifier = armModifier
                                                 )
                                             },
                                             quality = { AudioQualityPill(song = currentSong) },
@@ -2760,8 +2746,6 @@ private fun NusaMusicApp(
                                             VinylRecord(
                                                 song = currentSong,
                                                 isPlaying = isPlaying,
-                                                positionMsState = positionMsState,
-                                                durationMs = durationMs,
                                                 modifier = Modifier
                                                     .fillMaxWidth(0.84f)
                                                     .aspectRatio(1f)
@@ -4693,9 +4677,6 @@ private fun RealisticControlButton(
 private fun VinylRecord(
     song: Song?,
     isPlaying: Boolean,
-    positionMsState: State<Long>,
-    durationMs: Long,
-    showTonearm: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     // Keep the physical angle continuous while changing rotation speed.
@@ -4818,13 +4799,6 @@ private fun VinylRecord(
                 }
         )
 
-        if (showTonearm) VinylTonearm(
-            isPlaying = isPlaying,
-            hasSong = song != null,
-            positionMsState = positionMsState,
-            durationMs = durationMs,
-            modifier = Modifier.fillMaxSize()
-        )
     }
 }
 
