@@ -18,8 +18,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Repeat
@@ -44,7 +42,6 @@ import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
@@ -68,8 +65,6 @@ import kotlin.math.PI
 import kotlin.math.sin
 
 data class TurntableLabels(
-    val library: String,
-    val settings: String,
     val play: String,
     val pause: String,
     val previous: String,
@@ -101,8 +96,6 @@ fun TurntablePlayer(
     repeatMode: Int,
     realisticControls: Boolean,
     labels: TurntableLabels,
-    onLibrary: () -> Unit,
-    onSettings: () -> Unit,
     onPlayPause: () -> Unit,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
@@ -129,18 +122,8 @@ fun TurntablePlayer(
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    IconButton(onClick = onLibrary) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, labels.library, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onBackground)
-                    }
-                    IconButton(onClick = onSettings) {
-                        Icon(Icons.Default.MoreHoriz, labels.settings, tint = MaterialTheme.colorScheme.onBackground)
-                    }
-                }
+                // Retain the upper safe spacing without back/settings buttons.
+                Spacer(Modifier.height(52.dp))
 
                 Box(
                     modifier = Modifier.size(deckSize)
@@ -217,19 +200,8 @@ fun TurntablePlayer(
                 Spacer(Modifier.height(8.dp))
             }
 
-            val wash = lerp(page, MaterialTheme.colorScheme.surfaceVariant, 0.32f)
             Column(
-                modifier = Modifier.fillMaxWidth().drawWithCache {
-                    val panel = Path().apply {
-                        moveTo(0f, 24.dp.toPx())
-                        quadraticTo(size.width / 2f, -24.dp.toPx(), size.width, 24.dp.toPx())
-                        lineTo(size.width, size.height)
-                        lineTo(0f, size.height)
-                        close()
-                    }
-                    val gradient = Brush.verticalGradient(listOf(wash, page), endY = size.height * 0.8f)
-                    onDrawBehind { drawPath(panel, gradient) }
-                }.padding(top = 22.dp, bottom = 12.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 22.dp, bottom = 12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 TurntableProgress(positionMsState, durationMs, hasSong, labels.seek, onSeek)
@@ -245,7 +217,7 @@ fun TurntablePlayer(
                     TurntableTransportButton(
                         if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                         if (isPlaying) labels.pause else labels.play,
-                        onPlayPause, true, realisticControls, Modifier.size(76.dp), 32.dp
+                        onPlayPause, true, realisticControls, Modifier.size(76.dp), 32.dp, primary = true
                     )
                     TurntableTransportButton(
                         Icons.Default.SkipNext, labels.next, onNext, hasSong,
@@ -286,7 +258,8 @@ private fun TurntableTransportButton(
     enabled: Boolean,
     realistic: Boolean,
     modifier: Modifier,
-    iconSize: Dp
+    iconSize: Dp,
+    primary: Boolean = false
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
@@ -299,22 +272,25 @@ private fun TurntableTransportButton(
         enabled = enabled,
         interactionSource = interactionSource,
         shape = RoundedCornerShape(50),
-        color = if (realistic) face else shade,
-        border = if (realistic) BorderStroke(1.dp, ink.copy(alpha = 0.13f)) else null,
+        color = if (primary) Color.Black else if (realistic) face else shade,
+        border = if (!primary && realistic) BorderStroke(1.dp, ink.copy(alpha = 0.13f)) else null,
         shadowElevation = if (realistic && !pressed) 4.dp else 0.dp,
         modifier = modifier.graphicsLayer { scaleX = scale; scaleY = scale }
     ) {
         Box(
-            modifier = Modifier.padding(if (realistic) 4.dp else 0.dp)
+            modifier = Modifier.padding(if (realistic && !primary) 4.dp else 0.dp)
                 .clip(RoundedCornerShape(50))
                 .background(
-                    if (realistic) Brush.linearGradient(listOf(face, lerp(face, shade, 0.35f), face))
-                    else Brush.linearGradient(listOf(shade, shade))
+                    when {
+                        primary -> Brush.linearGradient(listOf(Color.Black, Color.Black))
+                        realistic -> Brush.linearGradient(listOf(face, lerp(face, shade, 0.35f), face))
+                        else -> Brush.linearGradient(listOf(shade, shade))
+                    }
                 )
-                .border(if (realistic) 1.dp else 0.dp, ink.copy(alpha = if (realistic) 0.06f else 0f), RoundedCornerShape(50)),
+                .border(if (!primary && realistic) 1.dp else 0.dp, ink.copy(alpha = if (!primary && realistic) 0.06f else 0f), RoundedCornerShape(50)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(icon, label, Modifier.size(iconSize), tint = ink.copy(alpha = if (enabled) 1f else 0.35f))
+            Icon(icon, label, Modifier.size(iconSize), tint = if (primary) Color.White else ink.copy(alpha = if (enabled) 1f else 0.35f))
         }
     }
 }
