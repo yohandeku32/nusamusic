@@ -106,6 +106,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -118,7 +119,11 @@ import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -133,6 +138,7 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.yohandeku32.nusamusic.data.ArtworkLoader
+import com.yohandeku32.nusamusic.data.ArtworkBlur
 import com.yohandeku32.nusamusic.data.AppleMusicAnimatedArtworkLoader
 import com.yohandeku32.nusamusic.data.AudioCodecInfo
 import com.yohandeku32.nusamusic.data.AudioCodecLoader
@@ -146,7 +152,7 @@ import com.yohandeku32.nusamusic.playback.PlaybackService
 import com.yohandeku32.nusamusic.ui.VINYL_LABEL_FRACTION
 import com.yohandeku32.nusamusic.ui.VinylLabelPainter
 import com.yohandeku32.nusamusic.ui.VinylPainter
-import com.yohandeku32.nusamusic.ui.IMMERSIVE_ARTWORK_HEIGHT_FRACTION
+import com.yohandeku32.nusamusic.ui.resolveArtworkBottom
 import com.yohandeku32.nusamusic.ui.ImmersiveArtworkPainter
 import com.yohandeku32.nusamusic.ui.artworkBackdropColor
 import kotlinx.coroutines.Dispatchers
@@ -1441,6 +1447,22 @@ private fun NusaMusicApp(
     var animatedArtworkEnabled by remember {
         mutableStateOf(uiPrefs.getBoolean("animated_artwork_enabled", true))
     }
+    var immersiveArtworkBottomPx by remember { mutableFloatStateOf(Float.NaN) }
+    val immersiveFrameCoordinates = remember { mutableStateOf<LayoutCoordinates?>(null) }
+    val immersiveArtistCoordinates = remember { mutableStateOf<LayoutCoordinates?>(null) }
+
+    fun updateImmersiveArtworkBottom() {
+        val frame = immersiveFrameCoordinates.value ?: return
+        val artist = immersiveArtistCoordinates.value ?: return
+        if (!frame.isAttached || !artist.isAttached) return
+        val bottom = frame.localPositionOf(
+            artist,
+            androidx.compose.ui.geometry.Offset(0f, artist.size.height.toFloat())
+        ).y
+        if (bottom.isFinite() && bottom > 0f &&
+            (!immersiveArtworkBottomPx.isFinite() || abs(bottom - immersiveArtworkBottomPx) > 0.5f)
+        ) immersiveArtworkBottomPx = bottom
+    }
     var customTitleTypeface by remember {
         mutableStateOf<Typeface?>(null)
     }
@@ -2450,6 +2472,14 @@ private fun NusaMusicApp(
                                         .fillParentMaxHeight()
                                         .then(
                                             if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
+                                                Modifier.onGloballyPositioned { coordinates ->
+                                                    immersiveFrameCoordinates.value = coordinates
+                                                    updateImmersiveArtworkBottom()
+                                                }
+                                            } else Modifier
+                                        )
+                                        .then(
+                                            if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
                                                 // Keep the immersive player edge square and fully black so
                                                 // rounded-corner antialiasing cannot reveal a light-colored seam
                                                 // between the player and the biography section.
@@ -2471,7 +2501,8 @@ private fun NusaMusicApp(
                                             song = currentSong,
                                             animatedArtworkEnabled = animatedArtworkEnabled,
                                             isVisible = pagerState.settledPage == 0,
-                                            modifier = Modifier.fillMaxSize()
+                                            artistBottomPx = immersiveArtworkBottomPx,
+                                            modifier = Modifier.matchParentSize()
                                         )
                                     }
 
@@ -2656,7 +2687,16 @@ private fun NusaMusicApp(
 
                                         Text(
                                             currentSong?.artist ?: nusaText("Perpustakaan musik lokal Anda", "Your local music library"),
-                                            modifier = Modifier.fillMaxWidth(),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .then(
+                                                    if (immersiveArtworkMode) {
+                                                        Modifier.onGloballyPositioned { coordinates ->
+                                                            immersiveArtistCoordinates.value = coordinates
+                                                            updateImmersiveArtworkBottom()
+                                                        }
+                                                    } else Modifier
+                                                ),
                                             fontSize = 14.sp,
                                             maxLines = 1,
                                             textAlign = TextAlign.Center,
@@ -5158,12 +5198,17 @@ private fun ImmersiveArtwork(
     song: Song?,
     animatedArtworkEnabled: Boolean = true,
     isVisible: Boolean = true,
+    artistBottomPx: Float = Float.NaN,
     modifier: Modifier = Modifier
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var artwork by remember(song?.uri, song?.albumId) { mutableStateOf<Bitmap?>(null) }
+    var staticBlur by remember(song?.uri, song?.albumId) { mutableStateOf<Bitmap?>(null) }
     var backdrop by remember(song?.uri, song?.albumId) { mutableStateOf(Color(0xFF141414)) }
     var animatedArtworkUrl by remember(song?.id, song?.uri) { mutableStateOf<String?>(null) }
+    var animatedBlur by remember(song?.uri, animatedArtworkUrl, animatedArtworkEnabled, isVisible) {
+        mutableStateOf<Bitmap?>(null)
+    }
 
     LaunchedEffect(song?.uri, song?.albumId) {
         val loaded = song?.let {
@@ -5174,9 +5219,8 @@ private fun ImmersiveArtwork(
                 cacheKey = it.albumId.takeIf { albumId -> albumId > 0L }?.toString()
             )
         }
-        val colour = withContext(Dispatchers.Default) {
+        val prepared = withContext(Dispatchers.Default) {
             loaded?.let { bitmap ->
-                // Sample the lower cover, where its colours meet the player controls.
                 val pixels = IntArray(64) { index ->
                     val x = ((index % 8 + 0.5f) / 8f * bitmap.width).toInt()
                         .coerceIn(0, bitmap.width - 1)
@@ -5184,39 +5228,71 @@ private fun ImmersiveArtwork(
                         .coerceIn(0, bitmap.height - 1)
                     bitmap.getPixel(x, y)
                 }
-                artworkBackdropColor(pixels)
-            } ?: Color(0xFF141414)
+                ArtworkBlur.create(bitmap) to artworkBackdropColor(pixels)
+            } ?: (null to Color(0xFF141414))
         }
         artwork = loaded
-        backdrop = colour
+        staticBlur = prepared.first
+        backdrop = prepared.second
     }
 
     LaunchedEffect(
-        song?.id,
-        song?.title,
-        song?.artist,
-        song?.album,
-        animatedArtworkEnabled
+        song?.id, song?.title, song?.artist, song?.album, animatedArtworkEnabled
     ) {
         animatedArtworkUrl = if (animatedArtworkEnabled) {
             song?.let { AppleMusicAnimatedArtworkLoader.loadAnimatedArtworkUrl(it) }
-        } else {
-            null
-        }
+        } else null
     }
 
-    Box(modifier.background(backdrop)) {
+    val activeBlur = if (animatedArtworkEnabled && isVisible && animatedArtworkUrl != null) {
+        animatedBlur ?: staticBlur
+    } else staticBlur
+
+    BoxWithConstraints(modifier.background(backdrop)) {
+        val sharpBottom = resolveArtworkBottom(artistBottomPx, constraints.maxHeight.toFloat())
+        val sharpHeight = with(LocalDensity.current) { sharpBottom.toDp() }
+
+        // Reuse the sharp cover's crop and top alignment; clamp its blurred edge down the page.
+        Box(
+            Modifier
+                .matchParentSize()
+                .drawWithCache {
+                    val bitmap = activeBlur
+                    val paint = if (bitmap != null && size.width > 0f && sharpBottom > 0f) {
+                        val scale = maxOf(size.width / bitmap.width, sharpBottom / bitmap.height)
+                        val matrix = android.graphics.Matrix().apply {
+                            setScale(scale, scale)
+                            postTranslate((size.width - bitmap.width * scale) / 2f, 0f)
+                        }
+                        val shader = android.graphics.BitmapShader(
+                            bitmap,
+                            android.graphics.Shader.TileMode.CLAMP,
+                            android.graphics.Shader.TileMode.CLAMP
+                        ).apply { setLocalMatrix(matrix) }
+                        android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG).apply {
+                            this.shader = shader
+                        }
+                    } else null
+                    onDrawBehind {
+                        if (paint != null) drawIntoCanvas { canvas ->
+                            canvas.nativeCanvas.drawRect(0f, 0f, size.width, size.height, paint)
+                        }
+                    }
+                }
+        )
+
+        // Static and animated artwork share the same boundary and feathered mask.
         Box(
             Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(IMMERSIVE_ARTWORK_HEIGHT_FRACTION)
+                .height(sharpHeight)
                 .align(Alignment.TopCenter)
                 .graphicsLayer {
                     clip = true
                     compositingStrategy = CompositingStrategy.Offscreen
                 }
                 .drawWithCache {
-                    val painter = ImmersiveArtworkPainter()
+                    val painter = ImmersiveArtworkPainter(size.height, 96.dp.toPx())
                     onDrawWithContent {
                         drawContent()
                         with(painter) { fadeArtwork() }
@@ -5241,15 +5317,16 @@ private fun ImmersiveArtwork(
                 )
             }
 
-            val activeAnimatedArtworkUrl = animatedArtworkUrl
-            if (animatedArtworkEnabled && isVisible && activeAnimatedArtworkUrl != null) {
+            val activeUrl = animatedArtworkUrl
+            if (animatedArtworkEnabled && isVisible && activeUrl != null) {
                 AnimatedArtworkVideoBackground(
-                    url = activeAnimatedArtworkUrl,
+                    url = activeUrl,
                     modifier = Modifier.fillMaxSize(),
+                    onBlurredFrame = { frame ->
+                        if (animatedArtworkUrl == activeUrl) animatedBlur = frame
+                    },
                     onUnavailable = {
-                        if (animatedArtworkUrl == activeAnimatedArtworkUrl) {
-                            animatedArtworkUrl = null
-                        }
+                        if (animatedArtworkUrl == activeUrl) animatedArtworkUrl = null
                     }
                 )
             }
@@ -5257,9 +5334,9 @@ private fun ImmersiveArtwork(
 
         Box(
             Modifier
-                .fillMaxSize()
+                .matchParentSize()
                 .drawWithCache {
-                    val painter = ImmersiveArtworkPainter()
+                    val painter = ImmersiveArtworkPainter(sharpBottom, 96.dp.toPx())
                     onDrawBehind { with(painter) { drawScrim() } }
                 }
         )
@@ -5271,10 +5348,31 @@ private fun ImmersiveArtwork(
 private fun AnimatedArtworkVideoBackground(
     url: String,
     modifier: Modifier = Modifier,
+    onBlurredFrame: (Bitmap) -> Unit,
     onUnavailable: () -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var videoReady by remember(url) { mutableStateOf(false) }
+    var artworkPlayerView by remember(url) { mutableStateOf<androidx.media3.ui.PlayerView?>(null) }
+    val onBlurredFrameCallback by rememberUpdatedState(onBlurredFrame)
+
+    LaunchedEffect(artworkPlayerView, videoReady) {
+        val view = artworkPlayerView ?: return@LaunchedEffect
+        if (!videoReady) return@LaunchedEffect
+        while (isActive) {
+            val frame = ArtworkBlur.captureViewport(view)
+            if (frame != null) {
+                val blurred = try {
+                    withContext(Dispatchers.Default) { ArtworkBlur.create(frame) }
+                } finally {
+                    frame.recycle()
+                }
+                onBlurredFrameCallback(blurred)
+            }
+            // Small snapshots keep the animated backdrop current without full-size readbacks.
+            delay(250L)
+        }
+    }
 
     val player = remember(url) {
         val trackSelector = androidx.media3.exoplayer.trackselection.DefaultTrackSelector(context).apply {
@@ -5336,10 +5434,12 @@ private fun AnimatedArtworkVideoBackground(
                     false
                 ) as androidx.media3.ui.PlayerView
             canvasPlayerView.player = player
+            artworkPlayerView = canvasPlayerView
             canvasPlayerView
         },
         update = { playerView ->
             if (playerView.player !== player) playerView.player = player
+            if (artworkPlayerView !== playerView) artworkPlayerView = playerView
         },
         modifier = modifier.graphicsLayer {
             // Keep the still artwork visible until the first video frame is ready.

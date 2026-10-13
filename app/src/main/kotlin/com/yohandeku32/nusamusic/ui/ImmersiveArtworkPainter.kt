@@ -5,26 +5,31 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 
-internal const val IMMERSIVE_ARTWORK_HEIGHT_FRACTION = 0.84f
+internal fun resolveArtworkBottom(artistBottom: Float, frameHeight: Float): Float {
+    if (frameHeight <= 0f) return 0f
+    return (if (artistBottom.isFinite()) artistBottom else frameHeight * 0.56f)
+        .coerceIn(1f.coerceAtMost(frameHeight), frameHeight)
+}
 
-internal class ImmersiveArtworkPainter {
+internal class ImmersiveArtworkPainter(artworkBottom: Float, transition: Float) {
+    private val transitionStart = (artworkBottom - transition).coerceAtLeast(0f)
     private val artworkFade = Brush.verticalGradient(
         0f to Color.White,
-        0.48f to Color.White,
-        0.60f to Color.White.copy(alpha = 0.95f),
-        0.75f to Color.White.copy(alpha = 0.72f),
-        0.90f to Color.White.copy(alpha = 0.22f),
+        0.20f to Color.White.copy(alpha = 0.94f),
+        0.50f to Color.White.copy(alpha = 0.60f),
+        0.80f to Color.White.copy(alpha = 0.12f),
         0.98f to Color.Transparent,
-        1f to Color.Transparent
+        1f to Color.Transparent,
+        startY = transitionStart,
+        endY = artworkBottom
     )
     private val scrim = Brush.verticalGradient(
         0f to Color.Transparent,
-        0.28f to Color.Transparent,
-        0.42f to Color.Black.copy(alpha = 0.14f),
-        0.55f to Color.Black.copy(alpha = 0.48f),
-        0.67f to Color.Black.copy(alpha = 0.66f),
-        0.84f to Color.Black.copy(alpha = 0.34f),
-        1f to Color.Black.copy(alpha = 0.20f)
+        0.35f to Color.Black.copy(alpha = 0.12f),
+        0.72f to Color.Black.copy(alpha = 0.40f),
+        1f to Color.Black.copy(alpha = 0.58f),
+        startY = (artworkBottom - transition * 1.5f).coerceAtLeast(0f),
+        endY = artworkBottom
     )
 
     fun DrawScope.fadeArtwork() {
@@ -36,7 +41,7 @@ internal class ImmersiveArtworkPainter {
     }
 }
 
-/** Muted colour from the lower cover keeps the controls connected to the artwork. */
+/** Muted colour used while the blurred cover is loading. */
 internal fun artworkBackdropColor(pixels: IntArray): Color {
     if (pixels.isEmpty()) return Color(0xFF141414)
     var red = 0L
