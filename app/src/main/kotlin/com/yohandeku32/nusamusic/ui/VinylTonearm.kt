@@ -32,8 +32,8 @@ fun VinylTonearm(
         (positionMs.toFloat() / durationMs).coerceIn(0f, 1f)
     } else 0f
 
-    // Follow the grooves slowly; the stylus parks outside the disc.
-    val targetAngle = if (isPlaying && hasSong) -5f + progress * 15f else -15f
+    // Keep the arm resting on the current groove when paused; park only without a song.
+    val targetAngle = if (hasSong) -5f + progress * 15f else -15f
     val armAngle by animateFloatAsState(
         targetValue = targetAngle,
         animationSpec = spring(
