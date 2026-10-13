@@ -128,62 +128,57 @@ fun TurntablePlayer(
 
                 Box(
                     modifier = Modifier.size(deckSize)
+                        // The connectors sit on the REAR EDGE and protrude behind the chassis.
+                        // Draw them outside the rounded clip; the deck covers their lower halves.
+                        .drawWithCache {
+                            val edgeY = -4.dp.toPx()
+                            val pinHeight = 6.dp.toPx()
+                            val pinWidth = 3.2.dp.toPx()
+                            val blackWidth = 8.dp.toPx()
+                            val rearBlack = Brush.verticalGradient(
+                                colors = listOf(Color(0xFF686C6E), Color(0xFF111518)),
+                                startY = edgeY,
+                                endY = 2.dp.toPx()
+                            )
+                            val rearGold = Brush.horizontalGradient(
+                                colors = listOf(Color(0xFF80591F), Color(0xFFEAC16D), Color(0xFFAA762A))
+                            )
+                            onDrawBehind {
+                                // Low-profile black power connector, partially hidden by the rim.
+                                drawRoundRect(
+                                    brush = rearBlack,
+                                    topLeft = Offset(size.width * 0.405f - blackWidth / 2f, edgeY),
+                                    size = Size(blackWidth, 6.dp.toPx()),
+                                    cornerRadius = CornerRadius(1.dp.toPx())
+                                )
+                                // Two metallic contact pins emerging from the back edge.
+                                listOf(0.535f, 0.575f).forEach { fraction ->
+                                    val x = size.width * fraction
+                                    drawRoundRect(
+                                        color = Color(0xFF3A3227),
+                                        topLeft = Offset(x - 2.6.dp.toPx(), -1.5.dp.toPx()),
+                                        size = Size(5.2.dp.toPx(), 3.5.dp.toPx()),
+                                        cornerRadius = CornerRadius(0.7.dp.toPx())
+                                    )
+                                    drawRoundRect(
+                                        brush = rearGold,
+                                        topLeft = Offset(x - pinWidth / 2f, -pinHeight),
+                                        size = Size(pinWidth, pinHeight + 1.dp.toPx()),
+                                        cornerRadius = CornerRadius(0.8.dp.toPx())
+                                    )
+                                }
+                            }
+                        }
                         .clip(RoundedCornerShape(18.dp))
                         .background(Brush.linearGradient(listOf(surface, page, surface)))
                         .border(1.dp, edge, RoundedCornerShape(18.dp))
                         .drawWithCache {
-                            // Recessed rear connection bay, above and behind the platter.
-                            val rearLeft = size.width * 0.305f
-                            val rearTop = size.height * 0.025f
-                            val rearWidth = size.width * 0.39f
-                            val rearHeight = size.height * 0.075f
-                            val baySize = Size(rearWidth, rearHeight)
-                            val bayCorner = CornerRadius(rearHeight * 0.16f)
-                            val bayFinish = Brush.verticalGradient(
-                                colors = listOf(Color(0xFF596164), Color(0xFF202528)),
-                                startY = rearTop,
-                                endY = rearTop + rearHeight
-                            )
-                            val jackY = rearTop + rearHeight * 0.55f
-                            val jackRadius = rearHeight * 0.245f
                             onDrawBehind {
-                                drawRoundRect(
-                                    color = Color.Black.copy(alpha = 0.20f),
-                                    topLeft = Offset(rearLeft, rearTop + 2.dp.toPx()),
-                                    size = baySize,
-                                    cornerRadius = bayCorner
-                                )
-                                drawRoundRect(
-                                    brush = bayFinish,
-                                    topLeft = Offset(rearLeft, rearTop),
-                                    size = baySize,
-                                    cornerRadius = bayCorner
-                                )
-                                drawLine(
-                                    color = Color.White.copy(alpha = 0.20f),
-                                    start = Offset(rearLeft + rearHeight * 0.16f, rearTop + rearHeight * 0.12f),
-                                    end = Offset(rearLeft + rearWidth - rearHeight * 0.16f, rearTop + rearHeight * 0.12f),
-                                    strokeWidth = 0.8.dp.toPx()
-                                )
-
-                                // DC input and a pair of silver-rimmed RCA audio jacks.
-                                val dcJack = Offset(rearLeft + rearWidth * 0.22f, jackY)
-                                drawCircle(Color(0xFFAAB1B4), jackRadius, dcJack)
-                                drawCircle(Color(0xFF101315), jackRadius * 0.72f, dcJack)
-                                drawCircle(Color(0xFF50575A), jackRadius * 0.24f, dcJack)
+                                // Small countersunk fittings remain on the deck surface.
                                 listOf(
-                                    0.56f to Color(0xFFE8EAEB),
-                                    0.80f to Color(0xFFBF443E)
-                                ).forEach { (fraction, accent) ->
-                                    val jack = Offset(rearLeft + rearWidth * fraction, jackY)
-                                    drawCircle(Color(0xFFC1C7CA), jackRadius, jack)
-                                    drawCircle(accent, jackRadius * 0.71f, jack)
-                                    drawCircle(Color(0xFF202528), jackRadius * 0.33f, jack)
-                                }
-
-                                // Small countersunk chassis fittings.
-                                listOf(Offset(size.width * 0.075f, size.height * 0.075f),
-                                    Offset(size.width * 0.77f, size.height * 0.075f)).forEach { screw ->
+                                    Offset(size.width * 0.075f, size.height * 0.075f),
+                                    Offset(size.width * 0.77f, size.height * 0.075f)
+                                ).forEach { screw ->
                                     drawCircle(edge, 2.dp.toPx(), screw)
                                     drawCircle(surface, 1.dp.toPx(), screw - Offset(0.4f, 0.4f))
                                 }
