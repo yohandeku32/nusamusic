@@ -2911,7 +2911,7 @@ private fun NusaMusicApp(
                                             Spacer(Modifier.height(8.dp))
                                             AudioQualityPill(song = currentSong)
                                         } else {
-                                            Spacer(Modifier.height(24.dp))
+                                            Spacer(Modifier.height(36.dp))
                                         }
 
                                         if (!permissionGranted) {
@@ -3695,7 +3695,7 @@ private fun AudioQualityPill(
                         }
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
                     ) {
@@ -3707,17 +3707,17 @@ private fun AudioQualityPill(
                                 if (hiRes) Color(0xFF3D3728) else MaterialTheme.colorScheme.onSurface
                             ),
                             modifier = Modifier.size(
-                                width = 20.dp,
-                                height = 11.dp
+                                width = 16.dp,
+                                height = 9.dp
                             )
                         )
 
-                        Spacer(Modifier.width(5.dp))
+                        Spacer(Modifier.width(4.dp))
 
                         Text(
                             text = if (hiRes) "Hi-Res" else "Lossless",
                             fontSize = 10.sp,
-                            lineHeight = 12.sp,
+                            lineHeight = 11.sp,
                             fontWeight = FontWeight.Medium,
                             color = if (hiRes) {
                                 Color(0xFF3D3728)
@@ -3739,7 +3739,7 @@ private fun AudioQualityPill(
                         .clickable(enabled = metadataMatchesSong && info != null) {
                             showMetadataDialog = true
                         }
-                        .padding(horizontal = 12.dp, vertical = 5.dp),
+                        .padding(horizontal = 8.dp, vertical = 3.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
