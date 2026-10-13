@@ -63,7 +63,6 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.SkipNext
@@ -113,6 +112,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.asImageBitmap
@@ -121,8 +121,6 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.googlefonts.GoogleFont
-import androidx.compose.ui.text.googlefonts.Font as GoogleFontFont
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -135,111 +133,28 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.yohandeku32.nusamusic.data.ArtworkLoader
+import com.yohandeku32.nusamusic.data.AppleMusicAnimatedArtworkLoader
 import com.yohandeku32.nusamusic.data.AudioCodecInfo
 import com.yohandeku32.nusamusic.data.AudioCodecLoader
 import com.yohandeku32.nusamusic.data.ArtistImageLoader
 import com.yohandeku32.nusamusic.data.ArtistBiographyLoader
 import com.yohandeku32.nusamusic.data.ArtistNameUtils
 import com.yohandeku32.nusamusic.data.MusicRepository
+import com.yohandeku32.nusamusic.model.PlayerPresentationMode
 import com.yohandeku32.nusamusic.model.Song
 import com.yohandeku32.nusamusic.playback.PlaybackService
 import com.yohandeku32.nusamusic.ui.VINYL_LABEL_FRACTION
 import com.yohandeku32.nusamusic.ui.VinylLabelPainter
 import com.yohandeku32.nusamusic.ui.VinylPainter
+import com.yohandeku32.nusamusic.ui.IMMERSIVE_ARTWORK_HEIGHT_FRACTION
+import com.yohandeku32.nusamusic.ui.ImmersiveArtworkPainter
+import com.yohandeku32.nusamusic.ui.artworkBackdropColor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-
-@Suppress("MentionsGoogle")
-private val GOOGLE_FONT_PROVIDER = GoogleFont.Provider(
-    providerAuthority = "com.google.android.gms.fonts",
-    providerPackage = "com.google.android.gms",
-    certificates = R.array.com_google_android_gms_fonts_certs
-)
-
-private val GOOGLE_TITLE_FONT_NAMES = listOf(
-    // Modern sans-serif
-    "Inter",
-    "Roboto",
-    "Open Sans",
-    "Lato",
-    "Montserrat",
-    "Poppins",
-    "Nunito",
-    "Nunito Sans",
-    "DM Sans",
-    "Manrope",
-    "Outfit",
-    "Urbanist",
-    "Plus Jakarta Sans",
-    "Rubik",
-    "Work Sans",
-    "Source Sans 3",
-    "Barlow",
-    "Archivo",
-    "IBM Plex Sans",
-    "Roboto Condensed",
-    "Raleway",
-    "Quicksand",
-    "Comfortaa",
-    // Display and geometric
-    "Oswald",
-    "Bebas Neue",
-    "Space Grotesk",
-    "Josefin Sans",
-    "Fira Sans",
-    "Fira Code",
-    "Cinzel",
-    // Serif and editorial
-    "Playfair Display",
-    "Merriweather",
-    "Lora",
-    "Libre Baskerville",
-    "Cormorant Garamond",
-    "Source Serif 4",
-    "Roboto Slab",
-    "Bodoni Moda",
-    // Handwriting and expressive
-    "Dancing Script",
-    "Pacifico",
-    "Lobster",
-    "Kalam",
-    "Caveat",
-    "Permanent Marker"
-)
-
-private val TITLE_FONT_OPTIONS = listOf(
-    "Default",
-    "Sans Serif",
-    "Serif",
-    "Monospace",
-    "Cursive"
-) + GOOGLE_TITLE_FONT_NAMES
-
-/**
- * Google Fonts are fetched by Android's downloadable-font provider the first
- * time a selected family is used. Compose falls back to a system font if the
- * provider cannot deliver the requested family.
- */
-@Suppress("MentionsGoogle")
-private fun titleFontFamilyFor(fontName: String): FontFamily = when (fontName) {
-    "Default" -> FontFamily.Default
-    "Sans Serif" -> FontFamily.SansSerif
-    "Serif" -> FontFamily.Serif
-    "Monospace" -> FontFamily.Monospace
-    "Cursive" -> FontFamily.Cursive
-    in GOOGLE_TITLE_FONT_NAMES -> {
-        val googleFont = GoogleFont(fontName, bestEffort = true)
-        FontFamily(
-            GoogleFontFont(googleFont, fontProvider = GOOGLE_FONT_PROVIDER, weight = FontWeight.Normal),
-            GoogleFontFont(googleFont, fontProvider = GOOGLE_FONT_PROVIDER, weight = FontWeight.Bold)
-        )
-    }
-    else -> FontFamily.Serif
-}
 
 private fun nusaText(
     indonesian: String,
@@ -510,6 +425,9 @@ class MainActivity : ComponentActivity() {
             musicContentObserver
         )
 
+        // Restore the last track before Compose draws the first frame. The full
+        // library and Media3 controller can finish initializing in the background.
+        currentSong = readLastSongForLaunch()
         loadCachedSongs()
         if (!permissionGranted) {
             permissionLauncher.launch(permission)
@@ -585,6 +503,7 @@ class MainActivity : ComponentActivity() {
                     durationMs = durationMs,
                     permissionGranted = permissionGranted,
                     onPlay = ::playSong,
+                    onPlaybackOrderChanged = ::updatePlaybackOrder,
                     onTogglePlay = ::togglePlay,
                     customTitleFontPath = customTitleFontPath,
                     customTitleFontName = customTitleFontName,
@@ -662,6 +581,62 @@ class MainActivity : ComponentActivity() {
         songs.firstOrNull { it.id == id }?.let { currentSong = it }
     }
 
+    /**
+     * Resolves the previous track from a small persisted snapshot first. On
+     * upgrades where that snapshot does not yet exist, fall back to the cached
+     * library and extract only the matching song rather than parsing every row.
+     */
+    private fun readLastSongForLaunch(): Song? {
+        val mediaId = playbackPrefs.getString("media_id", null) ?: return null
+        val snapshotId = playbackPrefs.getString("last_song_id", null)
+
+        if (
+            snapshotId == mediaId &&
+            !playbackPrefs.getString("last_song_uri", null).isNullOrBlank()
+        ) {
+            return runCatching {
+                Song(
+                    id = snapshotId.toLong(),
+                    title = playbackPrefs.getString("last_song_title", null)
+                        ?: nusaText("Judul tidak diketahui", "Unknown title"),
+                    artist = playbackPrefs.getString("last_song_artist", null)
+                        ?: nusaText("Artis tidak diketahui", "Unknown artist"),
+                    album = playbackPrefs.getString("last_song_album", null)
+                        ?: nusaText("Album tidak diketahui", "Unknown album"),
+                    uri = requireNotNull(playbackPrefs.getString("last_song_uri", null)),
+                    durationMs = playbackPrefs.getLong("last_song_duration_ms", 0L),
+                    albumId = playbackPrefs.getLong("last_song_album_id", 0L),
+                    dateAddedMs = playbackPrefs.getLong("last_song_date_added_ms", 0L)
+                )
+            }.getOrNull()
+        }
+
+        // One-time migration path for existing installs that only have the
+        // older songs_cache_json + media_id values.
+        val raw = libraryPrefs.getString("songs_cache_json", null) ?: return null
+        return runCatching {
+            val array = JSONArray(raw)
+            var match: Song? = null
+            for (index in 0 until array.length()) {
+                val item = array.getJSONObject(index)
+                if (item.optString("id") != mediaId) continue
+
+                match = Song(
+                    id = item.getLong("id"),
+                    title = item.getString("title"),
+                    artist = item.getString("artist"),
+                    album = item.getString("album"),
+                    uri = item.getString("uri"),
+                    durationMs = item.getLong("durationMs"),
+                    albumId = item.getLong("albumId"),
+                    dateAddedMs = item.optLong("dateAddedMs", 0L)
+                )
+                break
+            }
+            match
+        }.getOrNull()
+    }
+
     private fun setPlayerPageVisible(visible: Boolean) {
         playerPageVisible = visible
         if (!visible) return
@@ -687,14 +662,31 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        playbackPrefs.edit()
+        val snapshotSong = currentSong?.takeIf { it.id.toString() == mediaId }
+            ?: songs.firstOrNull { it.id.toString() == mediaId }
+
+        val editor = playbackPrefs.edit()
             .putString("media_id", mediaId)
             .putLong("position_ms", currentPosition)
             .putBoolean("is_playing", c.isPlaying)
             .putBoolean("shuffle_enabled", c.shuffleModeEnabled)
             .putInt("repeat_mode", c.repeatMode)
-            .apply()
 
+        // Keep a compact snapshot of the active song so the player can render
+        // it immediately on the next cold start, without waiting for library JSON.
+        snapshotSong?.let { song ->
+            editor
+                .putString("last_song_id", song.id.toString())
+                .putString("last_song_title", song.title)
+                .putString("last_song_artist", song.artist)
+                .putString("last_song_album", song.album)
+                .putString("last_song_uri", song.uri)
+                .putLong("last_song_duration_ms", song.durationMs)
+                .putLong("last_song_album_id", song.albumId)
+                .putLong("last_song_date_added_ms", song.dateAddedMs)
+        }
+
+        editor.apply()
         lastPersistedPosition = currentPosition
     }
 
@@ -1008,18 +1000,18 @@ class MainActivity : ComponentActivity() {
             )
             .build()
 
-    private fun playSong(song: Song) {
+    private fun playSong(song: Song, orderedSongs: List<Song>) {
         controller?.let { c ->
-            val targetIndex = songs.indexOfFirst { it.id == song.id }
+            // Use the list's selected sort order for the Media3 queue as well as
+            // the visible library. This keeps Next/Previous aligned with sorting.
+            val queueSongs = orderedSongs.ifEmpty { songs }
+            val targetIndex = queueSongs.indexOfFirst { it.id == song.id }
             if (targetIndex < 0) return@let
 
-            // Swiping between tracks should not rebuild the entire Media3 queue.
-            // Rebuilding the queue resets the decoder and can replay the first
-            // few milliseconds of the selected track. Reuse the current queue
-            // whenever it already contains the same library.
-            val queueMatches = c.mediaItemCount == songs.size &&
-                songs.indices.all { index ->
-                    c.getMediaItemAt(index).mediaId == songs[index].id.toString()
+            // Avoid resetting the decoder when the queue already uses this exact order.
+            val queueMatches = c.mediaItemCount == queueSongs.size &&
+                queueSongs.indices.all { index ->
+                    c.getMediaItemAt(index).mediaId == queueSongs[index].id.toString()
                 }
 
             if (queueMatches) {
@@ -1027,7 +1019,7 @@ class MainActivity : ComponentActivity() {
                 c.play()
             } else {
                 c.setMediaItems(
-                    songs.map(::mediaItemFor),
+                    queueSongs.map(::mediaItemFor),
                     targetIndex,
                     0L
                 )
@@ -1038,6 +1030,55 @@ class MainActivity : ComponentActivity() {
             currentSong = song
             isPlaying = true
         }
+    }
+
+    private fun updatePlaybackOrder(orderedSongs: List<Song>) {
+        if (orderedSongs.isEmpty()) return
+
+        val c = controller ?: return
+        val currentMediaId = c.currentMediaItem?.mediaId ?: return
+        val orderedIds = orderedSongs.map { it.id.toString() }
+        val currentIds = (0 until c.mediaItemCount)
+            .map { index -> c.getMediaItemAt(index).mediaId }
+
+        if (
+            currentIds.size == orderedIds.size &&
+            currentIds.toSet() == orderedIds.toSet()
+        ) {
+            // Reorder existing queue entries in place to preserve the active
+            // decoder, current position and ongoing playback.
+            orderedIds.forEachIndexed { targetIndex, targetId ->
+                val sourceIndex = (targetIndex until c.mediaItemCount)
+                    .firstOrNull { index ->
+                        c.getMediaItemAt(index).mediaId == targetId
+                    } ?: return@forEachIndexed
+
+                if (sourceIndex != targetIndex) {
+                    c.moveMediaItem(sourceIndex, targetIndex)
+                }
+            }
+            return
+        }
+
+        // If the library membership changed, keep the current track and position
+        // while synchronizing the queue to the newly sorted library.
+        val currentIndex = orderedIds.indexOf(currentMediaId)
+        if (currentIndex < 0) return
+
+        val wasPlayWhenReady = c.playWhenReady
+        val positionMs = c.currentPosition.coerceAtLeast(0L)
+        val savedRepeatMode = c.repeatMode
+        val savedShuffleEnabled = c.shuffleModeEnabled
+
+        c.setMediaItems(
+            orderedSongs.map(::mediaItemFor),
+            currentIndex,
+            positionMs
+        )
+        c.repeatMode = savedRepeatMode
+        c.shuffleModeEnabled = savedShuffleEnabled
+        c.prepare()
+        if (wasPlayWhenReady) c.play() else c.pause()
     }
 
     private fun togglePlay() {
@@ -1194,10 +1235,9 @@ private fun ChatGptStyleShareIcon(
 
 @Composable
 private fun BiographyArrowIcon(
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    color: Color = androidx.compose.material3.LocalContentColor.current
 ) {
-    val color = androidx.compose.material3.LocalContentColor.current
-
     Canvas(modifier = modifier) {
         val stroke = size.minDimension * 0.105f
         val centerX = size.width / 2f
@@ -1224,10 +1264,13 @@ private fun BiographyArrowIcon(
 @Composable
 private fun NusaFavoriteIcon(
     selected: Boolean,
+    color: Color = Color.Unspecified,
     modifier: Modifier = Modifier
 ) {
-    val color = if (selected) {
+    val resolvedColor = if (selected) {
         Color(0xFFFF4F6D)
+    } else if (color != Color.Unspecified) {
+        color
     } else {
         androidx.compose.material3.LocalContentColor.current
     }
@@ -1273,12 +1316,12 @@ private fun NusaFavoriteIcon(
         if (selected) {
             drawPath(
                 path = path,
-                color = color
+                color = resolvedColor
             )
         } else {
             drawPath(
                 path = path,
-                color = color,
+                color = resolvedColor,
                 style = androidx.compose.ui.graphics.drawscope.Stroke(
                     width = size.minDimension * 0.075f,
                     cap = androidx.compose.ui.graphics.StrokeCap.Round,
@@ -1342,7 +1385,8 @@ private fun NusaMusicApp(
     positionMsState: State<Long>,
     durationMs: Long,
     permissionGranted: Boolean,
-    onPlay: (Song) -> Unit,
+    onPlay: (Song, List<Song>) -> Unit,
+    onPlaybackOrderChanged: (List<Song>) -> Unit,
     onTogglePlay: () -> Unit,
     customTitleFontPath: String?,
     customTitleFontName: String?,
@@ -1387,9 +1431,33 @@ private fun NusaMusicApp(
             uiPrefs.getString("title_font_family", "Serif") ?: "Serif"
         )
     }
-
+    var playerPresentationMode by remember {
+        mutableStateOf(
+            PlayerPresentationMode.fromPreference(
+                uiPrefs.getString("player_presentation_mode", null)
+            )
+        )
+    }
+    var animatedArtworkEnabled by remember {
+        mutableStateOf(uiPrefs.getBoolean("animated_artwork_enabled", true))
+    }
     var customTitleTypeface by remember {
         mutableStateOf<Typeface?>(null)
+    }
+
+    LaunchedEffect(showSettings) {
+        if (showSettings) {
+            // Modal sheets can temporarily reveal the status bar on some Android versions.
+            // Hide it again after the sheet has finished opening.
+            delay(180)
+            val activity = context as? MainActivity
+            if (activity != null) {
+                androidx.core.view.WindowInsetsControllerCompat(
+                    activity.window,
+                    activity.window.decorView
+                ).hide(androidx.core.view.WindowInsetsCompat.Type.statusBars())
+            }
+        }
     }
 
     LaunchedEffect(customTitleFontPath) {
@@ -1478,6 +1546,10 @@ private fun NusaMusicApp(
         }
     }
 
+    LaunchedEffect(filtered) {
+        onPlaybackOrderChanged(filtered)
+    }
+
     val alphabet = remember {
         listOf('#') + ('A'..'Z')
     }
@@ -1543,14 +1615,14 @@ private fun NusaMusicApp(
         }
     }
 
-    // Bring the currently playing song into view when opening the song list.
+    // Bring the current track into view when the song list is opened,
+    // without forcing it to the center or changing the normal list padding.
     LaunchedEffect(pagerState) {
         androidx.compose.runtime.snapshotFlow { pagerState.settledPage }
             .collect { settledPage ->
                 onPlayerPageVisibilityChanged(settledPage == 0)
                 if (settledPage == 1 && currentSong != null) {
                     val index = filtered.indexOfFirst { it.id == currentSong.id }
-
                     if (index >= 0) {
                         kotlinx.coroutines.yield()
                         libraryListState.animateScrollToItem(index)
@@ -1578,6 +1650,53 @@ private fun NusaMusicApp(
             containerColor = MaterialTheme.colorScheme.background,
             contentColor = MaterialTheme.colorScheme.onBackground
         ) {
+            // ModalBottomSheet is hosted in its own dialog window. Hiding the
+            // Activity status bar alone is not enough because the dialog can
+            // reveal its own system bars while opening.
+            val sheetView = androidx.compose.ui.platform.LocalView.current
+            val sheetWindow = (sheetView.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window
+
+            // Keep the Settings dialog in fullscreen mode. ModalBottomSheet can
+            // reset system-bar visibility during its entrance/settling animation,
+            // so re-apply the hidden state when its window or sheet state changes.
+            val hideSettingsStatusBar: () -> Unit = {
+                sheetWindow?.let { dialogWindow ->
+                    dialogWindow.addFlags(android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN)
+                    WindowCompat.setDecorFitsSystemWindows(dialogWindow, false)
+
+                    @Suppress("DEPRECATION")
+                    run {
+                        dialogWindow.decorView.systemUiVisibility =
+                            dialogWindow.decorView.systemUiVisibility or
+                                android.view.View.SYSTEM_UI_FLAG_FULLSCREEN or
+                                android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                    }
+
+                    androidx.core.view.WindowInsetsControllerCompat(
+                        dialogWindow,
+                        dialogWindow.decorView
+                    ).apply {
+                        systemBarsBehavior =
+                            androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                        hide(androidx.core.view.WindowInsetsCompat.Type.statusBars())
+                    }
+                }
+            }
+
+            androidx.compose.runtime.SideEffect {
+                hideSettingsStatusBar()
+            }
+
+            LaunchedEffect(sheetWindow) {
+                // Keep enforcing fullscreen for the entire lifetime of Settings.
+                // The sheet/dialog can restore status-bar visibility after its
+                // entrance animation, so a one-time hide is not reliable.
+                while (kotlinx.coroutines.currentCoroutineContext().isActive) {
+                    hideSettingsStatusBar()
+                    delay(100)
+                }
+            }
+
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1833,6 +1952,101 @@ private fun NusaMusicApp(
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
+                    }
+                }
+
+                Spacer(Modifier.height(22.dp))
+
+                Text(
+                    nusaText("TAMPILAN PEMUTAR", "PLAYER PRESENTATION"),
+                    fontSize = 11.sp,
+                    letterSpacing = 1.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    PlayerButtonStyleOption(
+                        title = "Vinyl",
+                        subtitle = nusaText(
+                            "Piringan hitam berputar.",
+                            "Rotating vinyl record."
+                        ),
+                        selected = playerPresentationMode == PlayerPresentationMode.VINYL,
+                        onClick = {
+                            playerPresentationMode = PlayerPresentationMode.VINYL
+                            uiPrefs.edit()
+                                .putString(
+                                    "player_presentation_mode",
+                                    PlayerPresentationMode.VINYL.preferenceValue
+                                )
+                                .apply()
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                    PlayerButtonStyleOption(
+                        title = nusaText("Sampul imersif", "Immersive art"),
+                        subtitle = nusaText(
+                            "Sampul album layar penuh.",
+                            "Full-cover album artwork."
+                        ),
+                        selected = playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK,
+                        onClick = {
+                            playerPresentationMode = PlayerPresentationMode.IMMERSIVE_ARTWORK
+                            uiPrefs.edit()
+                                .putString(
+                                    "player_presentation_mode",
+                                    PlayerPresentationMode.IMMERSIVE_ARTWORK.preferenceValue
+                                )
+                                .apply()
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                Spacer(Modifier.height(18.dp))
+
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    tonalElevation = 0.dp
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                nusaText("Animated artwork", "Animated artwork"),
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                nusaText(
+                                    "Aktifkan atau nonaktifkan sampul album bergerak.",
+                                    "Enable or disable moving album artwork."
+                                ),
+                                fontSize = 12.sp,
+                                lineHeight = 17.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        androidx.compose.material3.Switch(
+                            checked = animatedArtworkEnabled,
+                            onCheckedChange = { enabled ->
+                                animatedArtworkEnabled = enabled
+                                uiPrefs.edit()
+                                    .putBoolean("animated_artwork_enabled", enabled)
+                                    .apply()
+                            }
+                        )
                     }
                 }
 
@@ -2219,7 +2433,9 @@ private fun NusaMusicApp(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .background(
-                                    if (revealPlayerCurve) {
+                                    if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK ||
+                                        revealPlayerCurve
+                                    ) {
                                         Color.Black
                                     } else {
                                         MaterialTheme.colorScheme.background
@@ -2228,19 +2444,49 @@ private fun NusaMusicApp(
                             contentPadding = PaddingValues(0.dp)
                         ) {
                             item {
-                                Column(
+                                Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .fillParentMaxHeight()
-                                        .clip(
-                                            RoundedCornerShape(
-                                                bottomStart = 34.dp,
-                                                bottomEnd = 34.dp
-                                            )
+                                        .then(
+                                            if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
+                                                // Keep the immersive player edge square and fully black so
+                                                // rounded-corner antialiasing cannot reveal a light-colored seam
+                                                // between the player and the biography section.
+                                                Modifier.background(Color.Black)
+                                            } else {
+                                                Modifier
+                                                    .clip(
+                                                        RoundedCornerShape(
+                                                            bottomStart = 34.dp,
+                                                            bottomEnd = 34.dp
+                                                        )
+                                                    )
+                                                    .background(MaterialTheme.colorScheme.background)
+                                            }
                                         )
-                                        .background(MaterialTheme.colorScheme.background),
-                                    horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
+                                    if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
+                                        ImmersiveArtwork(
+                                            song = currentSong,
+                                            animatedArtworkEnabled = animatedArtworkEnabled,
+                                            isVisible = pagerState.settledPage == 0,
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                    }
+
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .then(
+                                                if (playerPresentationMode == PlayerPresentationMode.VINYL) {
+                                                    Modifier.background(MaterialTheme.colorScheme.background)
+                                                } else {
+                                                    Modifier
+                                                }
+                                            ),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
                                     Spacer(
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -2250,8 +2496,18 @@ private fun NusaMusicApp(
                                     TopAppBar(
                                         title = { },
                                         colors = TopAppBarDefaults.topAppBarColors(
-                                            containerColor = MaterialTheme.colorScheme.background,
-                                            scrolledContainerColor = MaterialTheme.colorScheme.background
+                                            containerColor = if (
+                                                playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
+                                            ) Color.Transparent else MaterialTheme.colorScheme.background,
+                                            scrolledContainerColor = if (
+                                                playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
+                                            ) Color.Transparent else MaterialTheme.colorScheme.background,
+                                            actionIconContentColor = if (
+                                                playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
+                                            ) Color.White else MaterialTheme.colorScheme.onSurface,
+                                            navigationIconContentColor = if (
+                                                playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
+                                            ) Color.White else MaterialTheme.colorScheme.onSurface
                                         ),
                                         windowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
                                         navigationIcon = {
@@ -2264,16 +2520,13 @@ private fun NusaMusicApp(
                                             )
                                         },
                                         actions = {
-                                            IconButton(onClick = {}) {
-                                                Icon(
-                                                    Icons.Default.MoreHoriz,
-                                                    contentDescription = nusaText("Lainnya", "More")
-                                                )
-                                            }
                                             IconButton(onClick = { showSettings = true }) {
                                                 Icon(
-                                                    Icons.Default.Settings,
-                                                    contentDescription = nusaText("Pengaturan", "Settings")
+                                                    Icons.Default.MoreHoriz,
+                                                    contentDescription = nusaText("Pengaturan", "Settings"),
+                                                    tint = if (
+                                                        playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
+                                                    ) Color.White else MaterialTheme.colorScheme.onSurface
                                                 )
                                             }
                                         }
@@ -2282,65 +2535,121 @@ private fun NusaMusicApp(
                                     Column(
                                         modifier = Modifier
                                             .fillMaxWidth()
+                                            .then(
+                                                if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
+                                                    Modifier.weight(1f)
+                                                } else {
+                                                    Modifier
+                                                }
+                                            )
                                             .padding(horizontal = 22.dp),
                                         horizontalAlignment = Alignment.CenterHorizontally
                                     ) {
-                                        Spacer(Modifier.height(2.dp))
+                                        val immersiveArtworkMode =
+                                            playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
+                                        val titleText =
+                                            currentSong?.title ?: nusaText("Pilih lagu", "Choose a song")
+                                        val titleWordCount = remember(titleText) {
+                                            titleText.trim()
+                                                .split(Regex("\\s+"))
+                                                .count { it.isNotBlank() }
+                                        }
+                                        val titleSize = remember(titleWordCount, titleFontSize) {
+                                            val scale = titleFontSize / 34f
+                                            when {
+                                                titleWordCount <= 2 -> titleFontSize.sp
+                                                titleWordCount == 3 -> (31f * scale).sp
+                                                else -> (28f * scale).sp
+                                            }
+                                        }
+                                        val titleLineHeight = remember(titleWordCount, titleFontSize) {
+                                            val scale = titleFontSize / 34f
+                                            when {
+                                                titleWordCount <= 2 -> (37f * scale).sp
+                                                titleWordCount == 3 -> (34f * scale).sp
+                                                else -> (31f * scale).sp
+                                            }
+                                        }
+                                        val screenWidthDp =
+                                            androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
+                                        val estimatedTitleLines = remember(titleText, titleSize, screenWidthDp) {
+                                            val availableWidthDp = (screenWidthDp - 52f).coerceAtLeast(120f)
+                                            val estimatedCharacterWidthDp = (titleSize.value * 0.60f).coerceAtLeast(1f)
+                                            val estimatedCharactersPerLine =
+                                                (availableWidthDp / estimatedCharacterWidthDp).coerceAtLeast(1f)
+                                            kotlin.math.ceil(
+                                                titleText.length / estimatedCharactersPerLine
+                                            ).toInt().coerceIn(1, 6)
+                                        }
+                                        val titleLineHeightDp = with(
+                                            androidx.compose.ui.platform.LocalDensity.current
+                                        ) {
+                                            titleLineHeight.toDp()
+                                        }
+                                        val titleBoxHeight = if (immersiveArtworkMode) {
+                                            maxOf(
+                                                82.dp,
+                                                titleLineHeightDp * estimatedTitleLines.toFloat() + 8.dp
+                                            )
+                                        } else {
+                                            82.dp
+                                        }
+                                        val titleExtraHeight = titleBoxHeight - 82.dp
 
-                                        VinylRecord(
-                                            song = currentSong,
-                                            isPlaying = isPlaying,
-                                            positionMsState = positionMsState,
-                                            durationMs = durationMs,
-                                            modifier = Modifier
-                                                .fillMaxWidth(0.84f)
-                                                .aspectRatio(1f)
-                                        )
+                                        if (playerPresentationMode == PlayerPresentationMode.VINYL) {
+                                            Spacer(Modifier.height(2.dp))
+                                        } else {
+                                            val screenHeight =
+                                                androidx.compose.ui.platform.LocalConfiguration.current
+                                                    .screenHeightDp.dp
+                                            Spacer(
+                                                Modifier.height(
+                                                    (
+                                                        (screenHeight * 0.30f).coerceIn(160.dp, 250.dp) +
+                                                            16.dp - titleExtraHeight
+                                                    ).coerceAtLeast(0.dp)
+                                                )
+                                            )
+                                        }
 
-                                        Spacer(Modifier.height(24.dp))
+                                        if (playerPresentationMode == PlayerPresentationMode.VINYL) {
+                                            VinylRecord(
+                                                song = currentSong,
+                                                isPlaying = isPlaying,
+                                                positionMsState = positionMsState,
+                                                durationMs = durationMs,
+                                                modifier = Modifier
+                                                    .fillMaxWidth(0.84f)
+                                                    .aspectRatio(1f)
+                                            )
+                                        }
+
+                                        if (playerPresentationMode == PlayerPresentationMode.VINYL) {
+                                            Spacer(Modifier.height(24.dp))
+                                        }
 
                                         Box(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .height(82.dp),
+                                                .height(titleBoxHeight),
                                             contentAlignment = Alignment.Center
                                         ) {
-                                            val titleText =
-                                                currentSong?.title ?: nusaText("Pilih lagu", "Choose a song")
-
-                                            val titleWordCount = remember(titleText) {
-                                                titleText.trim()
-                                                    .split(Regex("\\s+"))
-                                                    .count { it.isNotBlank() }
-                                            }
-
-                                            val titleSize = remember(titleWordCount, titleFontSize) {
-                                                val scale = titleFontSize / 34f
-                                                when {
-                                                    titleWordCount <= 2 -> titleFontSize.sp
-                                                    titleWordCount == 3 -> (31f * scale).sp
-                                                    else -> (28f * scale).sp
-                                                }
-                                            }
-
-                                            val titleLineHeight = remember(titleWordCount, titleFontSize) {
-                                                val scale = titleFontSize / 34f
-                                                when {
-                                                    titleWordCount <= 2 -> (37f * scale).sp
-                                                    titleWordCount == 3 -> (34f * scale).sp
-                                                    else -> (31f * scale).sp
-                                                }
-                                            }
-
                                             Text(
                                                 titleText,
                                                 fontFamily = titleFontFamily,
                                                 fontWeight = FontWeight.Bold,
                                                 fontSize = titleSize,
                                                 lineHeight = titleLineHeight,
-                                                maxLines = 3,
-                                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                                maxLines = if (immersiveArtworkMode) estimatedTitleLines else 3,
+                                                overflow = if (immersiveArtworkMode) {
+                                                    androidx.compose.ui.text.style.TextOverflow.Clip
+                                                } else {
+                                                    androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                                },
                                                 modifier = Modifier.padding(horizontal = 4.dp),
+                                                color = if (
+                                                    playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
+                                                ) Color.White else MaterialTheme.colorScheme.onBackground,
                                                 textAlign = TextAlign.Center
                                             )
                                         }
@@ -2351,7 +2660,13 @@ private fun NusaMusicApp(
                                             fontSize = 14.sp,
                                             maxLines = 1,
                                             textAlign = TextAlign.Center,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            color = if (
+                                                playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
+                                            ) {
+                                                Color.White.copy(alpha = 0.82f)
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                            }
                                         )
 
                                         Spacer(Modifier.height(16.dp))
@@ -2361,6 +2676,7 @@ private fun NusaMusicApp(
                                             durationMs = durationMs,
                                             enabled = currentSong != null && durationMs > 0L,
                                             onSeek = onSeek,
+                                            immersive = playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK,
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .padding(horizontal = 12.dp)
@@ -2369,51 +2685,105 @@ private fun NusaMusicApp(
                                         Spacer(Modifier.height(5.dp))
 
                                         Row(
-                                            modifier = Modifier.fillMaxWidth(),
+                                            modifier = Modifier
+                                                .fillMaxWidth(),
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.Center
                                         ) {
-                                            TransportPillButton(
-                                                icon = Icons.Rounded.FastRewind,
-                                                contentDescription = nusaText("Sebelumnya", "Previous"),
-                                                onClick = onPrevious,
-                                                enabled = currentSong != null,
-                                                realistic = realisticControls
-                                            )
+                                            if (immersiveArtworkMode) {
+                                                IconButton(
+                                                    onClick = onPrevious,
+                                                    enabled = currentSong != null,
+                                                    modifier = Modifier.size(76.dp)
+                                                ) {
+                                                    Icon(
+                                                        Icons.Rounded.FastRewind,
+                                                        contentDescription = nusaText("Sebelumnya", "Previous"),
+                                                        tint = Color.White,
+                                                        modifier = Modifier.size(54.dp)
+                                                    )
+                                                }
+                                            } else {
+                                                TransportPillButton(
+                                                    icon = Icons.Rounded.FastRewind,
+                                                    contentDescription = nusaText("Sebelumnya", "Previous"),
+                                                    onClick = onPrevious,
+                                                    enabled = currentSong != null,
+                                                    realistic = realisticControls
+                                                )
+                                            }
 
-                                            Spacer(Modifier.width(16.dp))
+                                            Spacer(Modifier.width(if (immersiveArtworkMode) 8.dp else 12.dp))
 
-                                            PlayerControlButton(
-                                                realistic = realisticControls,
-                                                icon = if (isPlaying) {
-                                                    Icons.Rounded.Pause
-                                                } else {
-                                                    Icons.Rounded.PlayArrow
-                                                },
-                                                contentDescription = if (isPlaying) {
-                                                    nusaText("Jeda", "Pause")
-                                                } else {
-                                                    nusaText("Putar", "Play")
-                                                },
-                                                onClick = if (currentSong == null) {
-                                                    onRequestPermission
-                                                } else {
-                                                    onTogglePlay
-                                                },
-                                                enabled = true,
-                                                modifier = Modifier.size(84.dp),
-                                                iconSize = 40.dp
-                                            )
+                                            if (immersiveArtworkMode) {
+                                                IconButton(
+                                                    onClick = if (currentSong == null) onRequestPermission else onTogglePlay,
+                                                    enabled = true,
+                                                    modifier = Modifier.size(104.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = if (isPlaying) {
+                                                            Icons.Rounded.Pause
+                                                        } else {
+                                                            Icons.Rounded.PlayArrow
+                                                        },
+                                                        contentDescription = if (isPlaying) {
+                                                            nusaText("Jeda", "Pause")
+                                                        } else {
+                                                            nusaText("Putar", "Play")
+                                                        },
+                                                        tint = Color.White,
+                                                        modifier = Modifier.size(80.dp)
+                                                    )
+                                                }
+                                            } else {
+                                                PlayerControlButton(
+                                                    realistic = realisticControls,
+                                                    icon = if (isPlaying) {
+                                                        Icons.Rounded.Pause
+                                                    } else {
+                                                        Icons.Rounded.PlayArrow
+                                                    },
+                                                    contentDescription = if (isPlaying) {
+                                                        nusaText("Jeda", "Pause")
+                                                    } else {
+                                                        nusaText("Putar", "Play")
+                                                    },
+                                                    onClick = if (currentSong == null) {
+                                                        onRequestPermission
+                                                    } else {
+                                                        onTogglePlay
+                                                    },
+                                                    enabled = true,
+                                                    modifier = Modifier.size(84.dp),
+                                                    iconSize = 40.dp
+                                                )
+                                            }
 
-                                            Spacer(Modifier.width(16.dp))
+                                            Spacer(Modifier.width(if (immersiveArtworkMode) 8.dp else 12.dp))
 
-                                            TransportPillButton(
-                                                icon = Icons.Rounded.FastForward,
-                                                contentDescription = nusaText("Berikutnya", "Next"),
-                                                onClick = onNext,
-                                                enabled = currentSong != null,
-                                                realistic = realisticControls
-                                            )
+                                            if (immersiveArtworkMode) {
+                                                IconButton(
+                                                    onClick = onNext,
+                                                    enabled = currentSong != null,
+                                                    modifier = Modifier.size(76.dp)
+                                                ) {
+                                                    Icon(
+                                                        Icons.Rounded.FastForward,
+                                                        contentDescription = nusaText("Berikutnya", "Next"),
+                                                        tint = Color.White,
+                                                        modifier = Modifier.size(54.dp)
+                                                    )
+                                                }
+                                            } else {
+                                                TransportPillButton(
+                                                    icon = Icons.Rounded.FastForward,
+                                                    contentDescription = nusaText("Berikutnya", "Next"),
+                                                    onClick = onNext,
+                                                    enabled = currentSong != null,
+                                                    realistic = realisticControls
+                                                )
+                                            }
                                         }
 
                                         Spacer(Modifier.height(10.dp))
@@ -2464,7 +2834,10 @@ private fun NusaMusicApp(
                                                         .size(25.dp)
                                                         .graphicsLayer {
                                                             rotationZ = biographyArrowRotation
-                                                        }
+                                                        },
+                                                    color = if (
+                                                        playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
+                                                    ) Color.White else MaterialTheme.colorScheme.onSurface
                                                 )
                                             }
 
@@ -2476,7 +2849,10 @@ private fun NusaMusicApp(
                                                 modifier = Modifier.size(42.dp)
                                             ) {
                                                 ChatGptStyleShareIcon(
-                                                    modifier = Modifier.size(22.dp)
+                                                    modifier = Modifier.size(22.dp),
+                                                    color = if (
+                                                        playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
+                                                    ) Color.White else Color.Unspecified
                                                 )
                                             }
 
@@ -2487,13 +2863,24 @@ private fun NusaMusicApp(
                                             ) {
                                                 NusaFavoriteIcon(
                                                     selected = isFavorite,
+                                                    color = if (
+                                                        playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
+                                                    ) Color.White else Color.Unspecified,
                                                     modifier = Modifier.size(22.dp)
                                                 )
                                             }
                                         }
 
-                                        Spacer(Modifier.height(8.dp))
-                                        AudioQualityPill(song = currentSong)
+                                        if (playerPresentationMode == PlayerPresentationMode.VINYL) {
+                                            Spacer(Modifier.height(8.dp))
+                                            AudioQualityPill(song = currentSong)
+                                        } else {
+                                            Spacer(Modifier.height(20.dp))
+                                            AudioQualityPill(
+                                                song = currentSong,
+                                                immersive = true
+                                            )
+                                        }
 
                                         if (!permissionGranted) {
                                             Text(
@@ -2517,6 +2904,7 @@ private fun NusaMusicApp(
                                         }
                                     }
                                 }
+                            }
                             }
 
                             // Artist biography section.
@@ -2628,15 +3016,15 @@ private fun NusaMusicApp(
                             ) {
                                 LazyColumn(
                                     state = libraryListState,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(top = 76.dp),
-                                contentPadding = PaddingValues(
-                                    top = 8.dp,
-                                    start = 12.dp,
-                                    end = 12.dp,
-                                    bottom = 140.dp
-                                ),
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(top = 76.dp),
+                                    contentPadding = PaddingValues(
+                                        top = 8.dp,
+                                        start = 12.dp,
+                                        end = 12.dp,
+                                        bottom = 140.dp
+                                    ),
                                 verticalArrangement = Arrangement.spacedBy(2.dp)
                             ) {
                                 if (
@@ -2651,7 +3039,9 @@ private fun NusaMusicApp(
                                         LibrarySongListRow(
                                             song = song,
                                             selected = currentSong?.id == song.id,
-                                            onPlay = onPlay
+                                            onPlay = { selectedSong ->
+                                                onPlay(selectedSong, filtered)
+                                            }
                                         )
                                     }
                                 } else if (!permissionGranted && selectedMusicFolders.isEmpty()) {
@@ -3200,7 +3590,10 @@ private fun ArtistBiographySection(
 }
 
 @Composable
-private fun AudioQualityPill(song: Song?) {
+private fun AudioQualityPill(
+    song: Song?,
+    immersive: Boolean = false
+) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var codecInfo by remember { mutableStateOf<AudioCodecInfo?>(null) }
     var showMetadataDialog by remember { mutableStateOf(false) }
@@ -3218,30 +3611,94 @@ private fun AudioQualityPill(song: Song?) {
     val isLossless = info?.codecName == "Apple Lossless" || info?.codecName == "FLAC"
     val isHiRes = isLossless && info?.isHiRes == true
 
-    androidx.compose.animation.AnimatedVisibility(
-        visible = isLossless,
-        enter = androidx.compose.animation.fadeIn(
-            animationSpec = tween(durationMillis = 180)
-        ),
-        exit = androidx.compose.animation.fadeOut(
-            animationSpec = tween(durationMillis = 180)
-        )
+    val isDolbyAtmos = info?.codecName == "Dolby Atmos"
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Crossfade(
-            targetState = isHiRes,
-            animationSpec = tween(durationMillis = 180),
-            label = "qualityBadgeCrossfade"
-        ) { hiRes ->
+        androidx.compose.animation.AnimatedVisibility(
+            visible = isLossless,
+            enter = androidx.compose.animation.fadeIn(
+                animationSpec = tween(durationMillis = 180)
+            ),
+            exit = androidx.compose.animation.fadeOut(
+                animationSpec = tween(durationMillis = 180)
+            )
+        ) {
+            Crossfade(
+                targetState = isHiRes,
+                animationSpec = tween(durationMillis = 180),
+                label = "qualityBadgeCrossfade"
+            ) { hiRes ->
+                Box(
+                    modifier = Modifier
+                        .padding(top = if (immersive) 0.dp else 4.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(
+                            color = if (immersive) {
+                                Color.White
+                            } else if (hiRes) {
+                                Color(0xFFB5A77C).copy(alpha = 0.42f)
+                            } else {
+                                MaterialTheme.colorScheme.surfaceVariant
+                            }
+                        )
+                        .clickable(enabled = song != null && info != null) {
+                            showMetadataDialog = true
+                        }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        androidx.compose.foundation.Image(
+                            painter = painterResource(id = R.drawable.apple_lossless_logo),
+                            contentDescription = if (hiRes) "Hi-Res" else "Lossless",
+                            contentScale = ContentScale.Fit,
+                            colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(
+                                if (hiRes) Color(0xFF3D3728) else MaterialTheme.colorScheme.onSurface
+                            ),
+                            modifier = Modifier.size(
+                                width = 20.dp,
+                                height = 11.dp
+                            )
+                        )
+
+                        Spacer(Modifier.width(5.dp))
+
+                        Text(
+                            text = if (hiRes) "Hi-Res" else "Lossless",
+                            fontSize = 10.sp,
+                            lineHeight = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = if (hiRes) {
+                                Color(0xFF3D3728)
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            }
+                        )
+                    }
+                }
+            }
+        }
+
+        androidx.compose.animation.AnimatedVisibility(
+            visible = isDolbyAtmos,
+            enter = androidx.compose.animation.fadeIn(
+                animationSpec = tween(durationMillis = 180)
+            ),
+            exit = androidx.compose.animation.fadeOut(
+                animationSpec = tween(durationMillis = 180)
+            )
+        ) {
             Box(
                 modifier = Modifier
-                    .padding(top = 4.dp)
+                    .padding(top = if (immersive) 0.dp else 4.dp)
                     .clip(RoundedCornerShape(50))
                     .background(
-                        color = if (hiRes) {
-                            Color(0xFFB5A77C).copy(alpha = 0.42f)
-                        } else {
-                            MaterialTheme.colorScheme.surfaceVariant
-                        }
+                        if (immersive) Color.White else MaterialTheme.colorScheme.surfaceVariant
                     )
                     .clickable(enabled = song != null && info != null) {
                         showMetadataDialog = true
@@ -3252,28 +3709,25 @@ private fun AudioQualityPill(song: Song?) {
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center
                 ) {
-                    androidx.compose.foundation.Image(
-                        painter = painterResource(id = R.drawable.apple_lossless_logo),
-                        contentDescription = if (hiRes) "Hi-Res" else "Lossless",
+                    Image(
+                        painter = painterResource(id = R.drawable.dolby_atmos_mark),
+                        contentDescription = "Dolby Atmos",
                         contentScale = ContentScale.Fit,
                         colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(
-                            if (hiRes) Color(0xFF3D3728) else MaterialTheme.colorScheme.onSurface
+                            if (immersive) Color(0xFF1B1B1B) else MaterialTheme.colorScheme.onSurface
                         ),
-                        modifier = Modifier.size(
-                            width = 20.dp,
-                            height = 11.dp
-                        )
+                        modifier = Modifier.size(width = 18.dp, height = 11.dp)
                     )
 
                     Spacer(Modifier.width(5.dp))
 
                     Text(
-                        text = if (hiRes) "Hi-Res" else "Lossless",
+                        text = "Dolby Atmos",
                         fontSize = 10.sp,
                         lineHeight = 12.sp,
                         fontWeight = FontWeight.Medium,
-                        color = if (hiRes) {
-                            Color(0xFF3D3728)
+                        color = if (immersive) {
+                            Color(0xFF1B1B1B)
                         } else {
                             MaterialTheme.colorScheme.onSurface
                         }
@@ -3283,7 +3737,7 @@ private fun AudioQualityPill(song: Song?) {
         }
     }
 
-    if (isLossless) {
+    if ((isLossless || isDolbyAtmos) && !immersive) {
         Spacer(Modifier.height(4.dp))
     }
 
@@ -3557,6 +4011,7 @@ private fun SimpleProgressBar(
     durationMs: Long,
     enabled: Boolean,
     onSeek: (Long) -> Unit,
+    immersive: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val fraction = if (durationMs > 0L) {
@@ -3564,7 +4019,7 @@ private fun SimpleProgressBar(
     } else {
         0f
     }
-    val primary = MaterialTheme.colorScheme.primary
+    val primary = if (immersive) Color.White else MaterialTheme.colorScheme.primary
 
     androidx.compose.foundation.Canvas(
         modifier = modifier
@@ -3602,7 +4057,11 @@ private fun SimpleProgressBar(
         val stroke = 3.0.dp.toPx()
 
         drawLine(
-            color = Color(0xFFD0CDC6),
+            color = if (immersive) {
+                Color.White.copy(alpha = 0.48f)
+            } else {
+                Color(0xFFD0CDC6)
+            },
             start = androidx.compose.ui.geometry.Offset(0f, y),
             end = androidx.compose.ui.geometry.Offset(size.width, y),
             strokeWidth = stroke
@@ -3623,6 +4082,7 @@ private fun PlaybackProgress(
     durationMs: Long,
     enabled: Boolean,
     onSeek: (Long) -> Unit,
+    immersive: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val positionMs by positionMsState
@@ -3633,14 +4093,16 @@ private fun PlaybackProgress(
             durationMs = durationMs,
             enabled = enabled,
             onSeek = onSeek,
+            immersive = immersive,
             modifier = Modifier.fillMaxWidth()
         )
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(formatTime(positionMs), fontSize = 12.sp)
-            Text(formatTime(durationMs), fontSize = 12.sp)
+            val textColor = if (immersive) Color.White else MaterialTheme.colorScheme.onBackground
+            Text(formatTime(positionMs), fontSize = 12.sp, color = textColor)
+            Text(formatTime(durationMs), fontSize = 12.sp, color = textColor)
         }
     }
 }
@@ -4118,6 +4580,15 @@ private fun VinylRecord(
                 },
             contentAlignment = Alignment.Center
         ) {
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .drawWithCache {
+                        val painter = VinylPainter(size)
+                        onDrawBehind { with(painter) { drawReflections() } }
+                    }
+            )
+
             // A 12-inch record's paper label is approximately a third of its diameter.
             Box(
                 modifier = Modifier
@@ -4141,17 +4612,14 @@ private fun VinylRecord(
             }
         }
 
-        // Only the PVC texture and printed label rotate. The reflected light and spindle stay put.
+        // The spindle stays centered while the record and its reflections rotate.
         Box(
             Modifier
                 .fillMaxSize()
                 .drawWithCache {
                     val painter = VinylPainter(size)
                     onDrawBehind {
-                        with(painter) {
-                            drawReflections()
-                            drawSpindle()
-                        }
+                        with(painter) { drawSpindle() }
                     }
                 }
         )
@@ -4684,6 +5152,201 @@ private data class GrainFiber(
     val alpha: Float,
     val dark: Boolean
 )
+
+@Composable
+private fun ImmersiveArtwork(
+    song: Song?,
+    animatedArtworkEnabled: Boolean = true,
+    isVisible: Boolean = true,
+    modifier: Modifier = Modifier
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var artwork by remember(song?.uri, song?.albumId) { mutableStateOf<Bitmap?>(null) }
+    var backdrop by remember(song?.uri, song?.albumId) { mutableStateOf(Color(0xFF141414)) }
+    var animatedArtworkUrl by remember(song?.id, song?.uri) { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(song?.uri, song?.albumId) {
+        val loaded = song?.let {
+            ArtworkLoader.load(
+                context = context,
+                uriString = it.uri,
+                maxSize = 1_600,
+                cacheKey = it.albumId.takeIf { albumId -> albumId > 0L }?.toString()
+            )
+        }
+        val colour = withContext(Dispatchers.Default) {
+            loaded?.let { bitmap ->
+                // Sample the lower cover, where its colours meet the player controls.
+                val pixels = IntArray(64) { index ->
+                    val x = ((index % 8 + 0.5f) / 8f * bitmap.width).toInt()
+                        .coerceIn(0, bitmap.width - 1)
+                    val y = ((0.55f + (index / 8 + 0.5f) / 8f * 0.40f) * bitmap.height).toInt()
+                        .coerceIn(0, bitmap.height - 1)
+                    bitmap.getPixel(x, y)
+                }
+                artworkBackdropColor(pixels)
+            } ?: Color(0xFF141414)
+        }
+        artwork = loaded
+        backdrop = colour
+    }
+
+    LaunchedEffect(
+        song?.id,
+        song?.title,
+        song?.artist,
+        song?.album,
+        animatedArtworkEnabled
+    ) {
+        animatedArtworkUrl = if (animatedArtworkEnabled) {
+            song?.let { AppleMusicAnimatedArtworkLoader.loadAnimatedArtworkUrl(it) }
+        } else {
+            null
+        }
+    }
+
+    Box(modifier.background(backdrop)) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(IMMERSIVE_ARTWORK_HEIGHT_FRACTION)
+                .align(Alignment.TopCenter)
+                .graphicsLayer {
+                    clip = true
+                    compositingStrategy = CompositingStrategy.Offscreen
+                }
+                .drawWithCache {
+                    val painter = ImmersiveArtworkPainter()
+                    onDrawWithContent {
+                        drawContent()
+                        with(painter) { fadeArtwork() }
+                    }
+                }
+        ) {
+            val cover = artwork
+            if (cover != null) {
+                Image(
+                    bitmap = cover.asImageBitmap(),
+                    contentDescription = song?.title,
+                    contentScale = ContentScale.Crop,
+                    alignment = Alignment.TopCenter,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Icon(
+                    Icons.Default.MusicNote,
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.18f),
+                    modifier = Modifier.size(42.dp).align(Alignment.Center)
+                )
+            }
+
+            val activeAnimatedArtworkUrl = animatedArtworkUrl
+            if (animatedArtworkEnabled && isVisible && activeAnimatedArtworkUrl != null) {
+                AnimatedArtworkVideoBackground(
+                    url = activeAnimatedArtworkUrl,
+                    modifier = Modifier.fillMaxSize(),
+                    onUnavailable = {
+                        if (animatedArtworkUrl == activeAnimatedArtworkUrl) {
+                            animatedArtworkUrl = null
+                        }
+                    }
+                )
+            }
+        }
+
+        Box(
+            Modifier
+                .fillMaxSize()
+                .drawWithCache {
+                    val painter = ImmersiveArtworkPainter()
+                    onDrawBehind { with(painter) { drawScrim() } }
+                }
+        )
+    }
+}
+
+@Composable
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+private fun AnimatedArtworkVideoBackground(
+    url: String,
+    modifier: Modifier = Modifier,
+    onUnavailable: () -> Unit
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var videoReady by remember(url) { mutableStateOf(false) }
+
+    val player = remember(url) {
+        val trackSelector = androidx.media3.exoplayer.trackselection.DefaultTrackSelector(context).apply {
+            parameters = buildUponParameters()
+                .setMaxVideoSize(720, 1280)
+                .setMaxVideoFrameRate(30)
+                .setMaxVideoBitrate(4_000_000)
+                .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_AUDIO, true)
+                .build()
+        }
+        androidx.media3.exoplayer.ExoPlayer.Builder(context)
+            .setTrackSelector(trackSelector)
+            .setAudioAttributes(
+                androidx.media3.common.AudioAttributes.Builder()
+                    .setUsage(androidx.media3.common.C.USAGE_MEDIA)
+                    .setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_MOVIE)
+                    .build(),
+                false
+            )
+            .build()
+            .apply {
+            volume = 0f
+            repeatMode = Player.REPEAT_MODE_ONE
+            setMediaItem(
+                MediaItem.Builder()
+                    .setUri(url)
+                    .setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8)
+                    .build()
+            )
+        }
+    }
+
+    androidx.compose.runtime.DisposableEffect(player, url) {
+        val listener = object : Player.Listener {
+            override fun onRenderedFirstFrame() {
+                videoReady = true
+            }
+
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                onUnavailable()
+            }
+        }
+
+        player.addListener(listener)
+        player.prepare()
+        player.playWhenReady = true
+        onDispose {
+            player.removeListener(listener)
+            player.release()
+        }
+    }
+
+    androidx.compose.ui.viewinterop.AndroidView(
+        factory = { viewContext ->
+            val canvasPlayerView = android.view.LayoutInflater.from(viewContext)
+                .inflate(
+                    R.layout.immersive_canvas_player_view,
+                    null,
+                    false
+                ) as androidx.media3.ui.PlayerView
+            canvasPlayerView.player = player
+            canvasPlayerView
+        },
+        update = { playerView ->
+            if (playerView.player !== player) playerView.player = player
+        },
+        modifier = modifier.graphicsLayer {
+            // Keep the still artwork visible until the first video frame is ready.
+            alpha = if (videoReady) 1f else 0f
+        }
+    )
+}
 
 @Composable
 private fun ArtworkView(

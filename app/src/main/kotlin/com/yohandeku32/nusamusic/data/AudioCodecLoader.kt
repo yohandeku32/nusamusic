@@ -59,6 +59,11 @@ object AudioCodecLoader {
                 }
 
                 val codec = when {
+                    // E-AC-3 JOC is the stream identifier used for Dolby Atmos.
+                    // Do not label generic AC-3/E-AC-3 as Atmos unless the
+                    // extractor exposes the Atmos/JOC marker.
+                    mime.contains("atmos") ||
+                        (mime.contains("eac3") && mime.contains("joc")) -> "Dolby Atmos"
                     mime.contains("flac") -> "FLAC"
                     mime.contains("alac") -> "Apple Lossless"
                     mime.contains("mp4a") || mime.contains("aac") -> "AAC"
@@ -66,8 +71,8 @@ object AudioCodecLoader {
                     mime.contains("opus") -> "Opus"
                     mime.contains("vorbis") -> "Vorbis"
                     mime.contains("pcm") || mime.contains("raw") -> "PCM"
-                    mime.contains("ac3") -> "Dolby Digital"
                     mime.contains("eac3") -> "Dolby Digital+"
+                    mime.contains("ac3") -> "Dolby Digital"
                     mime.contains("dts") -> "DTS"
                     mime.contains("amr") -> "AMR"
                     else -> mime.removePrefix("audio/").uppercase()

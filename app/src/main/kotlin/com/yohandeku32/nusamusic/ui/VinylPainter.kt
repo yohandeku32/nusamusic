@@ -18,7 +18,7 @@ import kotlin.random.Random
 
 internal const val VINYL_LABEL_FRACTION = 0.318f
 
-/** Cached geometry and brushes. Lighting is drawn outside the rotating record layer. */
+/** Geometry and brushes are cached at the record's measured size. */
 internal class VinylPainter(size: Size) {
     private val radius = size.minDimension / 2f
     private val discCenter = Offset(size.width / 2f, size.height / 2f)

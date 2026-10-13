@@ -6,7 +6,8 @@ The current version is **3.13.4** (`versionCode 46`). It runs on Android 10 and 
 
 ## Features
 
-- A vinyl-style player with rotating artwork, a moving tonearm, and playback controls.
+- A vinyl-style player with rotating artwork and reflections, a moving tonearm, and playback controls.
+- Immersive artwork with a full-width cover and a gradual fade into the controls. Animated covers are optional, with local artwork as the fallback.
 - Background playback, notification controls, shuffle, and repeat through AndroidX Media3.
 - Crossfade from 1 to 12 seconds, with a default of 5 seconds when enabled.
 - A local library with album artwork, A–Z navigation, and sorting by title, artist, album, date added, or duration.
@@ -29,7 +30,7 @@ You'll need:
 
 The project targets Android 16 (API 36), with a minimum of API 29. It uses AGP's built-in Kotlin support and the Compose compiler plugin 2.2.10.
 
-Open the project in a compatible Android Studio version, or build from the repository root with Gradle. This repository doesn't include a Gradle wrapper.
+Open the project in a compatible Android Studio version, or build from the repository root with the included Gradle wrapper.
 
 Set `ANDROID_HOME` to your SDK directory, or add its path to an ignored `local.properties` file:
 
@@ -40,16 +41,18 @@ sdk.dir=/path/to/android-sdk
 Build the debug APK:
 
 ```sh
-gradle :app:assembleDebug
+./gradlew :app:assembleDebug
 ```
 
 The APK is written to `app/build/outputs/apk/debug/app-debug.apk`. To run Android lint:
 
 ```sh
-gradle :app:lintDebug
+./gradlew :app:lintDebug
 ```
 
-There are no automated unit or instrumentation tests in the repository yet. Playback, folder permissions, and crossfade still need testing on Android devices.
+Run the unit tests with `./gradlew :app:testDebugUnitTest`. There are no instrumentation tests yet. Playback, folder permissions, and crossfade still need testing on Android devices.
+
+Choose **Immersive art** in the player settings to switch from the vinyl view. Animated artwork uses the m8tec artwork lookup service and Apple-hosted HLS streams; the local cover stays visible when a stream is unavailable.
 
 ## Last.fm biographies
 
