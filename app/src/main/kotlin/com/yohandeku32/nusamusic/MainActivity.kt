@@ -4988,19 +4988,19 @@ private fun ImmersiveArtwork(
             )
         }
 
-        // A light, gradually increasing glass tint softens the lower area without
-        // hiding the cover or replacing its frozen animated-artwork colours.
+        // Dark frosted glass: keep the artwork colours visible, with a subtle
+        // smoked-glass fade towards the controls instead of an opaque grey wash.
         Box(
             Modifier
                 .matchParentSize()
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            Color.White.copy(alpha = 0.03f),
-                            Color.White.copy(alpha = 0.06f),
+                            Color.Black.copy(alpha = 0.03f),
+                            Color.Black.copy(alpha = 0.06f),
                             animatedBackdrop.copy(alpha = 0.05f),
-                            Color.White.copy(alpha = 0.16f),
-                            Color.White.copy(alpha = 0.26f)
+                            Color.Black.copy(alpha = 0.14f),
+                            Color.Black.copy(alpha = 0.24f)
                         )
                     )
                 )
