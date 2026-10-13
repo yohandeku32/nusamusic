@@ -2664,7 +2664,7 @@ private fun NusaMusicApp(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .height(titleBoxHeight),
-                                            contentAlignment = Alignment.Center
+                                            contentAlignment = Alignment.BottomCenter
                                         ) {
                                             Text(
                                                 titleText,
