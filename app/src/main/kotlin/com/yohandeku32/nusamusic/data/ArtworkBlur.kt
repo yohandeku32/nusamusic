@@ -7,7 +7,7 @@ import com.yohandeku32.nusamusic.ui.blurArgb
 import kotlin.math.roundToInt
 
 internal object ArtworkBlur {
-    private const val THUMBNAIL_SIZE = 192
+    private const val THUMBNAIL_SIZE = 256
 
     /** Avoid freezing the player's black opening frame as the animated backdrop. */
     fun hasVisibleFrame(bitmap: Bitmap): Boolean {
@@ -37,7 +37,7 @@ internal object ArtworkBlur {
             val pixels = IntArray(width * height)
             small.getPixels(pixels, 0, width, 0, 0, width, height)
             // Gentle frosted-glass softness: keep outlines and artwork colours visible.
-            return Bitmap.createBitmap(blurArgb(pixels, width, height, radius = 4, passes = 2), width, height, Bitmap.Config.ARGB_8888)
+            return Bitmap.createBitmap(blurArgb(pixels, width, height, radius = 3, passes = 1), width, height, Bitmap.Config.ARGB_8888)
         } finally {
             if (small !== source) small.recycle()
         }
