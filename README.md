@@ -52,7 +52,7 @@ The APK is written to `app/build/outputs/apk/debug/app-debug.apk`. To run Androi
 
 Run the unit tests with `./gradlew :app:testDebugUnitTest`. There are no instrumentation tests yet. Playback, folder permissions, and crossfade still need testing on Android devices.
 
-Choose **Immersive art** in the player settings to switch from the vinyl view. Animated artwork uses the m8tec artwork lookup service and Apple-hosted HLS streams; the local cover stays visible when a stream is unavailable.
+Choose **Immersive art** in the player settings to switch from the vinyl view. Nusa reads the playing file's tags and searches Apple's catalog by title and artist. Animated streams come from the m8tec lookup service; the local cover stays visible when a stream is unavailable.
 
 ## Last.fm biographies
 

@@ -5238,7 +5238,7 @@ private fun ImmersiveArtwork(
         song?.id, song?.title, song?.artist, song?.album, animatedArtworkEnabled
     ) {
         animatedArtworkUrl = if (animatedArtworkEnabled) {
-            song?.let { AppleMusicAnimatedArtworkLoader.loadAnimatedArtworkUrl(it) }
+            song?.let { AppleMusicAnimatedArtworkLoader.loadAnimatedArtworkUrl(context, it) }
         } else null
     }
 
