@@ -2952,9 +2952,7 @@ private fun NusaMusicApp(
 
                     1 -> {
                         val vinylLibrary = playerPresentationMode == PlayerPresentationMode.VINYL
-                        val libraryBackground = if (vinylLibrary && !isSystemInDarkTheme()) {
-                            Color(0xFFF5F6FB)
-                        } else MaterialTheme.colorScheme.background
+                        val libraryBackground = MaterialTheme.colorScheme.background
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()

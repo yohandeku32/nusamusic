@@ -44,7 +44,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
@@ -77,9 +76,7 @@ fun VinylSongList(
     val scope = rememberCoroutineScope()
     val fontScale = LocalDensity.current.fontScale.coerceIn(1f, 1.5f)
     val itemHeight = 104.dp * fontScale
-    val cardColor = if (backgroundColor.luminance() > 0.5f) {
-        Color(0xFFFAFBFF)
-    } else MaterialTheme.colorScheme.surface
+    val cardColor = MaterialTheme.colorScheme.surface
     val focusedKey by remember(state) {
         derivedStateOf {
             val layout = state.layoutInfo
