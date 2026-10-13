@@ -128,6 +128,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalDensity
@@ -3746,27 +3747,44 @@ private fun AudioQualityPill(
                     }
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center
                 ) {
                     Image(
                         painter = painterResource(id = R.drawable.dolby_atmos_mark),
-                        contentDescription = info?.codecName ?: "Dolby",
+                        contentDescription = null,
                         contentScale = ContentScale.Fit,
                         colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(
                             if (immersive) Color(0xFF1B1B1B) else MaterialTheme.colorScheme.onSurface
                         ),
-                        modifier = Modifier.size(width = 18.dp, height = 11.dp)
+                        modifier = Modifier.size(width = 19.dp, height = 10.dp)
                     )
 
-                    Spacer(Modifier.width(5.dp))
+                    Spacer(Modifier.width(4.dp))
 
                     Text(
-                        text = info?.codecName ?: "Dolby",
+                        text = androidx.compose.ui.text.buildAnnotatedString {
+                            withStyle(
+                                androidx.compose.ui.text.SpanStyle(
+                                    fontWeight = FontWeight.Bold
+                                )
+                            ) {
+                                append("Dolby")
+                            }
+                            append(" ")
+                            withStyle(
+                                androidx.compose.ui.text.SpanStyle(
+                                    fontWeight = FontWeight.Light
+                                )
+                            ) {
+                                append("Atmos")
+                            }
+                        },
                         fontSize = 10.sp,
-                        lineHeight = 12.sp,
-                        fontWeight = FontWeight.Medium,
+                        lineHeight = 11.sp,
+                        letterSpacing = (-0.35).sp,
+                        maxLines = 1,
                         color = if (immersive) {
                             Color(0xFF1B1B1B)
                         } else {
