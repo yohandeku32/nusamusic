@@ -33,7 +33,7 @@ fun VinylTonearm(
     } else 0f
 
     // Follow the grooves slowly; the stylus parks outside the disc.
-    val targetAngle = if (isPlaying && hasSong) progress * (if (mountedOnDeck) 14f else 12f) else -11f
+    val targetAngle = if (isPlaying && hasSong) -8f + progress * 18f else -15f
     val armAngle by animateFloatAsState(
         targetValue = targetAngle,
         animationSpec = spring(
@@ -49,7 +49,8 @@ fun VinylTonearm(
             size.width * (if (mountedOnDeck) 0.86f else 0.88f),
             size.height * (if (mountedOnDeck) 0.175f else 0.145f)
         )
-        fun pos(x: Float, y: Float) = pivot + Offset(x * unit, y * unit)
+        // Shorten the lower arm by 20%, without squashing the silver counterweight.
+        fun pos(x: Float, y: Float) = pivot + Offset(x * unit, (if (y > 0f) y * 0.80f else y) * unit)
         fun Path.move(x: Float, y: Float) {
             val p = pos(x, y)
             moveTo(p.x, p.y)
@@ -65,22 +66,8 @@ fun VinylTonearm(
             cubicTo(a.x, a.y, b.x, b.y, c.x, c.y)
         }
 
-        // Subtle bearing mount and cueing lever, both fixed to the deck.
+        // Only a subtle fixed bearing shadow; no decorative side levers.
         drawCircle(Color.Black.copy(alpha = 0.09f), unit * 0.063f, pos(0.005f, 0.005f))
-        drawCircle(Color(0xFFB6BEC1), unit * 0.054f, pivot)
-        val rest = Path().apply {
-            move(-0.155f, 0.115f)
-            curve(-0.107f, 0.151f, -0.063f, 0.160f, -0.010f, 0.142f)
-        }
-        drawPath(rest, Color(0xFF252B2E), style = Stroke(unit * 0.013f, cap = StrokeCap.Round))
-        drawLine(
-            Color(0xFF879094), pos(0.017f, 0.145f), pos(0.147f, 0.145f),
-            strokeWidth = unit * 0.006f, cap = StrokeCap.Round
-        )
-        drawLine(
-            Color(0xFF252B2E), pos(0.111f, 0.145f), pos(0.151f, 0.145f),
-            strokeWidth = unit * 0.008f, cap = StrokeCap.Round
-        )
 
         rotate(degrees = armAngle, pivot = pivot) {
             // Brushed silver cylindrical counterweight and short black stem.
