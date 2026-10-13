@@ -34,7 +34,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -53,7 +52,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yohandeku32.nusamusic.model.Song
-import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.pow
 
@@ -73,7 +71,6 @@ fun VinylSongList(
     artwork: @Composable (Song, Modifier) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val scope = rememberCoroutineScope()
     val fontScale = LocalDensity.current.fontScale.coerceIn(1f, 1.5f)
     val itemHeight = 104.dp * fontScale
     val cardColor = MaterialTheme.colorScheme.surface
@@ -102,7 +99,7 @@ fun VinylSongList(
             ),
             modifier = Modifier.fillMaxSize()
         ) {
-            itemsIndexed(songs, key = { _, song -> song.id }, contentType = { _, _ -> "vinyl-song" }) { index, song ->
+            itemsIndexed(songs, key = { _, song -> song.id }, contentType = { _, _ -> "vinyl-song" }) { _, song ->
                 val focused = focusedKey == song.id
                 VinylSongRow(
                     song = song,
@@ -114,7 +111,6 @@ fun VinylSongList(
                     pauseLabel = pauseLabel,
                     unknownArtistLabel = unknownArtistLabel,
                     onClick = {
-                        scope.launch { state.animateScrollToItem(index) }
                         if (currentSongId == song.id) onTogglePlay() else onPlay(song)
                     },
                     artwork = artwork,
