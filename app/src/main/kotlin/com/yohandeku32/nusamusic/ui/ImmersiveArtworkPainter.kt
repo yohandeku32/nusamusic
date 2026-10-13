@@ -82,20 +82,28 @@ internal class ImmersiveArtworkPainter(
     }
 }
 
-/** Muted colour used while the blurred cover is loading. */
+/** Artwork-tinted backdrop while the full-resolution blur is loading. */
 internal fun artworkBackdropColor(pixels: IntArray): Color {
     if (pixels.isEmpty()) return Color(0xFF141414)
-    var red = 0L
-    var green = 0L
-    var blue = 0L
+    var red = 0f
+    var green = 0f
+    var blue = 0f
+    var totalWeight = 0f
     for (pixel in pixels) {
-        red += (pixel shr 16) and 0xFF
-        green += (pixel shr 8) and 0xFF
-        blue += pixel and 0xFF
+        val r = (pixel shr 16) and 0xFF
+        val g = (pixel shr 8) and 0xFF
+        val b = pixel and 0xFF
+        // Give colourful areas more weight so mixed artwork does not turn grey.
+        val chroma = (maxOf(r, g, b) - minOf(r, g, b)) / 255f
+        val weight = 0.35f + 1.65f * chroma
+        red += r * weight
+        green += g * weight
+        blue += b * weight
+        totalWeight += weight
     }
     return Color(
-        red = (red / pixels.size * 0.38f).toInt(),
-        green = (green / pixels.size * 0.38f).toInt(),
-        blue = (blue / pixels.size * 0.38f).toInt()
+        red = (red / totalWeight * 0.78f).toInt().coerceIn(0, 255),
+        green = (green / totalWeight * 0.78f).toInt().coerceIn(0, 255),
+        blue = (blue / totalWeight * 0.78f).toInt().coerceIn(0, 255)
     )
 }
