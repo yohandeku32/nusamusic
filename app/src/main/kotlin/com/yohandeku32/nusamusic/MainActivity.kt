@@ -149,7 +149,7 @@ import com.yohandeku32.nusamusic.data.MusicRepository
 import com.yohandeku32.nusamusic.model.PlayerPresentationMode
 import com.yohandeku32.nusamusic.model.Song
 import com.yohandeku32.nusamusic.playback.PlaybackService
-import com.yohandeku32.nusamusic.ui.VINYL_LABEL_FRACTION
+import com.yohandeku32.nusamusic.ui.vinylLabelDiameter
 import com.yohandeku32.nusamusic.ui.VinylLabelPainter
 import com.yohandeku32.nusamusic.ui.VinylPainter
 import com.yohandeku32.nusamusic.ui.resolveArtworkBottom
@@ -4594,10 +4594,12 @@ private fun VinylRecord(
         }
     }
 
-    Box(
+    BoxWithConstraints(
         modifier = modifier,
         contentAlignment = Alignment.Center
     ) {
+        val labelPixels = vinylLabelDiameter(minOf(constraints.maxWidth, constraints.maxHeight))
+        val labelSize = with(LocalDensity.current) { labelPixels.toDp() }
         // The cast shadow belongs to the turntable lighting, not the spinning surface.
         Box(
             Modifier
@@ -4632,7 +4634,7 @@ private fun VinylRecord(
             // A 12-inch record's paper label is approximately a third of its diameter.
             Box(
                 modifier = Modifier
-                    .fillMaxSize(VINYL_LABEL_FRACTION)
+                    .size(labelSize)
                     .clip(CircleShape)
                     .background(Color(0xFF202321))
             ) {
@@ -5206,6 +5208,7 @@ private fun ImmersiveArtwork(
     var staticBlur by remember(song?.uri, song?.albumId) { mutableStateOf<Bitmap?>(null) }
     var backdrop by remember(song?.uri, song?.albumId) { mutableStateOf(Color(0xFF141414)) }
     var animatedArtworkUrl by remember(song?.id, song?.uri) { mutableStateOf<String?>(null) }
+    var artworkReloadAttempt by remember(song?.uri) { mutableIntStateOf(0) }
     var frozenAnimatedBlur by remember(song?.uri, animatedArtworkUrl) { mutableStateOf<Bitmap?>(null) }
 
     LaunchedEffect(song?.uri, song?.albumId) {
@@ -5235,11 +5238,23 @@ private fun ImmersiveArtwork(
     }
 
     LaunchedEffect(
-        song?.id, song?.title, song?.artist, song?.album, animatedArtworkEnabled
+        song?.id, song?.title, song?.artist, song?.album, animatedArtworkEnabled, isVisible, artworkReloadAttempt
     ) {
-        animatedArtworkUrl = if (animatedArtworkEnabled) {
-            song?.let { AppleMusicAnimatedArtworkLoader.loadAnimatedArtworkUrl(context, it) }
-        } else null
+        if (!animatedArtworkEnabled || song == null) {
+            animatedArtworkUrl = null
+            return@LaunchedEffect
+        }
+        if (!isVisible) return@LaunchedEffect
+        repeat(2) { attempt ->
+            val url = AppleMusicAnimatedArtworkLoader.loadAnimatedArtworkUrl(
+                context, song, forceRefresh = artworkReloadAttempt > 0 || attempt > 0
+            )
+            if (url != null) {
+                animatedArtworkUrl = url
+                return@LaunchedEffect
+            }
+            if (attempt == 0) delay(1_500L)
+        }
     }
 
     val activeBlur = if (animatedArtworkEnabled && animatedArtworkUrl != null) {
@@ -5327,7 +5342,11 @@ private fun ImmersiveArtwork(
                         }
                     },
                     onUnavailable = {
-                        if (animatedArtworkUrl == activeUrl) animatedArtworkUrl = null
+                        if (animatedArtworkUrl == activeUrl) {
+                            val alternative = AppleMusicAnimatedArtworkLoader.nextPlaybackUrl(activeUrl)
+                            animatedArtworkUrl = alternative
+                            if (alternative == null && artworkReloadAttempt < 1) artworkReloadAttempt++
+                        }
                     }
                 )
             }
@@ -5355,8 +5374,10 @@ private fun AnimatedArtworkVideoBackground(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var videoReady by remember(url) { mutableStateOf(false) }
+    var playbackRetryCount by remember(url) { mutableIntStateOf(0) }
     var artworkPlayerView by remember { mutableStateOf<androidx.media3.ui.PlayerView?>(null) }
     val onBackdropReadyCallback by rememberUpdatedState(onBackdropReady)
+    val onUnavailableCallback by rememberUpdatedState(onUnavailable)
 
     val player = remember(url) {
         val trackSelector = androidx.media3.exoplayer.trackselection.DefaultTrackSelector(context).apply {
@@ -5410,6 +5431,14 @@ private fun AnimatedArtworkVideoBackground(
         }
     }
 
+    LaunchedEffect(player, playbackRetryCount) {
+        if (playbackRetryCount > 0) {
+            delay(750L * playbackRetryCount)
+            player.prepare()
+            player.playWhenReady = true
+        }
+    }
+
     androidx.compose.runtime.DisposableEffect(player, url) {
         val listener = object : Player.Listener {
             override fun onRenderedFirstFrame() {
@@ -5417,7 +5446,9 @@ private fun AnimatedArtworkVideoBackground(
             }
 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                onUnavailable()
+                if (error.errorCode in 2000..2999 && playbackRetryCount < 2) {
+                    playbackRetryCount++
+                } else onUnavailableCallback()
             }
         }
 

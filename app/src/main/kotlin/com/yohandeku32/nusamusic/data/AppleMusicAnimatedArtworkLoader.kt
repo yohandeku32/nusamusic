@@ -20,83 +20,79 @@ object AppleMusicAnimatedArtworkLoader {
     private const val API_URL = "https://artwork.m8tec.top/api/v1/artwork"
     private const val CATALOG_URL = "https://itunes.apple.com/search"
     private const val POSITIVE_CACHE_MS = 12 * 60 * 60 * 1000L
-    private const val NEGATIVE_CACHE_MS = 30 * 60 * 1000L
-    private const val ERROR_CACHE_MS = 2 * 60 * 1000L
+    private const val NEGATIVE_CACHE_MS = 60 * 1000L
+    private const val ERROR_CACHE_MS = 5 * 1000L
     private const val MAX_CACHE_ENTRIES = 300
 
-    private data class CacheEntry(val url: String?, val expiresAtMs: Long)
+    private data class CacheEntry(val url: String?, val expiresAtMs: Long, val alternatives: List<String> = emptyList())
     private data class JsonResponse(val body: JSONObject? = null, val failed: Boolean = false)
     private val cache = LinkedHashMap<String, CacheEntry>(64, 0.75f, true)
 
-    suspend fun loadAnimatedArtworkUrl(context: Context, song: Song): String? = withContext(Dispatchers.IO) {
+    suspend fun loadAnimatedArtworkUrl(context: Context, song: Song, forceRefresh: Boolean = false): String? = withContext(Dispatchers.IO) {
         val metadata = artworkLookupMetadata(song, readEmbeddedMetadata(context, song))
         val now = System.currentTimeMillis()
         synchronized(cache) {
             val cached = cache[metadata.cacheKey]
-            if (cached != null && cached.expiresAtMs > now) return@withContext cached.url
-            if (cached != null) cache.remove(metadata.cacheKey)
+            if (!forceRefresh && cached != null && cached.expiresAtMs > now) return@withContext cached.url
+            if (cached != null && cached.expiresAtMs <= now) cache.remove(metadata.cacheKey)
         }
 
-        fun finish(url: String?, failed: Boolean = false): String? {
+        fun finish(url: String?, failed: Boolean = false, alternatives: List<String> = emptyList()): String? {
             val duration = if (url != null) POSITIVE_CACHE_MS else if (failed) ERROR_CACHE_MS else NEGATIVE_CACHE_MS
+            var resolvedUrl = url
             synchronized(cache) {
-                cache[metadata.cacheKey] = CacheEntry(url, System.currentTimeMillis() + duration)
+                val previous = cache[metadata.cacheKey]
+                if (url == null && previous?.url != null && previous.expiresAtMs > System.currentTimeMillis()) {
+                    // A temporary lookup failure must not replace a known working stream.
+                    resolvedUrl = previous.url
+                } else cache[metadata.cacheKey] = CacheEntry(url, System.currentTimeMillis() + duration, alternatives)
                 while (cache.size > MAX_CACHE_ENTRIES) cache.remove(cache.entries.first().key)
             }
-            return url
+            return resolvedUrl
         }
 
-        var catalogFailed = false
-        val attemptedAlbums = HashSet<String>()
-        if (metadata.canSearchCatalog) {
-            val localCountry = Locale.getDefault().country.uppercase(Locale.ROOT)
-                .takeIf { it.matches(Regex("[A-Z]{2}")) } ?: "US"
-            val countries = listOf(localCountry, "US", "ID").distinct()
-            val artists = metadata.artists.take(2)
-            val searches = artists.flatMap { artist -> countries.map { it to artist } }.take(4)
-            catalog@ for ((country, artist) in searches) {
-                currentCoroutineContext().ensureActive()
-                val term = artworkSearchTitle(metadata.title) + " " + artist
+        val result = resolveAnimatedArtwork(
+            metadata = metadata,
+            libraryMetadata = artworkLookupMetadata(song, null),
+            country = Locale.getDefault().country.uppercase(Locale.ROOT)
+                .takeIf { it.matches(Regex("[A-Z]{2}")) } ?: "US",
+            searchAlbum = { query ->
+                requestArtwork(
+                    API_URL + "/search?artist=${Uri.encode(query.artist)}&album=${Uri.encode(query.album)}" +
+                        (if (query.title.isNotBlank()) "&title=${Uri.encode(query.title)}" else "")
+                )
+            },
+            searchCatalog = { term, country ->
                 val response = readJson(
                     CATALOG_URL + "?term=${Uri.encode(term)}&entity=song&media=music&limit=20&explicit=Yes&country=$country"
                 )
-                currentCoroutineContext().ensureActive()
-                if (response.failed) {
-                    catalogFailed = true
-                    break
-                }
-                val candidates = matchingAppleAlbums(metadata, catalogSongs(response.body, country))
-                for (candidate in candidates.take(2)) {
-                    val albumUrl = appleMusicAlbumUrl(candidate.albumUrl) ?: continue
-                    if (!attemptedAlbums.add(albumUrl.substringAfterLast('/'))) continue
-                    val artwork = readJson(API_URL + "/url?url=${Uri.encode(albumUrl)}")
-                    currentCoroutineContext().ensureActive()
-                    if (artwork.failed) return@withContext finish(null, failed = true)
-                    val found = animatedUrl(artwork.body)
-                    if (found != null) return@withContext finish(found)
-                    if (attemptedAlbums.size >= 3) break@catalog
-                }
-            }
-        }
+                CatalogReply(catalogSongs(response.body, country), response.failed)
+            },
+            loadAlbumUrl = { url -> requestArtwork(API_URL + "/url?url=${Uri.encode(url)}") }
+        )
+        finish(result.url, result.failed, result.alternatives)
+    }
 
-        // Retain album lookup for tracks absent from iTunes, using both track and album artists.
-        if (metadata.album.isNotBlank()) {
-            val queries = listOf(metadata.album, artworkSearchAlbum(metadata.album)).distinct().flatMap { album ->
-                metadata.artists.map { artist -> artist to album }
-            }.distinct().take(3)
-            for ((artist, album) in queries) {
-                currentCoroutineContext().ensureActive()
-                val response = readJson(
-                    API_URL + "/search?artist=${Uri.encode(artist)}&album=${Uri.encode(album)}" +
-                        (if (metadata.title.isNotBlank()) "&title=${Uri.encode(artworkSearchTitle(metadata.title))}" else "")
-                )
-                currentCoroutineContext().ensureActive()
-                if (response.failed) return@withContext finish(null, failed = true)
-                val found = animatedUrl(response.body)
-                if (found != null) return@withContext finish(found)
-            }
+    fun nextPlaybackUrl(failedUrl: String): String? = synchronized(cache) {
+        var nextUrl: String? = null
+        val entries = cache.entries.iterator()
+        while (entries.hasNext()) {
+            val entry = entries.next()
+            if (entry.value.url != failedUrl) continue
+            val remaining = ArtworkReply(entry.value.url, alternatives = entry.value.alternatives)
+                .afterPlaybackFailure(failedUrl)
+            if (remaining.url != null) {
+                entry.setValue(CacheEntry(remaining.url, entry.value.expiresAtMs, remaining.alternatives))
+                if (nextUrl == null) nextUrl = remaining.url
+            } else entries.remove()
         }
-        finish(null, failed = catalogFailed)
+        nextUrl
+    }
+
+    private suspend fun requestArtwork(endpoint: String): ArtworkReply {
+        val response = readJson(endpoint)
+        val urls = animatedUrls(response.body)
+        return ArtworkReply(urls.firstOrNull(), response.failed, urls.drop(1))
     }
 
     private fun readEmbeddedMetadata(context: Context, song: Song): ArtworkLookupMetadata? {
@@ -136,9 +132,10 @@ object AppleMusicAnimatedArtworkLoader {
         }
     }
 
-    private fun readJson(endpoint: String): JsonResponse {
+    private suspend fun readJson(endpoint: String): JsonResponse {
+        currentCoroutineContext().ensureActive()
         var connection: HttpsURLConnection? = null
-        return try {
+        val response = try {
             connection = URL(endpoint).openConnection() as HttpsURLConnection
             connection.connectTimeout = 4_500
             connection.readTimeout = 7_000
@@ -159,11 +156,15 @@ object AppleMusicAnimatedArtworkLoader {
         } finally {
             connection?.disconnect()
         }
+        currentCoroutineContext().ensureActive()
+        return response
     }
 
-    private fun animatedUrl(json: JSONObject?): String? = sequenceOf("url_tall", "url")
+    private fun animatedUrls(json: JSONObject?): List<String> = sequenceOf("url_tall", "url")
         .mapNotNull { key -> json?.optString(key)?.takeIf { it.isNotBlank() && it != "null" } }
-        .firstOrNull(::isAppleArtworkUrl)
+        .filter(::isAppleArtworkUrl)
+        .distinct()
+        .toList()
 
     private fun isAppleArtworkUrl(value: String): Boolean = runCatching {
         val parsed = URL(value)
