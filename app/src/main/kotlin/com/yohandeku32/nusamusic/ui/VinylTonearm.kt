@@ -32,7 +32,7 @@ fun VinylTonearm(
         (positionMs.toFloat() / durationMs).coerceIn(0f, 1f)
     } else 0f
 
-    // Park outside the disc. During playback, track its grooves but not the artwork.
+    // Follow the grooves slowly; the stylus parks outside the disc.
     val targetAngle = if (isPlaying && hasSong) progress * (if (mountedOnDeck) 14f else 12f) else -11f
     val armAngle by animateFloatAsState(
         targetValue = targetAngle,
@@ -49,83 +49,122 @@ fun VinylTonearm(
             size.width * (if (mountedOnDeck) 0.86f else 0.88f),
             size.height * (if (mountedOnDeck) 0.175f else 0.145f)
         )
-        fun point(x: Float, y: Float) = pivot + Offset(x * unit, y * unit)
+        fun pos(x: Float, y: Float) = pivot + Offset(x * unit, y * unit)
+        fun Path.move(x: Float, y: Float) {
+            val p = pos(x, y)
+            moveTo(p.x, p.y)
+        }
+        fun Path.line(x: Float, y: Float) {
+            val p = pos(x, y)
+            lineTo(p.x, p.y)
+        }
+        fun Path.curve(x1: Float, y1: Float, x2: Float, y2: Float, x3: Float, y3: Float) {
+            val a = pos(x1, y1)
+            val b = pos(x2, y2)
+            val c = pos(x3, y3)
+            cubicTo(a.x, a.y, b.x, b.y, c.x, c.y)
+        }
 
-        // Fixed, low-profile bearing: visibly smaller than the old assembly.
-        drawCircle(Color.Black.copy(alpha = 0.12f), radius = unit * 0.046f, center = point(0.006f, 0.008f))
-        drawCircle(Color(0xFF343A3C), radius = unit * 0.039f, center = pivot)
-        drawCircle(
-            brush = Brush.linearGradient(
-                colors = listOf(Color(0xFFF5F6F6), Color(0xFF858E91), Color(0xFFD9DDDF)),
-                start = point(-0.035f, -0.035f),
-                end = point(0.035f, 0.035f)
-            ),
-            radius = unit * 0.032f,
-            center = pivot
+        // Subtle bearing mount and cueing lever, both fixed to the deck.
+        drawCircle(Color.Black.copy(alpha = 0.09f), unit * 0.063f, pos(0.005f, 0.005f))
+        drawCircle(Color(0xFFB6BEC1), unit * 0.054f, pivot)
+        val rest = Path().apply {
+            move(-0.155f, 0.115f)
+            curve(-0.107f, 0.151f, -0.063f, 0.160f, -0.010f, 0.142f)
+        }
+        drawPath(rest, Color(0xFF252B2E), style = Stroke(unit * 0.013f, cap = StrokeCap.Round))
+        drawLine(
+            Color(0xFF879094), pos(0.017f, 0.145f), pos(0.147f, 0.145f),
+            strokeWidth = unit * 0.006f, cap = StrokeCap.Round
+        )
+        drawLine(
+            Color(0xFF252B2E), pos(0.111f, 0.145f), pos(0.151f, 0.145f),
+            strokeWidth = unit * 0.008f, cap = StrokeCap.Round
         )
 
         rotate(degrees = armAngle, pivot = pivot) {
-            // Compact counterweight and slim curved chrome tube.
+            // Brushed silver cylindrical counterweight and short black stem.
             drawRoundRect(
-                brush = Brush.horizontalGradient(listOf(Color(0xFF454A4C), Color(0xFFE8EBEC), Color(0xFF696F72))),
-                topLeft = point(-0.027f, -0.108f),
-                size = Size(unit * 0.054f, unit * 0.090f),
-                cornerRadius = CornerRadius(unit * 0.010f)
+                color = Color(0xFF171C1E),
+                topLeft = pos(-0.018f, -0.067f),
+                size = Size(unit * 0.036f, unit * 0.080f),
+                cornerRadius = CornerRadius(unit * 0.004f)
             )
-            drawLine(
-                color = Color(0xFF262B2D),
-                start = point(-0.027f, -0.048f),
-                end = point(0.027f, -0.048f),
-                strokeWidth = unit * 0.006f
+            drawRoundRect(
+                brush = Brush.horizontalGradient(
+                    listOf(Color(0xFF667075), Color(0xFFF7FAFB), Color(0xFFADB5B9), Color(0xFF4C565B))
+                ),
+                topLeft = pos(-0.055f, -0.128f),
+                size = Size(unit * 0.110f, unit * 0.064f),
+                cornerRadius = CornerRadius(unit * 0.008f)
             )
+            drawCircle(Color(0xFF323B3F), unit * 0.005f, pos(0f, -0.093f))
 
+            // Straight black tube with a restrained bend, like the reference.
             val tube = Path().apply {
-                moveTo(point(0f, 0.034f).x, point(0f, 0.034f).y)
-                cubicTo(
-                    point(-0.012f, 0.230f).x, point(-0.012f, 0.230f).y,
-                    point(0.070f, 0.355f).x, point(0.070f, 0.355f).y,
-                    point(-0.050f, 0.470f).x, point(-0.050f, 0.470f).y
-                )
-                cubicTo(
-                    point(-0.095f, 0.515f).x, point(-0.095f, 0.515f).y,
-                    point(-0.110f, 0.538f).x, point(-0.110f, 0.538f).y,
-                    point(-0.132f, 0.547f).x, point(-0.132f, 0.547f).y
-                )
+                move(0f, 0.042f)
+                curve(0.001f, 0.215f, -0.011f, 0.413f, -0.043f, 0.563f)
             }
-            drawPath(tube, Color.Black.copy(alpha = 0.13f), style = Stroke(width = unit * 0.019f, cap = StrokeCap.Round))
-            drawPath(tube, Color(0xFF5D6569), style = Stroke(width = unit * 0.013f, cap = StrokeCap.Round))
+            drawPath(tube, Color.Black.copy(alpha = 0.16f), style = Stroke(unit * 0.025f, cap = StrokeCap.Round))
+            drawPath(tube, Color(0xFF161B1D), style = Stroke(unit * 0.018f, cap = StrokeCap.Round))
             drawPath(
                 tube,
-                brush = Brush.linearGradient(
-                    listOf(Color(0xFFFCFDFD), Color(0xFFB2BBC0), Color(0xFFFCFDFD)),
-                    start = point(-0.12f, 0.35f),
-                    end = point(0.065f, 0.35f)
-                ),
-                style = Stroke(width = unit * 0.008f, cap = StrokeCap.Round)
+                Color(0xFF4D565A).copy(alpha = 0.75f),
+                style = Stroke(unit * 0.003f, cap = StrokeCap.Round)
             )
 
-            // Small angled headshell and stylus, clear of the central label.
-            val cartridge = Path().apply {
-                moveTo(point(-0.128f, 0.540f).x, point(-0.128f, 0.540f).y)
-                lineTo(point(-0.106f, 0.565f).x, point(-0.106f, 0.565f).y)
-                lineTo(point(-0.145f, 0.601f).x, point(-0.145f, 0.601f).y)
-                lineTo(point(-0.171f, 0.580f).x, point(-0.171f, 0.580f).y)
+            // Small red tube keeper.
+            drawRoundRect(
+                color = Color(0xFFB13B35),
+                topLeft = pos(-0.027f, 0.382f),
+                size = Size(unit * 0.034f, unit * 0.028f),
+                cornerRadius = CornerRadius(unit * 0.003f)
+            )
+            drawLine(
+                Color(0xFF171B1D), pos(-0.010f, 0.382f), pos(-0.012f, 0.410f),
+                strokeWidth = unit * 0.019f, cap = StrokeCap.Round
+            )
+
+            // Narrow headshell clamp with two metal fasteners.
+            drawLine(
+                Color(0xFF25292B), pos(-0.081f, 0.561f), pos(-0.004f, 0.566f),
+                strokeWidth = unit * 0.014f, cap = StrokeCap.Round
+            )
+            drawCircle(Color(0xFFE0E5E6), unit * 0.005f, pos(-0.077f, 0.561f))
+            drawCircle(Color(0xFFE0E5E6), unit * 0.005f, pos(-0.010f, 0.566f))
+
+            // Angled black cartridge with a fine needle at the outer grooves.
+            val headshell = Path().apply {
+                move(-0.054f, 0.567f)
+                line(-0.020f, 0.582f)
+                line(-0.101f, 0.656f)
+                line(-0.145f, 0.638f)
                 close()
             }
-            drawPath(cartridge, Color(0xFF252A2C))
+            drawPath(headshell, Color(0xFF222729))
             drawLine(
-                color = Color(0xFFC9D0D2),
-                start = point(-0.146f, 0.581f),
-                end = point(-0.170f, 0.615f),
-                strokeWidth = unit * 0.006f,
-                cap = StrokeCap.Round
+                Color(0xFF697174), pos(-0.096f, 0.651f), pos(-0.137f, 0.635f),
+                strokeWidth = unit * 0.003f
             )
-            drawCircle(Color(0xFF33383A), radius = unit * 0.004f, center = point(-0.170f, 0.615f))
+            drawCircle(Color(0xFFEDF0F1), unit * 0.005f, pos(-0.113f, 0.629f))
+            drawLine(
+                Color(0xFF171B1D), pos(-0.143f, 0.639f), pos(-0.170f, 0.650f),
+                strokeWidth = unit * 0.006f, cap = StrokeCap.Round
+            )
+            drawCircle(Color(0xFFCED3D5), unit * 0.003f, pos(-0.170f, 0.650f))
         }
 
-        // The hub stays fixed while only the arm rotates.
-        drawCircle(Color(0xFF222729), radius = unit * 0.020f, center = pivot)
-        drawCircle(Color(0xFFC6CDCF), radius = unit * 0.012f, center = pivot)
-        drawCircle(Color(0xFF5F686C), radius = unit * 0.005f, center = pivot)
+        // The silver circular pivot face remains stationary while the arm swings.
+        drawCircle(Color(0xFF697277), unit * 0.050f, pivot)
+        drawCircle(
+            brush = Brush.linearGradient(
+                colors = listOf(Color(0xFFFFFFFF), Color(0xFFE4E9EB), Color(0xFFABB5BA)),
+                start = pos(-0.042f, -0.042f),
+                end = pos(0.042f, 0.042f)
+            ),
+            radius = unit * 0.044f,
+            center = pivot
+        )
+        drawCircle(Color(0xFFB0B8BC).copy(alpha = 0.65f), unit * 0.044f, pivot, style = Stroke(unit * 0.0015f))
     }
 }
