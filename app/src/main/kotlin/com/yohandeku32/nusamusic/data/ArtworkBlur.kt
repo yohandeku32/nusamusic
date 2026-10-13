@@ -9,6 +9,24 @@ import kotlin.math.roundToInt
 internal object ArtworkBlur {
     private const val THUMBNAIL_SIZE = 128
 
+    /** Avoid freezing the player's black opening frame as the animated backdrop. */
+    fun hasVisibleFrame(bitmap: Bitmap): Boolean {
+        for (row in 0 until 8) {
+            for (column in 0 until 8) {
+                val x = ((column + 0.5f) / 8f * bitmap.width).toInt()
+                    .coerceIn(0, bitmap.width - 1)
+                val y = ((row + 0.5f) / 8f * bitmap.height).toInt()
+                    .coerceIn(0, bitmap.height - 1)
+                val pixel = bitmap.getPixel(x, y)
+                if (((pixel shr 16) and 0xFF) > 40 ||
+                    ((pixel shr 8) and 0xFF) > 40 ||
+                    (pixel and 0xFF) > 40
+                ) return true
+            }
+        }
+        return false
+    }
+
     // The caller runs this on Dispatchers.Default, never on the UI thread.
     fun create(source: Bitmap): Bitmap {
         val scale = THUMBNAIL_SIZE.toFloat() / maxOf(source.width, source.height)

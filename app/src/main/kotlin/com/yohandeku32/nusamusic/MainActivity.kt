@@ -2565,7 +2565,7 @@ private fun NusaMusicApp(
                                         }
                                     )
 
-                                    Column(
+                                    BoxWithConstraints(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .then(
@@ -2575,9 +2575,19 @@ private fun NusaMusicApp(
                                                     Modifier
                                                 }
                                             )
-                                            .padding(horizontal = 22.dp),
-                                        horizontalAlignment = Alignment.CenterHorizontally
+                                            .padding(horizontal = 22.dp)
                                     ) {
+                                        val playerContentHeight = maxHeight
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .then(
+                                                    if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
+                                                        Modifier.fillMaxHeight()
+                                                    } else Modifier
+                                                ),
+                                            horizontalAlignment = Alignment.CenterHorizontally
+                                        ) {
                                         val immersiveArtworkMode =
                                             playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
                                         val titleText =
@@ -2603,45 +2613,26 @@ private fun NusaMusicApp(
                                                 else -> (31f * scale).sp
                                             }
                                         }
-                                        val screenWidthDp =
-                                            androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
-                                        val estimatedTitleLines = remember(titleText, titleSize, screenWidthDp) {
-                                            val availableWidthDp = (screenWidthDp - 52f).coerceAtLeast(120f)
-                                            val estimatedCharacterWidthDp = (titleSize.value * 0.60f).coerceAtLeast(1f)
-                                            val estimatedCharactersPerLine =
-                                                (availableWidthDp / estimatedCharacterWidthDp).coerceAtLeast(1f)
-                                            kotlin.math.ceil(
-                                                titleText.length / estimatedCharactersPerLine
-                                            ).toInt().coerceIn(1, 6)
-                                        }
-                                        val titleLineHeightDp = with(
+                                        val threeLineTitleHeight = with(
                                             androidx.compose.ui.platform.LocalDensity.current
                                         ) {
-                                            titleLineHeight.toDp()
+                                            ((titleFontSize * 37f / 34f).sp).toDp() * 3f + 6.dp
                                         }
                                         val titleBoxHeight = if (immersiveArtworkMode) {
-                                            maxOf(
-                                                82.dp,
-                                                titleLineHeightDp * estimatedTitleLines.toFloat() + 8.dp
-                                            )
+                                            maxOf(104.dp, threeLineTitleHeight)
                                         } else {
                                             82.dp
                                         }
-                                        val titleExtraHeight = titleBoxHeight - 82.dp
 
                                         if (playerPresentationMode == PlayerPresentationMode.VINYL) {
                                             Spacer(Modifier.height(2.dp))
                                         } else {
-                                            val screenHeight =
-                                                androidx.compose.ui.platform.LocalConfiguration.current
-                                                    .screenHeightDp.dp
+                                            // Reserve the lower controls first; this space only fills
+                                            // what is left and cannot push them down for a long title.
+                                            val heroSpace = (playerContentHeight - titleBoxHeight - 322.dp)
+                                                .coerceIn(0.dp, playerContentHeight * 0.33f)
                                             Spacer(
-                                                Modifier.height(
-                                                    (
-                                                        (screenHeight * 0.30f).coerceIn(160.dp, 250.dp) +
-                                                            16.dp - titleExtraHeight
-                                                    ).coerceAtLeast(0.dp)
-                                                )
+                                                Modifier.height(heroSpace)
                                             )
                                         }
 
@@ -2673,12 +2664,8 @@ private fun NusaMusicApp(
                                                 fontWeight = FontWeight.Bold,
                                                 fontSize = titleSize,
                                                 lineHeight = titleLineHeight,
-                                                maxLines = if (immersiveArtworkMode) estimatedTitleLines else 3,
-                                                overflow = if (immersiveArtworkMode) {
-                                                    androidx.compose.ui.text.style.TextOverflow.Clip
-                                                } else {
-                                                    androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                                },
+                                                maxLines = 3,
+                                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                                 modifier = Modifier.padding(horizontal = 4.dp),
                                                 color = if (
                                                     playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
@@ -2701,6 +2688,7 @@ private fun NusaMusicApp(
                                                 ),
                                             fontSize = 14.sp,
                                             maxLines = 1,
+                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                             textAlign = TextAlign.Center,
                                             color = if (
                                                 playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
@@ -2711,7 +2699,13 @@ private fun NusaMusicApp(
                                             }
                                         )
 
-                                        Spacer(Modifier.height(16.dp))
+                                        if (immersiveArtworkMode) {
+                                            Spacer(Modifier.height(10.dp))
+                                            AudioQualityPill(song = currentSong, immersive = true)
+                                            Spacer(Modifier.weight(1f))
+                                        } else {
+                                            Spacer(Modifier.height(16.dp))
+                                        }
 
                                         PlaybackProgress(
                                             positionMsState = positionMsState,
@@ -2917,11 +2911,7 @@ private fun NusaMusicApp(
                                             Spacer(Modifier.height(8.dp))
                                             AudioQualityPill(song = currentSong)
                                         } else {
-                                            Spacer(Modifier.height(20.dp))
-                                            AudioQualityPill(
-                                                song = currentSong,
-                                                immersive = true
-                                            )
+                                            Spacer(Modifier.height(24.dp))
                                         }
 
                                         if (!permissionGranted) {
@@ -2943,6 +2933,7 @@ private fun NusaMusicApp(
                                                 color = Color(0xFF9D9D9D),
                                                 fontSize = 14.sp
                                             )
+                                        }
                                         }
                                     }
                                 }
@@ -5214,6 +5205,28 @@ private suspend fun prepareImmersiveArtwork(bitmap: Bitmap): Pair<Bitmap, Color>
     }
 }
 
+private fun immersiveScrimOpacity(bitmap: Bitmap?): Float {
+    if (bitmap == null) return 0.38f
+    var brightnessSquared = 0f
+    for (row in 0 until 8) {
+        for (column in 0 until 8) {
+            val x = ((column + 0.5f) / 8f * bitmap.width).toInt()
+                .coerceIn(0, bitmap.width - 1)
+            val y = ((row + 0.5f) / 8f * bitmap.height).toInt()
+                .coerceIn(0, bitmap.height - 1)
+            val pixel = bitmap.getPixel(x, y)
+            val luminance = (
+                ((pixel shr 16) and 0xFF) * 0.2126f +
+                    ((pixel shr 8) and 0xFF) * 0.7152f +
+                    (pixel and 0xFF) * 0.0722f
+                ) / 255f
+            brightnessSquared += luminance * luminance
+        }
+    }
+    val brightness = kotlin.math.sqrt(brightnessSquared / 64f)
+    return (0.16f + brightness * 0.48f).coerceIn(0.18f, 0.62f)
+}
+
 @Composable
 private fun ImmersiveArtwork(
     song: Song?,
@@ -5305,6 +5318,12 @@ private fun ImmersiveArtwork(
     val activeBlur = if (animatedArtworkEnabled && animatedArtworkUrl != null) {
         frozenAnimatedBlur ?: staticBlur
     } else staticBlur
+    val targetScrimOpacity = remember(activeBlur) { immersiveScrimOpacity(activeBlur) }
+    val scrimOpacity by animateFloatAsState(
+        targetValue = targetScrimOpacity,
+        animationSpec = tween(durationMillis = 360),
+        label = "immersiveScrimOpacity"
+    )
     val animatedBackdrop by animateColorAsState(
         targetValue = backdrop,
         animationSpec = tween(durationMillis = 360),
@@ -5315,7 +5334,7 @@ private fun ImmersiveArtwork(
         val sharpBottom = resolveArtworkBottom(artistBottomPx, constraints.maxHeight.toFloat())
         val sharpHeight = with(LocalDensity.current) { sharpBottom.toDp() }
 
-        // Reuse the sharp cover's crop and top alignment; clamp its blurred edge down the page.
+        // Match the sharp cover at the seam and reflect its blurred colours below it.
         Crossfade(
             targetState = activeBlur,
             animationSpec = tween(durationMillis = 360),
@@ -5340,7 +5359,7 @@ private fun ImmersiveArtwork(
                             val shader = android.graphics.BitmapShader(
                                 blurBitmap,
                                 android.graphics.Shader.TileMode.CLAMP,
-                                android.graphics.Shader.TileMode.CLAMP
+                                android.graphics.Shader.TileMode.MIRROR
                             ).apply { setLocalMatrix(matrix) }
                             android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG).apply {
                                 this.shader = shader
@@ -5422,6 +5441,7 @@ private fun ImmersiveArtwork(
         Box(
             Modifier
                 .matchParentSize()
+                .graphicsLayer { alpha = scrimOpacity }
                 .drawWithCache {
                     val painter = ImmersiveArtworkPainter(size, sharpBottom, 192.dp.toPx())
                     onDrawBehind { with(painter) { drawScrim() } }
@@ -5441,10 +5461,12 @@ private fun AnimatedArtworkVideoBackground(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var videoReady by remember(url) { mutableStateOf(false) }
+    var videoVisible by remember(url) { mutableStateOf(false) }
     var playbackRetryCount by remember(url) { mutableIntStateOf(0) }
     var artworkPlayerView by remember { mutableStateOf<androidx.media3.ui.PlayerView?>(null) }
     val onBackdropReadyCallback by rememberUpdatedState(onBackdropReady)
     val onUnavailableCallback by rememberUpdatedState(onUnavailable)
+    val shouldCaptureBackdrop by rememberUpdatedState(captureBackdrop)
 
     val player = remember(url) {
         val trackSelector = androidx.media3.exoplayer.trackselection.DefaultTrackSelector(context).apply {
@@ -5477,24 +5499,32 @@ private fun AnimatedArtworkVideoBackground(
         }
     }
 
-    LaunchedEffect(player, artworkPlayerView, videoReady, captureBackdrop) {
+    LaunchedEffect(player, artworkPlayerView, videoReady) {
         val view = artworkPlayerView ?: return@LaunchedEffect
-        if (!videoReady || !captureBackdrop) return@LaunchedEffect
-        // Wait for the TextureView to receive the rendered frame, then capture once.
-        // A few bounded retries cover a surface that is still being attached.
-        repeat(4) {
+        if (!videoReady) return@LaunchedEffect
+        // Freeze the first visible frame. HLS streams may render black opening
+        // frames even after the first-frame callback has fired.
+        repeat(30) {
             androidx.compose.runtime.withFrameNanos { }
             val frame = ArtworkBlur.captureViewport(view)
             if (frame != null) {
-                val blurred = try {
-                    withContext(Dispatchers.Default) { ArtworkBlur.create(frame) }
-                } finally {
-                    frame.recycle()
+                if (ArtworkBlur.hasVisibleFrame(frame)) {
+                    videoVisible = true
+                    if (shouldCaptureBackdrop) {
+                        val blurred = try {
+                            withContext(Dispatchers.Default) { ArtworkBlur.create(frame) }
+                        } finally {
+                            frame.recycle()
+                        }
+                        onBackdropReadyCallback(blurred)
+                    } else {
+                        frame.recycle()
+                    }
+                    return@LaunchedEffect
                 }
-                onBackdropReadyCallback(blurred)
-                return@LaunchedEffect
+                frame.recycle()
             }
-            delay(80L)
+            delay(120L)
         }
     }
 
@@ -5513,6 +5543,8 @@ private fun AnimatedArtworkVideoBackground(
             }
 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                videoReady = false
+                videoVisible = false
                 if (error.errorCode in 2000..2999 && playbackRetryCount < 2) {
                     playbackRetryCount++
                 } else onUnavailableCallback()
@@ -5529,7 +5561,7 @@ private fun AnimatedArtworkVideoBackground(
     }
 
     val videoAlpha by animateFloatAsState(
-        targetValue = if (videoReady) 1f else 0f,
+        targetValue = if (videoVisible) 1f else 0f,
         animationSpec = tween(durationMillis = 360),
         label = "animatedArtworkFade"
     )

@@ -40,7 +40,7 @@ internal class ImmersiveArtworkPainter(
         CanvasDrawScope().draw(
             Density(1f), LayoutDirection.Ltr, Canvas(mask), Size(width.toFloat(), height.toFloat())
         ) {
-            drawRect(if (dark) Color.Black.copy(alpha = 0.58f) else Color.Transparent)
+            drawRect(if (dark) Color.Black else Color.Transparent)
             val contour = Path()
             for (step in 192 downTo 0) {
                 val progress = step / 192f
@@ -56,7 +56,7 @@ internal class ImmersiveArtworkPainter(
                 )
                 contour.lineTo(width.toFloat(), -height.toFloat())
                 contour.close()
-                val colour = if (dark) Color.Black.copy(alpha = 0.58f * smooth)
+                val colour = if (dark) Color.Black.copy(alpha = smooth)
                     else Color.White.copy(alpha = 1f - smooth)
                 drawPath(contour, colour, blendMode = BlendMode.Src)
             }
@@ -94,8 +94,8 @@ internal fun artworkBackdropColor(pixels: IntArray): Color {
         blue += pixel and 0xFF
     }
     return Color(
-        red = (red / pixels.size * 0.30f).toInt(),
-        green = (green / pixels.size * 0.30f).toInt(),
-        blue = (blue / pixels.size * 0.30f).toInt()
+        red = (red / pixels.size * 0.38f).toInt(),
+        green = (green / pixels.size * 0.38f).toInt(),
+        blue = (blue / pixels.size * 0.38f).toInt()
     )
 }
