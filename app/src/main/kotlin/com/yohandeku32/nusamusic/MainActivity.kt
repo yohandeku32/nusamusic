@@ -4821,7 +4821,7 @@ private suspend fun prepareImmersiveArtwork(bitmap: Bitmap): Pair<Bitmap, Color>
 }
 
 private fun immersiveScrimOpacity(bitmap: Bitmap?): Float {
-    if (bitmap == null) return 0.38f
+    if (bitmap == null) return 0.12f
     var brightnessSquared = 0f
     for (row in 0 until 8) {
         for (column in 0 until 8) {
@@ -4839,7 +4839,8 @@ private fun immersiveScrimOpacity(bitmap: Bitmap?): Float {
         }
     }
     val brightness = kotlin.math.sqrt(brightnessSquared / 64f)
-    return (0.16f + brightness * 0.48f).coerceIn(0.18f, 0.62f)
+    // Light tint protection for legibility, not a dark veil over artwork colours.
+    return (0.06f + brightness * 0.18f).coerceIn(0.07f, 0.24f)
 }
 
 @Composable
@@ -5111,6 +5112,15 @@ private fun AnimatedArtworkVideoBackground(
                     .setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8)
                     .build()
             )
+        }
+    }
+
+    // Do not require a successful TextureView screenshot to reveal animated artwork.
+    // Some devices render video correctly but never return a usable capture.
+    LaunchedEffect(player, videoReady) {
+        if (videoReady) {
+            delay(400L)
+            videoVisible = true
         }
     }
 
