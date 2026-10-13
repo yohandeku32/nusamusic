@@ -1,9 +1,18 @@
 package com.yohandeku32.nusamusic.ui
 
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
+import kotlin.math.roundToInt
 
 internal fun resolveArtworkBottom(artistBottom: Float, frameHeight: Float): Float {
     if (frameHeight <= 0f) return 0f
@@ -11,33 +20,65 @@ internal fun resolveArtworkBottom(artistBottom: Float, frameHeight: Float): Floa
         .coerceIn(1f.coerceAtMost(frameHeight), frameHeight)
 }
 
-internal class ImmersiveArtworkPainter(artworkBottom: Float, transition: Float) {
-    private val transitionStart = (artworkBottom - transition).coerceAtLeast(0f)
-    private val artworkFade = Brush.verticalGradient(
-        0f to Color.White,
-        0.20f to Color.White.copy(alpha = 0.94f),
-        0.50f to Color.White.copy(alpha = 0.60f),
-        0.80f to Color.White.copy(alpha = 0.12f),
-        0.98f to Color.Transparent,
-        1f to Color.Transparent,
-        startY = transitionStart,
-        endY = artworkBottom
-    )
-    private val scrim = Brush.verticalGradient(
-        0f to Color.Transparent,
-        0.35f to Color.Black.copy(alpha = 0.12f),
-        0.72f to Color.Black.copy(alpha = 0.40f),
-        1f to Color.Black.copy(alpha = 0.58f),
-        startY = (artworkBottom - transition * 1.5f).coerceAtLeast(0f),
-        endY = artworkBottom
-    )
+internal class ImmersiveArtworkPainter(
+    private val frameSize: Size,
+    private val artworkBottom: Float,
+    private val transition: Float
+) {
+    // Cached, filtered masks make the broad curved fade a single draw per frame.
+    private val artworkFade by lazy { createMask(dark = false) }
+    private val scrim by lazy { createMask(dark = true) }
+
+    private fun createMask(dark: Boolean): ImageBitmap {
+        val width = 96
+        val height = 256
+        val mask = ImageBitmap(width, height)
+        val bottom = artworkBottom / frameSize.height.coerceAtLeast(1f) * height
+        val span = (transition * if (dark) 1.3f else 1f)
+            .coerceIn(1f, artworkBottom.coerceAtLeast(1f)) /
+            frameSize.height.coerceAtLeast(1f) * height
+        CanvasDrawScope().draw(
+            Density(1f), LayoutDirection.Ltr, Canvas(mask), Size(width.toFloat(), height.toFloat())
+        ) {
+            drawRect(if (dark) Color.Black.copy(alpha = 0.58f) else Color.Transparent)
+            val contour = Path()
+            for (step in 192 downTo 0) {
+                val progress = step / 192f
+                val smooth = progress * progress * (3f - 2f * progress)
+                val y = bottom - span + span * progress
+                contour.reset()
+                contour.moveTo(0f, -height.toFloat())
+                contour.lineTo(0f, y - span * 0.28f)
+                contour.cubicTo(
+                    width * 0.24f, y + span * 0.10f,
+                    width * 0.64f, y - span * 0.03f,
+                    width.toFloat(), y - span * 0.18f
+                )
+                contour.lineTo(width.toFloat(), -height.toFloat())
+                contour.close()
+                val colour = if (dark) Color.Black.copy(alpha = 0.58f * smooth)
+                    else Color.White.copy(alpha = 1f - smooth)
+                drawPath(contour, colour, blendMode = BlendMode.Src)
+            }
+        }
+        return mask
+    }
+
+    private fun DrawScope.drawMask(mask: ImageBitmap, blendMode: BlendMode) {
+        drawImage(
+            mask,
+            dstSize = IntSize(size.width.roundToInt().coerceAtLeast(1), size.height.roundToInt().coerceAtLeast(1)),
+            filterQuality = FilterQuality.Low,
+            blendMode = blendMode
+        )
+    }
 
     fun DrawScope.fadeArtwork() {
-        drawRect(artworkFade, blendMode = BlendMode.DstIn)
+        drawMask(artworkFade, BlendMode.DstIn)
     }
 
     fun DrawScope.drawScrim() {
-        drawRect(scrim)
+        drawMask(scrim, BlendMode.SrcOver)
     }
 }
 

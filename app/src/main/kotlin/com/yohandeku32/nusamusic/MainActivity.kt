@@ -106,7 +106,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -5206,9 +5205,6 @@ private fun ImmersiveArtwork(
     var staticBlur by remember(song?.uri, song?.albumId) { mutableStateOf<Bitmap?>(null) }
     var backdrop by remember(song?.uri, song?.albumId) { mutableStateOf(Color(0xFF141414)) }
     var animatedArtworkUrl by remember(song?.id, song?.uri) { mutableStateOf<String?>(null) }
-    var animatedBlur by remember(song?.uri, animatedArtworkUrl, animatedArtworkEnabled, isVisible) {
-        mutableStateOf<Bitmap?>(null)
-    }
 
     LaunchedEffect(song?.uri, song?.albumId) {
         val loaded = song?.let {
@@ -5244,10 +5240,6 @@ private fun ImmersiveArtwork(
         } else null
     }
 
-    val activeBlur = if (animatedArtworkEnabled && isVisible && animatedArtworkUrl != null) {
-        animatedBlur ?: staticBlur
-    } else staticBlur
-
     BoxWithConstraints(modifier.background(backdrop)) {
         val sharpBottom = resolveArtworkBottom(artistBottomPx, constraints.maxHeight.toFloat())
         val sharpHeight = with(LocalDensity.current) { sharpBottom.toDp() }
@@ -5257,7 +5249,7 @@ private fun ImmersiveArtwork(
             Modifier
                 .matchParentSize()
                 .drawWithCache {
-                    val bitmap = activeBlur
+                    val bitmap = staticBlur
                     val paint = if (bitmap != null && size.width > 0f && sharpBottom > 0f) {
                         val scale = maxOf(size.width / bitmap.width, sharpBottom / bitmap.height)
                         val matrix = android.graphics.Matrix().apply {
@@ -5292,7 +5284,7 @@ private fun ImmersiveArtwork(
                     compositingStrategy = CompositingStrategy.Offscreen
                 }
                 .drawWithCache {
-                    val painter = ImmersiveArtworkPainter(size.height, 96.dp.toPx())
+                    val painter = ImmersiveArtworkPainter(size, size.height, 144.dp.toPx())
                     onDrawWithContent {
                         drawContent()
                         with(painter) { fadeArtwork() }
@@ -5322,9 +5314,6 @@ private fun ImmersiveArtwork(
                 AnimatedArtworkVideoBackground(
                     url = activeUrl,
                     modifier = Modifier.fillMaxSize(),
-                    onBlurredFrame = { frame ->
-                        if (animatedArtworkUrl == activeUrl) animatedBlur = frame
-                    },
                     onUnavailable = {
                         if (animatedArtworkUrl == activeUrl) animatedArtworkUrl = null
                     }
@@ -5336,7 +5325,7 @@ private fun ImmersiveArtwork(
             Modifier
                 .matchParentSize()
                 .drawWithCache {
-                    val painter = ImmersiveArtworkPainter(sharpBottom, 96.dp.toPx())
+                    val painter = ImmersiveArtworkPainter(size, sharpBottom, 144.dp.toPx())
                     onDrawBehind { with(painter) { drawScrim() } }
                 }
         )
@@ -5348,31 +5337,10 @@ private fun ImmersiveArtwork(
 private fun AnimatedArtworkVideoBackground(
     url: String,
     modifier: Modifier = Modifier,
-    onBlurredFrame: (Bitmap) -> Unit,
     onUnavailable: () -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var videoReady by remember(url) { mutableStateOf(false) }
-    var artworkPlayerView by remember(url) { mutableStateOf<androidx.media3.ui.PlayerView?>(null) }
-    val onBlurredFrameCallback by rememberUpdatedState(onBlurredFrame)
-
-    LaunchedEffect(artworkPlayerView, videoReady) {
-        val view = artworkPlayerView ?: return@LaunchedEffect
-        if (!videoReady) return@LaunchedEffect
-        while (isActive) {
-            val frame = ArtworkBlur.captureViewport(view)
-            if (frame != null) {
-                val blurred = try {
-                    withContext(Dispatchers.Default) { ArtworkBlur.create(frame) }
-                } finally {
-                    frame.recycle()
-                }
-                onBlurredFrameCallback(blurred)
-            }
-            // Small snapshots keep the animated backdrop current without full-size readbacks.
-            delay(250L)
-        }
-    }
 
     val player = remember(url) {
         val trackSelector = androidx.media3.exoplayer.trackselection.DefaultTrackSelector(context).apply {
@@ -5434,12 +5402,10 @@ private fun AnimatedArtworkVideoBackground(
                     false
                 ) as androidx.media3.ui.PlayerView
             canvasPlayerView.player = player
-            artworkPlayerView = canvasPlayerView
             canvasPlayerView
         },
         update = { playerView ->
             if (playerView.player !== player) playerView.player = player
-            if (artworkPlayerView !== playerView) artworkPlayerView = playerView
         },
         modifier = modifier.graphicsLayer {
             // Keep the still artwork visible until the first video frame is ready.

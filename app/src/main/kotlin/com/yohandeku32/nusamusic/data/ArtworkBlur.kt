@@ -1,8 +1,6 @@
 package com.yohandeku32.nusamusic.data
 
 import android.graphics.Bitmap
-import android.view.TextureView
-import androidx.media3.ui.PlayerView
 import com.yohandeku32.nusamusic.ui.blurArgb
 import kotlin.math.roundToInt
 
@@ -21,44 +19,6 @@ internal object ArtworkBlur {
             return Bitmap.createBitmap(blurArgb(pixels, width, height), width, height, Bitmap.Config.ARGB_8888)
         } finally {
             if (small !== source) small.recycle()
-        }
-    }
-
-    /** Capture only the visible video viewport; resize-mode zoom can extend the surface. */
-    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
-    fun captureViewport(playerView: PlayerView): Bitmap? {
-        val surface = playerView.videoSurfaceView as? TextureView ?: return null
-        if (!surface.isAvailable || surface.width <= 0 || surface.height <= 0 ||
-            playerView.width <= 0 || playerView.height <= 0
-        ) return null
-        val scale = THUMBNAIL_SIZE.toFloat() / maxOf(surface.width, surface.height)
-        val width = (surface.width * scale).roundToInt().coerceAtLeast(1)
-        val height = (surface.height * scale).roundToInt().coerceAtLeast(1)
-        val frame = try {
-            surface.getBitmap(width, height) ?: return null
-        } catch (_: RuntimeException) {
-            // A surface can be detached while navigating away from the player.
-            return null
-        }
-        try {
-            val surfacePosition = IntArray(2)
-            val viewportPosition = IntArray(2)
-            surface.getLocationInWindow(surfacePosition)
-            playerView.getLocationInWindow(viewportPosition)
-            val left = ((viewportPosition[0] - surfacePosition[0]) * width.toFloat() / surface.width)
-                .roundToInt().coerceIn(0, width - 1)
-            val top = ((viewportPosition[1] - surfacePosition[1]) * height.toFloat() / surface.height)
-                .roundToInt().coerceIn(0, height - 1)
-            val cropWidth = (playerView.width * width.toFloat() / surface.width)
-                .roundToInt().coerceIn(1, width - left)
-            val cropHeight = (playerView.height * height.toFloat() / surface.height)
-                .roundToInt().coerceIn(1, height - top)
-            val cropped = Bitmap.createBitmap(frame, left, top, cropWidth, cropHeight)
-            if (cropped !== frame) frame.recycle()
-            return cropped
-        } catch (_: RuntimeException) {
-            frame.recycle()
-            return null
         }
     }
 }
