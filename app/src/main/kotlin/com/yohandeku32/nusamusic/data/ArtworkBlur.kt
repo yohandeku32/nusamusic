@@ -36,7 +36,8 @@ internal object ArtworkBlur {
         try {
             val pixels = IntArray(width * height)
             small.getPixels(pixels, 0, width, 0, 0, width, height)
-            return Bitmap.createBitmap(blurArgb(pixels, width, height, radius = 12), width, height, Bitmap.Config.ARGB_8888)
+            // Keep recognisable artwork colours and shapes instead of a nearly solid wash.
+            return Bitmap.createBitmap(blurArgb(pixels, width, height, radius = 7, passes = 2), width, height, Bitmap.Config.ARGB_8888)
         } finally {
             if (small !== source) small.recycle()
         }
