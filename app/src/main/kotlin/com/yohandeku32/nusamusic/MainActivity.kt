@@ -4988,20 +4988,20 @@ private fun ImmersiveArtwork(
             )
         }
 
-        // Dark frosted glass: keep the artwork colours visible, with a subtle
-        // smoked-glass fade towards the controls instead of an opaque grey wash.
+        // Cinematic fade: let the artwork colours breathe above, then gradually
+        // melt them into deep black beneath the title and playback controls.
+        // The blur still uses the artwork/video frame (frozen per song).
         Box(
             Modifier
                 .matchParentSize()
                 .background(
                     Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Black.copy(alpha = 0.05f),
-                            Color.Black.copy(alpha = 0.10f),
-                            animatedBackdrop.copy(alpha = 0.07f),
-                            Color.Black.copy(alpha = 0.20f),
-                            Color.Black.copy(alpha = 0.32f)
-                        )
+                        0.00f to Color.Transparent,
+                        0.38f to Color.Transparent,
+                        0.58f to Color.Black.copy(alpha = 0.16f),
+                        0.75f to Color.Black.copy(alpha = 0.60f),
+                        0.90f to Color.Black.copy(alpha = 0.91f),
+                        1.00f to Color.Black.copy(alpha = 0.98f)
                     )
                 )
         )
