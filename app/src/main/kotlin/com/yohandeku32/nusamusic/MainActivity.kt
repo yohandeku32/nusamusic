@@ -2418,7 +2418,13 @@ private fun NusaMusicApp(
     }
 
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
+        // The CD player uses a permanently dark surface even on phones in
+        // light mode. Match it behind the swipeable library to avoid flashes.
+        containerColor = if (playerPresentationMode == PlayerPresentationMode.CD) {
+            Color(0xFF111111)
+        } else {
+            MaterialTheme.colorScheme.background
+        },
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0)
     ) { padding ->
         Box(
@@ -3089,6 +3095,25 @@ private fun NusaMusicApp(
 
                     1 -> {
                         val vinylLibrary = playerPresentationMode == PlayerPresentationMode.VINYL
+                        val cdLibrary = playerPresentationMode == PlayerPresentationMode.CD
+                        // Match the CD player's charcoal background and lime
+                        // accents. This theme is scoped ONLY to the song list,
+                        // so Vinyl and other presentation modes stay untouched.
+                        val libraryScheme = if (cdLibrary) {
+                            darkColorScheme(
+                                background = Color(0xFF111111),
+                                surface = Color(0xFF191919),
+                                surfaceVariant = Color(0xFF252525),
+                                primary = Color(0xFFB5DF51),
+                                onPrimary = Color(0xFF111111),
+                                onBackground = Color(0xFFF2F0E9),
+                                onSurface = Color(0xFFF2F0E9),
+                                onSurfaceVariant = Color(0xFFA5A5A0)
+                            )
+                        } else {
+                            MaterialTheme.colorScheme
+                        }
+                        MaterialTheme(colorScheme = libraryScheme) {
                         val libraryBackground = MaterialTheme.colorScheme.background
                         Box(
                             modifier = Modifier
@@ -3538,6 +3563,7 @@ private fun NusaMusicApp(
                             }
 
                         }
+                        } // Library-only theme
                     }
                 }
             }
