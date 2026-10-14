@@ -2513,6 +2513,11 @@ private fun NusaMusicApp(
                                                     ArtworkView(song = cdSong, maxSizePx = 768, modifier = artworkModifier)
                                                 }
                                             },
+                                            thumbnailArtwork = { cdSong, artworkModifier ->
+                                                androidx.compose.runtime.key(cdSong?.uri) {
+                                                    ArtworkView(song = cdSong, maxSizePx = 128, modifier = artworkModifier)
+                                                }
+                                            },
                                             emptyState = {
                                                 Text(
                                                     text = if (!permissionGranted && selectedMusicFolders.isEmpty()) {
