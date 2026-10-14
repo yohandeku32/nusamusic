@@ -4947,8 +4947,9 @@ private fun ImmersiveArtwork(
     BoxWithConstraints(modifier.background(animatedBackdrop)) {
         val sharpBottom = resolveArtworkBottom(artistBottomPx, constraints.maxHeight.toFloat())
         val sharpHeight = with(LocalDensity.current) { sharpBottom.toDp() }
+        val fadeSpan = sharpBottom * 0.72f
 
-        // Match the sharp cover at the seam and reflect its blurred colours below it.
+        // Match the cover crop and extend its blurred edge colours without reflections.
         Crossfade(
             targetState = activeBlur,
             animationSpec = tween(durationMillis = 360),
@@ -4973,7 +4974,7 @@ private fun ImmersiveArtwork(
                             val shader = android.graphics.BitmapShader(
                                 blurBitmap,
                                 android.graphics.Shader.TileMode.CLAMP,
-                                android.graphics.Shader.TileMode.MIRROR
+                                android.graphics.Shader.TileMode.CLAMP
                             ).apply { setLocalMatrix(matrix) }
                             android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG).apply {
                                 this.shader = shader
@@ -4988,8 +4989,7 @@ private fun ImmersiveArtwork(
             )
         }
 
-        // Coloured dark fade: let the artwork/video tint remain visible in the
-        // middle, then darken gently towards the playback controls.
+        // A light frosted wash keeps the cover palette visible beneath the controls.
         Box(
             Modifier
                 .matchParentSize()
@@ -4997,11 +4997,10 @@ private fun ImmersiveArtwork(
                     Brush.verticalGradient(
                         0.00f to Color.Transparent,
                         0.28f to Color.Transparent,
-                        0.48f to animatedBackdrop.copy(alpha = 0.10f),
-                        0.62f to animatedBackdrop.copy(alpha = 0.18f),
-                        0.76f to Color.Black.copy(alpha = 0.46f),
-                        0.90f to Color.Black.copy(alpha = 0.78f),
-                        1.00f to Color.Black.copy(alpha = 0.96f)
+                        0.48f to animatedBackdrop.copy(alpha = 0.04f),
+                        0.68f to animatedBackdrop.copy(alpha = 0.08f),
+                        0.84f to Color.White.copy(alpha = 0.10f),
+                        1.00f to Color.White.copy(alpha = 0.18f)
                     )
                 )
         )
@@ -5017,7 +5016,7 @@ private fun ImmersiveArtwork(
                     compositingStrategy = CompositingStrategy.Offscreen
                 }
                 .drawWithCache {
-                    val painter = ImmersiveArtworkPainter(size, size.height, 228.dp.toPx())
+                    val painter = ImmersiveArtworkPainter(size, size.height, fadeSpan)
                     onDrawWithContent {
                         drawContent()
                         with(painter) { fadeArtwork() }
@@ -5076,7 +5075,7 @@ private fun ImmersiveArtwork(
                 .matchParentSize()
                 .graphicsLayer { alpha = scrimOpacity }
                 .drawWithCache {
-                    val painter = ImmersiveArtworkPainter(size, sharpBottom, 228.dp.toPx())
+                    val painter = ImmersiveArtworkPainter(size, sharpBottom, fadeSpan)
                     onDrawBehind { with(painter) { drawScrim() } }
                 }
         )
