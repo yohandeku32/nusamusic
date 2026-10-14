@@ -47,11 +47,166 @@ private val CdAccent = Color(0xFFB5DF51)
 private fun cdText(id: String, en: String) =
     if (Locale.getDefault().language.equals("id", ignoreCase = true)) id else en
 
-/**
- * A font-independent Nothing-inspired dot-matrix title. Render a two-line
- * Unicode text mask only when its text or width changes, then replace the
- * strokes with tiny round LEDs. No external font download or per-frame work.
- */
+/** A fixed 5×7 circular-dot alphabet matching the reference display. */
+private val cdDotGlyphs = mapOf(
+    'A' to "01110/10001/10001/11111/10001/10001/10001",
+    'B' to "11110/10001/10001/11110/10001/10001/11110",
+    'C' to "01111/10000/10000/10000/10000/10000/01111",
+    'D' to "11110/10001/10001/10001/10001/10001/11110",
+    'E' to "11111/10000/10000/11110/10000/10000/11111",
+    'F' to "11111/10000/10000/11110/10000/10000/10000",
+    'G' to "01111/10000/10000/10111/10001/10001/01110",
+    'H' to "10001/10001/10001/11111/10001/10001/10001",
+    'I' to "11111/00100/00100/00100/00100/00100/11111",
+    'J' to "00111/00010/00010/00010/10010/10010/01100",
+    'K' to "10001/10010/10100/11000/10100/10010/10001",
+    'L' to "10000/10000/10000/10000/10000/10000/11111",
+    'M' to "10001/11011/10101/10101/10001/10001/10001",
+    'N' to "10001/11001/10101/10011/10001/10001/10001",
+    'O' to "01110/10001/10001/10001/10001/10001/01110",
+    'P' to "11110/10001/10001/11110/10000/10000/10000",
+    'Q' to "01110/10001/10001/10001/10101/10010/01101",
+    'R' to "11110/10001/10001/11110/10100/10010/10001",
+    'S' to "01111/10000/10000/01110/00001/00001/11110",
+    'T' to "11111/00100/00100/00100/00100/00100/00100",
+    'U' to "10001/10001/10001/10001/10001/10001/01110",
+    'V' to "10001/10001/10001/10001/10001/01010/00100",
+    'W' to "10001/10001/10001/10101/10101/10101/01010",
+    'X' to "10001/10001/01010/00100/01010/10001/10001",
+    'Y' to "10001/10001/01010/00100/00100/00100/00100",
+    'Z' to "11111/00001/00010/00100/01000/10000/11111",
+    '0' to "01110/10001/10011/10101/11001/10001/01110",
+    '1' to "00100/01100/00100/00100/00100/00100/01110",
+    '2' to "01110/10001/00001/00010/00100/01000/11111",
+    '3' to "11110/00001/00001/01110/00001/00001/11110",
+    '4' to "00010/00110/01010/10010/11111/00010/00010",
+    '5' to "11111/10000/10000/11110/00001/00001/11110",
+    '6' to "01110/10000/10000/11110/10001/10001/01110",
+    '7' to "11111/00001/00010/00100/01000/01000/01000",
+    '8' to "01110/10001/10001/01110/10001/10001/01110",
+    '9' to "01110/10001/10001/01111/00001/00001/01110",
+    ':' to "00000/00100/00100/00000/00100/00100/00000",
+    '.' to "00000/00000/00000/00000/00000/00100/00100",
+    ',' to "00000/00000/00000/00000/00100/00100/01000",
+    '-' to "00000/00000/00000/11111/00000/00000/00000",
+    '!' to "00100/00100/00100/00100/00100/00000/00100",
+    '?' to "01110/10001/00001/00010/00100/00000/00100",
+    '(' to "00010/00100/01000/01000/01000/00100/00010",
+    ')' to "01000/00100/00010/00010/00010/00100/01000",
+    '/' to "00001/00001/00010/00100/01000/10000/10000",
+    '&' to "01100/10010/10100/01000/10101/10010/01101",
+    '+' to "00000/00100/00100/11111/00100/00100/00000",
+    '#' to "01010/11111/01010/01010/11111/01010/00000",
+    '@' to "01110/10001/10111/10101/10111/10000/01110",
+    '_' to "00000/00000/00000/00000/00000/00000/11111",
+    '*' to "00000/10101/01110/11111/01110/10101/00000",
+    '=' to "00000/11111/00000/11111/00000/00000/00000",
+    '%' to "11001/11010/00010/00100/01000/01011/10011",
+    '$' to "01110/10100/10100/01110/00101/00101/01110",
+    '\'' to "00100/00100/00010/00000/00000/00000/00000",
+    '"' to "01010/01010/00000/00000/00000/00000/00000"
+)
+
+private fun cdDotColumns(c: Char): Int = when (c) {
+    ' ' -> 3
+    '.', ',', ':', '!', '\'' -> 4
+    else -> 6
+}
+
+private fun rasterizeDotMatrixTitle(
+    title: String,
+    widthPx: Int,
+    textPx: Float,
+    pitchPx: Float
+): android.graphics.Bitmap {
+    val normalized = java.text.Normalizer.normalize(
+        title.uppercase(Locale.ROOT).trim(),
+        java.text.Normalizer.Form.NFD
+    ).replace(Regex("\\p{M}+"), "").replace(Regex("\\s+"), " ")
+
+    // Fall back to the Unicode-safe renderer for non-Latin / emoji titles.
+    if (normalized.any { it != ' ' && it !in cdDotGlyphs }) {
+        return rasterizeDotTitleFallback(title, widthPx, textPx, pitchPx)
+    }
+
+    val pitch = maxOf(pitchPx.toInt(), (textPx / 8f).toInt()).coerceAtLeast(3)
+    val maxColumns = ((widthPx - pitch * 2) / pitch).coerceAtLeast(6)
+    fun columns(value: String): Int {
+        var total = 0
+        for (ch in value) total += cdDotColumns(ch)
+        return total
+    }
+
+    val lines = mutableListOf<String>()
+    var remaining = normalized
+    repeat(2) {
+        if (remaining.isEmpty()) return@repeat
+        var used = 0
+        var fitting = 0
+        var lastSpace = -1
+        for (index in remaining.indices) {
+            val width = cdDotColumns(remaining[index])
+            if (used + width > maxColumns) break
+            used += width
+            fitting = index + 1
+            if (remaining[index] == ' ') lastSpace = index
+        }
+        if (fitting == 0) fitting = 1
+        if (fitting >= remaining.length) {
+            lines.add(remaining)
+            remaining = ""
+        } else {
+            val splitAt = if (lastSpace > 0) lastSpace else fitting
+            lines.add(remaining.substring(0, splitAt).trimEnd())
+            remaining = remaining.substring(splitAt).trimStart()
+        }
+    }
+    if (lines.isEmpty()) lines.add(" ")
+    if (remaining.isNotEmpty()) {
+        var last = lines.last().trimEnd()
+        while (last.isNotEmpty() && columns(last + "...") > maxColumns) {
+            last = last.dropLast(1).trimEnd()
+        }
+        lines[lines.lastIndex] = last + "..."
+    }
+
+    val height = pitch * (lines.size * 8 + 1)
+    val result = android.graphics.Bitmap.createBitmap(
+        widthPx.coerceAtLeast(1), height, android.graphics.Bitmap.Config.ARGB_8888
+    )
+    val canvas = android.graphics.Canvas(result)
+    val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.rgb(242, 240, 233)
+        style = android.graphics.Paint.Style.FILL
+    }
+    val dotRadius = pitch * 0.35f
+    lines.forEachIndexed { lineIndex, line ->
+        var x = ((widthPx - columns(line) * pitch) / 2f).coerceAtLeast(0f)
+        val y = (lineIndex * 8 + 1) * pitch.toFloat()
+        for (ch in line) {
+            val glyph = cdDotGlyphs[ch]
+            if (glyph != null) {
+                for (row in 0 until 7) {
+                    val base = row * 6
+                    for (col in 0 until 5) {
+                        if (glyph[base + col] == '1') {
+                            canvas.drawCircle(
+                                x + (col + 0.5f) * pitch,
+                                y + (row + 0.5f) * pitch,
+                                dotRadius,
+                                paint
+                            )
+                        }
+                    }
+                }
+            }
+            x += cdDotColumns(ch) * pitch
+        }
+    }
+    return result
+}
+
+/** Title raster is cached by text, width, and font size; never per animation frame. */
 @Composable
 private fun CdDotTitle(
     title: String,
@@ -64,7 +219,7 @@ private fun CdDotTitle(
         val textPx = with(density) { fontSize.coerceIn(18f, 26f).sp.toPx() }
         val pitchPx = with(density) { 3.dp.toPx() }
         val dots = remember(title, widthPx, textPx, pitchPx) {
-            rasterizeDotTitle(title, widthPx, textPx, pitchPx)
+            rasterizeDotMatrixTitle(title, widthPx, textPx, pitchPx)
         }
         Image(
             bitmap = dots.asImageBitmap(),
@@ -76,7 +231,7 @@ private fun CdDotTitle(
     }
 }
 
-private fun rasterizeDotTitle(
+private fun rasterizeDotTitleFallback(
     title: String,
     widthPx: Int,
     textPx: Float,
