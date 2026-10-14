@@ -180,6 +180,9 @@ private fun nusaText(
 
 class MainActivity : ComponentActivity() {
     private var controller: MediaController? = null
+    // Avoid checking every Media3 queue item whenever a carousel disc is tapped.
+    private var queuedPlaybackOrder: List<Song>? = null
+    private var pendingPlaySongJob: Job? = null
     private var songs by mutableStateOf<List<Song>>(emptyList())
     private var currentSong by mutableStateOf<Song?>(null)
     private var isPlaying by mutableStateOf(false)
@@ -449,6 +452,7 @@ class MainActivity : ComponentActivity() {
         future.addListener({
             val c = future.get()
             controller = c
+            queuedPlaybackOrder = null
             c.addListener(object : Player.Listener {
                 override fun onIsPlayingChanged(playing: Boolean) {
                     isPlaying = playing
@@ -750,6 +754,7 @@ class MainActivity : ComponentActivity() {
         c.shuffleModeEnabled = savedShuffle
         c.repeatMode = savedRepeat
         c.prepare()
+        queuedPlaybackOrder = songSnapshot
 
         currentSong = songSnapshot[index]
         shuffleEnabled = savedShuffle
@@ -1011,32 +1016,41 @@ class MainActivity : ComponentActivity() {
             .build()
 
     private fun playSong(song: Song, orderedSongs: List<Song>) {
-        controller?.let { c ->
-            // Use the list's selected sort order for the Media3 queue as well as
-            // the visible library. This keeps Next/Previous aligned with sorting.
-            val queueSongs = orderedSongs.ifEmpty { songs }
-            val targetIndex = queueSongs.indexOfFirst { it.id == song.id }
-            if (targetIndex < 0) return@let
+        val c = controller ?: return
+        val queueSongs = orderedSongs.ifEmpty { songs }
+        val targetIndex = queueSongs.indexOfFirst { it.id == song.id }
+        if (targetIndex < 0) return
 
-            // Avoid resetting the decoder when the queue already uses this exact order.
-            val queueMatches = c.mediaItemCount == queueSongs.size &&
-                queueSongs.indices.all { index ->
-                    c.getMediaItemAt(index).mediaId == queueSongs[index].id.toString()
-                }
+        // Avoid an O(library size) series of MediaController calls for every
+        // carousel tap. This queue only changes when we explicitly load an order.
+        val queueMatches = queuedPlaybackOrder === queueSongs &&
+            c.mediaItemCount == queueSongs.size &&
+            c.getMediaItemAt(targetIndex).mediaId == song.id.toString()
 
-            if (queueMatches) {
-                c.seekTo(targetIndex, 0L)
-                c.play()
-            } else {
-                c.setMediaItems(
-                    queueSongs.map(::mediaItemFor),
-                    targetIndex,
-                    0L
-                )
-                c.prepare()
-                c.play()
+        pendingPlaySongJob?.cancel()
+        pendingPlaySongJob = null
+
+        if (queueMatches) {
+            c.seekTo(targetIndex, 0L)
+            c.play()
+            currentSong = song
+            isPlaying = true
+            return
+        }
+
+        // Build large playlists off the UI thread. Rapid taps cancel older
+        // requests instead of stacking expensive full-queue rebuilds.
+        queuedPlaybackOrder = null
+        pendingPlaySongJob = lifecycleScope.launch {
+            val mediaItems = withContext(Dispatchers.Default) {
+                queueSongs.map(::mediaItemFor)
             }
+            if (controller !== c) return@launch
 
+            c.setMediaItems(mediaItems, targetIndex, 0L)
+            c.prepare()
+            c.play()
+            queuedPlaybackOrder = queueSongs
             currentSong = song
             isPlaying = true
         }
@@ -1092,6 +1106,8 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        pendingPlaySongJob?.cancel()
+        pendingPlaySongJob = null
         automaticMusicScanJob?.cancel()
         automaticMusicScanJob = null
         runCatching {
