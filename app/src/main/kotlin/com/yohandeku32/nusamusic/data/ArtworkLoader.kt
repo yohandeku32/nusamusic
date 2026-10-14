@@ -8,8 +8,17 @@ import android.net.Uri
 import android.util.LruCache
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 
 object ArtworkLoader {
+    // Limit simultaneous MediaMetadataRetriever and bitmap decodes while
+    // flinging large libraries or rapidly shuffling tracks.
+    private val decodePermit = Semaphore(2)
+    // Many local files have no embedded artwork. Remember that result so
+    // scrolling past them again never reopens a metadata retriever.
+    private val noArtworkCache = LruCache<String, Boolean>(512)
+
     // Keep a bounded memory cache instead of retaining dozens of large album covers.
     private val cache = object : LruCache<String, Bitmap>(24 * 1024) {
         override fun sizeOf(key: String, value: Bitmap): Int {
@@ -31,11 +40,18 @@ object ArtworkLoader {
     ): Bitmap? = withContext(Dispatchers.IO) {
         val memoryKey = resolvedCacheKey(uriString, maxSize, cacheKey)
         cache.get(memoryKey)?.let { return@withContext it }
+        if (noArtworkCache.get(memoryKey) == true) return@withContext null
 
-        val retriever = MediaMetadataRetriever()
+        decodePermit.withPermit {
+            cache.get(memoryKey)?.let { return@withPermit it }
+            if (noArtworkCache.get(memoryKey) == true) return@withPermit null
+            val retriever = MediaMetadataRetriever()
         try {
             retriever.setDataSource(context, Uri.parse(uriString))
-            val bytes = retriever.embeddedPicture ?: return@withContext null
+            val bytes = retriever.embeddedPicture ?: run {
+                noArtworkCache.put(memoryKey, true)
+                return@withPermit null
+            }
 
             // Read image bounds first so a large 2000px+ embedded cover is never
             // decoded at full resolution when the UI only needs a small thumbnail.
@@ -60,7 +76,10 @@ object ArtworkLoader {
                 0,
                 bytes.size,
                 options
-            ) ?: return@withContext null
+            ) ?: run {
+                noArtworkCache.put(memoryKey, true)
+                return@withPermit null
+            }
 
             val bitmap = scaleDown(decoded, maxSize)
             if (bitmap !== decoded) {
@@ -73,6 +92,7 @@ object ArtworkLoader {
             null
         } finally {
             retriever.release()
+        }
         }
     }
 
