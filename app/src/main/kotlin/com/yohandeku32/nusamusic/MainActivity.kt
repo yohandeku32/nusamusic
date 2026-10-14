@@ -5748,6 +5748,10 @@ private fun LibrarySongListRow(
     var codecInfo by remember(song.uri) { mutableStateOf<AudioCodecInfo?>(null) }
 
     LaunchedEffect(context, song.uri) {
+        // A flick through hundreds of rows should not immediately create
+        // hundreds of extractors. Offscreen rows cancel this delay, and
+        // AudioCodecLoader caches results for revisits.
+        delay(120L)
         codecInfo = AudioCodecLoader.load(
             context = context,
             uriString = song.uri
@@ -5783,6 +5787,7 @@ private fun LibrarySongListRow(
             ArtworkView(
                 song = song,
                 maxSizePx = 160,
+                loadDelayMs = 85L,
                 modifier = Modifier.fillMaxSize()
             )
         }
