@@ -105,7 +105,9 @@ fun CdPlayer(
                 }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Spacer(Modifier.height(18.dp))
-                    CdDisc(song, isPlaying && isVisible, artwork, Modifier.size(discSize))
+                    CdJewelCase(Modifier.size(width = discSize * 1.12f, height = discSize)) { discModifier ->
+                        CdDisc(song, isPlaying && isVisible, artwork, discModifier)
+                    }
                     Spacer(Modifier.height(20.dp))
                     Text(
                         song?.title ?: cdText("Pilih lagu", "Choose a song"),
