@@ -3145,13 +3145,8 @@ private fun NusaMusicApp(
                                                         )
                                                         .apply()
                                                     sortMenuExpanded = false
-
-                                                    if (
-                                                        option == LibrarySortOption.RECENTLY_ADDED &&
-                                                        songs.any { it.dateAddedMs <= 0L }
-                                                    ) {
-                                                        onScanMusic()
-                                                    }
+                                                    // Sorting must never trigger a full media scan.
+                                                    // Missing dates sort last; users can refresh explicitly.
                                                 }
                                             )
                                         }
