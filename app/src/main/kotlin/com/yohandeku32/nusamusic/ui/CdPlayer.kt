@@ -104,6 +104,9 @@ fun CdPlayer(
 
         if (visibleDiscSong?.id == target?.id) {
             visibleDiscSong = target
+            // If leaving/re-entering the player cancelled an entrance,
+            // always restore the disc to its seated position.
+            if (swapOffset.value != 0f) swapOffset.snapTo(0f)
             return@LaunchedEffect
         }
         if (!isVisible || kotlin.math.abs(swapOffset.value) > 0.01f) {
