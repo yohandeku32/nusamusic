@@ -22,21 +22,29 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 
-// Fine scuffs molded into the outer clear case, not the spinning disc.
-// Fractional coordinates let the marks scale to different screen widths.
-private val caseHairlineScratches = arrayOf(
-    floatArrayOf(0.17f, 0.14f, 0.27f, 0.12f),
-    floatArrayOf(0.37f, 0.09f, 0.43f, 0.13f),
-    floatArrayOf(0.78f, 0.12f, 0.87f, 0.10f),
-    floatArrayOf(0.23f, 0.29f, 0.31f, 0.25f),
-    floatArrayOf(0.73f, 0.29f, 0.84f, 0.34f),
-    floatArrayOf(0.17f, 0.45f, 0.25f, 0.49f),
-    floatArrayOf(0.82f, 0.47f, 0.91f, 0.44f),
-    floatArrayOf(0.21f, 0.67f, 0.32f, 0.62f),
-    floatArrayOf(0.68f, 0.74f, 0.77f, 0.76f),
-    floatArrayOf(0.82f, 0.86f, 0.92f, 0.81f),
-    floatArrayOf(0.36f, 0.89f, 0.43f, 0.86f),
-    floatArrayOf(0.55f, 0.17f, 0.63f, 0.19f)
+// Fine, stationary plastic scratches concentrated on the four clear
+// jewel-case corners. Fractional values scale naturally with the case size.
+private val caseCornerScratches = arrayOf(
+    // Upper-left, beside the hinge.
+    floatArrayOf(0.105f, 0.062f, 0.155f, 0.049f),
+    floatArrayOf(0.120f, 0.084f, 0.174f, 0.070f),
+    floatArrayOf(0.098f, 0.113f, 0.143f, 0.095f),
+    floatArrayOf(0.151f, 0.039f, 0.184f, 0.052f),
+    // Upper-right, near the opening edge.
+    floatArrayOf(0.818f, 0.057f, 0.905f, 0.078f),
+    floatArrayOf(0.853f, 0.100f, 0.936f, 0.111f),
+    floatArrayOf(0.880f, 0.045f, 0.940f, 0.058f),
+    floatArrayOf(0.804f, 0.126f, 0.870f, 0.146f),
+    // Lower-left.
+    floatArrayOf(0.100f, 0.893f, 0.160f, 0.867f),
+    floatArrayOf(0.130f, 0.922f, 0.187f, 0.904f),
+    floatArrayOf(0.097f, 0.942f, 0.151f, 0.925f),
+    floatArrayOf(0.175f, 0.955f, 0.217f, 0.935f),
+    // Lower-right.
+    floatArrayOf(0.812f, 0.867f, 0.896f, 0.842f),
+    floatArrayOf(0.843f, 0.916f, 0.937f, 0.889f),
+    floatArrayOf(0.869f, 0.952f, 0.941f, 0.927f),
+    floatArrayOf(0.778f, 0.935f, 0.843f, 0.914f)
 )
 
 /** Fixed clear shell and spindle; only the supplied disc rotates inside them. */
@@ -152,48 +160,29 @@ private fun DrawScope.drawClearLid() {
     }
     drawPath(lowerReflection, glass.copy(alpha = 0.045f))
 
-    // Lightly worn jewel case: short random-looking hairline marks on the
-    // stationary transparent lid. Tiny dark offsets create etched depth while
-    // keeping the rotating album artwork readable beneath the clear plastic.
-    caseHairlineScratches.forEachIndexed { index, mark ->
+    // Very subtle short etches exclusively at the case corners. The tiny
+    // dark offset gives each scratch a shallow edge without clouding artwork.
+    caseCornerScratches.forEachIndexed { index, mark ->
         val start = Offset(w * mark[0], h * mark[1])
         val end = Offset(w * mark[2], h * mark[3])
         drawLine(
-            color = glass.copy(alpha = if (index % 3 == 0) 0.30f else 0.18f),
+            color = glass.copy(alpha = if (index % 3 == 0) 0.31f else 0.20f),
             start = start,
             end = end,
-            strokeWidth = edge * if (index % 4 == 0) 0.80f else 0.55f,
+            strokeWidth = edge * if (index % 4 == 0) 0.65f else 0.50f,
             cap = StrokeCap.Round
         )
-        if (index % 4 == 0) {
-            val shift = Offset(edge * 0.6f, edge * 0.8f)
+        if (index % 3 == 0) {
+            val offset = Offset(edge * 0.45f, edge * 0.55f)
             drawLine(
-                Color.Black.copy(alpha = 0.11f),
-                start + shift,
-                end + shift,
-                edge * 0.55f,
-                StrokeCap.Round
+                color = Color.Black.copy(alpha = 0.075f),
+                start = start + offset,
+                end = end + offset,
+                strokeWidth = edge * 0.35f,
+                cap = StrokeCap.Round
             )
         }
     }
-    drawArc(
-        glass.copy(alpha = 0.14f),
-        startAngle = 198f,
-        sweepAngle = 19f,
-        useCenter = false,
-        topLeft = Offset(w * 0.28f, h * 0.18f),
-        size = Size(w * 0.40f, h * 0.43f),
-        style = Stroke(edge * 0.65f, cap = StrokeCap.Round)
-    )
-    drawArc(
-        glass.copy(alpha = 0.13f),
-        startAngle = 18f,
-        sweepAngle = 14f,
-        useCenter = false,
-        topLeft = Offset(w * 0.55f, h * 0.51f),
-        size = Size(w * 0.31f, h * 0.30f),
-        style = Stroke(edge * 0.60f, cap = StrokeCap.Round)
-    )
 
     // Doubled edges give the thin clear plastic its thickness.
     drawLine(glass.copy(alpha = 0.58f), Offset(w * 0.11f, edge), Offset(w * 0.96f, edge), edge * 0.9f)
