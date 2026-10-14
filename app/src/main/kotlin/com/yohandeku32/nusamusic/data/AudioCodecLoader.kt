@@ -4,15 +4,48 @@ import android.content.Context
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.net.Uri
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 
 object AudioCodecLoader {
 
-    suspend fun load(
-        context: Context,
-        uriString: String
-    ): AudioCodecInfo? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+    // Metadata is expensive: opening a MediaExtractor for every row that
+    // enters the viewport can saturate storage while the user scrolls.
+    // Keep a small LRU (including missing/unreadable results) and allow only
+    // two native metadata reads at once across the entire app.
+    private val metadataCache = object : LinkedHashMap<String, AudioCodecInfo?>(192, 0.75f, true) {
+        override fun removeEldestEntry(
+            eldest: MutableMap.MutableEntry<String, AudioCodecInfo?>?
+        ): Boolean = size > 192
+    }
+    private val metadataPermit = Semaphore(2)
+
+    suspend fun load(context: Context, uriString: String): AudioCodecInfo? =
+        withContext(Dispatchers.IO) {
+            synchronized(metadataCache) {
+                if (metadataCache.containsKey(uriString)) {
+                    return@withContext metadataCache[uriString]
+                }
+            }
+            metadataPermit.withPermit {
+                // A neighbouring row may have finished the same lookup
+                // while this coroutine waited for a metadata permit.
+                synchronized(metadataCache) {
+                    if (metadataCache.containsKey(uriString)) {
+                        return@withPermit metadataCache[uriString]
+                    }
+                }
+                val info = inspect(context, uriString)
+                synchronized(metadataCache) { metadataCache[uriString] = info }
+                info
+            }
+        }
+
+    private fun inspect(context: Context, uriString: String): AudioCodecInfo? {
         val uri = runCatching { Uri.parse(uriString) }.getOrNull()
-            ?: return@withContext null
+            ?: return null
 
         val extractor = MediaExtractor()
         try {
@@ -83,16 +116,16 @@ object AudioCodecLoader {
                         null
                     }
 
-                return@withContext AudioCodecInfo(
+                return AudioCodecInfo(
                     codecName = codec,
                     sampleRateHz = sampleRate ?: retrieverSampleRate,
                     bitDepth = bitDepth ?: retrieverBitDepth
                 )
             }
 
-            null
+            return null
         } catch (_: Exception) {
-            null
+            return null
         } finally {
             extractor.release()
         }
