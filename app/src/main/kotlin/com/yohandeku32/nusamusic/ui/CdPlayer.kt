@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
@@ -142,6 +143,14 @@ fun CdPlayer(
             // Reserve the transport and collection first; the parent scrolls
             // naturally for compact screens or enlarged accessibility text.
             val discSize = minOf(maxWidth * 0.76f, (viewportHeight - 520.dp).coerceIn(160.dp, 340.dp))
+            // Reserve exactly the same title slot for both one-line and
+            // two-line song names. Otherwise SpaceBetween shifts the CD and
+            // lower carousel each time a longer title wraps.
+            val titleSize = titleFontSize.coerceIn(18f, 26f)
+            val titleLineHeight = (titleSize * 1.25f).sp
+            val titleSlotHeight = with(LocalDensity.current) {
+                (titleSize * 2.7f).sp.toDp()
+            }
             Column(
                 Modifier.fillMaxWidth().heightIn(min = viewportHeight).statusBarsPadding(),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -180,17 +189,27 @@ fun CdPlayer(
                         )
                     }
                     Spacer(Modifier.height(20.dp))
-                    // A single metadata tree avoids overlapping crossfade
-                    // text layouts on rapid Shuffle changes.
-                    Text(
-                        text = song?.title ?: cdText("Pilih lagu", "Choose a song"),
-                        fontSize = titleFontSize.coerceIn(18f, 26f).sp,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(horizontal = 28.dp)
-                    )
+                    // Keep the entire player geometry stable: the title is
+                    // vertically centred within a permanent two-line slot.
+                    // Even short names occupy this space, so the CD and
+                    // bottom carousel never jump when a title wraps.
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(titleSlotHeight)
+                            .padding(horizontal = 28.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = song?.title ?: cdText("Pilih lagu", "Choose a song"),
+                            fontSize = titleSize.sp,
+                            lineHeight = titleLineHeight,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.Center
+                        )
+                    }
                     Spacer(Modifier.height(4.dp))
                     Text(
                         song?.artist?.takeIf { it.isNotBlank() }
