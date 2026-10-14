@@ -1,12 +1,14 @@
 package com.yohandeku32.nusamusic.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -65,12 +67,16 @@ internal fun CdJewelCase(
         Canvas(Modifier.matchParentSize()) { drawClearTray() }
 
         val diameter = maxHeight * 0.92f
-        disc(
-            Modifier.offset(
-                x = maxWidth * 0.55f - diameter / 2,
-                y = (maxHeight - diameter) / 2
-            ).size(diameter)
-        )
+        val discX = maxWidth * 0.55f - diameter / 2
+        val discY = (maxHeight - diameter) / 2
+        // Only the disc content may slide during swaps. The parent clips discs
+        // as they enter/leave the physical tray, while the static lid and
+        // centre spindle remain outside this animation layer.
+        Box(Modifier.matchParentSize().clipToBounds()) {
+            disc(
+                Modifier.offset(x = discX, y = discY).size(diameter)
+            )
+        }
 
         // The cover reflections, hinge and centre clip stay still during playback.
         Canvas(Modifier.matchParentSize()) {
