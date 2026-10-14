@@ -198,7 +198,7 @@ private fun CdDisc(
             var previous = withFrameNanos { it }
             while (true) {
                 withFrameNanos { now ->
-                    rotation = (rotation + (now - previous) / 1_000_000_000f * 24f) % 360f
+                    rotation = (rotation + (now - previous) / 1_000_000_000f * 36f) % 360f
                     previous = now
                 }
             }
