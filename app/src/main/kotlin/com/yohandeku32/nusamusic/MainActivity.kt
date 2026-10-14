@@ -2629,13 +2629,17 @@ private fun NusaMusicApp(
                                         ),
                                         windowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
                                         navigationIcon = {
-                                            ArtistAvatar(
-                                                song = currentSong,
-                                                modifier = Modifier
-                                                    .padding(start = 18.dp)
-                                                    .size(40.dp)
-                                                    .clip(CircleShape)
-                                            )
+                                            // Keep the top-left corner clear in Immersive mode.
+                                            // Other presentation modes retain the artist avatar.
+                                            if (playerPresentationMode != PlayerPresentationMode.IMMERSIVE_ARTWORK) {
+                                                ArtistAvatar(
+                                                    song = currentSong,
+                                                    modifier = Modifier
+                                                        .padding(start = 18.dp)
+                                                        .size(40.dp)
+                                                        .clip(CircleShape)
+                                                )
+                                            }
                                         },
                                         actions = {
                                             IconButton(onClick = { showSettings = true }) {
