@@ -39,13 +39,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
@@ -125,44 +124,15 @@ fun TurntablePlayer(
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                // Reserve real space for the rear wiring, so its ends cannot be
-                // clipped by the deck or cut off at a negative canvas coordinate.
-                val cableClearance = 52.dp
-                Box(modifier = Modifier.size(width = deckSize, height = deckSize + cableClearance)) {
+                // Keep the original upper spacing and reveal the rear ports above the chassis.
+                val rearInset = 52.dp
+                Box(modifier = Modifier.size(width = deckSize, height = deckSize + rearInset)) {
                     Canvas(Modifier.matchParentSize()) {
-                        val deckTop = cableClearance.toPx()
+                        val deckTop = rearInset.toPx()
                         val powerX = size.width * 0.285f
                         val audioXs = listOf(size.width * 0.335f, size.width * 0.385f)
 
-                        fun drawCable(x: Float, exitY: Float, thickness: Dp, sheath: Color) {
-                            // Each lead leaves the visible upper-left corner and curves
-                            // naturally into a socket on the rear edge of the deck.
-                            val route = Path().apply {
-                                moveTo(-8.dp.toPx(), exitY)
-                                cubicTo(
-                                    size.width * 0.07f, exitY + 1.dp.toPx(),
-                                    x - 15.dp.toPx(), deckTop - 27.dp.toPx(),
-                                    x, deckTop - 7.dp.toPx()
-                                )
-                            }
-                            drawPath(
-                                route, Color.Black.copy(alpha = 0.19f),
-                                style = Stroke(width = thickness.toPx() + 1.5.dp.toPx(), cap = StrokeCap.Round)
-                            )
-                            drawPath(
-                                route, sheath,
-                                style = Stroke(width = thickness.toPx(), cap = StrokeCap.Round)
-                            )
-                            drawPath(
-                                route, Color.White.copy(alpha = 0.14f),
-                                style = Stroke(width = 0.65.dp.toPx(), cap = StrokeCap.Round)
-                            )
-                        }
-
-                        drawCable(powerX, 22.dp.toPx(), 4.dp, Color(0xFF22282B))
-                        drawCable(audioXs[0], 15.dp.toPx(), 2.8.dp, Color(0xFF34393C))
-                        drawCable(audioXs[1], 8.dp.toPx(), 2.8.dp, Color(0xFF34393C))
-
+                        // Exposed rear connectors only: no cables attached.
                         // Plug housings sit directly at the rear rim, behind the deck.
                         val metal = Brush.horizontalGradient(
                             listOf(Color(0xFF80591F), Color(0xFFEAC16D), Color(0xFFAA762A))
@@ -195,9 +165,22 @@ fun TurntablePlayer(
 
                     Box(
                         modifier = Modifier.align(Alignment.BottomCenter).size(deckSize)
+                        .shadow(
+                            elevation = 16.dp,
+                            shape = RoundedCornerShape(18.dp),
+                            clip = false,
+                            ambientColor = Color.Black.copy(alpha = 0.42f),
+                            spotColor = Color.Black.copy(alpha = 0.55f)
+                        )
                         .clip(RoundedCornerShape(18.dp))
                         .background(Brush.linearGradient(listOf(surface, page, surface)))
-                        .border(1.dp, edge, RoundedCornerShape(18.dp))
+                        .border(
+                            1.dp,
+                            Brush.linearGradient(
+                                listOf(Color.White.copy(alpha = 0.20f), edge, Color.Black.copy(alpha = 0.24f))
+                            ),
+                            RoundedCornerShape(18.dp)
+                        )
                         .drawWithCache {
                             onDrawBehind {
                                 // Small countersunk fittings remain on the deck surface.
