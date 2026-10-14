@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -93,7 +94,6 @@ fun CdPlayer(
                     Modifier.fillMaxWidth().padding(start = 24.dp, end = 12.dp, top = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("NUSA", fontSize = 12.sp, letterSpacing = 3.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.weight(1f))
                     Text("COMPACT DISC", color = Color(0xFF92928D), fontSize = 9.sp, letterSpacing = 2.sp)
                     IconButton(onClick = onSettings) {
@@ -198,7 +198,7 @@ private fun CdDisc(
             var previous = withFrameNanos { it }
             while (true) {
                 withFrameNanos { now ->
-                    rotation = (rotation + (now - previous) / 1_000_000_000f * 18f) % 360f
+                    rotation = (rotation + (now - previous) / 1_000_000_000f * 24f) % 360f
                     previous = now
                 }
             }
@@ -218,6 +218,50 @@ private fun CdDisc(
                     drawCircle(Color.White.copy(alpha = 0.045f), radius * (0.68f + ring * 0.03f), style = Stroke(0.5.dp.toPx()))
                 }
                 drawCircle(Color.White.copy(alpha = 0.3f), radius - 1.dp.toPx(), style = Stroke(1.dp.toPx()))
+
+                // A few tiny, irregular hairline scuffs follow the circular
+                // grooves. They rotate WITH the printed artwork, stay subtle,
+                // and never cover the central molded hub.
+                val hairline = 0.55.dp.toPx()
+                val scratches = arrayOf(
+                    floatArrayOf(0.44f, 32f, 13f),
+                    floatArrayOf(0.60f, 161f, 7f),
+                    floatArrayOf(0.70f, 278f, 18f),
+                    floatArrayOf(0.78f, 73f, 6f),
+                    floatArrayOf(0.84f, 207f, 11f),
+                    floatArrayOf(0.91f, 322f, 8f),
+                    floatArrayOf(0.95f, 121f, 16f)
+                )
+                scratches.forEachIndexed { index, scratch ->
+                    val distance = radius * scratch[0]
+                    drawArc(
+                        color = if (index % 3 == 0) {
+                            Color.Black.copy(alpha = 0.11f)
+                        } else {
+                            Color.White.copy(alpha = 0.14f)
+                        },
+                        startAngle = scratch[1],
+                        sweepAngle = scratch[2],
+                        useCenter = false,
+                        topLeft = Offset(center.x - distance, center.y - distance),
+                        size = Size(distance * 2f, distance * 2f),
+                        style = Stroke(width = hairline, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                    )
+                }
+                // Light radial marks add a barely visible used-disc texture.
+                drawLine(
+                    Color.White.copy(alpha = 0.09f),
+                    start = Offset(center.x + radius * 0.46f, center.y - radius * 0.40f),
+                    end = Offset(center.x + radius * 0.56f, center.y - radius * 0.49f),
+                    strokeWidth = hairline
+                )
+                drawLine(
+                    Color.Black.copy(alpha = 0.10f),
+                    start = Offset(center.x - radius * 0.76f, center.y + radius * 0.18f),
+                    end = Offset(center.x - radius * 0.89f, center.y + radius * 0.21f),
+                    strokeWidth = hairline
+                )
+
                 // Real CD centre: the molded, translucent inner ring is wider than
                 // the spindle hole and stays perfectly concentric with the disc.
                 // A soft dark recess and iridescent rim make the hub read as
