@@ -2536,7 +2536,7 @@ private fun NusaMusicApp(
                                             },
                                             thumbnailArtwork = { cdSong, artworkModifier ->
                                                 androidx.compose.runtime.key(cdSong?.uri) {
-                                                    ArtworkView(song = cdSong, maxSizePx = 128, modifier = artworkModifier)
+                                                    ArtworkView(song = cdSong, maxSizePx = 128, loadDelayMs = 65L, modifier = artworkModifier)
                                                 }
                                             },
                                             emptyState = {
