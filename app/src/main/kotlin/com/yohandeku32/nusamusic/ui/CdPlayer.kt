@@ -2,7 +2,6 @@ package com.yohandeku32.nusamusic.ui
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -25,7 +24,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.Role
@@ -37,7 +35,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.sp
 import com.yohandeku32.nusamusic.model.Song
 import java.util.Locale
@@ -46,254 +43,6 @@ private val CdBackground = Color(0xFF111111)
 private val CdAccent = Color(0xFFB5DF51)
 private fun cdText(id: String, en: String) =
     if (Locale.getDefault().language.equals("id", ignoreCase = true)) id else en
-
-/** A fixed 5×7 circular-dot alphabet matching the reference display. */
-private val cdDotGlyphs = mapOf(
-    'A' to "01110/10001/10001/11111/10001/10001/10001",
-    'B' to "11110/10001/10001/11110/10001/10001/11110",
-    'C' to "01111/10000/10000/10000/10000/10000/01111",
-    'D' to "11110/10001/10001/10001/10001/10001/11110",
-    'E' to "11111/10000/10000/11110/10000/10000/11111",
-    'F' to "11111/10000/10000/11110/10000/10000/10000",
-    'G' to "01111/10000/10000/10111/10001/10001/01110",
-    'H' to "10001/10001/10001/11111/10001/10001/10001",
-    'I' to "11111/00100/00100/00100/00100/00100/11111",
-    'J' to "00111/00010/00010/00010/10010/10010/01100",
-    'K' to "10001/10010/10100/11000/10100/10010/10001",
-    'L' to "10000/10000/10000/10000/10000/10000/11111",
-    'M' to "10001/11011/10101/10101/10001/10001/10001",
-    'N' to "10001/11001/10101/10011/10001/10001/10001",
-    'O' to "01110/10001/10001/10001/10001/10001/01110",
-    'P' to "11110/10001/10001/11110/10000/10000/10000",
-    'Q' to "01110/10001/10001/10001/10101/10010/01101",
-    'R' to "11110/10001/10001/11110/10100/10010/10001",
-    'S' to "01111/10000/10000/01110/00001/00001/11110",
-    'T' to "11111/00100/00100/00100/00100/00100/00100",
-    'U' to "10001/10001/10001/10001/10001/10001/01110",
-    'V' to "10001/10001/10001/10001/10001/01010/00100",
-    'W' to "10001/10001/10001/10101/10101/10101/01010",
-    'X' to "10001/10001/01010/00100/01010/10001/10001",
-    'Y' to "10001/10001/01010/00100/00100/00100/00100",
-    'Z' to "11111/00001/00010/00100/01000/10000/11111",
-    '0' to "01110/10001/10011/10101/11001/10001/01110",
-    '1' to "00100/01100/00100/00100/00100/00100/01110",
-    '2' to "01110/10001/00001/00010/00100/01000/11111",
-    '3' to "11110/00001/00001/01110/00001/00001/11110",
-    '4' to "00010/00110/01010/10010/11111/00010/00010",
-    '5' to "11111/10000/10000/11110/00001/00001/11110",
-    '6' to "01110/10000/10000/11110/10001/10001/01110",
-    '7' to "11111/00001/00010/00100/01000/01000/01000",
-    '8' to "01110/10001/10001/01110/10001/10001/01110",
-    '9' to "01110/10001/10001/01111/00001/00001/01110",
-    ':' to "00000/00100/00100/00000/00100/00100/00000",
-    '.' to "00000/00000/00000/00000/00000/00100/00100",
-    ',' to "00000/00000/00000/00000/00100/00100/01000",
-    '-' to "00000/00000/00000/11111/00000/00000/00000",
-    '!' to "00100/00100/00100/00100/00100/00000/00100",
-    '?' to "01110/10001/00001/00010/00100/00000/00100",
-    '(' to "00010/00100/01000/01000/01000/00100/00010",
-    ')' to "01000/00100/00010/00010/00010/00100/01000",
-    '/' to "00001/00001/00010/00100/01000/10000/10000",
-    '&' to "01100/10010/10100/01000/10101/10010/01101",
-    '+' to "00000/00100/00100/11111/00100/00100/00000",
-    '#' to "01010/11111/01010/01010/11111/01010/00000",
-    '@' to "01110/10001/10111/10101/10111/10000/01110",
-    '_' to "00000/00000/00000/00000/00000/00000/11111",
-    '*' to "00000/10101/01110/11111/01110/10101/00000",
-    '=' to "00000/11111/00000/11111/00000/00000/00000",
-    '%' to "11001/11010/00010/00100/01000/01011/10011",
-    '$' to "01110/10100/10100/01110/00101/00101/01110",
-    '\'' to "00100/00100/00010/00000/00000/00000/00000",
-    '"' to "01010/01010/00000/00000/00000/00000/00000"
-)
-
-private fun cdDotColumns(c: Char): Int = when (c) {
-    ' ' -> 3
-    '.', ',', ':', '!', '\'' -> 4
-    else -> 6
-}
-
-private fun rasterizeDotMatrixTitle(
-    title: String,
-    widthPx: Int,
-    textPx: Float,
-    pitchPx: Float
-): android.graphics.Bitmap {
-    val normalized = java.text.Normalizer.normalize(
-        title.uppercase(Locale.ROOT).trim(),
-        java.text.Normalizer.Form.NFD
-    ).replace(Regex("\\p{M}+"), "").replace(Regex("\\s+"), " ")
-
-    // Fall back to the Unicode-safe renderer for non-Latin / emoji titles.
-    if (normalized.any { it != ' ' && it !in cdDotGlyphs }) {
-        return rasterizeDotTitleFallback(title, widthPx, textPx, pitchPx)
-    }
-
-    val pitch = maxOf(pitchPx.toInt(), (textPx / 8f).toInt()).coerceAtLeast(3)
-    val maxColumns = ((widthPx - pitch * 2) / pitch).coerceAtLeast(6)
-    fun columns(value: String): Int {
-        var total = 0
-        for (ch in value) total += cdDotColumns(ch)
-        return total
-    }
-
-    val lines = mutableListOf<String>()
-    var remaining = normalized
-    repeat(2) {
-        if (remaining.isEmpty()) return@repeat
-        var used = 0
-        var fitting = 0
-        var lastSpace = -1
-        for (index in remaining.indices) {
-            val width = cdDotColumns(remaining[index])
-            if (used + width > maxColumns) break
-            used += width
-            fitting = index + 1
-            if (remaining[index] == ' ') lastSpace = index
-        }
-        if (fitting == 0) fitting = 1
-        if (fitting >= remaining.length) {
-            lines.add(remaining)
-            remaining = ""
-        } else {
-            val splitAt = if (lastSpace > 0) lastSpace else fitting
-            lines.add(remaining.substring(0, splitAt).trimEnd())
-            remaining = remaining.substring(splitAt).trimStart()
-        }
-    }
-    if (lines.isEmpty()) lines.add(" ")
-    if (remaining.isNotEmpty()) {
-        var last = lines.last().trimEnd()
-        while (last.isNotEmpty() && columns(last + "...") > maxColumns) {
-            last = last.dropLast(1).trimEnd()
-        }
-        lines[lines.lastIndex] = last + "..."
-    }
-
-    val height = pitch * (lines.size * 8 + 1)
-    val result = android.graphics.Bitmap.createBitmap(
-        widthPx.coerceAtLeast(1), height, android.graphics.Bitmap.Config.ARGB_8888
-    )
-    val canvas = android.graphics.Canvas(result)
-    val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-        color = android.graphics.Color.rgb(242, 240, 233)
-        style = android.graphics.Paint.Style.FILL
-    }
-    val dotRadius = pitch * 0.35f
-    lines.forEachIndexed { lineIndex, line ->
-        var x = ((widthPx - columns(line) * pitch) / 2f).coerceAtLeast(0f)
-        val y = (lineIndex * 8 + 1) * pitch.toFloat()
-        for (ch in line) {
-            val glyph = cdDotGlyphs[ch]
-            if (glyph != null) {
-                for (row in 0 until 7) {
-                    val base = row * 6
-                    for (col in 0 until 5) {
-                        if (glyph[base + col] == '1') {
-                            canvas.drawCircle(
-                                x + (col + 0.5f) * pitch,
-                                y + (row + 0.5f) * pitch,
-                                dotRadius,
-                                paint
-                            )
-                        }
-                    }
-                }
-            }
-            x += cdDotColumns(ch) * pitch
-        }
-    }
-    return result
-}
-
-/** Title raster is cached by text, width, and font size; never per animation frame. */
-@Composable
-private fun CdDotTitle(
-    title: String,
-    fontSize: Float,
-    modifier: Modifier = Modifier
-) {
-    BoxWithConstraints(modifier) {
-        val density = LocalDensity.current
-        val widthPx = with(density) { maxWidth.roundToPx() }.coerceAtLeast(1)
-        val textPx = with(density) { fontSize.coerceIn(18f, 26f).sp.toPx() }
-        val pitchPx = with(density) { 3.dp.toPx() }
-        val dots = remember(title, widthPx, textPx, pitchPx) {
-            rasterizeDotMatrixTitle(title, widthPx, textPx, pitchPx)
-        }
-        Image(
-            bitmap = dots.asImageBitmap(),
-            contentDescription = title,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(with(density) { dots.height.toDp() })
-        )
-    }
-}
-
-private fun rasterizeDotTitleFallback(
-    title: String,
-    widthPx: Int,
-    textPx: Float,
-    pitchPx: Float
-): android.graphics.Bitmap {
-    // StaticLayout handles ellipsis, international characters and 2-line
-    // wrapping before rasterisation. The user does not need a font asset.
-    val ink = android.text.TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-        color = android.graphics.Color.WHITE
-        textSize = textPx
-        typeface = android.graphics.Typeface.create(
-            "sans-serif-medium", android.graphics.Typeface.BOLD
-        )
-    }
-    val layout = android.text.StaticLayout.Builder.obtain(
-        title, 0, title.length, ink, widthPx
-    )
-        .setAlignment(android.text.Layout.Alignment.ALIGN_CENTER)
-        .setIncludePad(false)
-        .setMaxLines(2)
-        .setEllipsize(android.text.TextUtils.TruncateAt.END)
-        .build()
-    val heightPx = layout.height.coerceAtLeast(1)
-    val mask = android.graphics.Bitmap.createBitmap(
-        widthPx, heightPx, android.graphics.Bitmap.Config.ARGB_8888
-    )
-    layout.draw(android.graphics.Canvas(mask))
-    val pixels = IntArray(widthPx * heightPx)
-    mask.getPixels(pixels, 0, widthPx, 0, 0, widthPx, heightPx)
-    mask.recycle()
-
-    val output = android.graphics.Bitmap.createBitmap(
-        widthPx, heightPx, android.graphics.Bitmap.Config.ARGB_8888
-    )
-    val canvas = android.graphics.Canvas(output)
-    val pointInk = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-        color = android.graphics.Color.rgb(242, 240, 233)
-        style = android.graphics.Paint.Style.FILL
-    }
-    val pitch = pitchPx.toInt().coerceAtLeast(3)
-    val half = pitch / 2
-    val radius = pitch * 0.33f
-    val sampleRadius = (pitch / 4).coerceAtLeast(1)
-    for (y in half until heightPx step pitch) {
-        val upperY = (y - sampleRadius).coerceAtLeast(0)
-        val lowerY = (y + sampleRadius).coerceAtMost(heightPx - 1)
-        for (x in half until widthPx step pitch) {
-            // Sample a tiny cross, without allocating objects per dot.
-            val leftX = (x - sampleRadius).coerceAtLeast(0)
-            val rightX = (x + sampleRadius).coerceAtMost(widthPx - 1)
-            var opacity = pixels[y * widthPx + x] ushr 24
-            opacity = maxOf(opacity, pixels[y * widthPx + leftX] ushr 24)
-            opacity = maxOf(opacity, pixels[y * widthPx + rightX] ushr 24)
-            opacity = maxOf(opacity, pixels[upperY * widthPx + x] ushr 24)
-            opacity = maxOf(opacity, pixels[lowerY * widthPx + x] ushr 24)
-            if (opacity > 48) {
-                canvas.drawCircle(x.toFloat(), y.toFloat(), radius, pointInk)
-            }
-        }
-    }
-    return output
-}
 
 /** A presentation of the existing player, with no separate audio or queue state. */
 @Composable
@@ -345,7 +94,6 @@ fun CdPlayer(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Spacer(Modifier.weight(1f))
-                    Text("COMPACT DISC", color = Color(0xFF92928D), fontSize = 9.sp, letterSpacing = 2.sp)
                     IconButton(onClick = onSettings) {
                         Icon(Icons.Default.MoreHoriz, cdText("Pengaturan", "Settings"))
                     }
@@ -359,10 +107,14 @@ fun CdPlayer(
                         CdDisc(song, isPlaying && isVisible, artwork, discModifier)
                     }
                     Spacer(Modifier.height(20.dp))
-                    CdDotTitle(
-                        title = song?.title ?: cdText("Pilih lagu", "Choose a song"),
-                        fontSize = titleFontSize,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 28.dp)
+                    Text(
+                        text = song?.title ?: cdText("Pilih lagu", "Choose a song"),
+                        fontSize = titleFontSize.coerceIn(18f, 26f).sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 28.dp)
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
@@ -443,7 +195,7 @@ private fun CdDisc(
             var previous = withFrameNanos { it }
             while (true) {
                 withFrameNanos { now ->
-                    rotation = (rotation + (now - previous) / 1_000_000_000f * 36f) % 360f
+                    rotation = (rotation + (now - previous) / 1_000_000_000f * 48f) % 360f
                     previous = now
                 }
             }
