@@ -153,6 +153,7 @@ import com.yohandeku32.nusamusic.ui.vinylLabelDiameter
 import com.yohandeku32.nusamusic.ui.VinylLabelPainter
 import com.yohandeku32.nusamusic.ui.VinylPainter
 import com.yohandeku32.nusamusic.ui.VinylShadowPainter
+import com.yohandeku32.nusamusic.ui.CdPlayer
 import com.yohandeku32.nusamusic.ui.TurntablePlayer
 import com.yohandeku32.nusamusic.ui.TurntableLabels
 import com.yohandeku32.nusamusic.ui.VinylSongList
@@ -1646,6 +1647,19 @@ private fun NusaMusicApp(
         onPlayerPageVisibilityChanged(pagerState.settledPage == 0)
     }
 
+    // CD is always dark, including when the device uses the light theme.
+    androidx.compose.runtime.DisposableEffect(playerPresentationMode, pagerState.settledPage) {
+        val activity = context as? ComponentActivity
+        val insets = activity?.let { WindowCompat.getInsetsController(it.window, it.window.decorView) }
+        val previousLightNavigation = insets?.isAppearanceLightNavigationBars
+        if (playerPresentationMode == PlayerPresentationMode.CD && pagerState.settledPage == 0) {
+            insets?.isAppearanceLightNavigationBars = false
+        }
+        onDispose {
+            if (previousLightNavigation != null) insets?.isAppearanceLightNavigationBars = previousLightNavigation
+        }
+    }
+
     LaunchedEffect(currentSong?.artist) {
         artistBiography = null
         biographyLoading =
@@ -2022,6 +2036,18 @@ private fun NusaMusicApp(
                         modifier = Modifier.weight(1f)
                     )
                 }
+
+                Spacer(Modifier.height(10.dp))
+                PlayerButtonStyleOption(
+                    title = "CD",
+                    subtitle = nusaText("Cakram berputar, tema gelap, dan pilihan lagu geser.", "Rotating disc, dark theme, and a swipeable song collection."),
+                    selected = playerPresentationMode == PlayerPresentationMode.CD,
+                    onClick = {
+                        playerPresentationMode = PlayerPresentationMode.CD
+                        uiPrefs.edit().putString("player_presentation_mode", PlayerPresentationMode.CD.preferenceValue).apply()
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
 
                 Spacer(Modifier.height(18.dp))
 
@@ -2450,7 +2476,7 @@ private fun NusaMusicApp(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .background(
-                                    if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK ||
+                                    if (playerPresentationMode != PlayerPresentationMode.VINYL ||
                                         revealPlayerCurve
                                     ) {
                                         Color.Black
@@ -2465,7 +2491,7 @@ private fun NusaMusicApp(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .then(
-                                            if (playerPresentationMode == PlayerPresentationMode.VINYL) {
+                                            if (playerPresentationMode != PlayerPresentationMode.IMMERSIVE_ARTWORK) {
                                                 Modifier.heightIn(min = playerViewportHeight)
                                             } else Modifier.fillParentMaxHeight()
                                         )
@@ -2505,7 +2531,54 @@ private fun NusaMusicApp(
                                         )
                                     }
 
-                                    if (playerPresentationMode == PlayerPresentationMode.VINYL) {
+                                    if (playerPresentationMode == PlayerPresentationMode.CD) {
+                                        CdPlayer(
+                                            song = currentSong,
+                                            songs = filtered,
+                                            isPlaying = isPlaying,
+                                            isVisible = pagerState.settledPage == 0,
+                                            positionMsState = positionMsState,
+                                            durationMs = durationMs,
+                                            viewportHeight = playerViewportHeight,
+                                            titleFontFamily = titleFontFamily,
+                                            titleFontSize = titleFontSize,
+                                            shuffleEnabled = shuffleEnabled,
+                                            repeatMode = repeatMode,
+                                            onPlayPause = {
+                                                when {
+                                                    currentSong != null -> onTogglePlay()
+                                                    filtered.isNotEmpty() -> onPlay(filtered.first(), filtered)
+                                                    !permissionGranted && selectedMusicFolders.isEmpty() -> onRequestPermission()
+                                                    else -> scope.launch { pagerState.animateScrollToPage(1) }
+                                                }
+                                            },
+                                            onPrevious = onPrevious,
+                                            onNext = onNext,
+                                            onSeek = onSeek,
+                                            onShuffle = onToggleShuffle,
+                                            onRepeat = onToggleRepeat,
+                                            onSelectSong = { onPlay(it, filtered) },
+                                            onSettings = { showSettings = true },
+                                            onLibrary = { scope.launch { pagerState.animateScrollToPage(1) } },
+                                            artwork = { cdSong, artworkModifier ->
+                                                androidx.compose.runtime.key(cdSong?.uri) {
+                                                    ArtworkView(song = cdSong, maxSizePx = 768, modifier = artworkModifier)
+                                                }
+                                            },
+                                            emptyState = {
+                                                Text(
+                                                    text = if (!permissionGranted && selectedMusicFolders.isEmpty()) {
+                                                        nusaText("Izinkan akses musik untuk mulai memutar.", "Allow music access to start listening.")
+                                                    } else nusaText("Tidak ada musik lokal", "No local music found"),
+                                                    color = Color(0xFFA5A5A0),
+                                                    fontSize = 12.sp,
+                                                    textAlign = TextAlign.Center,
+                                                    modifier = Modifier.padding(24.dp)
+                                                )
+                                            },
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    } else if (playerPresentationMode == PlayerPresentationMode.VINYL) {
                                         TurntablePlayer(
                                             title = currentSong?.title ?: nusaText("Pilih lagu", "Choose a song"),
                                             artist = currentSong?.artist ?: nusaText("Perpustakaan musik lokal Anda", "Your local music library"),
