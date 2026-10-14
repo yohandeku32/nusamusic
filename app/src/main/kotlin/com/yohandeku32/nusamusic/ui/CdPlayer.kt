@@ -1,6 +1,19 @@
 package com.yohandeku32.nusamusic.ui
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.using
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -71,6 +84,19 @@ fun CdPlayer(
     emptyState: @Composable () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // UI-only direction: the audio playback/queue is owned by the parent.
+    // A previous action reverses the case swap; automatic/shuffled advances
+    // use the normal leftward exit and rightward entrance.
+    var swapDirection by remember { mutableIntStateOf(1) }
+    LaunchedEffect(song?.id, swapDirection) {
+        // Return to forward motion after the swap; avoids a stale previous
+        // direction affecting the next automatic or shuffled track.
+        if (swapDirection < 0) {
+            kotlinx.coroutines.delay(500L)
+            swapDirection = 1
+        }
+    }
+
     MaterialTheme(colorScheme = darkColorScheme(
         background = CdBackground,
         surface = Color(0xFF191919),
@@ -104,25 +130,82 @@ fun CdPlayer(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Spacer(Modifier.height(18.dp))
                     CdJewelCase(Modifier.size(width = discSize * 1.12f, height = discSize)) { discModifier ->
-                        CdDisc(song, isPlaying && isVisible, artwork, discModifier)
+                        // Only the disc changes identity. The jewel-case tray,
+                        // transparent scratched lid, and centre spindle never
+                        // animate or move with the disc.
+                        AnimatedContent(
+                            targetState = song,
+                            modifier = discModifier,
+                            contentKey = { it?.id },
+                            transitionSpec = {
+                                val direction = swapDirection
+                                (
+                                    slideInHorizontally(
+                                        animationSpec = tween(
+                                            durationMillis = 260,
+                                            delayMillis = 150,
+                                            easing = FastOutSlowInEasing
+                                        ),
+                                        initialOffsetX = { width -> direction * width }
+                                    ) +
+                                    fadeIn(animationSpec = tween(180, delayMillis = 150)) +
+                                    scaleIn(
+                                        initialScale = 0.92f,
+                                        animationSpec = tween(260, delayMillis = 150)
+                                    )
+                                ).togetherWith(
+                                    slideOutHorizontally(
+                                        animationSpec = tween(
+                                            durationMillis = 180,
+                                            easing = FastOutSlowInEasing
+                                        ),
+                                        targetOffsetX = { width -> -direction * width }
+                                    ) +
+                                    fadeOut(animationSpec = tween(160)) +
+                                    scaleOut(
+                                        targetScale = 0.93f,
+                                        animationSpec = tween(180)
+                                    )
+                                ).using(SizeTransform(clip = false))
+                            },
+                            label = "CD disc swap"
+                        ) { shownSong ->
+                            CdDisc(
+                                song = shownSong,
+                                spinning = shownSong?.id == song?.id && isPlaying && isVisible,
+                                artwork = artwork,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
                     }
                     Spacer(Modifier.height(20.dp))
-                    Text(
-                        text = song?.title ?: cdText("Pilih lagu", "Choose a song"),
-                        fontSize = titleFontSize.coerceIn(18f, 26f).sp,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(horizontal = 28.dp)
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        song?.artist?.takeIf { it.isNotBlank() } ?: cdText("Koleksi musik Anda", "Your music collection"),
-                        color = Color(0xFFA5A5A0), fontSize = 12.sp,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(horizontal = 28.dp)
-                    )
+                    Crossfade(
+                        targetState = song,
+                        animationSpec = tween(durationMillis = 220),
+                        label = "CD song metadata"
+                    ) { shownSong ->
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = shownSong?.title ?: cdText("Pilih lagu", "Choose a song"),
+                                fontSize = titleFontSize.coerceIn(18f, 26f).sp,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(horizontal = 28.dp)
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                shownSong?.artist?.takeIf { it.isNotBlank() }
+                                    ?: cdText("Koleksi musik Anda", "Your music collection"),
+                                color = Color(0xFFA5A5A0),
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(horizontal = 28.dp)
+                            )
+                        }
+                    }
                     Row(
                         Modifier.padding(top = 12.dp, bottom = 14.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -131,7 +214,10 @@ fun CdPlayer(
                         IconToggleButton(checked = shuffleEnabled, onCheckedChange = { onShuffle() }, enabled = song != null) {
                             Icon(Icons.Default.Shuffle, cdText("Acak", "Shuffle"), Modifier.size(19.dp), tint = if (shuffleEnabled) CdAccent else Color.Gray)
                         }
-                        IconButton(onClick = onPrevious, enabled = song != null) {
+                        IconButton(onClick = {
+                            swapDirection = -1
+                            onPrevious()
+                        }, enabled = song != null) {
                             Icon(Icons.Default.SkipPrevious, cdText("Sebelumnya", "Previous"), Modifier.size(27.dp))
                         }
                         FilledIconButton(
@@ -141,7 +227,10 @@ fun CdPlayer(
                             Icon(if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                 if (isPlaying) cdText("Jeda", "Pause") else cdText("Putar", "Play"), Modifier.size(29.dp))
                         }
-                        IconButton(onClick = onNext, enabled = song != null) {
+                        IconButton(onClick = {
+                            swapDirection = 1
+                            onNext()
+                        }, enabled = song != null) {
                             Icon(Icons.Default.SkipNext, cdText("Berikutnya", "Next"), Modifier.size(27.dp))
                         }
                         IconButton(onClick = onRepeat, enabled = song != null) {
@@ -165,7 +254,12 @@ fun CdPlayer(
                     Box(Modifier.size(28.dp, 3.dp).clip(CircleShape).background(Color(0xFF343434)))
                     Spacer(Modifier.height(12.dp))
                     if (songs.isNotEmpty()) {
-                        CdSongCarousel(songs, song?.id, thumbnailArtwork, onSelectSong)
+                        CdSongCarousel(songs, song?.id, thumbnailArtwork) { selected ->
+                            val oldIndex = songs.indexOfFirst { it.id == song?.id }
+                            val newIndex = songs.indexOfFirst { it.id == selected.id }
+                            swapDirection = if (oldIndex >= 0 && newIndex < oldIndex) -1 else 1
+                            onSelectSong(selected)
+                        }
                         Text(cdText("Geser untuk memilih · ketuk untuk putar", "Swipe to browse · tap to play"),
                             color = Color(0xFF92928D), fontSize = 11.sp,
                             modifier = Modifier.padding(top = 10.dp, bottom = 4.dp))
