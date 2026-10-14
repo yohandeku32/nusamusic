@@ -2504,7 +2504,6 @@ private fun NusaMusicApp(
                                             positionMsState = positionMsState,
                                             durationMs = durationMs,
                                             viewportHeight = playerViewportHeight,
-                                            titleFontFamily = titleFontFamily,
                                             titleFontSize = titleFontSize,
                                             shuffleEnabled = shuffleEnabled,
                                             repeatMode = repeatMode,
