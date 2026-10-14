@@ -8,8 +8,14 @@ import android.net.Uri
 import android.util.LruCache
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 
 object ArtworkLoader {
+    // Limit simultaneous MediaMetadataRetriever and bitmap decodes while
+    // flinging large libraries or rapidly shuffling tracks.
+    private val decodePermit = Semaphore(2)
+
     // Keep a bounded memory cache instead of retaining dozens of large album covers.
     private val cache = object : LruCache<String, Bitmap>(24 * 1024) {
         override fun sizeOf(key: String, value: Bitmap): Int {
@@ -32,10 +38,12 @@ object ArtworkLoader {
         val memoryKey = resolvedCacheKey(uriString, maxSize, cacheKey)
         cache.get(memoryKey)?.let { return@withContext it }
 
+        decodePermit.withPermit {
+        cache.get(memoryKey)?.let { return@withPermit it }
         val retriever = MediaMetadataRetriever()
         try {
             retriever.setDataSource(context, Uri.parse(uriString))
-            val bytes = retriever.embeddedPicture ?: return@withContext null
+            val bytes = retriever.embeddedPicture ?: return@withPermit null
 
             // Read image bounds first so a large 2000px+ embedded cover is never
             // decoded at full resolution when the UI only needs a small thumbnail.
@@ -60,7 +68,7 @@ object ArtworkLoader {
                 0,
                 bytes.size,
                 options
-            ) ?: return@withContext null
+            ) ?: return@withPermit null
 
             val bitmap = scaleDown(decoded, maxSize)
             if (bitmap !== decoded) {
@@ -73,6 +81,7 @@ object ArtworkLoader {
             null
         } finally {
             retriever.release()
+        }
         }
     }
 
