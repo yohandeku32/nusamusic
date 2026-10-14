@@ -2,11 +2,11 @@ package com.yohandeku32.nusamusic.ui
 
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.unit.Density
@@ -25,7 +25,7 @@ internal class ImmersiveArtworkPainter(
     private val artworkBottom: Float,
     private val transition: Float
 ) {
-    // Cached, filtered masks make the broad curved fade a single draw per frame.
+    // Cached, filtered masks keep the progressive vertical fade cheap to draw.
     private val artworkFade by lazy { createMask(dark = false) }
     private val scrim by lazy { createMask(dark = true) }
 
@@ -40,26 +40,20 @@ internal class ImmersiveArtworkPainter(
         CanvasDrawScope().draw(
             Density(1f), LayoutDirection.Ltr, Canvas(mask), Size(width.toFloat(), height.toFloat())
         ) {
-            drawRect(if (dark) Color.Black else Color.Transparent)
-            val contour = Path()
-            for (step in 192 downTo 0) {
-                val progress = step / 192f
+            val stops = Array(33) { step ->
+                val progress = step / 32f
                 val smooth = progress * progress * (3f - 2f * progress)
-                val y = bottom - span + span * progress
-                contour.reset()
-                contour.moveTo(0f, -height.toFloat())
-                contour.lineTo(0f, y - span * 0.28f)
-                contour.cubicTo(
-                    width * 0.24f, y + span * 0.10f,
-                    width * 0.64f, y - span * 0.03f,
-                    width.toFloat(), y - span * 0.18f
-                )
-                contour.lineTo(width.toFloat(), -height.toFloat())
-                contour.close()
-                val colour = if (dark) Color.Black.copy(alpha = smooth)
+                progress to if (dark) Color.Black.copy(alpha = smooth)
                     else Color.White.copy(alpha = 1f - smooth)
-                drawPath(contour, colour, blendMode = BlendMode.Src)
             }
+            drawRect(
+                brush = Brush.verticalGradient(
+                    *stops,
+                    startY = bottom - span,
+                    endY = bottom
+                ),
+                blendMode = BlendMode.Src
+            )
         }
         return mask
     }

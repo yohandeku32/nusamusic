@@ -36,8 +36,9 @@ internal object ArtworkBlur {
         try {
             val pixels = IntArray(width * height)
             small.getPixels(pixels, 0, width, 0, 0, width, height)
-            // Gentle frosted-glass softness: keep outlines and artwork colours visible.
-            return Bitmap.createBitmap(blurArgb(pixels, width, height, radius = 3, passes = 1), width, height, Bitmap.Config.ARGB_8888)
+            // Broad, soft colour diffusion behind the progressively fading cover.
+            // Work on the thumbnail once per artwork, including frozen video frames.
+            return Bitmap.createBitmap(blurArgb(pixels, width, height, radius = 12, passes = 3), width, height, Bitmap.Config.ARGB_8888)
         } finally {
             if (small !== source) small.recycle()
         }
