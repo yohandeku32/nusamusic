@@ -127,13 +127,11 @@ private fun rasterizeDotTitle(
             // Sample a tiny cross, without allocating objects per dot.
             val leftX = (x - sampleRadius).coerceAtLeast(0)
             val rightX = (x + sampleRadius).coerceAtMost(widthPx - 1)
-            val opacity = maxOf(
-                pixels[y * widthPx + x] ushr 24,
-                pixels[y * widthPx + leftX] ushr 24,
-                pixels[y * widthPx + rightX] ushr 24,
-                pixels[upperY * widthPx + x] ushr 24,
-                pixels[lowerY * widthPx + x] ushr 24
-            )
+            var opacity = pixels[y * widthPx + x] ushr 24
+            opacity = maxOf(opacity, pixels[y * widthPx + leftX] ushr 24)
+            opacity = maxOf(opacity, pixels[y * widthPx + rightX] ushr 24)
+            opacity = maxOf(opacity, pixels[upperY * widthPx + x] ushr 24)
+            opacity = maxOf(opacity, pixels[lowerY * widthPx + x] ushr 24)
             if (opacity > 48) {
                 canvas.drawCircle(x.toFloat(), y.toFloat(), radius, pointInk)
             }
