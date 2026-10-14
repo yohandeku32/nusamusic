@@ -180,6 +180,9 @@ private fun nusaText(
 
 class MainActivity : ComponentActivity() {
     private var controller: MediaController? = null
+    // Avoid checking every Media3 queue item whenever a carousel disc is tapped.
+    private var queuedPlaybackOrder: List<Song>? = null
+    private var pendingPlaySongJob: Job? = null
     private var songs by mutableStateOf<List<Song>>(emptyList())
     private var currentSong by mutableStateOf<Song?>(null)
     private var isPlaying by mutableStateOf(false)
@@ -449,6 +452,7 @@ class MainActivity : ComponentActivity() {
         future.addListener({
             val c = future.get()
             controller = c
+            queuedPlaybackOrder = null
             c.addListener(object : Player.Listener {
                 override fun onIsPlayingChanged(playing: Boolean) {
                     isPlaying = playing
@@ -514,7 +518,6 @@ class MainActivity : ComponentActivity() {
                     durationMs = durationMs,
                     permissionGranted = permissionGranted,
                     onPlay = ::playSong,
-                    onPlaybackOrderChanged = ::updatePlaybackOrder,
                     onTogglePlay = ::togglePlay,
                     customTitleFontPath = customTitleFontPath,
                     customTitleFontName = customTitleFontName,
@@ -751,6 +754,7 @@ class MainActivity : ComponentActivity() {
         c.shuffleModeEnabled = savedShuffle
         c.repeatMode = savedRepeat
         c.prepare()
+        queuedPlaybackOrder = songSnapshot
 
         currentSong = songSnapshot[index]
         shuffleEnabled = savedShuffle
@@ -1012,84 +1016,44 @@ class MainActivity : ComponentActivity() {
             .build()
 
     private fun playSong(song: Song, orderedSongs: List<Song>) {
-        controller?.let { c ->
-            // Use the list's selected sort order for the Media3 queue as well as
-            // the visible library. This keeps Next/Previous aligned with sorting.
-            val queueSongs = orderedSongs.ifEmpty { songs }
-            val targetIndex = queueSongs.indexOfFirst { it.id == song.id }
-            if (targetIndex < 0) return@let
+        val c = controller ?: return
+        val queueSongs = orderedSongs.ifEmpty { songs }
+        val targetIndex = queueSongs.indexOfFirst { it.id == song.id }
+        if (targetIndex < 0) return
 
-            // Avoid resetting the decoder when the queue already uses this exact order.
-            val queueMatches = c.mediaItemCount == queueSongs.size &&
-                queueSongs.indices.all { index ->
-                    c.getMediaItemAt(index).mediaId == queueSongs[index].id.toString()
-                }
+        // Avoid an O(library size) series of MediaController calls for every
+        // carousel tap. This queue only changes when we explicitly load an order.
+        val queueMatches = queuedPlaybackOrder === queueSongs &&
+            c.mediaItemCount == queueSongs.size &&
+            c.getMediaItemAt(targetIndex).mediaId == song.id.toString()
 
-            if (queueMatches) {
-                c.seekTo(targetIndex, 0L)
-                c.play()
-            } else {
-                c.setMediaItems(
-                    queueSongs.map(::mediaItemFor),
-                    targetIndex,
-                    0L
-                )
-                c.prepare()
-                c.play()
-            }
+        pendingPlaySongJob?.cancel()
+        pendingPlaySongJob = null
 
+        if (queueMatches) {
+            c.seekTo(targetIndex, 0L)
+            c.play()
             currentSong = song
             isPlaying = true
-        }
-    }
-
-    private fun updatePlaybackOrder(orderedSongs: List<Song>) {
-        if (orderedSongs.isEmpty()) return
-
-        val c = controller ?: return
-        val currentMediaId = c.currentMediaItem?.mediaId ?: return
-        val orderedIds = orderedSongs.map { it.id.toString() }
-        val currentIds = (0 until c.mediaItemCount)
-            .map { index -> c.getMediaItemAt(index).mediaId }
-
-        if (
-            currentIds.size == orderedIds.size &&
-            currentIds.toSet() == orderedIds.toSet()
-        ) {
-            // Reorder existing queue entries in place to preserve the active
-            // decoder, current position and ongoing playback.
-            orderedIds.forEachIndexed { targetIndex, targetId ->
-                val sourceIndex = (targetIndex until c.mediaItemCount)
-                    .firstOrNull { index ->
-                        c.getMediaItemAt(index).mediaId == targetId
-                    } ?: return@forEachIndexed
-
-                if (sourceIndex != targetIndex) {
-                    c.moveMediaItem(sourceIndex, targetIndex)
-                }
-            }
             return
         }
 
-        // If the library membership changed, keep the current track and position
-        // while synchronizing the queue to the newly sorted library.
-        val currentIndex = orderedIds.indexOf(currentMediaId)
-        if (currentIndex < 0) return
+        // Build large playlists off the UI thread. Rapid taps cancel older
+        // requests instead of stacking expensive full-queue rebuilds.
+        queuedPlaybackOrder = null
+        pendingPlaySongJob = lifecycleScope.launch {
+            val mediaItems = withContext(Dispatchers.Default) {
+                queueSongs.map(::mediaItemFor)
+            }
+            if (controller !== c) return@launch
 
-        val wasPlayWhenReady = c.playWhenReady
-        val positionMs = c.currentPosition.coerceAtLeast(0L)
-        val savedRepeatMode = c.repeatMode
-        val savedShuffleEnabled = c.shuffleModeEnabled
-
-        c.setMediaItems(
-            orderedSongs.map(::mediaItemFor),
-            currentIndex,
-            positionMs
-        )
-        c.repeatMode = savedRepeatMode
-        c.shuffleModeEnabled = savedShuffleEnabled
-        c.prepare()
-        if (wasPlayWhenReady) c.play() else c.pause()
+            c.setMediaItems(mediaItems, targetIndex, 0L)
+            c.prepare()
+            c.play()
+            queuedPlaybackOrder = queueSongs
+            currentSong = song
+            isPlaying = true
+        }
     }
 
     private fun togglePlay() {
@@ -1142,6 +1106,8 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        pendingPlaySongJob?.cancel()
+        pendingPlaySongJob = null
         automaticMusicScanJob?.cancel()
         automaticMusicScanJob = null
         runCatching {
@@ -1359,6 +1325,11 @@ private enum class LibrarySortOption(
         get() = englishLabel
 }
 
+private data class SortedLibrary(
+    val songs: List<Song>,
+    val alphabetTargets: Map<Char, Int>
+)
+
 private fun alphabetIndexKey(title: String): Char {
     val normalizedTitle = Normalizer.normalize(
         title.trim(),
@@ -1397,7 +1368,6 @@ private fun NusaMusicApp(
     durationMs: Long,
     permissionGranted: Boolean,
     onPlay: (Song, List<Song>) -> Unit,
-    onPlaybackOrderChanged: (List<Song>) -> Unit,
     onTogglePlay: () -> Unit,
     customTitleFontPath: String?,
     customTitleFontName: String?,
@@ -1538,58 +1508,52 @@ private fun NusaMusicApp(
         )
     }
 
-    val filtered = remember(
-        songs,
-        librarySortOption
-    ) {
-        when (librarySortOption) {
-            LibrarySortOption.TITLE_ASC ->
-                songs.sortedBy { it.title.lowercase(Locale.ROOT) }
-
-            LibrarySortOption.TITLE_DESC ->
-                songs.sortedByDescending { it.title.lowercase(Locale.ROOT) }
-
-            LibrarySortOption.ARTIST_ASC ->
-                songs.sortedBy {
-                    it.artist.lowercase(Locale.ROOT)
+    // Sort and calculate the A–Z index outside Compose's main thread.
+    // Retain the last ready list during rapid sort changes, so the player and
+    // CD carousel never receive an intermediate, partially sorted list.
+    var sortedLibrary by remember(songs) {
+        mutableStateOf(SortedLibrary(songs, emptyMap()))
+    }
+    LaunchedEffect(songs, librarySortOption) {
+        val prepared = withContext(Dispatchers.Default) {
+            val ordered = when (librarySortOption) {
+                LibrarySortOption.TITLE_ASC ->
+                    songs.sortedBy { it.title.lowercase(Locale.ROOT) }
+                LibrarySortOption.TITLE_DESC ->
+                    songs.sortedByDescending { it.title.lowercase(Locale.ROOT) }
+                LibrarySortOption.ARTIST_ASC ->
+                    songs.sortedBy { it.artist.lowercase(Locale.ROOT) }
+                LibrarySortOption.RECENTLY_ADDED ->
+                    songs.sortedWith(
+                        compareByDescending<Song> { it.dateAddedMs }
+                            .thenBy { it.title.lowercase(Locale.ROOT) }
+                    )
+                LibrarySortOption.ALBUM_ASC ->
+                    songs.sortedBy { it.album.lowercase(Locale.ROOT) }
+                LibrarySortOption.DURATION_ASC ->
+                    songs.sortedBy { it.durationMs }
+                LibrarySortOption.DURATION_DESC ->
+                    songs.sortedByDescending { it.durationMs }
+            }
+            val targets = buildMap<Char, Int> {
+                ordered.forEachIndexed { index, track ->
+                    val letter = alphabetIndexKey(track.title)
+                    if (letter !in this) put(letter, index)
                 }
-
-            LibrarySortOption.RECENTLY_ADDED ->
-                songs.sortedWith(
-                    compareByDescending<Song> { it.dateAddedMs }
-                        .thenBy { it.title.lowercase(Locale.ROOT) }
-                )
-
-            LibrarySortOption.ALBUM_ASC ->
-                songs.sortedBy {
-                    it.album.lowercase(Locale.ROOT)
-                }
-
-            LibrarySortOption.DURATION_ASC ->
-                songs.sortedBy { it.durationMs }
-
-            LibrarySortOption.DURATION_DESC ->
-                songs.sortedByDescending { it.durationMs }
+            }
+            SortedLibrary(ordered, targets)
         }
+        sortedLibrary = prepared
     }
+    val filtered = sortedLibrary.songs
+    val alphabetTargets = sortedLibrary.alphabetTargets
 
-    LaunchedEffect(filtered) {
-        onPlaybackOrderChanged(filtered)
-    }
+    // Sorting is a visual library action; it must never reconstruct or move
+    // thousands of entries in an actively playing Media3 queue. When a song
+    // is selected, playSong() already applies the currently displayed order.
 
     val alphabet = remember {
         listOf('#') + ('A'..'Z')
-    }
-
-    val alphabetTargets = remember(filtered) {
-        buildMap {
-            filtered.forEachIndexed { index, song ->
-                val key = alphabetIndexKey(song.title)
-                if (key !in this) {
-                    put(key, index)
-                }
-            }
-        }
     }
 
     val pagerState = androidx.compose.foundation.pager.rememberPagerState(
@@ -2565,6 +2529,11 @@ private fun NusaMusicApp(
                                                     ArtworkView(song = cdSong, maxSizePx = 768, modifier = artworkModifier)
                                                 }
                                             },
+                                            thumbnailArtwork = { cdSong, artworkModifier ->
+                                                androidx.compose.runtime.key(cdSong?.uri) {
+                                                    ArtworkView(song = cdSong, maxSizePx = 128, modifier = artworkModifier)
+                                                }
+                                            },
                                             emptyState = {
                                                 Text(
                                                     text = if (!permissionGranted && selectedMusicFolders.isEmpty()) {
@@ -3192,13 +3161,8 @@ private fun NusaMusicApp(
                                                         )
                                                         .apply()
                                                     sortMenuExpanded = false
-
-                                                    if (
-                                                        option == LibrarySortOption.RECENTLY_ADDED &&
-                                                        songs.any { it.dateAddedMs <= 0L }
-                                                    ) {
-                                                        onScanMusic()
-                                                    }
+                                                    // Sorting must never trigger a full media scan.
+                                                    // Missing dates sort last; users can refresh explicitly.
                                                 }
                                             )
                                         }
@@ -5312,7 +5276,19 @@ private fun ArtworkView(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val density = androidx.compose.ui.platform.LocalDensity.current
-    var bitmap by remember { mutableStateOf<Bitmap?>(null) }
+    // On recycled song rows, immediately show cached art; never display the
+    // previous row's bitmap while the new cover loads in the background.
+    var bitmap by remember(song?.uri, maxSizePx) {
+        mutableStateOf(
+            song?.let {
+                ArtworkLoader.cached(
+                    uriString = it.uri,
+                    maxSize = maxSizePx,
+                    cacheKey = it.albumId.takeIf { id -> id > 0L }?.toString()
+                )
+            }
+        )
+    }
 
     LaunchedEffect(song?.uri, maxSizePx) {
         bitmap = song?.let {

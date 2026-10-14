@@ -69,6 +69,7 @@ fun CdPlayer(
     onSettings: () -> Unit,
     onLibrary: () -> Unit,
     artwork: @Composable (Song?, Modifier) -> Unit,
+    thumbnailArtwork: @Composable (Song?, Modifier) -> Unit,
     emptyState: @Composable () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -168,7 +169,7 @@ fun CdPlayer(
                     Box(Modifier.size(28.dp, 3.dp).clip(CircleShape).background(Color(0xFF343434)))
                     Spacer(Modifier.height(12.dp))
                     if (songs.isNotEmpty()) {
-                        CdSongCarousel(songs, song?.id, artwork, onSelectSong)
+                        CdSongCarousel(songs, song?.id, thumbnailArtwork, onSelectSong)
                         Text(cdText("Geser untuk memilih · ketuk untuk putar", "Swipe to browse · tap to play"),
                             color = Color(0xFF92928D), fontSize = 11.sp,
                             modifier = Modifier.padding(top = 10.dp, bottom = 4.dp))
@@ -339,16 +340,56 @@ private fun CdDisc(
     }
 }
 
+/** Lightweight static carousel preview: no rotating frame effects or large artwork. */
+@Composable
+private fun CdThumbnail(
+    song: Song,
+    artwork: @Composable (Song?, Modifier) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(modifier.clip(CircleShape), contentAlignment = Alignment.Center) {
+        artwork(song, Modifier.fillMaxSize())
+        Canvas(Modifier.matchParentSize()) {
+            val radius = size.minDimension / 2f
+            drawCircle(
+                Brush.sweepGradient(
+                    listOf(
+                        Color.Transparent,
+                        Color.White.copy(alpha = 0.15f),
+                        Color.Transparent,
+                        Color.Black.copy(alpha = 0.10f),
+                        Color.Transparent
+                    )
+                ),
+                radius = radius
+            )
+            drawCircle(Color.Black.copy(alpha = 0.23f), radius * 0.36f)
+            drawCircle(
+                Brush.radialGradient(
+                    listOf(Color(0xFF8C979D), Color(0xFFD0D8DB), Color(0xFF7E878A))
+                ),
+                radius * 0.31f
+            )
+            drawCircle(Color(0xFF1A1D20), radius * 0.065f)
+        }
+    }
+}
+
 @Composable
 private fun CdSongCarousel(
     songs: List<Song>, currentId: Long?,
     artwork: @Composable (Song?, Modifier) -> Unit,
     onSelectSong: (Song) -> Unit
 ) {
-    val currentIndex = songs.indexOfFirst { it.id == currentId }.coerceAtLeast(0)
+    val currentIndex = remember(songs, currentId) {
+        songs.indexOfFirst { it.id == currentId }.coerceAtLeast(0)
+    }
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = currentIndex)
+    // A song change (especially Shuffle) can jump across thousands of items:
+    // snap directly rather than animating every intermediate row and decoding
+    // their covers just to scroll past them.
     LaunchedEffect(currentId, songs) {
-        listState.animateScrollToItem(currentIndex)
+        listState.scrollToItem(currentIndex)
     }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         LazyRow(
@@ -371,7 +412,7 @@ private fun CdSongCarousel(
                         .padding(6.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    CdDisc(item, false, artwork, Modifier.fillMaxSize())
+                    CdThumbnail(item, artwork, Modifier.fillMaxSize())
                 }
             }
         }
