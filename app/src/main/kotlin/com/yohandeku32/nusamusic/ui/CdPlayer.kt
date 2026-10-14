@@ -218,9 +218,77 @@ private fun CdDisc(
                     drawCircle(Color.White.copy(alpha = 0.045f), radius * (0.68f + ring * 0.03f), style = Stroke(0.5.dp.toPx()))
                 }
                 drawCircle(Color.White.copy(alpha = 0.3f), radius - 1.dp.toPx(), style = Stroke(1.dp.toPx()))
-                drawCircle(Color.Black.copy(alpha = 0.14f), radius * 0.18f)
-                drawCircle(Color.White.copy(alpha = 0.25f), radius * 0.18f, style = Stroke(0.8.dp.toPx()))
-                drawCircle(Color.White.copy(alpha = 0.1f), radius * 0.12f, style = Stroke(1.dp.toPx()))
+                // Real CD centre: the molded, translucent inner ring is wider than
+                // the spindle hole and stays perfectly concentric with the disc.
+                // A soft dark recess and iridescent rim make the hub read as
+                // layered polycarbonate instead of flat album artwork.
+                val hub = center
+                drawCircle(Color.Black.copy(alpha = 0.24f), radius * 0.371f, hub)
+                drawCircle(
+                    brush = Brush.sweepGradient(
+                        listOf(
+                            Color(0xFFBAD1DD),
+                            Color(0xFFE4E8E5),
+                            Color(0xFFF9DA83),
+                            Color(0xFFF2A7A5),
+                            Color(0xFFA7B8EA),
+                            Color(0xFFDDE5E8),
+                            Color(0xFFBAD1DD)
+                        ),
+                        center = hub
+                    ),
+                    radius = radius * 0.352f,
+                    center = hub,
+                    alpha = 0.76f
+                )
+                drawCircle(
+                    Color.White.copy(alpha = 0.62f), radius * 0.352f, hub,
+                    style = Stroke(0.8.dp.toPx())
+                )
+                drawCircle(
+                    Color(0xFF525D62).copy(alpha = 0.40f), radius * 0.332f, hub,
+                    style = Stroke(2.2.dp.toPx())
+                )
+                // Satin silver-grey recessed label ring, softly shaded radially.
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        0.00f to Color(0xFF8B9092),
+                        0.38f to Color(0xFFB9BFC0),
+                        0.72f to Color(0xFFD5DADB),
+                        0.88f to Color(0xFFA0AAAE),
+                        1.00f to Color(0xFFE5EAEB),
+                        center = hub,
+                        radius = radius * 0.314f
+                    ),
+                    radius = radius * 0.314f,
+                    center = hub
+                )
+                drawCircle(
+                    Color.White.copy(alpha = 0.55f), radius * 0.306f, hub,
+                    style = Stroke(0.8.dp.toPx())
+                )
+                drawCircle(
+                    Color.Black.copy(alpha = 0.22f), radius * 0.167f, hub,
+                    style = Stroke(2.dp.toPx())
+                )
+                // Small inner mounting disc with a clear edge and dark centre.
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            Color(0xFF777D80),
+                            Color(0xFF929A9D),
+                            Color(0xFFAAB2B5)
+                        ),
+                        center = hub,
+                        radius = radius * 0.150f
+                    ),
+                    radius = radius * 0.150f,
+                    center = hub
+                )
+                drawCircle(
+                    Color.White.copy(alpha = 0.26f), radius * 0.149f, hub,
+                    style = Stroke(0.75.dp.toPx())
+                )
             }
         }
         Box(Modifier.fillMaxSize(0.065f).clip(CircleShape).background(CdBackground).border(1.dp, Color.Black.copy(alpha = 0.5f), CircleShape))
