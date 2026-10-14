@@ -125,100 +125,76 @@ fun TurntablePlayer(
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                // Retain the upper safe spacing without back/settings buttons.
-                Spacer(Modifier.height(52.dp))
+                // Reserve real space for the rear wiring, so its ends cannot be
+                // clipped by the deck or cut off at a negative canvas coordinate.
+                val cableClearance = 52.dp
+                Box(modifier = Modifier.size(width = deckSize, height = deckSize + cableClearance)) {
+                    Canvas(Modifier.matchParentSize()) {
+                        val deckTop = cableClearance.toPx()
+                        val powerX = size.width * 0.285f
+                        val audioXs = listOf(size.width * 0.335f, size.width * 0.385f)
 
-                Box(
-                    modifier = Modifier.size(deckSize)
-                        // The connectors sit on the REAR EDGE and protrude behind the chassis.
-                        // Draw them outside the rounded clip; the deck covers their lower halves.
-                        .drawWithCache {
-                            val edgeY = -4.dp.toPx()
-                            val pinHeight = 6.dp.toPx()
-                            val pinWidth = 3.2.dp.toPx()
-                            val blackWidth = 8.dp.toPx()
-                            val rearBlack = Brush.verticalGradient(
-                                colors = listOf(Color(0xFF686C6E), Color(0xFF111518)),
-                                startY = edgeY,
-                                endY = 2.dp.toPx()
-                            )
-                            val rearGold = Brush.horizontalGradient(
-                                colors = listOf(Color(0xFF80591F), Color(0xFFEAC16D), Color(0xFFAA762A))
-                            )
-                            onDrawBehind {
-                                // Short real-looking leads curve away BEHIND the upper deck rim.
-                                // Keep the cables outside the record/artwork area.
-                                val dcX = size.width * 0.405f
-                                val dcCable = Path().apply {
-                                    moveTo(dcX, edgeY)
-                                    cubicTo(
-                                        dcX - 1.dp.toPx(), -13.dp.toPx(),
-                                        dcX - 15.dp.toPx(), -19.dp.toPx(),
-                                        dcX - 27.dp.toPx(), -31.dp.toPx()
-                                    )
-                                }
-                                drawPath(
-                                    dcCable, Color.Black.copy(alpha = 0.17f),
-                                    style = Stroke(width = 6.dp.toPx(), cap = StrokeCap.Round)
+                        fun drawCable(x: Float, exitY: Float, thickness: Dp, sheath: Color) {
+                            // Each lead leaves the visible upper-left corner and curves
+                            // naturally into a socket on the rear edge of the deck.
+                            val route = Path().apply {
+                                moveTo(-8.dp.toPx(), exitY)
+                                cubicTo(
+                                    size.width * 0.07f, exitY + 1.dp.toPx(),
+                                    x - 15.dp.toPx(), deckTop - 27.dp.toPx(),
+                                    x, deckTop - 7.dp.toPx()
                                 )
-                                drawPath(
-                                    dcCable, Color(0xFF202629),
-                                    style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
-                                )
-                                drawPath(
-                                    dcCable, Color(0xFF7A8386).copy(alpha = 0.38f),
-                                    style = Stroke(width = 0.8.dp.toPx(), cap = StrokeCap.Round)
-                                )
-
-                                listOf(0.535f, 0.575f).forEachIndexed { index, fraction ->
-                                    val x = size.width * fraction
-                                    val bend = (15 + index * 8).dp.toPx()
-                                    val rcaCable = Path().apply {
-                                        moveTo(x, -pinHeight)
-                                        cubicTo(
-                                            x + 2.dp.toPx(), -13.dp.toPx(),
-                                            x + bend * 0.65f, -20.dp.toPx(),
-                                            x + bend, -32.dp.toPx()
-                                        )
-                                    }
-                                    drawPath(
-                                        rcaCable, Color.Black.copy(alpha = 0.14f),
-                                        style = Stroke(width = 4.4.dp.toPx(), cap = StrokeCap.Round)
-                                    )
-                                    drawPath(
-                                        rcaCable, Color(0xFF35393C),
-                                        style = Stroke(width = 2.7.dp.toPx(), cap = StrokeCap.Round)
-                                    )
-                                    drawPath(
-                                        rcaCable, Color(0xFF90969A).copy(alpha = 0.35f),
-                                        style = Stroke(width = 0.55.dp.toPx(), cap = StrokeCap.Round)
-                                    )
-                                }
-                                // Low-profile black power connector, partially hidden by the rim.
-                                drawRoundRect(
-                                    brush = rearBlack,
-                                    topLeft = Offset(size.width * 0.405f - blackWidth / 2f, edgeY),
-                                    size = Size(blackWidth, 6.dp.toPx()),
-                                    cornerRadius = CornerRadius(1.dp.toPx())
-                                )
-                                // Two metallic contact pins emerging from the back edge.
-                                listOf(0.535f, 0.575f).forEach { fraction ->
-                                    val x = size.width * fraction
-                                    drawRoundRect(
-                                        color = Color(0xFF3A3227),
-                                        topLeft = Offset(x - 2.6.dp.toPx(), -1.5.dp.toPx()),
-                                        size = Size(5.2.dp.toPx(), 3.5.dp.toPx()),
-                                        cornerRadius = CornerRadius(0.7.dp.toPx())
-                                    )
-                                    drawRoundRect(
-                                        brush = rearGold,
-                                        topLeft = Offset(x - pinWidth / 2f, -pinHeight),
-                                        size = Size(pinWidth, pinHeight + 1.dp.toPx()),
-                                        cornerRadius = CornerRadius(0.8.dp.toPx())
-                                    )
-                                }
                             }
+                            drawPath(
+                                route, Color.Black.copy(alpha = 0.19f),
+                                style = Stroke(width = thickness.toPx() + 1.5.dp.toPx(), cap = StrokeCap.Round)
+                            )
+                            drawPath(
+                                route, sheath,
+                                style = Stroke(width = thickness.toPx(), cap = StrokeCap.Round)
+                            )
+                            drawPath(
+                                route, Color.White.copy(alpha = 0.14f),
+                                style = Stroke(width = 0.65.dp.toPx(), cap = StrokeCap.Round)
+                            )
                         }
+
+                        drawCable(powerX, 22.dp.toPx(), 4.dp, Color(0xFF22282B))
+                        drawCable(audioXs[0], 15.dp.toPx(), 2.8.dp, Color(0xFF34393C))
+                        drawCable(audioXs[1], 8.dp.toPx(), 2.8.dp, Color(0xFF34393C))
+
+                        // Plug housings sit directly at the rear rim, behind the deck.
+                        val metal = Brush.horizontalGradient(
+                            listOf(Color(0xFF80591F), Color(0xFFEAC16D), Color(0xFFAA762A))
+                        )
+                        val powerWidth = 8.dp.toPx()
+                        drawRoundRect(
+                            brush = Brush.verticalGradient(
+                                listOf(Color(0xFF686C6E), Color(0xFF111518)),
+                                startY = deckTop - 5.dp.toPx(), endY = deckTop + 2.dp.toPx()
+                            ),
+                            topLeft = Offset(powerX - powerWidth / 2f, deckTop - 5.dp.toPx()),
+                            size = Size(powerWidth, 7.dp.toPx()),
+                            cornerRadius = CornerRadius(1.dp.toPx())
+                        )
+                        audioXs.forEach { x ->
+                            drawRoundRect(
+                                color = Color(0xFF3A3227),
+                                topLeft = Offset(x - 2.6.dp.toPx(), deckTop - 3.dp.toPx()),
+                                size = Size(5.2.dp.toPx(), 5.dp.toPx()),
+                                cornerRadius = CornerRadius(0.7.dp.toPx())
+                            )
+                            drawRoundRect(
+                                brush = metal,
+                                topLeft = Offset(x - 1.6.dp.toPx(), deckTop - 7.dp.toPx()),
+                                size = Size(3.2.dp.toPx(), 8.dp.toPx()),
+                                cornerRadius = CornerRadius(0.8.dp.toPx())
+                            )
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier.align(Alignment.BottomCenter).size(deckSize)
                         .clip(RoundedCornerShape(18.dp))
                         .background(Brush.linearGradient(listOf(surface, page, surface)))
                         .border(1.dp, edge, RoundedCornerShape(18.dp))
@@ -262,9 +238,11 @@ fun TurntablePlayer(
                             onClick = onRepeat
                         )
                     }
+                    }
                 }
 
-                Spacer(Modifier.height(16.dp))
+                // Bring title/artist closer to the raised progress controls.
+                Spacer(Modifier.height(28.dp))
                 Text(
                     text = title,
                     fontFamily = titleFontFamily,
