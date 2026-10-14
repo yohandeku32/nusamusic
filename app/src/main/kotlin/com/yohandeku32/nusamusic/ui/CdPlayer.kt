@@ -1,18 +1,9 @@
 package com.yohandeku32.nusamusic.ui
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.Crossfade
-import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -53,6 +44,22 @@ import java.util.Locale
 
 private val CdBackground = Color(0xFF111111)
 private val CdAccent = Color(0xFFB5DF51)
+// Immutable disc imperfections reused for every frame and swap.
+private val cdDiscScratches = arrayOf(
+    floatArrayOf(0.44f, 32f, 13f),
+    floatArrayOf(0.60f, 161f, 7f),
+    floatArrayOf(0.70f, 278f, 18f),
+    floatArrayOf(0.78f, 73f, 6f),
+    floatArrayOf(0.84f, 207f, 11f),
+    floatArrayOf(0.91f, 322f, 8f),
+    floatArrayOf(0.95f, 121f, 16f),
+    floatArrayOf(0.55f, 340f, 5f),
+    floatArrayOf(0.63f, 106f, 17f),
+    floatArrayOf(0.72f, 12f, 6f),
+    floatArrayOf(0.82f, 254f, 15f),
+    floatArrayOf(0.88f, 149f, 9f)
+                )
+
 private fun cdText(id: String, en: String) =
     if (Locale.getDefault().language.equals("id", ignoreCase = true)) id else en
 
@@ -83,17 +90,40 @@ fun CdPlayer(
     emptyState: @Composable () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // UI-only direction: the audio playback/queue is owned by the parent.
-    // A previous action reverses the case swap; automatic/shuffled advances
-    // use the normal leftward exit and rightward entrance.
+    // One reusable disc during swaps: never render/decode two 768px covers
+    // simultaneously. LaunchedEffect cancels the old movement when Shuffle
+    // quickly jumps to another track, so animations cannot pile up.
     var swapDirection by remember { mutableIntStateOf(1) }
-    LaunchedEffect(song?.id, swapDirection) {
-        // Return to forward motion after the swap; avoids a stale previous
-        // direction affecting the next automatic or shuffled track.
-        if (swapDirection < 0) {
-            kotlinx.coroutines.delay(500L)
-            swapDirection = 1
+    var visibleDiscSong by remember { mutableStateOf(song) }
+    val swapOffset = remember { Animatable(0f) }
+
+    LaunchedEffect(song?.id, isVisible) {
+        val target = song
+        val direction = swapDirection
+        swapDirection = 1 // Previous affects only the next actual transition.
+
+        if (visibleDiscSong?.id == target?.id) {
+            visibleDiscSong = target
+            return@LaunchedEffect
         }
+        if (!isVisible || kotlin.math.abs(swapOffset.value) > 0.01f) {
+            // A rapid second change interrupts the old animation. Show only
+            // the latest track instead of animating through obsolete songs.
+            visibleDiscSong = target
+            swapOffset.snapTo(0f)
+            return@LaunchedEffect
+        }
+
+        swapOffset.animateTo(
+            targetValue = -direction * 1.12f,
+            animationSpec = tween(durationMillis = 140, easing = FastOutSlowInEasing)
+        )
+        visibleDiscSong = target
+        swapOffset.snapTo(direction * 1.12f)
+        swapOffset.animateTo(
+            targetValue = 0f,
+            animationSpec = tween(durationMillis = 195, easing = FastOutSlowInEasing)
+        )
     }
 
     MaterialTheme(colorScheme = darkColorScheme(
@@ -129,82 +159,45 @@ fun CdPlayer(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Spacer(Modifier.height(18.dp))
                     CdJewelCase(Modifier.size(width = discSize * 1.12f, height = discSize)) { discModifier ->
-                        // Only the disc changes identity. The jewel-case tray,
-                        // transparent scratched lid, and centre spindle never
-                        // animate or move with the disc.
-                        AnimatedContent(
-                            targetState = song,
-                            modifier = discModifier,
-                            contentKey = { it?.id },
-                            transitionSpec = {
-                                val direction = swapDirection
-                                (
-                                    slideInHorizontally(
-                                        animationSpec = tween(
-                                            durationMillis = 260,
-                                            delayMillis = 150,
-                                            easing = FastOutSlowInEasing
-                                        ),
-                                        initialOffsetX = { width -> direction * width }
-                                    ) +
-                                    fadeIn(animationSpec = tween(180, delayMillis = 150)) +
-                                    scaleIn(
-                                        initialScale = 0.92f,
-                                        animationSpec = tween(260, delayMillis = 150)
-                                    )
-                                ).togetherWith(
-                                    slideOutHorizontally(
-                                        animationSpec = tween(
-                                            durationMillis = 180,
-                                            easing = FastOutSlowInEasing
-                                        ),
-                                        targetOffsetX = { width -> -direction * width }
-                                    ) +
-                                    fadeOut(animationSpec = tween(160)) +
-                                    scaleOut(
-                                        targetScale = 0.93f,
-                                        animationSpec = tween(180)
-                                    )
-                                ).using(SizeTransform(clip = false))
-                            },
-                            label = "CD disc swap"
-                        ) { shownSong ->
-                            CdDisc(
-                                song = shownSong,
-                                spinning = shownSong?.id == song?.id && isPlaying && isVisible,
-                                artwork = artwork,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        }
+                        // Only one CD is ever composed. Translation/scale are
+                        // applied on the GPU; case, lid scratches and spindle
+                        // stay untouched and remain above the disc.
+                        CdDisc(
+                            song = visibleDiscSong,
+                            spinning = visibleDiscSong?.id == song?.id && isPlaying && isVisible,
+                            artwork = artwork,
+                            modifier = discModifier.graphicsLayer {
+                                val travel = swapOffset.value
+                                val distance = kotlin.math.abs(travel).coerceIn(0f, 1f)
+                                translationX = travel * size.width
+                                scaleX = 1f - 0.06f * distance
+                                scaleY = 1f - 0.06f * distance
+                                alpha = 1f - 0.18f * distance
+                            }
+                        )
                     }
                     Spacer(Modifier.height(20.dp))
-                    Crossfade(
-                        targetState = song,
-                        animationSpec = tween(durationMillis = 220),
-                        label = "CD song metadata"
-                    ) { shownSong ->
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                text = shownSong?.title ?: cdText("Pilih lagu", "Choose a song"),
-                                fontSize = titleFontSize.coerceIn(18f, 26f).sp,
-                                fontWeight = FontWeight.Medium,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(horizontal = 28.dp)
-                            )
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                shownSong?.artist?.takeIf { it.isNotBlank() }
-                                    ?: cdText("Koleksi musik Anda", "Your music collection"),
-                                color = Color(0xFFA5A5A0),
-                                fontSize = 12.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.padding(horizontal = 28.dp)
-                            )
-                        }
-                    }
+                    // A single metadata tree avoids overlapping crossfade
+                    // text layouts on rapid Shuffle changes.
+                    Text(
+                        text = song?.title ?: cdText("Pilih lagu", "Choose a song"),
+                        fontSize = titleFontSize.coerceIn(18f, 26f).sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 28.dp)
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        song?.artist?.takeIf { it.isNotBlank() }
+                            ?: cdText("Koleksi musik Anda", "Your music collection"),
+                        color = Color(0xFFA5A5A0),
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(horizontal = 28.dp)
+                    )
                     Row(
                         Modifier.padding(top = 12.dp, bottom = 14.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -313,21 +306,7 @@ private fun CdDisc(
                 // grooves. They rotate WITH the printed artwork, stay subtle,
                 // and never cover the central molded hub.
                 val hairline = 0.55.dp.toPx()
-                val scratches = arrayOf(
-                    floatArrayOf(0.44f, 32f, 13f),
-                    floatArrayOf(0.60f, 161f, 7f),
-                    floatArrayOf(0.70f, 278f, 18f),
-                    floatArrayOf(0.78f, 73f, 6f),
-                    floatArrayOf(0.84f, 207f, 11f),
-                    floatArrayOf(0.91f, 322f, 8f),
-                    floatArrayOf(0.95f, 121f, 16f),
-                    floatArrayOf(0.55f, 340f, 5f),
-                    floatArrayOf(0.63f, 106f, 17f),
-                    floatArrayOf(0.72f, 12f, 6f),
-                    floatArrayOf(0.82f, 254f, 15f),
-                    floatArrayOf(0.88f, 149f, 9f)
-                )
-                scratches.forEachIndexed { index, scratch ->
+                cdDiscScratches.forEachIndexed { index, scratch ->
                     val distance = radius * scratch[0]
                     drawArc(
                         color = if (index % 3 == 0) {
