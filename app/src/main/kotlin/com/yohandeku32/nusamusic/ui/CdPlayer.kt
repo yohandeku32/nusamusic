@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yohandeku32.nusamusic.model.Song
 import java.util.Locale
+import kotlinx.coroutines.flow.first
 
 private val CdBackground = Color(0xFF111111)
 private val CdAccent = Color(0xFFB5DF51)
@@ -299,37 +300,43 @@ private fun CdDisc(
     artwork: @Composable (Song?, Modifier) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Keep the angle AND angular velocity between Play/Pause toggles so the
-    // disc never snaps or abruptly changes speed. Only the graphics layer
-    // observes rotation; text, album art and layout are not recomposed.
+    // A single persistent frame loop for every Play/Pause transition.
+    // Do not cancel/restart it when playback toggles: at high refresh rates
+    // the coroutine handoff could skip a vsync and cause visible stutter.
     var rotation by remember { mutableFloatStateOf(0f) }
-    val currentSpeed = remember { floatArrayOf(0f) }
+    val angularVelocity = remember { floatArrayOf(0f) }
+    val playingState = rememberUpdatedState(spinning)
 
-    LaunchedEffect(spinning, visible) {
+    LaunchedEffect(visible) {
         if (!visible) {
-            // When the player page is hidden, skip all animation frames.
-            currentSpeed[0] = 0f
+            // Suspending the page also stops the frame loop, so the CD
+            // cannot use up 120 frames/second while off-screen.
+            angularVelocity[0] = 0f
             return@LaunchedEffect
         }
-        val initialSpeed = currentSpeed[0]
-        val targetSpeed = if (spinning) 48f else 0f
-        if (!spinning && initialSpeed < 0.01f) return@LaunchedEffect
-        val rampSeconds = if (spinning) 0.70f else 1.00f
-        var elapsed = 0f
-        var lastFrame = withFrameNanos { it }
+
         while (true) {
-            val now = withFrameNanos { it }
-            // Cap unusually long frame gaps, e.g. when Android was busy
-            // decoding cover art, so the CD cannot jump many degrees.
-            val seconds = ((now - lastFrame) / 1_000_000_000f).coerceIn(0f, 0.05f)
-            lastFrame = now
-            elapsed = (elapsed + seconds).coerceAtMost(rampSeconds)
-            val t = elapsed / rampSeconds
-            val easing = t * t * (3f - 2f * t) // smoothstep acceleration
-            val speed = initialSpeed + (targetSpeed - initialSpeed) * easing
-            rotation = (rotation + (currentSpeed[0] + speed) * 0.5f * seconds) % 360f
-            currentSpeed[0] = speed
-            if (!spinning && elapsed >= rampSeconds) break
+            if (!playingState.value && angularVelocity[0] <= 0.025f) {
+                // At rest, consume zero animation frames until Play.
+                angularVelocity[0] = 0f
+                snapshotFlow { playingState.value }.first { it }
+            }
+            var previousFrame = withFrameNanos { it }
+            while (playingState.value || angularVelocity[0] > 0.025f) {
+                val now = withFrameNanos { it }
+                // Use actual vsync timestamps (8.3ms on 120Hz screens).
+                // Clamp only large stalls to avoid jumping many degrees.
+                val seconds = ((now - previousFrame) / 1_000_000_000f)
+                    .coerceIn(0f, 0.065f)
+                previousFrame = now
+                val target = if (playingState.value) 48f else 0f
+                val tau = if (playingState.value) 0.20f else 0.28f
+                val smoothing = 1f - kotlin.math.exp(-seconds / tau)
+                val oldSpeed = angularVelocity[0]
+                val newSpeed = oldSpeed + (target - oldSpeed) * smoothing
+                angularVelocity[0] = newSpeed
+                rotation = (rotation + (oldSpeed + newSpeed) * 0.5f * seconds) % 360f
+            }
         }
     }
     Box(modifier.shadow(18.dp, CircleShape), contentAlignment = Alignment.Center) {

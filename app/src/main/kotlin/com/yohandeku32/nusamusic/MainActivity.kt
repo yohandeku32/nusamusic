@@ -1564,6 +1564,11 @@ private fun NusaMusicApp(
         androidx.compose.foundation.lazy.rememberLazyListState()
     val libraryListState =
         androidx.compose.foundation.lazy.rememberLazyListState()
+    // Cached covers remain visible while scrolling; pause expensive
+    // native metadata/image reads until the list has settled.
+    val libraryRowLoadsEnabled by remember(libraryListState) {
+        derivedStateOf { !libraryListState.isScrollInProgress }
+    }
     val scope = rememberCoroutineScope()
     var alphabetVisible by remember { mutableStateOf(false) }
     var alphabetDragging by remember { mutableStateOf(false) }
@@ -3251,6 +3256,7 @@ private fun NusaMusicApp(
                                         LibrarySongListRow(
                                             song = song,
                                             selected = currentSong?.id == song.id,
+                                            loadDetails = libraryRowLoadsEnabled,
                                             onPlay = { selectedSong ->
                                                 onPlay(selectedSong, filtered)
                                             }
@@ -5305,7 +5311,9 @@ private fun ArtworkView(
     modifier: Modifier = Modifier,
     monochrome: Boolean = false,
     fallbackMaxSizePx: Int? = null,
-    loadDelayMs: Long = 0L
+    loadDelayMs: Long = 0L,
+    loadAllowed: Boolean = true,
+    grainOverlay: Boolean = true
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val density = androidx.compose.ui.platform.LocalDensity.current
@@ -5330,7 +5338,8 @@ private fun ArtworkView(
         )
     }
 
-    LaunchedEffect(song?.uri, maxSizePx, loadDelayMs) {
+    LaunchedEffect(song?.uri, maxSizePx, loadDelayMs, loadAllowed) {
+        if (!loadAllowed) return@LaunchedEffect
         // Skip IO for tracks that are replaced by rapid Shuffle transitions.
         if (song != null && loadDelayMs > 0L) delay(loadDelayMs)
         bitmap = song?.let {
@@ -5353,7 +5362,7 @@ private fun ArtworkView(
                     )
                 )
             )
-            .drawWithCache {
+            .then(if (grainOverlay) Modifier.drawWithCache {
                 val seed = (song?.id ?: song?.uri ?: "nusa").hashCode()
                 val random = Random(seed)
                 val speckles = List(24) {
@@ -5414,13 +5423,13 @@ private fun ArtworkView(
                         )
                     }
                 }
-            },
+            } else Modifier),
         contentAlignment = Alignment.Center
     ) {
-        val targetBitmap = bitmap
-        if (targetBitmap != null) {
+        val cachedImage = remember(bitmap) { bitmap?.asImageBitmap() }
+        if (cachedImage != null) {
             androidx.compose.foundation.Image(
-                bitmap = targetBitmap.asImageBitmap(),
+                bitmap = cachedImage,
                 contentDescription = song?.title,
                 contentScale = ContentScale.Crop,
                 colorFilter = if (monochrome) {
@@ -5742,12 +5751,15 @@ private fun WornCoverArtwork(
 private fun LibrarySongListRow(
     song: Song,
     selected: Boolean,
+    loadDetails: Boolean,
     onPlay: (Song) -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var codecInfo by remember(song.uri) { mutableStateOf<AudioCodecInfo?>(null) }
 
-    LaunchedEffect(context, song.uri) {
+    LaunchedEffect(context, song.uri, loadDetails) {
+        // Do not inspect codec for items passing quickly during a fling.
+        if (!loadDetails) return@LaunchedEffect
         // A flick through hundreds of rows should not immediately create
         // hundreds of extractors. Offscreen rows cancel this delay, and
         // AudioCodecLoader caches results for revisits.
@@ -5788,6 +5800,8 @@ private fun LibrarySongListRow(
                 song = song,
                 maxSizePx = 160,
                 loadDelayMs = 85L,
+                loadAllowed = loadDetails,
+                grainOverlay = false,
                 modifier = Modifier.fillMaxSize()
             )
         }
