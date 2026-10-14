@@ -91,10 +91,32 @@ internal class VinylPainter(size: Size) {
         start = discCenter - Offset(radius, radius),
         end = discCenter + Offset(radius, radius)
     )
-    private val spindle = Brush.linearGradient(
-        listOf(Color(0xFFC0C0B9), Color(0xFF8D908C), Color(0xFF484C4A)),
-        start = discCenter - Offset(radius * 0.01f, radius * 0.01f),
-        end = discCenter + Offset(radius * 0.01f, radius * 0.01f)
+    // A visible steel pin and bevel, proportional to the record on every screen.
+    private val spindleRadius = radius * 0.035f
+    private val spindleShadowCenter = discCenter + Offset(spindleRadius * 0.22f, spindleRadius * 0.32f)
+    private val spindleShadow = Brush.radialGradient(
+        0f to Color.Black.copy(alpha = 0.65f),
+        0.55f to Color.Black.copy(alpha = 0.40f),
+        1f to Color.Transparent,
+        center = spindleShadowCenter,
+        radius = spindleRadius * 1.65f
+    )
+    private val spindleBevel = Brush.sweepGradient(
+        0f to Color(0xFF59636B),
+        0.18f to Color(0xFFDAE1E5),
+        0.38f to Color(0xFF68747D),
+        0.58f to Color(0xFFF5F7F8),
+        0.78f to Color(0xFFABB5BC),
+        1f to Color(0xFF59636B),
+        center = discCenter
+    )
+    private val spindle = Brush.radialGradient(
+        0f to Color(0xFFFAFCFD),
+        0.30f to Color(0xFFDCE3E8),
+        0.65f to Color(0xFF9EAAB4),
+        1f to Color(0xFF45515D),
+        center = discCenter - Offset(spindleRadius * 0.30f, spindleRadius * 0.35f),
+        radius = spindleRadius * 1.45f
     )
     private val labelWell = Brush.radialGradient(
         0f to Color(0xFF090A0A),
@@ -191,12 +213,19 @@ internal class VinylPainter(size: Size) {
     }
 
     fun DrawScope.drawSpindle() {
+        drawCircle(spindleShadow, spindleRadius * 1.65f, spindleShadowCenter)
+        // Dark contact ring and machined bevel separate the metal from any label colour.
+        drawCircle(Color(0xFF151B20), spindleRadius * 1.18f, discCenter)
+        drawCircle(spindleBevel, spindleRadius * 1.10f, discCenter)
+        drawCircle(spindle, spindleRadius * 0.88f, discCenter)
         drawCircle(
-            Color.Black.copy(alpha = 0.4f), radius * 0.016f,
-            discCenter + Offset(0f, radius * 0.003f)
+            Color.White.copy(alpha = 0.32f), spindleRadius * 0.82f, discCenter,
+            style = Stroke(spindleRadius * 0.055f)
         )
-        drawCircle(Color(0xFF070909), radius * 0.013f, discCenter)
-        drawCircle(spindle, radius * 0.01f, discCenter)
+        drawCircle(
+            Color.White.copy(alpha = 0.72f), spindleRadius * 0.18f,
+            discCenter - Offset(spindleRadius * 0.30f, spindleRadius * 0.35f)
+        )
     }
 
     private fun annulus(outer: Float, inner: Float) = Path().apply {
