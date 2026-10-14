@@ -5,6 +5,13 @@ import org.junit.Test
 
 class PlayerPresentationModeTest {
     @Test
+    fun allPresentationChoicesSurvivePreferenceRoundTrip() {
+        PlayerPresentationMode.entries.forEach { mode ->
+            assertEquals(mode, PlayerPresentationMode.fromPreference(mode.preferenceValue))
+        }
+    }
+
+    @Test
     fun missingOrUnknownPreferenceDefaultsToVinyl() {
         assertEquals(PlayerPresentationMode.VINYL, PlayerPresentationMode.fromPreference(null))
         assertEquals(PlayerPresentationMode.VINYL, PlayerPresentationMode.fromPreference("unknown"))
