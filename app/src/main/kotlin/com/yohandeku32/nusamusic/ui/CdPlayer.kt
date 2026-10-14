@@ -119,19 +119,21 @@ private fun rasterizeDotTitle(
     val pitch = pitchPx.toInt().coerceAtLeast(3)
     val half = pitch / 2
     val radius = pitch * 0.33f
+    val sampleRadius = (pitch / 4).coerceAtLeast(1)
     for (y in half until heightPx step pitch) {
+        val upperY = (y - sampleRadius).coerceAtLeast(0)
+        val lowerY = (y + sampleRadius).coerceAtMost(heightPx - 1)
         for (x in half until widthPx step pitch) {
-            // Sample a tiny cross to preserve fine strokes between dot centres.
-            val sampleRadius = (pitch / 4).coerceAtLeast(1)
-            var opacity = 0
-            for ((dx, dy) in arrayOf(
-                0 to 0, -sampleRadius to 0, sampleRadius to 0,
-                0 to -sampleRadius, 0 to sampleRadius
-            )) {
-                val sx = (x + dx).coerceIn(0, widthPx - 1)
-                val sy = (y + dy).coerceIn(0, heightPx - 1)
-                opacity = maxOf(opacity, (pixels[sy * widthPx + sx] ushr 24) and 0xFF)
-            }
+            // Sample a tiny cross, without allocating objects per dot.
+            val leftX = (x - sampleRadius).coerceAtLeast(0)
+            val rightX = (x + sampleRadius).coerceAtMost(widthPx - 1)
+            val opacity = maxOf(
+                pixels[y * widthPx + x] ushr 24,
+                pixels[y * widthPx + leftX] ushr 24,
+                pixels[y * widthPx + rightX] ushr 24,
+                pixels[upperY * widthPx + x] ushr 24,
+                pixels[lowerY * widthPx + x] ushr 24
+            )
             if (opacity > 48) {
                 canvas.drawCircle(x.toFloat(), y.toFloat(), radius, pointInk)
             }
