@@ -2525,7 +2525,13 @@ private fun NusaMusicApp(
                                             onLibrary = { scope.launch { pagerState.animateScrollToPage(1) } },
                                             artwork = { cdSong, artworkModifier ->
                                                 androidx.compose.runtime.key(cdSong?.uri) {
-                                                    ArtworkView(song = cdSong, maxSizePx = 768, modifier = artworkModifier)
+                                                    ArtworkView(
+                                                        song = cdSong,
+                                                        maxSizePx = 512,
+                                                        fallbackMaxSizePx = 128,
+                                                        loadDelayMs = 40L,
+                                                        modifier = artworkModifier
+                                                    )
                                                 }
                                             },
                                             thumbnailArtwork = { cdSong, artworkModifier ->
@@ -5271,25 +5277,36 @@ private fun ArtworkView(
     song: Song?,
     maxSizePx: Int = 512,
     modifier: Modifier = Modifier,
-    monochrome: Boolean = false
+    monochrome: Boolean = false,
+    fallbackMaxSizePx: Int? = null,
+    loadDelayMs: Long = 0L
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val density = androidx.compose.ui.platform.LocalDensity.current
-    // On recycled song rows, immediately show cached art; never display the
-    // previous row's bitmap while the new cover loads in the background.
-    var bitmap by remember(song?.uri, maxSizePx) {
+    // A cached carousel thumbnail is shown instantly until the full CD cover
+    // is ready. Preserve default behaviour in Vinyl and other player modes.
+    var bitmap by remember(song?.uri, maxSizePx, fallbackMaxSizePx) {
         mutableStateOf(
             song?.let {
+                val cacheKey = it.albumId.takeIf { albumId -> albumId > 0L }?.toString()
                 ArtworkLoader.cached(
                     uriString = it.uri,
                     maxSize = maxSizePx,
-                    cacheKey = it.albumId.takeIf { id -> id > 0L }?.toString()
-                )
+                    cacheKey = cacheKey
+                ) ?: fallbackMaxSizePx?.let { previewSize ->
+                    ArtworkLoader.cached(
+                        uriString = it.uri,
+                        maxSize = previewSize,
+                        cacheKey = cacheKey
+                    )
+                }
             }
         )
     }
 
-    LaunchedEffect(song?.uri, maxSizePx) {
+    LaunchedEffect(song?.uri, maxSizePx, loadDelayMs) {
+        // Skip IO for tracks that are replaced by rapid Shuffle transitions.
+        if (song != null && loadDelayMs > 0L) delay(loadDelayMs)
         bitmap = song?.let {
             ArtworkLoader.load(
                 context = context,
