@@ -177,6 +177,7 @@ fun CdPlayer(
                         CdDisc(
                             song = visibleDiscSong,
                             spinning = visibleDiscSong?.id == song?.id && isPlaying && isVisible,
+                            visible = isVisible,
                             artwork = artwork,
                             modifier = discModifier.graphicsLayer {
                                 val travel = swapOffset.value
@@ -294,19 +295,41 @@ fun CdPlayer(
 private fun CdDisc(
     song: Song?,
     spinning: Boolean,
+    visible: Boolean,
     artwork: @Composable (Song?, Modifier) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // Keep the angle AND angular velocity between Play/Pause toggles so the
+    // disc never snaps or abruptly changes speed. Only the graphics layer
+    // observes rotation; text, album art and layout are not recomposed.
     var rotation by remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(spinning) {
-        if (spinning) {
-            var previous = withFrameNanos { it }
-            while (true) {
-                withFrameNanos { now ->
-                    rotation = (rotation + (now - previous) / 1_000_000_000f * 48f) % 360f
-                    previous = now
-                }
-            }
+    val currentSpeed = remember { floatArrayOf(0f) }
+
+    LaunchedEffect(spinning, visible) {
+        if (!visible) {
+            // When the player page is hidden, skip all animation frames.
+            currentSpeed[0] = 0f
+            return@LaunchedEffect
+        }
+        val initialSpeed = currentSpeed[0]
+        val targetSpeed = if (spinning) 48f else 0f
+        if (!spinning && initialSpeed < 0.01f) return@LaunchedEffect
+        val rampSeconds = if (spinning) 0.70f else 1.00f
+        var elapsed = 0f
+        var lastFrame = withFrameNanos { it }
+        while (true) {
+            val now = withFrameNanos { it }
+            // Cap unusually long frame gaps, e.g. when Android was busy
+            // decoding cover art, so the CD cannot jump many degrees.
+            val seconds = ((now - lastFrame) / 1_000_000_000f).coerceIn(0f, 0.05f)
+            lastFrame = now
+            elapsed = (elapsed + seconds).coerceAtMost(rampSeconds)
+            val t = elapsed / rampSeconds
+            val easing = t * t * (3f - 2f * t) // smoothstep acceleration
+            val speed = initialSpeed + (targetSpeed - initialSpeed) * easing
+            rotation = (rotation + (currentSpeed[0] + speed) * 0.5f * seconds) % 360f
+            currentSpeed[0] = speed
+            if (!spinning && elapsed >= rampSeconds) break
         }
     }
     Box(modifier.shadow(18.dp, CircleShape), contentAlignment = Alignment.Center) {
