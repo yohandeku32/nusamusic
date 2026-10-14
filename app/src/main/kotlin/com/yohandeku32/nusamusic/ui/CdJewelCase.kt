@@ -67,15 +67,14 @@ internal fun CdJewelCase(
         Canvas(Modifier.matchParentSize()) { drawClearTray() }
 
         val diameter = maxHeight * 0.92f
+        val discX = maxWidth * 0.55f - diameter / 2
+        val discY = (maxHeight - diameter) / 2
         // Only the disc content may slide during swaps. The parent clips discs
         // as they enter/leave the physical tray, while the static lid and
         // centre spindle remain outside this animation layer.
         Box(Modifier.matchParentSize().clipToBounds()) {
             disc(
-                Modifier.offset(
-                    x = maxWidth * 0.55f - diameter / 2,
-                    y = (maxHeight - diameter) / 2
-                ).size(diameter)
+                Modifier.offset(x = discX, y = discY).size(diameter)
             )
         }
 
