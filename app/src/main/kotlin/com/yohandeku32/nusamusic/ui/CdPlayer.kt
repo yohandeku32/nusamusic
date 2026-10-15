@@ -42,6 +42,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yohandeku32.nusamusic.model.Song
 import java.util.Locale
+import kotlin.math.abs
+import kotlin.math.pow
 import kotlinx.coroutines.flow.first
 
 private val CdBackground = Color(0xFF111111)
@@ -553,8 +555,9 @@ private fun CdSongCarousel(
             contentPadding = PaddingValues(horizontal = ((maxWidth - itemSize) / 2).coerceAtLeast(0.dp)),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            // Flat, horizontal carousel: reserve only a little vertical breathing room.
-            modifier = Modifier.height(itemSize + 12.dp)
+            // Reserve the full 32dp edge drop above and below the disc so an
+            // active (full-size) item is not clipped while it is dragged aside.
+            modifier = Modifier.height(itemSize + 64.dp)
         ) {
             items(songs, key = { it.id }) { item ->
                 val active = item.id == currentId
@@ -563,6 +566,23 @@ private fun CdSongCarousel(
                     Modifier.size(itemSize).graphicsLayer {
                         scaleX = scale
                         scaleY = scale
+
+                        // Items and viewport offsets share the same coordinate
+                        // space, including the leading centering padding.
+                        // Read layout in the layer so scrolling updates the arc
+                        // without recomposing or re-decoding thumbnail artwork.
+                        val layout = listState.layoutInfo
+                        val center = (layout.viewportStartOffset + layout.viewportEndOffset) * 0.5f
+                        val halfWidth = (layout.viewportEndOffset - layout.viewportStartOffset) * 0.5f
+                        val visibleItem = layout.visibleItemsInfo.firstOrNull { it.key == item.id }
+                        translationY = if (visibleItem != null && halfWidth > 0f) {
+                            val itemCenter = visibleItem.offset + visibleItem.size * 0.5f
+                            val distance = ((itemCenter - center) / halfWidth).coerceIn(-1f, 1f)
+                            val arc = abs(distance).pow(1.65f)
+                            (-12f + 44f * arc).dp.toPx()
+                        } else {
+                            0f
+                        }
                     }
                         .border(0.75.dp, if (active) Color.White.copy(alpha = 0.65f) else Color.Transparent, CircleShape)
                         // Suppress the default rectangular touch ripple. The disc
