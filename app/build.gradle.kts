@@ -1,4 +1,5 @@
 import java.util.Properties
+import java.util.zip.ZipFile
 
 plugins {
     id("com.android.application")
@@ -31,7 +32,7 @@ if (requireFfmpegDecoder && !localFfmpegAar.isFile) {
 if (localFfmpegAar.isFile) {
     // A Java-only stub AAR is not functional. Require the native JNI shared
     // library to be present so builds do not silently claim FFmpeg support.
-    val hasNativeJni = java.util.zip.ZipFile(localFfmpegAar).use { zip ->
+    val hasNativeJni = ZipFile(localFfmpegAar).use { zip ->
         zip.entries().asSequence().any {
             it.name.startsWith("jni/") && it.name.endsWith("/libffmpegJNI.so")
         }
