@@ -24,7 +24,6 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -512,42 +511,53 @@ private fun CdThumbnail(
     selected: Boolean,
     modifier: Modifier = Modifier
 ) {
-    // Grayscale is applied after composing artwork and disc decorations.
-    // The small offscreen layer is reused while scrolling and is needed for
-    // Saturation blending to affect only this thumbnail (not the row behind it).
-    val grayscale = if (selected) Modifier else Modifier
-        .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-        .drawWithCache {
-            onDrawWithContent {
-                drawContent()
-                drawRect(color = Color.Black, blendMode = BlendMode.Saturation)
-            }
-        }
-    Box(modifier.clip(CircleShape).then(grayscale), contentAlignment = Alignment.Center) {
+    Box(
+        modifier.shadow(
+            elevation = if (selected) 14.dp else 10.dp,
+            shape = CircleShape,
+            clip = false,
+            ambientColor = Color.Black.copy(alpha = 0.5f),
+            spotColor = Color.Black.copy(alpha = 0.7f)
+        ).clip(CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
         artwork(song, Modifier.fillMaxSize())
-        Canvas(Modifier.matchParentSize()) {
+        Spacer(Modifier.matchParentSize().drawWithCache {
             val radius = size.minDimension / 2f
-            drawCircle(
-                Brush.sweepGradient(
-                    listOf(
-                        Color.Transparent,
-                        Color.White.copy(alpha = 0.15f),
-                        Color.Transparent,
-                        Color.Black.copy(alpha = 0.10f),
-                        Color.Transparent
-                    )
-                ),
-                radius = radius
+            val discCenter = Offset(size.width / 2f, size.height / 2f)
+            // Cache the finishes so scrolling only moves the disc's layer.
+            val sheen = Brush.linearGradient(
+                listOf(Color.White.copy(alpha = 0.18f), Color.Transparent, Color.Black.copy(alpha = 0.08f)),
+                start = Offset(size.width * 0.1f, 0f),
+                end = Offset(size.width * 0.9f, size.height)
             )
-            drawCircle(Color.Black.copy(alpha = 0.23f), radius * 0.36f)
-            drawCircle(
-                Brush.radialGradient(
-                    listOf(Color(0xFF8C979D), Color(0xFFD0D8DB), Color(0xFF7E878A))
+            val reflection = Brush.sweepGradient(
+                listOf(
+                    Color.Transparent, Color.White.copy(alpha = 0.16f),
+                    Color.Transparent, Color.White.copy(alpha = 0.06f), Color.Transparent
                 ),
-                radius * 0.31f
+                center = discCenter
             )
-            drawCircle(Color(0xFF1A1D20), radius * 0.065f)
-        }
+            val edgeDepth = Brush.radialGradient(
+                0f to Color.Transparent,
+                0.72f to Color.Transparent,
+                1f to Color.Black.copy(alpha = 0.24f),
+                center = discCenter, radius = radius
+            )
+            val metalHub = Brush.linearGradient(
+                listOf(Color(0xFF78858B), Color(0xFFE3E9EA), Color(0xFF8A969B)),
+                start = Offset.Zero, end = Offset(size.width, size.height)
+            )
+            onDrawBehind {
+                drawCircle(sheen, radius)
+                drawCircle(reflection, radius)
+                drawCircle(edgeDepth, radius)
+                drawCircle(Color.Black.copy(alpha = 0.23f), radius * 0.36f)
+                drawCircle(metalHub, radius * 0.31f)
+                drawCircle(Color(0xFF59656B), radius * 0.09f)
+                drawCircle(Color(0xFF14181A), radius * 0.065f)
+            }
+        })
     }
 }
 
@@ -585,7 +595,6 @@ private fun CdSongCarousel(
                     Modifier.size(itemSize).graphicsLayer {
                         scaleX = scale
                         scaleY = scale
-                        alpha = if (active) 1f else 0.72f
 
                         // Item offsets exclude the leading content padding.
                         // Use the viewport offsets in that same coordinate
@@ -605,8 +614,6 @@ private fun CdSongCarousel(
                             0f
                         }
                     }
-                        .clip(CircleShape)
-                        .border(1.dp, if (active) Color(0xFF999991) else Color.Transparent, CircleShape)
                         .clickable(role = Role.Button) { onSelectSong(item) }
                         .semantics { selected = active; contentDescription = "${item.title}, ${item.artist}" }
                         .padding(6.dp),
