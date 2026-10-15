@@ -205,24 +205,12 @@ fun CdPlayer(
                     Spacer(Modifier.height(8.dp))
                     if (songs.isNotEmpty()) {
                         CdSongCarousel(songs, song?.id, thumbnailArtwork, onSelectSong)
-                        Spacer(Modifier.height(10.dp))
-                        Text(
-                            cdText(
-                                "Geser untuk melihat · ketuk untuk memutar",
-                                "Swipe to browse · tap to play"
-                            ),
-                            color = Color(0xFF969696),
-                            fontSize = 12.sp,
-                            maxLines = 1,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)
-                        )
                     } else {
                         emptyState()
                     }
                     OutlinedButton(
                         onClick = onLibrary,
-                        modifier = Modifier.padding(top = 16.dp)
+                        modifier = Modifier.padding(top = 10.dp)
                             .defaultMinSize(minWidth = 68.dp, minHeight = 30.dp),
                         shape = RoundedCornerShape(50),
                         border = BorderStroke(1.dp, Brush.linearGradient(listOf(
@@ -237,7 +225,7 @@ fun CdPlayer(
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
                     ) {
                         Text(
-                            cdText("Buka koleksi", "Open library"),
+                            "Open Library",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium
                         )
