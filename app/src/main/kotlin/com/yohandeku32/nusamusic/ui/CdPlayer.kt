@@ -503,64 +503,34 @@ private fun CdDisc(
     }
 }
 
-/** Lightweight static carousel preview: no rotating frame effects or large artwork. */
+/** A lightweight, flat CD preview: no per-item shadow or heavy reflection shaders. */
 @Composable
 private fun CdThumbnail(
     song: Song,
     artwork: @Composable (Song?, Modifier) -> Unit,
-    selected: Boolean,
     modifier: Modifier = Modifier
 ) {
-    Box(
-        modifier.shadow(
-            elevation = if (selected) 14.dp else 10.dp,
-            shape = CircleShape,
-            clip = false,
-            ambientColor = Color.Black.copy(alpha = 0.5f),
-            spotColor = Color.Black.copy(alpha = 0.7f)
-        ).clip(CircleShape),
-        contentAlignment = Alignment.Center
-    ) {
+    Box(modifier.clip(CircleShape), contentAlignment = Alignment.Center) {
         artwork(song, Modifier.fillMaxSize())
+        // Keep only the inexpensive metal hub and a light edge highlight.
+        // Removing multiple sweep/radial passes reduces work during flings.
         Spacer(Modifier.matchParentSize().drawWithCache {
             val radius = size.minDimension / 2f
-            val discCenter = Offset(size.width / 2f, size.height / 2f)
-            // Cache the finishes so scrolling only moves the disc's layer.
-            val sheen = Brush.linearGradient(
-                listOf(Color.White.copy(alpha = 0.18f), Color.Transparent, Color.Black.copy(alpha = 0.08f)),
-                start = Offset(size.width * 0.1f, 0f),
-                end = Offset(size.width * 0.9f, size.height)
-            )
-            val reflection = Brush.sweepGradient(
-                listOf(
-                    Color.Transparent, Color.White.copy(alpha = 0.16f),
-                    Color.Transparent, Color.White.copy(alpha = 0.06f), Color.Transparent
-                ),
-                center = discCenter
-            )
-            val edgeDepth = Brush.radialGradient(
-                0f to Color.Transparent,
-                0.72f to Color.Transparent,
-                1f to Color.Black.copy(alpha = 0.24f),
-                center = discCenter, radius = radius
-            )
-            val metalHub = Brush.linearGradient(
-                listOf(Color(0xFF78858B), Color(0xFFE3E9EA), Color(0xFF8A969B)),
-                start = Offset.Zero, end = Offset(size.width, size.height)
+            val hub = Brush.linearGradient(
+                listOf(Color(0xFF818D92), Color(0xFFD9E0E1), Color(0xFF919DA1)),
+                start = Offset.Zero,
+                end = Offset(size.width, size.height)
             )
             onDrawBehind {
-                drawCircle(sheen, radius)
-                drawCircle(reflection, radius)
-                drawCircle(edgeDepth, radius)
+                drawCircle(Color.White.copy(alpha = 0.10f), radius, style = Stroke(0.8.dp.toPx()))
                 drawCircle(Color.Black.copy(alpha = 0.23f), radius * 0.36f)
-                drawCircle(metalHub, radius * 0.31f)
+                drawCircle(hub, radius * 0.31f)
                 drawCircle(Color(0xFF59656B), radius * 0.09f)
                 drawCircle(Color(0xFF14181A), radius * 0.065f)
             }
         })
     }
 }
-
 @Composable
 private fun CdSongCarousel(
     songs: List<Song>, currentId: Long?,
@@ -615,12 +585,18 @@ private fun CdSongCarousel(
                         }
                     }
                         .border(0.75.dp, if (active) Color.White.copy(alpha = 0.65f) else Color.Transparent, CircleShape)
-                        .clickable(role = Role.Button) { onSelectSong(item) }
+                        // Suppress the default rectangular touch ripple. The disc
+                        // itself remains the full accessible tap target.
+                        .clickable(
+                            interactionSource = null,
+                            indication = null,
+                            role = Role.Button
+                        ) { onSelectSong(item) }
                         .semantics { selected = active; contentDescription = "${item.title}, ${item.artist}" }
                         .padding(6.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    CdThumbnail(item, artwork, selected = active, modifier = Modifier.fillMaxSize())
+                    CdThumbnail(item, artwork, modifier = Modifier.fillMaxSize())
                 }
             }
         }
