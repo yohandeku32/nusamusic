@@ -37,6 +37,7 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.rememberOverscrollEffect
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.verticalScroll
@@ -2451,6 +2452,9 @@ private fun NusaMusicApp(
                         val playerViewportHeight = maxHeight
                         LazyColumn(
                             state = playerScrollState,
+                            overscrollEffect = if (playerPresentationMode == PlayerPresentationMode.CD) {
+                                null
+                            } else rememberOverscrollEffect(),
                             modifier = Modifier
                                 .fillMaxSize()
                                 .background(
