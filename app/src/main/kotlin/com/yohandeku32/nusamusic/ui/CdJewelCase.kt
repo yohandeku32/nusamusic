@@ -20,6 +20,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.unit.dp
@@ -235,29 +237,50 @@ private fun DrawScope.drawJewelCaseStickers() {
     val bh = h * 0.385f
     // Scale paper, print, borders and stamp together without shifting the lid.
     scale(scaleX = 0.82f, scaleY = 0.82f, pivot = Offset(bx, by)) {
-        val corner = CornerRadius(h * 0.027f)
-        drawRoundRect(
-            color = Color.Black.copy(alpha = 0.15f),
-            topLeft = Offset(bx + 1.3.dp.toPx(), by + 1.7.dp.toPx()),
-            size = Size(bw, bh),
-            cornerRadius = corner
-        )
-        drawRoundRect(
+        // Slightly frayed paper silhouette, with a tiny tear on the right edge.
+        val paperEdge = Path().apply {
+            moveTo(bx + bw * 0.045f, by)
+            lineTo(bx + bw * 0.943f, by)
+            quadraticBezierTo(bx + bw, by, bx + bw, by + bh * 0.047f)
+            lineTo(bx + bw, by + bh * 0.804f)
+            lineTo(bx + bw * 0.968f, by + bh * 0.838f)
+            lineTo(bx + bw * 0.988f, by + bh * 0.855f)
+            lineTo(bx + bw * 0.952f, by + bh * 0.881f)
+            lineTo(bx + bw * 0.979f, by + bh * 0.907f)
+            lineTo(bx + bw * 0.949f, by + bh * 0.932f)
+            lineTo(bx + bw * 0.970f, by + bh * 0.963f)
+            quadraticBezierTo(bx + bw * 0.963f, by + bh, bx + bw * 0.923f, by + bh)
+            lineTo(bx + bw * 0.056f, by + bh)
+            quadraticBezierTo(bx, by + bh, bx, by + bh * 0.952f)
+            lineTo(bx, by + bh * 0.050f)
+            quadraticBezierTo(bx, by, bx + bw * 0.045f, by)
+            close()
+        }
+        translate(left = 1.2.dp.toPx(), top = 1.3.dp.toPx()) {
+            drawPath(paperEdge, Color.Black.copy(alpha = 0.13f))
+        }
+        drawPath(
+            paperEdge,
             brush = Brush.verticalGradient(
-                listOf(paper, Color(0xFFCDD9D7)),
+                listOf(Color(0xFFEEEDE6), paper, Color(0xFFD3DAD4)),
                 startY = by,
                 endY = by + bh
-            ),
-            topLeft = Offset(bx, by),
-            size = Size(bw, bh),
-            cornerRadius = corner
+            )
         )
-        drawRoundRect(
-            color = blue.copy(alpha = 0.93f),
-            topLeft = Offset(bx, by),
-            size = Size(bw, bh),
-            cornerRadius = corner,
-            style = Stroke(1.1.dp.toPx())
+        clipPath(paperEdge) {
+            drawStickerFibers(
+                left = bx, top = by, width = bw, height = bh,
+                darkFiber = Color(0xFF7D8790), lightFiber = Color.White,
+                count = 75
+            )
+        }
+        drawPath(paperEdge, blue.copy(alpha = 0.81f), style = Stroke(0.85.dp.toPx()))
+        // A bright exposed fiber at the small notch, not a plastic-wrap crease.
+        drawLine(
+            Color.White.copy(alpha = 0.56f),
+            Offset(bx + bw * 0.968f, by + bh * 0.838f),
+            Offset(bx + bw * 0.952f, by + bh * 0.881f),
+            0.55.dp.toPx()
         )
     
         val stamp = Offset(bx + bw * 0.78f, by + h * 0.067f)
@@ -282,24 +305,46 @@ private fun DrawScope.drawJewelCaseStickers() {
     val yw = w * 0.285f
     val yh = h * 0.123f
     scale(scaleX = 0.80f, scaleY = 0.80f, pivot = Offset(yx, yy)) {
-        val ycorner = CornerRadius(h * 0.007f)
         val pivot = Offset(yx + yw / 2f, yy + yh / 2f)
         rotate(degrees = -9f, pivot = pivot) {
-            drawRoundRect(
-                Color.Black.copy(alpha = 0.13f),
-                topLeft = Offset(yx + 1.dp.toPx(), yy + 1.4.dp.toPx()),
-                size = Size(yw, yh),
-                cornerRadius = ycorner
-            )
-            drawRoundRect(
+            // Tiny nicks in the bottom-right paper edge suggest a peeled sticker.
+            val yellowEdge = Path().apply {
+                moveTo(yx + yw * 0.025f, yy)
+                lineTo(yx + yw * 0.951f, yy)
+                lineTo(yx + yw, yy + yh * 0.065f)
+                lineTo(yx + yw, yy + yh * 0.815f)
+                lineTo(yx + yw * 0.959f, yy + yh * 0.856f)
+                lineTo(yx + yw * 0.984f, yy + yh * 0.898f)
+                lineTo(yx + yw * 0.944f, yy + yh * 0.924f)
+                lineTo(yx + yw * 0.961f, yy + yh * 0.966f)
+                lineTo(yx + yw * 0.935f, yy + yh)
+                lineTo(yx + yw * 0.027f, yy + yh)
+                lineTo(yx, yy + yh * 0.963f)
+                lineTo(yx, yy + yh * 0.055f)
+                close()
+            }
+            translate(left = 1.dp.toPx(), top = 1.3.dp.toPx()) {
+                drawPath(yellowEdge, Color.Black.copy(alpha = 0.12f))
+            }
+            drawPath(
+                yellowEdge,
                 brush = Brush.linearGradient(
-                    listOf(Color(0xFFF2D968), Color(0xFFE2BF42)),
+                    listOf(Color(0xFFF3DC7A), Color(0xFFE1BE45)),
                     start = Offset(yx, yy),
                     end = Offset(yx + yw, yy + yh)
-                ),
-                topLeft = Offset(yx, yy),
-                size = Size(yw, yh),
-                cornerRadius = ycorner
+                )
+            )
+            clipPath(yellowEdge) {
+                drawStickerFibers(
+                    left = yx, top = yy, width = yw, height = yh,
+                    darkFiber = Color(0xFF946E27), lightFiber = Color.White,
+                    count = 38
+                )
+            }
+            drawPath(
+                yellowEdge,
+                color = Color(0xFFB8953B).copy(alpha = 0.47f),
+                style = Stroke(0.55.dp.toPx())
             )
             drawLine(blue.copy(alpha = 0.65f), Offset(yx + yw * 0.07f, yy + yh * 0.53f),
                 Offset(yx + yw * 0.90f, yy + yh * 0.53f), 0.5.dp.toPx())
@@ -308,6 +353,40 @@ private fun DrawScope.drawJewelCaseStickers() {
             val badge = Offset(yx + yw * 0.83f, yy + yh * 0.28f)
             drawCircle(blue, h * 0.019f, badge, style = Stroke(0.65.dp.toPx()))
             printAt("13", badge.x - h * 0.012f, badge.y + h * 0.006f, 0.020f)
+        }
+    }
+}
+
+/** Tiny fixed paper fibers and flecks. Deterministic, with no bitmap or animation. */
+private fun DrawScope.drawStickerFibers(
+    left: Float,
+    top: Float,
+    width: Float,
+    height: Float,
+    darkFiber: Color,
+    lightFiber: Color,
+    count: Int
+) {
+    val fine = 0.42.dp.toPx()
+    for (i in 0 until count) {
+        // Fixed low-discrepancy positions keep the same printed paper grain on every redraw.
+        val u = ((i * 37 + 19) % 101) / 101f
+        val v = ((i * 53 + 11) % 97) / 97f
+        val x = left + width * (0.065f + u * 0.87f)
+        val y = top + height * (0.045f + v * 0.90f)
+        val fiberLength = width * (0.009f + (i % 4) * 0.003f)
+        drawLine(
+            color = darkFiber.copy(alpha = if (i % 5 == 0) 0.14f else 0.075f),
+            start = Offset(x, y),
+            end = Offset(x + fiberLength, y + height * 0.002f),
+            strokeWidth = fine
+        )
+        if (i % 3 == 0) {
+            drawCircle(
+                color = lightFiber.copy(alpha = 0.15f),
+                radius = 0.36.dp.toPx(),
+                center = Offset(x + fiberLength, y)
+            )
         }
     }
 }
