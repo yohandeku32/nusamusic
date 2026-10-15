@@ -346,7 +346,7 @@ private fun CdDisc(
             }
         }
     }
-    Box(modifier.shadow(18.dp, CircleShape), contentAlignment = Alignment.Center) {
+    Box(modifier.shadow(12.dp, CircleShape), contentAlignment = Alignment.Center) {
         Box(Modifier.fillMaxSize().graphicsLayer { rotationZ = angle.floatValue }.clip(CircleShape)) {
             artwork(song, Modifier.fillMaxSize())
             // Cache all expensive gradient shaders. Only the already-cached
@@ -359,7 +359,7 @@ private fun CdDisc(
                         Color.White.copy(alpha = 0.13f),
                         Color(0xFFD0EFF5).copy(alpha = 0.045f),
                         Color.Transparent,
-                        Color(0xFF060B14).copy(alpha = 0.11f)
+                        Color(0xFF060B14).copy(alpha = 0.055f)
                     ),
                     start = Offset(size.width * 0.12f, size.height * 0.05f),
                     end = Offset(size.width * 0.88f, size.height * 0.98f)
@@ -367,9 +367,9 @@ private fun CdDisc(
                 val outerDepth = Brush.radialGradient(
                     0.00f to Color.Transparent,
                     0.70f to Color.Transparent,
-                    0.87f to Color.Black.copy(alpha = 0.025f),
-                    0.98f to Color.Black.copy(alpha = 0.25f),
-                    1.00f to Color.Black.copy(alpha = 0.30f),
+                    0.87f to Color.Black.copy(alpha = 0.012f),
+                    0.98f to Color.Black.copy(alpha = 0.10f),
+                    1.00f to Color.Black.copy(alpha = 0.14f),
                     center = discCenter,
                     radius = radius
                 )
@@ -409,8 +409,8 @@ private fun CdDisc(
                     center = discCenter
                 )
                 onDrawBehind {
-                    // Tinted lacquer and soft vignette make the real album
-                    // artwork pop without drawing opaque shapes over it.
+                    // A light satin finish and softer edge vignette keep the album
+                    // cover vivid instead of hiding it behind dark shading.
                     drawCircle(satinFinish, radius = radius)
                     drawCircle(lightSweep, radius = radius)
                     drawCircle(outerDepth, radius = radius)
@@ -424,10 +424,10 @@ private fun CdDisc(
                     drawCircle(
                         brush = prismRim,
                         radius = radius * 0.970f,
-                        style = Stroke(width = radius * 0.033f)
+                        style = Stroke(width = radius * 0.019f)
                     )
                     drawCircle(
-                        Color.Black.copy(alpha = 0.37f),
+                        Color.Black.copy(alpha = 0.20f),
                         radius - 0.75.dp.toPx(),
                         style = Stroke(1.15.dp.toPx())
                     )
