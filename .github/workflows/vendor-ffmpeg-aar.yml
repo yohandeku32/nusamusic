@@ -1,0 +1,71 @@
+name: Vendor native FFmpeg AAR for Android Studio
+
+on:
+  push:
+    branches:
+      - feat/bundled-ffmpeg-default-android-studio
+    paths:
+      - .github/workflows/vendor-ffmpeg-aar.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-vendored-ffmpeg:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout integration branch
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Install native Android toolchain
+        shell: bash
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
+            "ndk;26.1.10909125" "cmake;3.22.1"
+
+      - name: Build Media3 1.9.3 and FFmpeg native decoder for 4 ABIs
+        shell: bash
+        run: |
+          export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/26.1.10909125"
+          bash scripts/build-ffmpeg-android.sh
+
+      - name: Verify bundled native ABIs and APK build
+        shell: bash
+        run: |
+          for abi in arm64-v8a armeabi-v7a x86 x86_64; do
+            unzip -Z -1 app/libs/media3-decoder-ffmpeg.aar | grep -q "^jni/$abi/libffmpegJNI.so$"
+          done
+          chmod +x gradlew
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace
+          bytes="$(wc -c < app/libs/media3-decoder-ffmpeg.aar)"
+          test "$bytes" -lt 98000000
+          echo "Native FFmpeg AAR size: $bytes bytes"
+
+      - name: Commit FFmpeg decoder binary into the PR branch
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f app/libs/media3-decoder-ffmpeg.aar
+          git commit -m "Vendor verified Media3 1.9.3 FFmpeg decoder AAR for Android Studio"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+
+      - name: Upload native FFmpeg APK for validation
+        uses: actions/upload-artifact@v4
+        with:
+          name: nusa-native-ffmpeg-validation
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
+          if-no-files-found: error
