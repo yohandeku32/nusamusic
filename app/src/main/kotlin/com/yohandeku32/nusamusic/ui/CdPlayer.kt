@@ -23,6 +23,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.draw.drawWithCache
@@ -286,7 +287,17 @@ private fun CdDisc(
         }
     }
     Box(modifier.shadow(12.dp, CircleShape), contentAlignment = Alignment.Center) {
-        Box(Modifier.fillMaxSize().graphicsLayer { rotationZ = angle.floatValue }.clip(CircleShape)) {
+        // One cached GPU layer handles both disc clipping and rotation.
+        // The album bitmap and hologram are rasterized when content changes,
+        // while playback frames only update the transform.
+        Box(
+            Modifier.fillMaxSize().graphicsLayer {
+                rotationZ = angle.floatValue
+                shape = CircleShape
+                clip = true
+                compositingStrategy = CompositingStrategy.Offscreen
+            }
+        ) {
             artwork(song, Modifier.fillMaxSize())
             // Cache all expensive gradient shaders. Only the already-cached
             // disc layer rotates; a 120 Hz transform never rebuilds its art.
@@ -346,6 +357,28 @@ private fun CdDisc(
                         Color(0xFF80888C)
                     ),
                     center = discCenter
+                )
+                // These two radial gradients depend only on disc dimensions:
+                // prepare their shaders with the other cached finishes, never in
+                // the onDrawBehind path during a spinning frame.
+                val labelPlastic = Brush.radialGradient(
+                    0.00f to Color(0xFF858E93).copy(alpha = 0.42f),
+                    0.37f to Color(0xFFADB6BA).copy(alpha = 0.34f),
+                    0.70f to Color(0xFFE2E7E7).copy(alpha = 0.38f),
+                    0.91f to Color(0xFF9DAAB0).copy(alpha = 0.36f),
+                    1.00f to Color(0xFFDEE7E9).copy(alpha = 0.44f),
+                    center = discCenter,
+                    radius = radius * 0.324f
+                )
+                val innerClamp = Brush.radialGradient(
+                    listOf(
+                        Color(0xFF6C7477),
+                        Color(0xFFAEB7BA),
+                        Color(0xFFD8DEDF),
+                        Color(0xFF7E898D)
+                    ),
+                    center = discCenter,
+                    radius = radius * 0.157f
                 )
                 onDrawBehind {
                     // A light satin finish and softer edge vignette keep the album
@@ -407,15 +440,7 @@ private fun CdDisc(
                 )
                 // Lightly tinted inner plastic lets more of the artwork show through.
                 drawCircle(
-                    brush = Brush.radialGradient(
-                        0.00f to Color(0xFF858E93).copy(alpha = 0.42f),
-                        0.37f to Color(0xFFADB6BA).copy(alpha = 0.34f),
-                        0.70f to Color(0xFFE2E7E7).copy(alpha = 0.38f),
-                        0.91f to Color(0xFF9DAAB0).copy(alpha = 0.36f),
-                        1.00f to Color(0xFFDEE7E9).copy(alpha = 0.44f),
-                        center = hub,
-                        radius = radius * 0.324f
-                    ),
+                    brush = labelPlastic,
                     radius = radius * 0.324f,
                     center = hub
                 )
@@ -434,16 +459,7 @@ private fun CdDisc(
                 // Narrow recessed mounting ring rather than a flat silver disc.
                 drawCircle(Color.Black.copy(alpha = 0.24f), radius * 0.181f, hub)
                 drawCircle(
-                    brush = Brush.radialGradient(
-                        listOf(
-                            Color(0xFF6C7477),
-                            Color(0xFFAEB7BA),
-                            Color(0xFFD8DEDF),
-                            Color(0xFF7E898D)
-                        ),
-                        center = hub,
-                        radius = radius * 0.157f
-                    ),
+                    brush = innerClamp,
                     radius = radius * 0.157f,
                     center = hub
                 )
