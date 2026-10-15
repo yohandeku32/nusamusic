@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
@@ -30,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
+import java.util.Locale
 
 /** Fixed clear shell and spindle; only the supplied disc rotates inside them. */
 @Composable
@@ -38,6 +41,20 @@ internal fun CdJewelCase(
     artistName: String? = null,
     disc: @Composable (Modifier) -> Unit
 ) {
+    // This font is a locally supplied, optional asset. Never commit the
+    // personal-use-only font itself to the public source repository.
+    val context = LocalContext.current.applicationContext
+    val stickerFont = remember(context) {
+        try {
+            android.graphics.Typeface.createFromAsset(
+                context.assets,
+                "fonts/Aerosoldier_PERSONAL_USE_ONLY.otf"
+            )
+        } catch (_: RuntimeException) {
+            null // Safe fallback for builds without the optional local asset.
+        }
+    }
+
     BoxWithConstraints(
         modifier.shadow(
             elevation = 12.dp,
@@ -75,7 +92,7 @@ internal fun CdJewelCase(
             drawClearLid()
             drawClearCaseReflections()
             drawSpindle(Offset(size.width * 0.55f, size.height * 0.5f))
-            drawJewelCaseStickers(artistName)
+            drawJewelCaseStickers(artistName, stickerFont)
         }
     }
 }
@@ -302,7 +319,10 @@ private fun DrawScope.drawSpindle(centre: Offset) {
  * Drawn as stationary vectors (no bitmap loading or per-track transitions),
  * with their own paper finish and ink so the rotating CD remains visible.
  */
-private fun DrawScope.drawJewelCaseStickers(artistName: String?) {
+private fun DrawScope.drawJewelCaseStickers(
+    artistName: String?,
+    stickerTypeface: android.graphics.Typeface?
+) {
     val w = size.width
     val h = size.height
     val blue = Color(0xFF41698A)
@@ -384,7 +404,7 @@ private fun DrawScope.drawJewelCaseStickers(artistName: String?) {
         drawLine(blue.copy(alpha = 0.65f), Offset(bx + bw * 0.06f, by + h * 0.116f),
             Offset(bx + bw * 0.94f, by + h * 0.116f), 0.7.dp.toPx())
         // Unlike the archival typesetting, the artist name is handwritten in marker.
-        drawArtistMarker(artistName, bx + bw * 0.072f, by + h * 0.175f, bw * 0.86f)
+        drawArtistMarker(artistName, stickerTypeface, bx + bw * 0.072f, by + h * 0.175f, bw * 0.86f)
         printAt("MUSIC ARCHIVE", bx + bw * 0.072f, by + h * 0.211f, 0.027f)
         printAt("S/N 7738700", bx + bw * 0.072f, by + h * 0.258f, 0.027f)
         drawLine(blue.copy(alpha = 0.54f), Offset(bx + bw * 0.06f, by + h * 0.280f),
@@ -617,6 +637,7 @@ private fun DrawScope.drawStickerInkWear(
  */
 private fun DrawScope.drawArtistMarker(
     artistName: String?,
+    stickerTypeface: android.graphics.Typeface?,
     x: Float,
     baseline: Float,
     availableWidth: Float
@@ -625,23 +646,25 @@ private fun DrawScope.drawArtistMarker(
     val artist = artistName
         ?.trim()
         ?.replace(Regex("\\s+"), " ")
+        ?.uppercase(Locale.ROOT)
         ?.takeIf { it.isNotEmpty() }
         ?: "ARTIST"
     val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-        typeface = android.graphics.Typeface.create(
-            "casual", android.graphics.Typeface.BOLD
-        )
+        typeface = stickerTypeface
+            ?: android.graphics.Typeface.create("casual", android.graphics.Typeface.BOLD)
         color = android.graphics.Color.rgb(171, 47, 49)
-        textSkewX = -0.075f
+        // Use the exact Aerosoldier glyph outlines without synthetic slant.
+        textSkewX = if (stickerTypeface == null) -0.075f else 0f
         isSubpixelText = true
         style = android.graphics.Paint.Style.FILL_AND_STROKE
         strokeJoin = android.graphics.Paint.Join.ROUND
         strokeCap = android.graphics.Paint.Cap.ROUND
-        // A thicker, rounded nib preserves the handwritten marker feel.
-        strokeWidth = h * 0.0017f
+        // Aerosoldier is already expressive; avoid artificial thick outlines.
+        strokeWidth = h * (if (stickerTypeface == null) 0.0017f else 0.0006f)
         textSize = h * 0.050f
     }
 
+    // Uppercase labels; abbreviate longer artist names to initials if needed.
     // If the artist's full name does not fit at natural marker size,
     // write the first letter of each word instead (e.g. Bunga Citra Lestari -> BCL).
     // Single long names are still reduced to fit, without inventing initials.

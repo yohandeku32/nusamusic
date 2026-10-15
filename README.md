@@ -23,6 +23,14 @@ The folder scanner recognises AAC, ALAC, FLAC, M4A, MP3, OGG, OPUS, WAV, and WMA
 
 Lossless and Hi-Res labels use audio metadata. The Hi-Res label appears when the reported bit depth is at least 24 bits; it doesn't confirm bit-perfect output to your headphones or DAC.
 
+## Optional CD sticker font (local only)
+
+The CD jewel-case sticker prints the **current artist name in UPPERCASE**, shortening long multi-word artist names to initials. To use the *Aerosoldier PERSONAL USE* font in a locally built APK, copy your legally obtained `Aerosoldier_PERSONAL_USE_ONLY.otf` into:
+
+`app/src/main/assets/fonts/Aerosoldier_PERSONAL_USE_ONLY.otf`
+
+Create the `assets/fonts` folders if they do not exist, then rebuild the APK with Android Studio. The font file is intentionally **gitignored and not bundled with the public repository** due to its personal-use licensing. Without that local asset, the sticker uses the existing handwritten fallback font. Check your font licence before distributing an APK that contains it.
+
 ## Build
 
 You'll need:

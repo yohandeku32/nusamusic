@@ -21,3 +21,7 @@ Thumbs.db
 
 # Locally built AndroidX FFmpeg native decoder binaries
 app/libs/*.aar
+
+# Optional personal-use font supplied locally for the CD sticker;
+# never redistribute the font in this public repository.
+app/src/main/assets/fonts/Aerosoldier_PERSONAL_USE_ONLY.otf
