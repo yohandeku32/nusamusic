@@ -30,7 +30,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -40,15 +39,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.Constraints
-import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yohandeku32.nusamusic.model.Song
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.pow
-import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.first
 
 private val CdBackground = Color(0xFF111111)
@@ -92,7 +88,10 @@ fun CdPlayer(
         onSurfaceVariant = Color(0xFFA5A5A0)
     )) {
         CompositionLocalProvider(LocalContentColor provides Color(0xFFF2F0E9)) {
-        Box(modifier.background(CdBackground)) {
+        BoxWithConstraints(modifier.background(CdBackground)) {
+            // Reserve the transport and collection first; the parent scrolls
+            // naturally for compact screens or enlarged accessibility text.
+            val discSize = minOf(maxWidth * 0.76f, (viewportHeight - 520.dp).coerceIn(160.dp, 340.dp))
             // Reserve exactly the same title slot for both one-line and
             // two-line song names. Otherwise SpaceBetween shifts the CD and
             // lower carousel each time a longer title wraps.
@@ -101,9 +100,11 @@ fun CdPlayer(
             val titleSlotHeight = with(LocalDensity.current) {
                 (titleSize * 2.7f).sp.toDp()
             }
-            Layout(
-                modifier = Modifier.fillMaxWidth().heightIn(min = viewportHeight).statusBarsPadding(),
-                content = {
+            Column(
+                Modifier.fillMaxWidth().heightIn(min = viewportHeight).statusBarsPadding(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
                 Row(
                     Modifier.fillMaxWidth().padding(start = 24.dp, end = 12.dp, top = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -116,12 +117,10 @@ fun CdPlayer(
                 key(song?.id) {
                     CdTimeline(positionMsState, durationMs, song != null, onSeek)
                 }
-                Box(
-                    Modifier.padding(top = 18.dp),
-                    contentAlignment = Alignment.Center
-                ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Spacer(Modifier.height(18.dp))
                     CdJewelCase(
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier.size(width = discSize * 1.12f, height = discSize),
                         artistName = song?.artist
                     ) { discModifier ->
                         // Switch to the new artwork immediately without a slide,
@@ -134,8 +133,6 @@ fun CdPlayer(
                             modifier = discModifier
                         )
                     }
-                }
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Spacer(Modifier.height(20.dp))
                     // Keep the entire player geometry stable: the title is
                     // vertically centred within a permanent two-line slot.
@@ -201,14 +198,15 @@ fun CdPlayer(
                 }
                 Column(
                     Modifier.fillMaxWidth()
+                        .padding(top = 8.dp)
                         .clip(RoundedCornerShape(topStart = 48.dp, topEnd = 48.dp))
                         .background(Brush.verticalGradient(listOf(Color(0xFF1B1B1B), Color(0xFF151515))))
                         .border(1.dp, Color.White.copy(alpha = 0.07f), RoundedCornerShape(topStart = 48.dp, topEnd = 48.dp))
-                        .navigationBarsPadding().padding(top = 12.dp, bottom = 32.dp),
+                        .navigationBarsPadding().padding(top = 10.dp, bottom = 24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Box(Modifier.size(28.dp, 3.dp).clip(CircleShape).background(Color(0xFF343434)))
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(8.dp))
                     if (songs.isNotEmpty()) {
                         CdSongCarousel(songs, song?.id, thumbnailArtwork, onSelectSong)
                     } else {
@@ -234,47 +232,6 @@ fun CdPlayer(
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium
                         )
-                    }
-                }
-                }
-            ) { measurables, constraints ->
-                // Measure all controls and the collection, including real text
-                // sizes and navigation insets, before allocating the large CD.
-                // A guessed fixed reserve made the whole page exceed the screen.
-                val naturalConstraints = constraints.copy(
-                    minWidth = 0, minHeight = 0, maxHeight = Constraints.Infinity
-                )
-                val header = measurables[0].measure(naturalConstraints)
-                val timeline = measurables[1].measure(naturalConstraints)
-                val details = measurables[3].measure(naturalConstraints)
-                val collection = measurables[4].measure(naturalConstraints)
-                val discTopPadding = 18.dp.roundToPx()
-                val reservedHeight = header.height + timeline.height + details.height +
-                    collection.height + discTopPadding
-                val maxDiscHeight = minOf(
-                    (constraints.maxWidth * 0.76f).roundToInt(), 340.dp.roundToPx()
-                )
-                val minDiscHeight = minOf(maxDiscHeight, 120.dp.roundToPx())
-                val discHeight = (constraints.minHeight - reservedHeight)
-                    .coerceIn(minDiscHeight, maxDiscHeight)
-                val disc = measurables[2].measure(Constraints.fixed(
-                    width = (discHeight * 1.12f).roundToInt(),
-                    height = discHeight + discTopPadding
-                ))
-                val parts = listOf(header, timeline, disc, details, collection)
-                val contentHeight = parts.sumOf { it.height }
-                // Compact screens and large accessibility fonts can still scroll
-                // to actual content; a normal screen fits exactly in its viewport.
-                val height = constraints.constrainHeight(maxOf(constraints.minHeight, contentHeight))
-                val extraSpace = (height - contentHeight).coerceAtLeast(0)
-                layout(constraints.maxWidth, height) {
-                    var y = 0
-                    parts.forEachIndexed { index, part ->
-                        part.placeRelative(
-                            x = (constraints.maxWidth - part.width) / 2,
-                            y = y + extraSpace * index / (parts.size - 1)
-                        )
-                        y += part.height
                     }
                 }
             }
@@ -609,7 +566,7 @@ private fun CdSongCarousel(
     LaunchedEffect(currentId, songs) {
         listState.scrollToItem(currentIndex)
     }
-    val itemSize = 100.dp
+    val itemSize = 94.dp
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         LazyRow(
             state = listState,
@@ -618,7 +575,7 @@ private fun CdSongCarousel(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
             // Leave room for the full disc at the crest and at the lower edges.
-            modifier = Modifier.height(itemSize + 64.dp)
+            modifier = Modifier.height(itemSize + 56.dp)
         ) {
             items(songs, key = { it.id }) { item ->
                 val active = item.id == currentId
@@ -642,7 +599,7 @@ private fun CdSongCarousel(
                             // A rounded crest, then a gentle drop on both sides,
                             // matching the reference even while dragging.
                             val arc = abs(distance).pow(1.65f)
-                            (-24f + 52f * arc).dp.toPx()
+                            (-12f + 44f * arc).dp.toPx()
                         } else {
                             0f
                         }
