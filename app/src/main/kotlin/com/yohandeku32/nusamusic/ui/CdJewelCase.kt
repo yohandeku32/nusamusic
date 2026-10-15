@@ -24,31 +24,6 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 
-// Fine, stationary plastic scratches concentrated on the four clear
-// jewel-case corners. Fractional values scale naturally with the case size.
-private val caseCornerScratches = arrayOf(
-    // Upper-left, beside the hinge.
-    floatArrayOf(0.105f, 0.062f, 0.155f, 0.049f),
-    floatArrayOf(0.120f, 0.084f, 0.174f, 0.070f),
-    floatArrayOf(0.098f, 0.113f, 0.143f, 0.095f),
-    floatArrayOf(0.151f, 0.039f, 0.184f, 0.052f),
-    // Upper-right, near the opening edge.
-    floatArrayOf(0.818f, 0.057f, 0.905f, 0.078f),
-    floatArrayOf(0.853f, 0.100f, 0.936f, 0.111f),
-    floatArrayOf(0.880f, 0.045f, 0.940f, 0.058f),
-    floatArrayOf(0.804f, 0.126f, 0.870f, 0.146f),
-    // Lower-left.
-    floatArrayOf(0.100f, 0.893f, 0.160f, 0.867f),
-    floatArrayOf(0.130f, 0.922f, 0.187f, 0.904f),
-    floatArrayOf(0.097f, 0.942f, 0.151f, 0.925f),
-    floatArrayOf(0.175f, 0.955f, 0.217f, 0.935f),
-    // Lower-right.
-    floatArrayOf(0.812f, 0.867f, 0.896f, 0.842f),
-    floatArrayOf(0.843f, 0.916f, 0.937f, 0.889f),
-    floatArrayOf(0.869f, 0.952f, 0.941f, 0.927f),
-    floatArrayOf(0.778f, 0.935f, 0.843f, 0.914f)
-)
-
 /** Fixed clear shell and spindle; only the supplied disc rotates inside them. */
 @Composable
 internal fun CdJewelCase(
@@ -156,7 +131,11 @@ private fun DrawScope.drawClearLid() {
         lineTo(w * 0.11f, h * 0.94f)
         close()
     }
-    drawPath(reflection, Brush.linearGradient(listOf(Color.White.copy(alpha = 0.065f), Color.Transparent)))
+    drawPath(reflection, Brush.linearGradient(listOf(
+        Color.White.copy(alpha = 0.090f),
+        Color.White.copy(alpha = 0.020f),
+        Color.Transparent
+    )))
     val lowerReflection = Path().apply {
         moveTo(w * 0.68f, h * 0.98f)
         lineTo(w * 0.95f, h * 0.58f)
@@ -164,31 +143,21 @@ private fun DrawScope.drawClearLid() {
         lineTo(w * 0.78f, h * 0.98f)
         close()
     }
-    drawPath(lowerReflection, glass.copy(alpha = 0.045f))
+    drawPath(lowerReflection, glass.copy(alpha = 0.065f))
 
-    // Very subtle short etches exclusively at the case corners. The tiny
-    // dark offset gives each scratch a shallow edge without clouding artwork.
-    caseCornerScratches.forEachIndexed { index, mark ->
-        val start = Offset(w * mark[0], h * mark[1])
-        val end = Offset(w * mark[2], h * mark[3])
-        drawLine(
-            color = glass.copy(alpha = if (index % 3 == 0) 0.31f else 0.20f),
-            start = start,
-            end = end,
-            strokeWidth = edge * if (index % 4 == 0) 0.65f else 0.50f,
-            cap = StrokeCap.Round
-        )
-        if (index % 3 == 0) {
-            val offset = Offset(edge * 0.45f, edge * 0.55f)
-            drawLine(
-                color = Color.Black.copy(alpha = 0.075f),
-                start = start + offset,
-                end = end + offset,
-                strokeWidth = edge * 0.35f,
-                cap = StrokeCap.Round
-            )
-        }
+    // An immaculate, clean polycarbonate lid. Tiny specular highlights
+    // show its depth without placing damage marks over the album cover.
+    val specular = Path().apply {
+        moveTo(w * 0.16f, h * 0.024f)
+        lineTo(w * 0.185f, h * 0.024f)
+        lineTo(w * 0.115f, h * 0.28f)
+        lineTo(w * 0.115f, h * 0.16f)
+        close()
     }
+    drawPath(specular, Brush.linearGradient(listOf(
+        Color.White.copy(alpha = 0.16f),
+        Color.White.copy(alpha = 0.015f)
+    )))
 
     // Doubled edges give the thin clear plastic its thickness.
     drawLine(glass.copy(alpha = 0.58f), Offset(w * 0.11f, edge), Offset(w * 0.96f, edge), edge * 0.9f)
