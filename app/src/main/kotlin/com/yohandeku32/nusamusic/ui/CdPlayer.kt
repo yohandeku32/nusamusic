@@ -60,6 +60,7 @@ fun CdPlayer(
     durationMs: Long,
     viewportHeight: Dp,
     titleFontSize: Float,
+    realisticControls: Boolean,
     titleFontFamily: FontFamily,
     shuffleEnabled: Boolean,
     repeatMode: Int,
@@ -173,36 +174,18 @@ fun CdPlayer(
                             )
                         }
                     }
-                    Row(
-                        Modifier.padding(top = 12.dp, bottom = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        IconToggleButton(checked = shuffleEnabled, onCheckedChange = { onShuffle() }, enabled = song != null) {
-                            Icon(Icons.Default.Shuffle, cdText("Acak", "Shuffle"), Modifier.size(19.dp), tint = if (shuffleEnabled) CdAccent else Color.Gray)
-                        }
-                        IconButton(onClick = onPrevious, enabled = song != null) {
-                            Icon(Icons.Default.SkipPrevious, cdText("Sebelumnya", "Previous"), Modifier.size(27.dp))
-                        }
-                        FilledIconButton(
-                            onClick = onPlayPause, modifier = Modifier.size(54.dp),
-                            colors = IconButtonDefaults.filledIconButtonColors(containerColor = Color(0xFFEDEDE7), contentColor = CdBackground)
-                        ) {
-                            Icon(if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                if (isPlaying) cdText("Jeda", "Pause") else cdText("Putar", "Play"), Modifier.size(29.dp))
-                        }
-                        IconButton(onClick = onNext, enabled = song != null) {
-                            Icon(Icons.Default.SkipNext, cdText("Berikutnya", "Next"), Modifier.size(27.dp))
-                        }
-                        IconButton(onClick = onRepeat, enabled = song != null) {
-                            Icon(if (repeatMode == 1) Icons.Default.RepeatOne else Icons.Default.Repeat,
-                                when (repeatMode) {
-                                    1 -> cdText("Ulangi satu lagu", "Repeat one")
-                                    2 -> cdText("Ulangi semua", "Repeat all")
-                                    else -> cdText("Ulangi nonaktif", "Repeat off")
-                                }, Modifier.size(19.dp), tint = if (repeatMode != 0) CdAccent else Color.Gray)
-                        }
-                    }
+                    CdPlaybackControls(
+                        isPlaying = isPlaying,
+                        hasSong = song != null,
+                        shuffleEnabled = shuffleEnabled,
+                        repeatMode = repeatMode,
+                        realistic = realisticControls,
+                        onPlayPause = onPlayPause,
+                        onPrevious = onPrevious,
+                        onNext = onNext,
+                        onShuffle = onShuffle,
+                        onRepeat = onRepeat
+                    )
                 }
                 Column(
                     Modifier.fillMaxWidth()
