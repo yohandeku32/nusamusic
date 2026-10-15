@@ -1419,6 +1419,7 @@ private fun NusaMusicApp(
             )
         )
     }
+    val showArtistBiography = playerPresentationMode != PlayerPresentationMode.CD
     var animatedArtworkEnabled by remember {
         mutableStateOf(uiPrefs.getBoolean("animated_artwork_enabled", true))
     }
@@ -1629,8 +1630,10 @@ private fun NusaMusicApp(
         }
     }
 
-    LaunchedEffect(currentSong?.artist) {
+    LaunchedEffect(currentSong?.artist, showArtistBiography) {
         artistBiography = null
+        biographyLoading = false
+        if (!showArtistBiography) return@LaunchedEffect
         biographyLoading =
             ArtistNameUtils.firstArtist(currentSong?.artist).isNotBlank()
         artistBiography = currentSong?.let {
@@ -3086,13 +3089,14 @@ private fun NusaMusicApp(
                             }
                             }
 
-                            // Artist biography section.
-                            item {
-                                ArtistBiographySection(
-                                    artistName = currentSong?.artist,
-                                    biography = artistBiography,
-                                    loading = biographyLoading
-                                )
+                            if (showArtistBiography) {
+                                item {
+                                    ArtistBiographySection(
+                                        artistName = currentSong?.artist,
+                                        biography = artistBiography,
+                                        loading = biographyLoading
+                                    )
+                                }
                             }
                         }
                         }
