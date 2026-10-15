@@ -33,6 +33,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -582,6 +583,10 @@ private fun CdTimeline(position: State<Long>, durationMs: Long, hasSong: Boolean
     val duration = durationMs.coerceAtLeast(0L)
     val value = drag ?: if (duration > 0) (position.value.toFloat() / duration).coerceIn(0f, 1f) else 0f
     val enabled = hasSong && duration > 0L
+    // Reserve identical fixed-width slots for both labels. Proportional time
+    // text would otherwise resize the weighted Slider whenever digits change
+    // (e.g. 9:59 → 10:00), shifting the entire progress track.
+    val timeLabelWidth = 56.dp
     LaunchedEffect(durationMs, hasSong) { drag = null }
     Row(
         Modifier.padding(horizontal = 24.dp).fillMaxWidth()
@@ -589,7 +594,15 @@ private fun CdTimeline(position: State<Long>, durationMs: Long, hasSong: Boolean
             .background(Color(0xFF181818), RoundedCornerShape(16.dp)).padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(cdTime((value * duration).toLong()), color = Color(0xFFC9C9C1), fontSize = 11.sp)
+        Text(
+            text = cdTime((value * duration).toLong()),
+            modifier = Modifier.width(timeLabelWidth),
+            color = Color(0xFFC9C9C1),
+            fontSize = 11.sp,
+            fontFamily = FontFamily.Monospace,
+            maxLines = 1,
+            textAlign = TextAlign.Start
+        )
         Slider(
             value = value, onValueChange = { drag = it },
             onValueChangeFinished = { drag?.let { onSeek((it * duration).toLong()) }; drag = null },
@@ -608,7 +621,15 @@ private fun CdTimeline(position: State<Long>, durationMs: Long, hasSong: Boolean
                 }
             }
         )
-        Text(cdTime(duration), color = Color(0xFF92928D), fontSize = 11.sp)
+        Text(
+            text = cdTime(duration),
+            modifier = Modifier.width(timeLabelWidth),
+            color = Color(0xFF92928D),
+            fontSize = 11.sp,
+            fontFamily = FontFamily.Monospace,
+            maxLines = 1,
+            textAlign = TextAlign.End
+        )
     }
 }
 
