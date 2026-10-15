@@ -23,6 +23,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -41,6 +42,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yohandeku32.nusamusic.model.Song
 import java.util.Locale
+import kotlin.math.abs
+import kotlin.math.pow
 import kotlinx.coroutines.flow.first
 
 private val CdBackground = Color(0xFF111111)
@@ -488,9 +491,21 @@ private fun CdDisc(
 private fun CdThumbnail(
     song: Song,
     artwork: @Composable (Song?, Modifier) -> Unit,
+    selected: Boolean,
     modifier: Modifier = Modifier
 ) {
-    Box(modifier.clip(CircleShape), contentAlignment = Alignment.Center) {
+    // Grayscale is applied after composing artwork and disc decorations.
+    // The small offscreen layer is reused while scrolling and is needed for
+    // Saturation blending to affect only this thumbnail (not the row behind it).
+    val grayscale = if (selected) Modifier else Modifier
+        .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+        .drawWithCache {
+            onDrawWithContent {
+                drawContent()
+                drawRect(color = Color.Black, blendMode = BlendMode.Saturation)
+            }
+        }
+    Box(modifier.clip(CircleShape).then(grayscale), contentAlignment = Alignment.Center) {
         artwork(song, Modifier.fillMaxSize())
         Canvas(Modifier.matchParentSize()) {
             val radius = size.minDimension / 2f
@@ -541,8 +556,8 @@ private fun CdSongCarousel(
             contentPadding = PaddingValues(horizontal = ((maxWidth - 88.dp) / 2).coerceAtLeast(0.dp)),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            // Allow a small vertical arc without clipping the top or bottom discs.
-            modifier = Modifier.height(106.dp)
+            // A taller viewport accommodates the raised center and lower sides.
+            modifier = Modifier.height(142.dp)
         ) {
             items(songs, key = { it.id }) { item ->
                 val active = item.id == currentId
@@ -551,19 +566,20 @@ private fun CdSongCarousel(
                     Modifier.size(88.dp).graphicsLayer {
                         scaleX = scale
                         scaleY = scale
-                        alpha = if (active) 1f else 0.55f
+                        alpha = if (active) 1f else 0.72f
 
-                        // A gentle upward arc: the disc at the viewport center
-                        // sits slightly higher, while those at the edges sit
-                        // lower. Calculate on the graphics layer rather than
-                        // recomposing artwork for every scroll frame.
+                        // Follow the reference's curved record shelf: the
+                        // center rises distinctly and neighboring records
+                        // descend progressively to both sides. Keep the
+                        // position in the GPU transform while scrolling.
                         val layout = listState.layoutInfo
                         val center = layout.viewportSize.width * 0.5f
                         val visibleItem = layout.visibleItemsInfo.firstOrNull { it.key == item.id }
                         translationY = if (visibleItem != null && center > 0f) {
                             val itemCenter = visibleItem.offset + visibleItem.size * 0.5f
                             val distance = ((itemCenter - center) / center).coerceIn(-1f, 1f)
-                            (-6f + 12f * distance * distance).dp.toPx()
+                            val arc = abs(distance).pow(1.25f)
+                            (-17f + 44f * arc).dp.toPx()
                         } else {
                             0f
                         }
@@ -575,7 +591,7 @@ private fun CdSongCarousel(
                         .padding(6.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    CdThumbnail(item, artwork, Modifier.fillMaxSize())
+                    CdThumbnail(item, artwork, selected = active, modifier = Modifier.fillMaxSize())
                 }
             }
         }
