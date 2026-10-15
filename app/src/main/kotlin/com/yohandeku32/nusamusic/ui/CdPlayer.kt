@@ -450,30 +450,30 @@ private fun CdDisc(
                 // transparent inner plastic, a recessed silver clamp and the
                 // genuine-sized spindle hole. All radii share one centre.
                 val hub = center
-                drawCircle(Color.Black.copy(alpha = 0.18f), radius * 0.405f, hub)
+                drawCircle(Color.Black.copy(alpha = 0.11f), radius * 0.405f, hub)
                 drawCircle(
                     brush = metallicHubBand,
                     radius = radius * 0.370f,
                     center = hub,
-                    alpha = 0.88f,
+                    alpha = 0.52f,
                     style = Stroke(width = radius * 0.038f)
                 )
                 drawCircle(
-                    Color.White.copy(alpha = 0.57f), radius * 0.406f, hub,
+                    Color.White.copy(alpha = 0.30f), radius * 0.406f, hub,
                     style = Stroke(0.75.dp.toPx())
                 )
                 drawCircle(
-                    Color(0xFF59656B).copy(alpha = 0.51f), radius * 0.336f, hub,
-                    style = Stroke(1.2.dp.toPx())
+                    Color(0xFF59656B).copy(alpha = 0.22f), radius * 0.336f, hub,
+                    style = Stroke(1.0.dp.toPx())
                 )
-                // Faintly translucent inner label plastic retains a hint of the cover.
+                // Lightly tinted inner plastic lets more of the artwork show through.
                 drawCircle(
                     brush = Brush.radialGradient(
-                        0.00f to Color(0xFF858E93).copy(alpha = 0.75f),
-                        0.37f to Color(0xFFADB6BA).copy(alpha = 0.67f),
-                        0.70f to Color(0xFFE2E7E7).copy(alpha = 0.76f),
-                        0.91f to Color(0xFF9DAAB0).copy(alpha = 0.77f),
-                        1.00f to Color(0xFFDEE7E9).copy(alpha = 0.84f),
+                        0.00f to Color(0xFF858E93).copy(alpha = 0.42f),
+                        0.37f to Color(0xFFADB6BA).copy(alpha = 0.34f),
+                        0.70f to Color(0xFFE2E7E7).copy(alpha = 0.38f),
+                        0.91f to Color(0xFF9DAAB0).copy(alpha = 0.36f),
+                        1.00f to Color(0xFFDEE7E9).copy(alpha = 0.44f),
                         center = hub,
                         radius = radius * 0.324f
                     ),
@@ -481,15 +481,15 @@ private fun CdDisc(
                     center = hub
                 )
                 drawCircle(
-                    Color.White.copy(alpha = 0.60f), radius * 0.320f, hub,
+                    Color.White.copy(alpha = 0.26f), radius * 0.320f, hub,
                     style = Stroke(0.65.dp.toPx())
                 )
                 drawCircle(
-                    Color(0xFF495157).copy(alpha = 0.28f), radius * 0.272f, hub,
+                    Color(0xFF495157).copy(alpha = 0.14f), radius * 0.272f, hub,
                     style = Stroke(0.8.dp.toPx())
                 )
                 drawCircle(
-                    Color.White.copy(alpha = 0.30f), radius * 0.249f, hub,
+                    Color.White.copy(alpha = 0.14f), radius * 0.249f, hub,
                     style = Stroke(0.65.dp.toPx())
                 )
                 // Narrow recessed mounting ring rather than a flat silver disc.
