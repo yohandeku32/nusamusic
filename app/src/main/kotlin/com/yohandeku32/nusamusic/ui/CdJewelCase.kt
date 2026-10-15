@@ -14,6 +14,8 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -61,7 +63,15 @@ internal fun CdJewelCase(
 
         // Case-front decals remain fixed while the artwork and CD rotate underneath.
         // They belong to the clear lid, not to an album's artwork.
-        Canvas(Modifier.matchParentSize()) {
+        // Render the static plastic lid, reflections and detailed paper grain
+        // into an independent layer. Rotating frames can then reuse that layer
+        // instead of submitting the sticker's hundreds of tiny draw operations.
+        // Changing songs still invalidates the artist text as normal.
+        Canvas(
+            Modifier.matchParentSize().graphicsLayer {
+                compositingStrategy = CompositingStrategy.Offscreen
+            }
+        ) {
             drawClearLid()
             drawClearCaseReflections()
             drawSpindle(Offset(size.width * 0.55f, size.height * 0.5f))
