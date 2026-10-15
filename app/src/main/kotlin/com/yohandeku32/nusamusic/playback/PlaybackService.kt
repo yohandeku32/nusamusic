@@ -38,8 +38,38 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
+    /**
+     * Media3's FFmpeg extension is loaded reflectively by DefaultRenderersFactory
+     * only when its separately built native AAR is bundled in this APK.
+     * Keep Android's hardware/platform codec first for battery efficiency and
+     * fall back to FFmpeg only when the primary audio renderer cannot decode.
+     *
+     * Use the exact same factory for the primary and crossfade players.
+     */
+    private fun buildAudioRenderersFactory(): DefaultRenderersFactory =
+        DefaultRenderersFactory(this)
+            .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+            .setEnableDecoderFallback(true)
+
+    private fun logOptionalFfmpegStatus() {
+        // No compile-time dependency on the optional AAR: standard builds
+        // remain fully functional without the FFmpeg native distribution.
+        val status = runCatching {
+            val library = Class.forName("androidx.media3.decoder.ffmpeg.FfmpegLibrary")
+            val available = library.getMethod("isAvailable").invoke(null) == true
+            if (!available) {
+                "FFmpeg extension is packaged, but its native library could not load"
+            } else {
+                val version = library.getMethod("getVersion").invoke(null)
+                "FFmpeg decoder available: $version"
+            }
+        }.getOrElse { "FFmpeg decoder not packaged; using platform Media3 decoders" }
+        Log.i("NusaDecoder", status)
+    }
+
     override fun onCreate() {
         super.onCreate()
+        logOptionalFfmpegStatus()
 
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
@@ -52,7 +82,7 @@ class PlaybackService : MediaSessionService() {
 
         val player = ExoPlayer.Builder(
             this,
-            DefaultRenderersFactory(this)
+            buildAudioRenderersFactory()
         )
             .setLoadControl(loadControl)
             .build()
@@ -181,7 +211,7 @@ class PlaybackService : MediaSessionService() {
 
         return ExoPlayer.Builder(
             this,
-            DefaultRenderersFactory(this)
+            buildAudioRenderersFactory()
         )
             // The secondary player must never compete for audio focus.
             .setAudioAttributes(audioAttributes, false)
