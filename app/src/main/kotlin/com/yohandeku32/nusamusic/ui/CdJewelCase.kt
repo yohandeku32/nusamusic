@@ -57,6 +57,8 @@ internal fun CdJewelCase(
         Canvas(Modifier.matchParentSize()) {
             drawClearLid()
             drawSpindle(Offset(size.width * 0.55f, size.height * 0.5f))
+            // The stationary shrink-wrap sits over the closed jewel case.
+            drawPlasticWrap()
         }
     }
 }
@@ -197,4 +199,147 @@ private fun DrawScope.drawSpindle(centre: Offset) {
     drawCircle(glass.copy(alpha = 0.34f), radius * 0.32f, centre, style = Stroke(edge * 0.65f))
     drawArc(glass.copy(alpha = 0.65f), 205f, 95f, false,
         centre - Offset(radius, radius), Size(radius * 2, radius * 2), style = Stroke(edge))
+}
+
+/**
+ * Stationary shrink-wrap film over a sealed jewel case.
+ * Specular tension folds collect along the edges, leaving album art visible.
+ * The plastic never rotates with the disc and has no animated shaders.
+ */
+private fun DrawScope.drawPlasticWrap() {
+    val w = size.width
+    val h = size.height
+    val hairline = 1.dp.toPx()
+
+    // The film itself is transparent; only grazing reflections reveal it.
+    drawRect(
+        brush = Brush.linearGradient(
+            colors = listOf(
+                Color.White.copy(alpha = 0.027f),
+                Color.Transparent,
+                Color.White.copy(alpha = 0.015f)
+            ),
+            start = Offset(w * 0.10f, 0f),
+            end = Offset(w * 0.94f, h)
+        ),
+        topLeft = Offset(w * 0.10f, 0f),
+        size = Size(w * 0.89f, h)
+    )
+
+    // Slightly stretched film along the heat-sealed top and right edges.
+    drawRect(
+        brush = Brush.verticalGradient(
+            colors = listOf(
+                Color.White.copy(alpha = 0.20f),
+                Color.White.copy(alpha = 0.075f),
+                Color.Transparent
+            ),
+            startY = 0f,
+            endY = h * 0.14f
+        ),
+        topLeft = Offset(w * 0.10f, 0f),
+        size = Size(w * 0.88f, h * 0.14f)
+    )
+    drawRect(
+        brush = Brush.horizontalGradient(
+            colors = listOf(
+                Color.Transparent,
+                Color.White.copy(alpha = 0.07f),
+                Color.White.copy(alpha = 0.16f)
+            ),
+            startX = w * 0.87f,
+            endX = w
+        ),
+        topLeft = Offset(w * 0.87f, h * 0.035f),
+        size = Size(w * 0.12f, h * 0.93f)
+    )
+    drawRect(
+        brush = Brush.verticalGradient(
+            colors = listOf(Color.Transparent, Color.White.copy(alpha = 0.08f)),
+            startY = h * 0.91f,
+            endY = h
+        ),
+        topLeft = Offset(w * 0.10f, h * 0.91f),
+        size = Size(w * 0.88f, h * 0.085f)
+    )
+
+    // Semi-transparent broad creases, like cellophane pulled tight at corners.
+    val topLeftFold = Path().apply {
+        moveTo(w * 0.105f, h * 0.012f)
+        lineTo(w * 0.245f, h * 0.010f)
+        cubicTo(w * 0.19f, h * 0.03f, w * 0.18f, h * 0.075f, w * 0.27f, h * 0.14f)
+        lineTo(w * 0.135f, h * 0.047f)
+        close()
+    }
+    drawPath(
+        topLeftFold,
+        Brush.linearGradient(
+            colors = listOf(
+                Color.White.copy(alpha = 0.17f),
+                Color.White.copy(alpha = 0.055f),
+                Color.Transparent
+            ),
+            start = Offset(w * 0.13f, h * 0.01f),
+            end = Offset(w * 0.27f, h * 0.14f)
+        )
+    )
+    val upperRightFold = Path().apply {
+        moveTo(w * 0.73f, h * 0.012f)
+        lineTo(w * 0.975f, h * 0.025f)
+        lineTo(w * 0.944f, h * 0.32f)
+        cubicTo(w * 0.915f, h * 0.19f, w * 0.91f, h * 0.09f, w * 0.73f, h * 0.012f)
+        close()
+    }
+    drawPath(
+        upperRightFold,
+        Brush.linearGradient(
+            colors = listOf(
+                Color.White.copy(alpha = 0.045f),
+                Color.White.copy(alpha = 0.12f),
+                Color.Transparent
+            ),
+            start = Offset(w * 0.82f, 0f),
+            end = Offset(w * 0.97f, h * 0.33f)
+        )
+    )
+
+    // Fine, uneven tension lines: highlights rather than scratches.
+    fun crease(
+        x0: Float, y0: Float,
+        xc: Float, yc: Float,
+        x1: Float, y1: Float,
+        alpha: Float, width: Float
+    ) {
+        val path = Path().apply {
+            moveTo(w * x0, h * y0)
+            quadraticBezierTo(w * xc, h * yc, w * x1, h * y1)
+        }
+        drawPath(
+            path,
+            Color.White.copy(alpha = alpha),
+            style = Stroke(width = width * hairline, cap = StrokeCap.Round)
+        )
+    }
+
+    // Top-left cluster (over the case surface, away from the centre label).
+    crease(0.115f, 0.014f, 0.145f, 0.024f, 0.17f, 0.083f, 0.28f, 1.8f)
+    crease(0.135f, 0.009f, 0.185f, 0.047f, 0.225f, 0.107f, 0.19f, 1.25f)
+    crease(0.195f, 0.012f, 0.23f, 0.045f, 0.29f, 0.078f, 0.13f, 0.85f)
+    crease(0.245f, 0.006f, 0.30f, 0.035f, 0.35f, 0.062f, 0.11f, 0.85f)
+
+    // Upper edge: slightly broken specular streaks from stretched film.
+    crease(0.54f, 0.008f, 0.64f, 0.02f, 0.73f, 0.025f, 0.16f, 2.0f)
+    crease(0.69f, 0.006f, 0.75f, 0.027f, 0.83f, 0.055f, 0.22f, 1.5f)
+    crease(0.88f, 0.024f, 0.93f, 0.055f, 0.955f, 0.135f, 0.21f, 1.35f)
+
+    // Right edge: elongated reflections typical of tightly wrapped cases.
+    crease(0.975f, 0.13f, 0.95f, 0.23f, 0.94f, 0.40f, 0.30f, 2.1f)
+    crease(0.987f, 0.20f, 0.965f, 0.31f, 0.97f, 0.43f, 0.17f, 1.0f)
+    crease(0.98f, 0.72f, 0.95f, 0.79f, 0.91f, 0.85f, 0.11f, 0.9f)
+
+    // Bottom corners: a few pulled folds, leaving the artwork unobscured.
+    crease(0.15f, 0.965f, 0.22f, 0.94f, 0.28f, 0.89f, 0.14f, 1.15f)
+    crease(0.50f, 0.987f, 0.55f, 0.963f, 0.605f, 0.93f, 0.18f, 1.2f)
+    crease(0.64f, 0.99f, 0.70f, 0.959f, 0.75f, 0.92f, 0.21f, 1.4f)
+    crease(0.92f, 0.983f, 0.86f, 0.954f, 0.81f, 0.917f, 0.15f, 1.1f)
 }
