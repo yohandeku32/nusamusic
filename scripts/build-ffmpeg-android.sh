@@ -59,12 +59,7 @@ decoders=(aac mp3 flac alac vorbis opus ac3 eac3 truehd dca)
 # Locate the actual native decoder artifact instead of assuming build/outputs.
 aar=""
 while IFS= read -r candidate; do
-  if unzip -Z -1 "$candidate" | grep -qE '^jni/[^/]+/libffmpegJNI\.so
-mkdir -p "$project_root/app/libs"
-cp "$aar" "$project_root/app/libs/media3-decoder-ffmpeg.aar"
-echo "FFmpeg AAR ready: $project_root/app/libs/media3-decoder-ffmpeg.aar"
-echo "Now build Nusa: ./gradlew :app:assembleDebug -PrequireFfmpegDecoder=true"
-; then
+  if unzip -Z -1 "$candidate" | grep -E '^jni/[^/]+/libffmpegJNI\.so$' >/dev/null; then
     aar="$candidate"
     break
   fi
@@ -76,4 +71,4 @@ fi
 mkdir -p "$project_root/app/libs"
 cp "$aar" "$project_root/app/libs/media3-decoder-ffmpeg.aar"
 echo "FFmpeg AAR ready: $project_root/app/libs/media3-decoder-ffmpeg.aar"
-echo "Now build Nusa: ./gradlew :app:assembleDebug -PrequireFfmpegDecoder=true"
+echo "Now build Nusa: ./gradlew :app:assembleDebug"
