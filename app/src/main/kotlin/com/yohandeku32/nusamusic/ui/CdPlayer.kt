@@ -205,12 +205,24 @@ fun CdPlayer(
                     Spacer(Modifier.height(8.dp))
                     if (songs.isNotEmpty()) {
                         CdSongCarousel(songs, song?.id, thumbnailArtwork, onSelectSong)
+                        Spacer(Modifier.height(10.dp))
+                        Text(
+                            cdText(
+                                "Geser untuk melihat · ketuk untuk memutar",
+                                "Swipe to browse · tap to play"
+                            ),
+                            color = Color(0xFF969696),
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)
+                        )
                     } else {
                         emptyState()
                     }
                     OutlinedButton(
                         onClick = onLibrary,
-                        modifier = Modifier.offset(y = (-8).dp)
+                        modifier = Modifier.padding(top = 16.dp)
                             .defaultMinSize(minWidth = 68.dp, minHeight = 30.dp),
                         shape = RoundedCornerShape(50),
                         border = BorderStroke(1.dp, Brush.linearGradient(listOf(
@@ -225,7 +237,7 @@ fun CdPlayer(
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
                     ) {
                         Text(
-                            cdText("Koleksi", "Library"),
+                            cdText("Buka koleksi", "Open library"),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium
                         )
@@ -531,7 +543,8 @@ private fun CdSongCarousel(
     LaunchedEffect(currentId, songs) {
         listState.scrollToItem(currentIndex)
     }
-    val itemSize = 128.dp
+    // Compact discs keep the lower panel balanced without heavy transforms.
+    val itemSize = 104.dp
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         LazyRow(
             state = listState,
@@ -541,14 +554,14 @@ private fun CdSongCarousel(
             verticalAlignment = Alignment.CenterVertically,
             // All discs share one horizontal centre line; no per-frame arc
             // translation or offscreen space for shadows is necessary.
-            modifier = Modifier.height(itemSize + 12.dp)
+            modifier = Modifier.height(itemSize + 8.dp)
         ) {
             items(songs, key = { it.id }) { item ->
                 val active = item.id == currentId
                 // Size only changes when the active song changes, not on scroll.
                 // Avoid per-item graphicsLayer, animated scaling and layoutInfo
                 // reads during a drag to keep 120 Hz scrolling responsive.
-                val discSize = (itemSize - 12.dp) * if (active) 1f else 0.84f
+                val discSize = (itemSize - 8.dp) * if (active) 1f else 0.8f
                 Box(
                     Modifier
                         .size(itemSize)
