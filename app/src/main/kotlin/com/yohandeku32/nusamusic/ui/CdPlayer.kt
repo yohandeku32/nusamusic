@@ -306,13 +306,25 @@ private fun CdDisc(
             }
         }
     }
-    Box(modifier.shadow(12.dp, CircleShape), contentAlignment = Alignment.Center) {
+    CdDiscSurface(song, artwork, modifier, rotationDegrees = { angle.floatValue })
+}
+
+/** Shared CD finish; carousel discs reuse the player design without a rotation loop. */
+@Composable
+private fun CdDiscSurface(
+    song: Song?,
+    artwork: @Composable (Song?, Modifier) -> Unit,
+    modifier: Modifier = Modifier,
+    rotationDegrees: () -> Float = { 0f },
+    shadowElevation: Dp = 12.dp
+) {
+    Box(modifier.shadow(shadowElevation, CircleShape), contentAlignment = Alignment.Center) {
         // One cached GPU layer handles both disc clipping and rotation.
         // The album bitmap and hologram are rasterized when content changes,
         // while playback frames only update the transform.
         Box(
             Modifier.fillMaxSize().graphicsLayer {
-                rotationZ = angle.floatValue
+                rotationZ = rotationDegrees()
                 shape = CircleShape
                 clip = true
                 compositingStrategy = CompositingStrategy.Offscreen
@@ -503,34 +515,6 @@ private fun CdDisc(
     }
 }
 
-/** A lightweight, flat CD preview: no per-item shadow or heavy reflection shaders. */
-@Composable
-private fun CdThumbnail(
-    song: Song,
-    artwork: @Composable (Song?, Modifier) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Box(modifier.clip(CircleShape), contentAlignment = Alignment.Center) {
-        artwork(song, Modifier.fillMaxSize())
-        // Keep only the inexpensive metal hub and a light edge highlight.
-        // Removing multiple sweep/radial passes reduces work during flings.
-        Spacer(Modifier.matchParentSize().drawWithCache {
-            val radius = size.minDimension / 2f
-            val hub = Brush.linearGradient(
-                listOf(Color(0xFF818D92), Color(0xFFD9E0E1), Color(0xFF919DA1)),
-                start = Offset.Zero,
-                end = Offset(size.width, size.height)
-            )
-            onDrawBehind {
-                drawCircle(Color.White.copy(alpha = 0.10f), radius, style = Stroke(0.8.dp.toPx()))
-                drawCircle(Color.Black.copy(alpha = 0.23f), radius * 0.36f)
-                drawCircle(hub, radius * 0.31f)
-                drawCircle(Color(0xFF59656B), radius * 0.09f)
-                drawCircle(Color(0xFF14181A), radius * 0.065f)
-            }
-        })
-    }
-}
 @Composable
 private fun CdSongCarousel(
     songs: List<Song>, currentId: Long?,
@@ -547,7 +531,7 @@ private fun CdSongCarousel(
     LaunchedEffect(currentId, songs) {
         listState.scrollToItem(currentIndex)
     }
-    val itemSize = 94.dp
+    val itemSize = 128.dp
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         LazyRow(
             state = listState,
@@ -555,13 +539,13 @@ private fun CdSongCarousel(
             contentPadding = PaddingValues(horizontal = ((maxWidth - itemSize) / 2).coerceAtLeast(0.dp)),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            // Reserve the full 32dp edge drop above and below the disc so an
-            // active (full-size) item is not clipped while it is dragged aside.
-            modifier = Modifier.height(itemSize + 64.dp)
+            // Reserve the 32dp edge drop plus room for the shared CD shadow,
+            // including when the full-size active disc is dragged to an edge.
+            modifier = Modifier.height(itemSize + 80.dp)
         ) {
             items(songs, key = { it.id }) { item ->
                 val active = item.id == currentId
-                val scale by animateFloatAsState(if (active) 1f else 0.76f, label = "CD selection")
+                val scale by animateFloatAsState(if (active) 1f else 0.84f, label = "CD selection")
                 Box(
                     Modifier.size(itemSize).graphicsLayer {
                         scaleX = scale
@@ -596,7 +580,7 @@ private fun CdSongCarousel(
                         .padding(6.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    CdThumbnail(item, artwork, modifier = Modifier.fillMaxSize())
+                    CdDiscSurface(item, artwork, modifier = Modifier.fillMaxSize(), shadowElevation = 6.dp)
                 }
             }
         }
