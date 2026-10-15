@@ -5755,15 +5755,18 @@ private fun LibrarySongListRow(
     onPlay: (Song) -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    var codecInfo by remember(song.uri) { mutableStateOf<AudioCodecInfo?>(null) }
+    // Cached Hi-Res information appears on the first composed frame, even
+    // when the user is actively scrolling the playlist.
+    var codecInfo by remember(song.uri) {
+        mutableStateOf(AudioCodecLoader.cached(song.uri))
+    }
+    val currentlyScrolling by rememberUpdatedState(!loadDetails)
 
-    LaunchedEffect(context, song.uri, loadDetails) {
-        // Do not inspect codec for items passing quickly during a fling.
-        if (!loadDetails) return@LaunchedEffect
-        // A flick through hundreds of rows should not immediately create
-        // hundreds of extractors. Offscreen rows cancel this delay, and
-        // AudioCodecLoader caches results for revisits.
-        delay(120L)
+    LaunchedEffect(context, song.uri) {
+        // Unlike cover decoding, the tiny Hi-Res badge must not wait for
+        // scrolling to stop. A short dwell prevents flung-away rows from
+        // opening extractors; cached entries already render immediately.
+        if (codecInfo == null && currentlyScrolling) delay(35L)
         codecInfo = AudioCodecLoader.load(
             context = context,
             uriString = song.uri
