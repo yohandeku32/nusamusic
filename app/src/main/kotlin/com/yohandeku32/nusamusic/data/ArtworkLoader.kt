@@ -26,11 +26,47 @@ object ArtworkLoader {
         }
     }
 
+    // The CD player, its carousel and the library request different image
+    // sizes. Reuse an already decoded album cover immediately instead of
+    // showing the placeholder and reopening the same audio file.
+    private val commonSizes = intArrayOf(128, 160, 256, 512, 768)
+
     fun cached(
         uriString: String,
         maxSize: Int = 512,
         cacheKey: String? = null
-    ): Bitmap? = cache.get(resolvedCacheKey(uriString, maxSize, cacheKey))
+    ): Bitmap? {
+        val identity = cacheKey ?: uriString
+        cache.get("$identity@$maxSize")?.let { return it }
+        // Prefer images at least as sharp as requested, then a smaller
+        // cached preview while the correct size is decoded asynchronously.
+        for (size in commonSizes) {
+            if (size >= maxSize && size != maxSize) {
+                cache.get("$identity@$size")?.let { return it }
+            }
+        }
+        for (index in commonSizes.indices.reversed()) {
+            val size = commonSizes[index]
+            if (size < maxSize) {
+                cache.get("$identity@$size")?.let { return it }
+            }
+        }
+        return null
+    }
+
+    private fun cachedLarger(
+        uriString: String,
+        maxSize: Int,
+        cacheKey: String?
+    ): Bitmap? {
+        val identity = cacheKey ?: uriString
+        for (size in commonSizes) {
+            if (size > maxSize) {
+                cache.get("$identity@$size")?.let { return it }
+            }
+        }
+        return null
+    }
 
     suspend fun load(
         context: Context,
@@ -40,10 +76,23 @@ object ArtworkLoader {
     ): Bitmap? = withContext(Dispatchers.IO) {
         val memoryKey = resolvedCacheKey(uriString, maxSize, cacheKey)
         cache.get(memoryKey)?.let { return@withContext it }
+
+        // Downsample an existing larger cover on a background thread instead
+        // of decoding embedded art and creating a MediaMetadataRetriever again.
+        cachedLarger(uriString, maxSize, cacheKey)?.let { larger ->
+            val thumbnail = scaleDown(larger, maxSize)
+            cache.put(memoryKey, thumbnail)
+            return@withContext thumbnail
+        }
         if (noArtworkCache.get(memoryKey) == true) return@withContext null
 
         decodePermit.withPermit {
             cache.get(memoryKey)?.let { return@withPermit it }
+            cachedLarger(uriString, maxSize, cacheKey)?.let { larger ->
+                val thumbnail = scaleDown(larger, maxSize)
+                cache.put(memoryKey, thumbnail)
+                return@withPermit thumbnail
+            }
             if (noArtworkCache.get(memoryKey) == true) return@withPermit null
             val retriever = MediaMetadataRetriever()
         try {
