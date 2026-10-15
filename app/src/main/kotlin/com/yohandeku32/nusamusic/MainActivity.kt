@@ -1795,6 +1795,7 @@ private fun NusaMusicApp(
                                 durationMs = durationMs,
                                 viewportHeight = playerViewportHeight,
                                 titleFontSize = titleFontSize,
+                                titleFontFamily = titleFontFamily,
                                 shuffleEnabled = shuffleEnabled,
                                 repeatMode = repeatMode,
                                 onPlayPause = {
