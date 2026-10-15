@@ -14,32 +14,25 @@ if (localPropertiesFile.exists()) {
     }
 }
 
-// Media3's FFmpeg renderer is a native Android extension, not a Maven
-// dependency. The AAR is optional so the app remains buildable without it.
-// Build it from the matching AndroidX Media3 v1.9.3 source (see docs).
-val localFfmpegAar = file("libs/media3-decoder-ffmpeg.aar")
-val requireFfmpegDecoder = providers.gradleProperty("requireFfmpegDecoder")
-    .map { it.toBoolean() }
-    .getOrElse(false)
-
-if (requireFfmpegDecoder && !localFfmpegAar.isFile) {
-    error(
-        "FFmpeg was required, but app/libs/media3-decoder-ffmpeg.aar is missing. " +
-            "See docs/FFMPEG_ANDROID.md to build the native extension."
-    )
+// FFmpeg is bundled in every NusaMusic APK. The AAR was built from the
+// official AndroidX Media3 1.9.3 decoder using FFmpeg 6.0 and is tracked in
+// app/libs/ so Android Studio builds work after an ordinary Git Pull.
+val bundledFfmpegAar = file("libs/media3-decoder-ffmpeg.aar")
+check(bundledFfmpegAar.isFile) {
+    "Missing bundled FFmpeg library: app/libs/media3-decoder-ffmpeg.aar. " +
+        "Pull the full repository (including binary assets) from GitHub."
 }
 
-if (localFfmpegAar.isFile) {
-    // A Java-only stub AAR is not functional. Require the native JNI shared
-    // library to be present so builds do not silently claim FFmpeg support.
-    val hasNativeJni = ZipFile(localFfmpegAar).use { zip ->
-        zip.entries().asSequence().any {
-            it.name.startsWith("jni/") && it.name.endsWith("/libffmpegJNI.so")
+// Fail rather than accidentally shipping an ordinary APK without native
+// FFmpeg, or an AAR containing libraries for only the build host ABI.
+ZipFile(bundledFfmpegAar).use { archive ->
+    val contents = archive.entries().asSequence().map { it.name }.toSet()
+    val requiredAbis = listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+    requiredAbis.forEach { abi ->
+        check("jni/$abi/libffmpegJNI.so" in contents) {
+            "FFmpeg AAR is missing $abi/libffmpegJNI.so. " +
+                "A complete native AAR is required for every normal build."
         }
-    }
-    check(hasNativeJni) {
-        "The FFmpeg AAR is missing libffmpegJNI.so. " +
-            "Build its Android NDK libraries before exporting the AAR."
     }
 }
 
@@ -103,12 +96,9 @@ dependencies {
     implementation("androidx.media3:media3-session:1.9.3")
     implementation("androidx.media3:media3-ui:1.9.3")
     implementation("androidx.media3:media3-inspector:1.9.3")
-    if (localFfmpegAar.isFile) {
-        // The extension depends on Media3's decoder base module; keep all
-        // Media3 dependencies at exactly the same version.
-        implementation("androidx.media3:media3-decoder:1.9.3")
-        implementation(files(localFfmpegAar))
-    }
+    // Required direct dependency of AndroidX's native FFmpeg extension.
+    implementation("androidx.media3:media3-decoder:1.9.3")
+    implementation(files(bundledFfmpegAar))
     testImplementation("junit:junit:4.13.2")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
