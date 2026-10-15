@@ -456,7 +456,7 @@ private fun CdDisc(
                     radius = radius * 0.370f,
                     center = hub,
                     alpha = 0.88f,
-                    style = Stroke(width = radius * 0.056f)
+                    style = Stroke(width = radius * 0.038f)
                 )
                 drawCircle(
                     Color.White.copy(alpha = 0.57f), radius * 0.406f, hub,
