@@ -26,3 +26,15 @@ of the [Hi-Res Audio logo](https://en.wikipedia.org/wiki/File:Hi-Res_Audio_(logo
 Wikimedia identifies the logo as public domain because it is ineligible for
 copyright; attribution is not required. The logo is trademarked and is used
 only to identify Hi-Res audio.
+
+## Optional FFmpeg audio decoder
+
+FFmpeg is **not bundled in normal NusaMusic builds**. When an FFmpeg-enabled
+APK is built using the optional native AAR, it includes the AndroidX Media3
+FFmpeg decoder module (Apache-2.0) and statically linked FFmpeg libraries
+with their **separate** LGPL/GPL licensing requirements. The build helper
+pins AndroidX Media3 1.9.3 and upstream FFmpeg n6.0. Shipping such an APK
+requires reviewing the exact FFmpeg build configuration, source/notice
+obligations, and supported ABI requirements. See
+[docs/FFMPEG_ANDROID.md](docs/FFMPEG_ANDROID.md) and
+https://ffmpeg.org/legal.html.
