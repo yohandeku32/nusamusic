@@ -134,16 +134,16 @@ fun CdPlayer(
                         )
                     }
                     Spacer(Modifier.height(20.dp))
-                    // Keep the entire player geometry stable: the title is
-                    // vertically centred within a permanent two-line slot.
-                    // Even short names occupy this space, so the CD and
-                    // bottom carousel never jump when a title wraps.
+                    // Keep a permanent two-line slot so the disc and carousel
+                    // do not jump as titles change. Bottom-align the title so
+                    // a single-line title stays close to the artist, just like
+                    // the last line of a two-line title.
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(titleSlotHeight)
                             .padding(horizontal = 28.dp),
-                        contentAlignment = Alignment.Center
+                        contentAlignment = Alignment.BottomCenter
                     ) {
                         Text(
                             text = song?.title ?: cdText("Pilih lagu", "Choose a song"),
