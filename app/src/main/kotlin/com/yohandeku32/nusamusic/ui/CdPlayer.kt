@@ -1,9 +1,6 @@
 package com.yohandeku32.nusamusic.ui
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -77,45 +74,6 @@ fun CdPlayer(
     emptyState: @Composable () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // One reusable disc during swaps: never render/decode two 768px covers
-    // simultaneously. LaunchedEffect cancels the old movement when Shuffle
-    // quickly jumps to another track, so animations cannot pile up.
-    var swapDirection by remember { mutableIntStateOf(1) }
-    var visibleDiscSong by remember { mutableStateOf(song) }
-    val swapOffset = remember { Animatable(0f) }
-
-    LaunchedEffect(song?.id, isVisible) {
-        val target = song
-        val direction = swapDirection
-        swapDirection = 1 // Previous affects only the next actual transition.
-
-        if (visibleDiscSong?.id == target?.id) {
-            visibleDiscSong = target
-            // If leaving/re-entering the player cancelled an entrance,
-            // always restore the disc to its seated position.
-            if (swapOffset.value != 0f) swapOffset.snapTo(0f)
-            return@LaunchedEffect
-        }
-        if (!isVisible || kotlin.math.abs(swapOffset.value) > 0.01f) {
-            // A rapid second change interrupts the old animation. Show only
-            // the latest track instead of animating through obsolete songs.
-            visibleDiscSong = target
-            swapOffset.snapTo(0f)
-            return@LaunchedEffect
-        }
-
-        swapOffset.animateTo(
-            targetValue = -direction * 1.12f,
-            animationSpec = tween(durationMillis = 140, easing = FastOutSlowInEasing)
-        )
-        visibleDiscSong = target
-        swapOffset.snapTo(direction * 1.12f)
-        swapOffset.animateTo(
-            targetValue = 0f,
-            animationSpec = tween(durationMillis = 195, easing = FastOutSlowInEasing)
-        )
-    }
-
     MaterialTheme(colorScheme = darkColorScheme(
         background = CdBackground,
         surface = Color(0xFF191919),
@@ -157,25 +115,14 @@ fun CdPlayer(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Spacer(Modifier.height(18.dp))
                     CdJewelCase(Modifier.size(width = discSize * 1.12f, height = discSize)) { discModifier ->
-                        // Only one CD is ever composed. Translation/scale are
-                        // applied on the GPU; case, lid scratches and spindle
-                        // stay untouched and remain above the disc.
+                        // Switch to the new artwork immediately without a slide,
+                        // scale or fade; keep the disc's normal rotation intact.
                         CdDisc(
-                            song = visibleDiscSong,
-                            // Keep the disc motor running while the old artwork exits
-                            // and the new one enters; comparing song IDs caused
-                            // a brief deceleration on every Next/Shuffle swap.
+                            song = song,
                             spinning = isPlaying && isVisible,
                             visible = isVisible,
                             artwork = artwork,
-                            modifier = discModifier.graphicsLayer {
-                                val travel = swapOffset.value
-                                val distance = kotlin.math.abs(travel).coerceIn(0f, 1f)
-                                translationX = travel * size.width
-                                scaleX = 1f - 0.06f * distance
-                                scaleY = 1f - 0.06f * distance
-                                alpha = 1f - 0.18f * distance
-                            }
+                            modifier = discModifier
                         )
                     }
                     Spacer(Modifier.height(20.dp))
@@ -218,10 +165,7 @@ fun CdPlayer(
                         IconToggleButton(checked = shuffleEnabled, onCheckedChange = { onShuffle() }, enabled = song != null) {
                             Icon(Icons.Default.Shuffle, cdText("Acak", "Shuffle"), Modifier.size(19.dp), tint = if (shuffleEnabled) CdAccent else Color.Gray)
                         }
-                        IconButton(onClick = {
-                            swapDirection = -1
-                            onPrevious()
-                        }, enabled = song != null) {
+                        IconButton(onClick = onPrevious, enabled = song != null) {
                             Icon(Icons.Default.SkipPrevious, cdText("Sebelumnya", "Previous"), Modifier.size(27.dp))
                         }
                         FilledIconButton(
@@ -231,10 +175,7 @@ fun CdPlayer(
                             Icon(if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                 if (isPlaying) cdText("Jeda", "Pause") else cdText("Putar", "Play"), Modifier.size(29.dp))
                         }
-                        IconButton(onClick = {
-                            swapDirection = 1
-                            onNext()
-                        }, enabled = song != null) {
+                        IconButton(onClick = onNext, enabled = song != null) {
                             Icon(Icons.Default.SkipNext, cdText("Berikutnya", "Next"), Modifier.size(27.dp))
                         }
                         IconButton(onClick = onRepeat, enabled = song != null) {
@@ -258,12 +199,7 @@ fun CdPlayer(
                     Box(Modifier.size(28.dp, 3.dp).clip(CircleShape).background(Color(0xFF343434)))
                     Spacer(Modifier.height(12.dp))
                     if (songs.isNotEmpty()) {
-                        CdSongCarousel(songs, song?.id, thumbnailArtwork) { selected ->
-                            val oldIndex = songs.indexOfFirst { it.id == song?.id }
-                            val newIndex = songs.indexOfFirst { it.id == selected.id }
-                            swapDirection = if (oldIndex >= 0 && newIndex < oldIndex) -1 else 1
-                            onSelectSong(selected)
-                        }
+                        CdSongCarousel(songs, song?.id, thumbnailArtwork, onSelectSong)
                         Text(cdText("Geser untuk memilih · ketuk untuk putar", "Swipe to browse · tap to play"),
                             color = Color(0xFF92928D), fontSize = 11.sp,
                             modifier = Modifier.padding(top = 10.dp, bottom = 4.dp))
