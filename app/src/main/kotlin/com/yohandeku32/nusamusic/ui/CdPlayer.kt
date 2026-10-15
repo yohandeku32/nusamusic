@@ -1,6 +1,7 @@
 package com.yohandeku32.nusamusic.ui
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -210,12 +211,25 @@ fun CdPlayer(
                     } else {
                         emptyState()
                     }
-                    IconButton(onClick = onLibrary) {
-                        Icon(
-                            Icons.Default.LibraryMusic,
-                            contentDescription = cdText("Buka koleksi", "Open library"),
-                            modifier = Modifier.size(22.dp),
-                            tint = Color(0xFFEAEAE4)
+                    OutlinedButton(
+                        onClick = onLibrary,
+                        modifier = Modifier.defaultMinSize(minWidth = 92.dp).heightIn(min = 44.dp),
+                        shape = RoundedCornerShape(50),
+                        border = BorderStroke(1.dp, Brush.linearGradient(listOf(
+                            Color.White.copy(alpha = 0.32f),
+                            Color.White.copy(alpha = 0.06f),
+                            Color.White.copy(alpha = 0.18f)
+                        ))),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = Color(0xFF1A1A1A),
+                            contentColor = Color(0xFFEAEAE4)
+                        ),
+                        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp)
+                    ) {
+                        Text(
+                            cdText("Koleksi", "Library"),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
                         )
                     }
                 }
