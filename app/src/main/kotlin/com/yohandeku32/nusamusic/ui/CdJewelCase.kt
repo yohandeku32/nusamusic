@@ -526,7 +526,7 @@ private fun DrawScope.drawArtistMarker(
         ?: "ARTIST"
     val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
         typeface = android.graphics.Typeface.create(
-            "casual", android.graphics.Typeface.NORMAL
+            "casual", android.graphics.Typeface.BOLD
         )
         color = android.graphics.Color.rgb(171, 47, 49)
         textSkewX = -0.075f
@@ -534,7 +534,8 @@ private fun DrawScope.drawArtistMarker(
         style = android.graphics.Paint.Style.FILL_AND_STROKE
         strokeJoin = android.graphics.Paint.Join.ROUND
         strokeCap = android.graphics.Paint.Cap.ROUND
-        strokeWidth = h * 0.0010f
+        // A thicker, rounded nib preserves the handwritten marker feel.
+        strokeWidth = h * 0.0017f
         textSize = h * 0.050f
     }
 
