@@ -31,6 +31,17 @@ if [[ ! -L "$jni_root/ffmpeg" && ! -e "$jni_root/ffmpeg" ]]; then
   ln -s "$ffmpeg_root" "$jni_root/ffmpeg"
 fi
 
+# FFmpeg 6.0 autoconfigure can accidentally detect host iconv while cross-
+# compiling with NDK r26b; Android's linker has no iconv_open/iconv_close.
+# Disable iconv for these audio decoders in the upstream build helper.
+if ! grep -q -- '--disable-iconv' "$jni_root/build_ffmpeg.sh"; then
+  sed -i 's/--disable-vulkan/--disable-vulkan --disable-iconv/' "$jni_root/build_ffmpeg.sh"
+fi
+grep -q -- '--disable-iconv' "$jni_root/build_ffmpeg.sh" || {
+  echo "Could not turn off FFmpeg iconv auto-detection" >&2
+  exit 1
+}
+
 # Only enable audio decoders explicitly mapped by FfmpegLibrary. Additional
 # native codecs alone don't make unsupported container formats demuxable.
 decoders=(aac mp3 flac alac vorbis opus ac3 eac3 truehd dca)
