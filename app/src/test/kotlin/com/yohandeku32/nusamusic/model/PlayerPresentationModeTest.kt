@@ -1,27 +1,37 @@
 package com.yohandeku32.nusamusic.model
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PlayerPresentationModeTest {
     @Test
-    fun allPresentationChoicesSurvivePreferenceRoundTrip() {
-        PlayerPresentationMode.entries.forEach { mode ->
-            assertEquals(mode, PlayerPresentationMode.fromPreference(mode.preferenceValue))
-        }
+    fun onlyCdIsCurrentlyEnabled() {
+        assertTrue(PlayerPresentationMode.CD_ONLY_MODE)
     }
 
     @Test
-    fun missingOrUnknownPreferenceDefaultsToVinyl() {
-        assertEquals(PlayerPresentationMode.VINYL, PlayerPresentationMode.fromPreference(null))
-        assertEquals(PlayerPresentationMode.VINYL, PlayerPresentationMode.fromPreference("unknown"))
-    }
-
-    @Test
-    fun immersiveArtworkPreferenceRestoresImmersiveMode() {
+    fun oldVinylAndImmersivePreferencesLoadCdWhileDisabled() {
         assertEquals(
-            PlayerPresentationMode.IMMERSIVE_ARTWORK,
-            PlayerPresentationMode.fromPreference("immersive_artwork")
+            PlayerPresentationMode.CD,
+            PlayerPresentationMode.fromPreference(PlayerPresentationMode.VINYL.preferenceValue)
         )
+        assertEquals(
+            PlayerPresentationMode.CD,
+            PlayerPresentationMode.fromPreference(PlayerPresentationMode.IMMERSIVE_ARTWORK.preferenceValue)
+        )
+    }
+
+    @Test
+    fun cdAndUnknownPreferencesAlsoLoadCd() {
+        assertEquals(PlayerPresentationMode.CD, PlayerPresentationMode.fromPreference("cd"))
+        assertEquals(PlayerPresentationMode.CD, PlayerPresentationMode.fromPreference(null))
+        assertEquals(PlayerPresentationMode.CD, PlayerPresentationMode.fromPreference("unknown"))
+    }
+
+    @Test
+    fun inactiveModesKeepTheirPreferenceIdentifiersForLater() {
+        assertEquals("vinyl", PlayerPresentationMode.VINYL.preferenceValue)
+        assertEquals("immersive_artwork", PlayerPresentationMode.IMMERSIVE_ARTWORK.preferenceValue)
     }
 }
