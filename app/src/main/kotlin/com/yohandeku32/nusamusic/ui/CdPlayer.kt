@@ -207,14 +207,16 @@ fun CdPlayer(
                     Spacer(Modifier.height(12.dp))
                     if (songs.isNotEmpty()) {
                         CdSongCarousel(songs, song?.id, thumbnailArtwork, onSelectSong)
-                        Text(cdText("Geser untuk memilih · ketuk untuk putar", "Swipe to browse · tap to play"),
-                            color = Color(0xFF92928D), fontSize = 11.sp,
-                            modifier = Modifier.padding(top = 10.dp, bottom = 4.dp))
                     } else {
                         emptyState()
                     }
-                    TextButton(onClick = onLibrary) {
-                        Text(cdText("Buka koleksi", "Open library"), color = Color(0xFFEAEAE4), fontSize = 12.sp)
+                    IconButton(onClick = onLibrary) {
+                        Icon(
+                            Icons.Default.LibraryMusic,
+                            contentDescription = cdText("Buka koleksi", "Open library"),
+                            modifier = Modifier.size(22.dp),
+                            tint = Color(0xFFEAEAE4)
+                        )
                     }
                 }
             }
@@ -549,21 +551,22 @@ private fun CdSongCarousel(
     LaunchedEffect(currentId, songs) {
         listState.scrollToItem(currentIndex)
     }
+    val itemSize = 100.dp
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         LazyRow(
             state = listState,
             flingBehavior = rememberSnapFlingBehavior(listState),
-            contentPadding = PaddingValues(horizontal = ((maxWidth - 88.dp) / 2).coerceAtLeast(0.dp)),
+            contentPadding = PaddingValues(horizontal = ((maxWidth - itemSize) / 2).coerceAtLeast(0.dp)),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
             // Leave room for the full disc at the crest and at the lower edges.
-            modifier = Modifier.height(152.dp)
+            modifier = Modifier.height(itemSize + 64.dp)
         ) {
             items(songs, key = { it.id }) { item ->
                 val active = item.id == currentId
                 val scale by animateFloatAsState(if (active) 1f else 0.76f, label = "CD selection")
                 Box(
-                    Modifier.size(88.dp).graphicsLayer {
+                    Modifier.size(itemSize).graphicsLayer {
                         scaleX = scale
                         scaleY = scale
                         alpha = if (active) 1f else 0.72f
