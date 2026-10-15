@@ -614,6 +614,7 @@ private fun CdSongCarousel(
                             0f
                         }
                     }
+                        .border(0.75.dp, if (active) Color.White.copy(alpha = 0.65f) else Color.Transparent, CircleShape)
                         .clickable(role = Role.Button) { onSelectSong(item) }
                         .semantics { selected = active; contentDescription = "${item.title}, ${item.artist}" }
                         .padding(6.dp),

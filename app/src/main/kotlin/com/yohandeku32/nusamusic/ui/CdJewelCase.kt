@@ -652,7 +652,7 @@ private fun DrawScope.drawArtistMarker(
     val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
         typeface = stickerTypeface
             ?: android.graphics.Typeface.create("casual", android.graphics.Typeface.BOLD)
-        color = android.graphics.Color.rgb(171, 47, 49)
+        color = android.graphics.Color.BLACK
         // Use the exact Aerosoldier glyph outlines without synthetic slant.
         textSkewX = if (stickerTypeface == null) -0.075f else 0f
         isSubpixelText = true
