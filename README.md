@@ -17,7 +17,7 @@ The current version is **3.13.4** (`versionCode 46`). It runs on Android 10 and 
 - Artist portraits from Deezer and biographies from Last.fm.
 - System fonts and custom TTF or OTF files for the player title.
 
-The folder scanner recognises AAC, ALAC, FLAC, M4A, MP3, OGG, OPUS, WAV, and WMA files. Playback support depends on the codecs available on the device.
+The folder scanner recognises AAC, ALAC, FLAC, M4A, MP3, OGG, OPUS, WAV, and WMA files. Playback support depends on the codecs available on the device.\n\n**Optional FFmpeg decoder:** Both the main player and crossfade player can use Media3's native FFmpeg audio renderer as a fallback when bundled. The standard APK **does not** include the native FFmpeg extension; build a matching 1.9.3 AAR or use the manual **Build FFmpeg-enabled Nusa APK** GitHub Actions workflow. FFmpeg decoding does not automatically add unsupported container extractors such as APE or WMA. See [FFmpeg Android integration](docs/FFMPEG_ANDROID.md).
 
 Lossless and Hi-Res labels use audio metadata. The Hi-Res label appears when the reported bit depth is at least 24 bits; it doesn't confirm bit-perfect output to your headphones or DAC.
 
