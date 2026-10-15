@@ -41,7 +41,7 @@ decoders=(aac mp3 flac alac vorbis opus ac3 eac3 truehd dca)
 (
   cd "$media_root"
   chmod +x ./gradlew
-  ./gradlew :media3-lib-decoder-ffmpeg:assembleRelease --no-daemon
+  ./gradlew :lib-decoder-ffmpeg:assembleRelease --no-daemon
 )
 
 aar="$(find "$media_root/libraries/decoder_ffmpeg/build/outputs/aar" -maxdepth 1 -type f -name '*release.aar' -print -quit)"
