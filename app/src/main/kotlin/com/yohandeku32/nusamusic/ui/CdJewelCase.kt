@@ -528,7 +528,7 @@ private fun DrawScope.drawArtistMarker(
         typeface = android.graphics.Typeface.create(
             "casual", android.graphics.Typeface.NORMAL
         )
-        color = android.graphics.Color.rgb(46, 76, 117)
+        color = android.graphics.Color.rgb(171, 47, 49)
         textSkewX = -0.075f
         isSubpixelText = true
         style = android.graphics.Paint.Style.FILL_AND_STROKE
@@ -538,13 +538,22 @@ private fun DrawScope.drawArtistMarker(
         textSize = h * 0.050f
     }
 
-    // Keep the full artist name when possible; compress only when necessary.
-    // Extremely long names get an ellipsis instead of spilling off the sticker.
-    val measured = paint.measureText(artist).coerceAtLeast(1f)
-    val targetSize = (paint.textSize * availableWidth / measured)
+    // If the artist's full name does not fit at natural marker size,
+    // write the first letter of each word instead (e.g. Bunga Citra Lestari -> BCL).
+    // Single long names are still reduced to fit, without inventing initials.
+    val words = artist.split(" ").filter { it.isNotEmpty() }
+    val displayName = if (words.size > 1 && paint.measureText(artist) > availableWidth) {
+        words.joinToString(separator = "") { it.first().uppercaseChar().toString() }
+    } else {
+        artist
+    }
+
+    // Retain the natural handwritten size where possible. Extra-long initials
+    // or single-word names shrink gently, with ellipsis only as a last resort.
+    val measured = paint.measureText(displayName).coerceAtLeast(1f)
+    paint.textSize = (paint.textSize * availableWidth / measured)
         .coerceIn(h * 0.025f, h * 0.050f)
-    paint.textSize = targetSize
-    var display = artist
+    var display = displayName
     if (paint.measureText(display) > availableWidth) {
         while (display.length > 1 && paint.measureText("$display…") > availableWidth) {
             display = display.dropLast(1)
