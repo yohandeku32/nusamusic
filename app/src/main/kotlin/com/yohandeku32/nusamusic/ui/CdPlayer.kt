@@ -40,6 +40,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.yohandeku32.nusamusic.model.Song
 import java.util.Locale
 import kotlin.math.abs
@@ -557,8 +558,19 @@ private fun CdSongCarousel(
         }
         listState.scrollToItem(target)
     }
+    // Reorder only when a different case becomes closest to the centre.
+    // The cover in front then overlaps its neighbours in the correct order.
+    val centerItemIndex by remember(listState) {
+        derivedStateOf {
+            val layout = listState.layoutInfo
+            val center = (layout.viewportStartOffset + layout.viewportEndOffset) * 0.5f
+            layout.visibleItemsInfo.minByOrNull {
+                abs(it.offset + it.size * 0.5f - center)
+            }?.index ?: listState.firstVisibleItemIndex
+        }
+    }
     BoxWithConstraints(
-        Modifier.fillMaxWidth().graphicsLayer {
+        Modifier.widthIn(max = 360.dp).fillMaxWidth().graphicsLayer {
             clip = true
             compositingStrategy = CompositingStrategy.Offscreen
         }.drawWithCache {
@@ -577,20 +589,23 @@ private fun CdSongCarousel(
         }
     ) {
         val slotWidth = maxWidth / CD_CAROUSEL_VISIBLE_COUNT
-        // Five compact, separate discs share one horizontal centre line.
-        val discSize = minOf(72.dp, (slotWidth - 8.dp).coerceAtLeast(40.dp))
+        // Five overlapping cases keep the stack compact, with a full cover
+        // in front and progressively smaller covers tucked behind each side.
+        val caseWidth = minOf(116.dp, maxWidth * 0.32f)
+        val caseHeight = caseWidth * 0.93f
         LazyRow(
             state = listState,
             flingBehavior = rememberSnapFlingBehavior(listState),
             contentPadding = PaddingValues(horizontal = (maxWidth - slotWidth) / 2),
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.height(discSize + 16.dp)
+            modifier = Modifier.height(caseHeight + 24.dp)
         ) {
             items(count = if (looping) Int.MAX_VALUE else songs.size, key = { it }) { index ->
                 val item = songs[index % songs.size]
                 val active = item.id == currentId
                 Box(
-                    Modifier.width(slotWidth).heightIn(min = 48.dp).height(discSize)
+                    Modifier.width(slotWidth).heightIn(min = 48.dp).height(caseHeight)
+                        .zIndex((3 - abs(index - centerItemIndex)).coerceAtLeast(0).toFloat())
                         .clickable(interactionSource = null, indication = null, role = Role.Button) {
                             onSelectSong(item)
                         }
@@ -600,10 +615,25 @@ private fun CdSongCarousel(
                         },
                     contentAlignment = Alignment.Center
                 ) {
-                    CdDiscSurface(
-                        item, artwork,
-                        modifier = Modifier.size(discSize * if (active) 1f else 0.92f),
-                        shadowElevation = 0.dp
+                    CdAlbumCase(
+                        song = item,
+                        artwork = artwork,
+                        selected = active,
+                        modifier = Modifier.requiredSize(width = caseWidth, height = caseHeight).graphicsLayer {
+                            val layout = listState.layoutInfo
+                            val center = (layout.viewportStartOffset + layout.viewportEndOffset) * 0.5f
+                            val visibleItem = layout.visibleItemsInfo.firstOrNull { it.index == index }
+                            val distance = if (visibleItem != null && visibleItem.size > 0) {
+                                (visibleItem.offset + visibleItem.size * 0.5f - center) / visibleItem.size
+                            } else 3f
+                            val depth = abs(distance).coerceAtMost(2f)
+                            val scale = 1f - 0.12f * depth
+                            scaleX = scale
+                            scaleY = scale
+                            rotationY = -distance.coerceIn(-2f, 2f) * 12f
+                            cameraDistance = size.width * 8f
+                            alpha = 1f - 0.14f * depth
+                        }
                     )
                 }
             }
