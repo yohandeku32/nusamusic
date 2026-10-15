@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.unit.dp
 import kotlin.math.PI
@@ -227,81 +228,86 @@ private fun DrawScope.drawJewelCaseStickers() {
     }
 
     // Cream-and-blue archival sticker, similar to a vintage numbered CD seal.
-    // Positioned left of the disc's metal hub rather than covering its centre.
-    val bx = w * 0.235f
-    val by = h * 0.105f
+    // Kept small in the upper-left corner of the clear lid.
+    val bx = w * 0.155f
+    val by = h * 0.080f
     val bw = w * 0.295f
     val bh = h * 0.385f
-    val corner = CornerRadius(h * 0.027f)
-    drawRoundRect(
-        color = Color.Black.copy(alpha = 0.15f),
-        topLeft = Offset(bx + 1.3.dp.toPx(), by + 1.7.dp.toPx()),
-        size = Size(bw, bh),
-        cornerRadius = corner
-    )
-    drawRoundRect(
-        brush = Brush.verticalGradient(
-            listOf(paper, Color(0xFFCDD9D7)),
-            startY = by,
-            endY = by + bh
-        ),
-        topLeft = Offset(bx, by),
-        size = Size(bw, bh),
-        cornerRadius = corner
-    )
-    drawRoundRect(
-        color = blue.copy(alpha = 0.93f),
-        topLeft = Offset(bx, by),
-        size = Size(bw, bh),
-        cornerRadius = corner,
-        style = Stroke(1.1.dp.toPx())
-    )
+    // Scale paper, print, borders and stamp together without shifting the lid.
+    scale(scaleX = 0.82f, scaleY = 0.82f, pivot = Offset(bx, by)) {
+        val corner = CornerRadius(h * 0.027f)
+        drawRoundRect(
+            color = Color.Black.copy(alpha = 0.15f),
+            topLeft = Offset(bx + 1.3.dp.toPx(), by + 1.7.dp.toPx()),
+            size = Size(bw, bh),
+            cornerRadius = corner
+        )
+        drawRoundRect(
+            brush = Brush.verticalGradient(
+                listOf(paper, Color(0xFFCDD9D7)),
+                startY = by,
+                endY = by + bh
+            ),
+            topLeft = Offset(bx, by),
+            size = Size(bw, bh),
+            cornerRadius = corner
+        )
+        drawRoundRect(
+            color = blue.copy(alpha = 0.93f),
+            topLeft = Offset(bx, by),
+            size = Size(bw, bh),
+            cornerRadius = corner,
+            style = Stroke(1.1.dp.toPx())
+        )
+    
+        val stamp = Offset(bx + bw * 0.78f, by + h * 0.067f)
+        drawCircle(blue, h * 0.040f, stamp, style = Stroke(1.0.dp.toPx()))
+        drawCircle(blue.copy(alpha = 0.48f), h * 0.034f, stamp, style = Stroke(0.55.dp.toPx()))
+        printAt("13", stamp.x - h * 0.025f, stamp.y + h * 0.013f, 0.038f)
+        printAt("B-SIDE", bx + bw * 0.072f, by + h * 0.059f, 0.032f)
+        drawLine(blue.copy(alpha = 0.65f), Offset(bx + bw * 0.06f, by + h * 0.116f),
+            Offset(bx + bw * 0.94f, by + h * 0.116f), 0.7.dp.toPx())
+        printAt("NUSA", bx + bw * 0.072f, by + h * 0.173f, 0.057f)
+        printAt("MUSIC ARCHIVE", bx + bw * 0.072f, by + h * 0.211f, 0.027f)
+        printAt("S/N 7738700", bx + bw * 0.072f, by + h * 0.258f, 0.027f)
+        drawLine(blue.copy(alpha = 0.54f), Offset(bx + bw * 0.06f, by + h * 0.280f),
+            Offset(bx + bw * 0.94f, by + h * 0.280f), 0.6.dp.toPx())
+        printAt("LIMITED", bx + bw * 0.072f, by + h * 0.327f, 0.043f)
+        printAt("EDITION", bx + bw * 0.072f, by + h * 0.363f, 0.038f)
+    }
 
-    val stamp = Offset(bx + bw * 0.78f, by + h * 0.067f)
-    drawCircle(blue, h * 0.040f, stamp, style = Stroke(1.0.dp.toPx()))
-    drawCircle(blue.copy(alpha = 0.48f), h * 0.034f, stamp, style = Stroke(0.55.dp.toPx()))
-    printAt("13", stamp.x - h * 0.025f, stamp.y + h * 0.013f, 0.038f)
-    printAt("B-SIDE", bx + bw * 0.072f, by + h * 0.059f, 0.032f)
-    drawLine(blue.copy(alpha = 0.65f), Offset(bx + bw * 0.06f, by + h * 0.116f),
-        Offset(bx + bw * 0.94f, by + h * 0.116f), 0.7.dp.toPx())
-    printAt("NUSA", bx + bw * 0.072f, by + h * 0.173f, 0.057f)
-    printAt("MUSIC ARCHIVE", bx + bw * 0.072f, by + h * 0.211f, 0.027f)
-    printAt("S/N 7738700", bx + bw * 0.072f, by + h * 0.258f, 0.027f)
-    drawLine(blue.copy(alpha = 0.54f), Offset(bx + bw * 0.06f, by + h * 0.280f),
-        Offset(bx + bw * 0.94f, by + h * 0.280f), 0.6.dp.toPx())
-    printAt("LIMITED", bx + bw * 0.072f, by + h * 0.327f, 0.043f)
-    printAt("EDITION", bx + bw * 0.072f, by + h * 0.363f, 0.038f)
-
-    // Slightly angled mustard inventory sticker beneath the big archival label.
-    val yx = w * 0.645f
-    val yy = h * 0.610f
+    // Smaller angled mustard inventory sticker at the lower-right corner.
+    val yx = w * 0.715f
+    val yy = h * 0.790f
     val yw = w * 0.285f
     val yh = h * 0.123f
-    val ycorner = CornerRadius(h * 0.007f)
-    val pivot = Offset(yx + yw / 2f, yy + yh / 2f)
-    rotate(degrees = -9f, pivot = pivot) {
-        drawRoundRect(
-            Color.Black.copy(alpha = 0.13f),
-            topLeft = Offset(yx + 1.dp.toPx(), yy + 1.4.dp.toPx()),
-            size = Size(yw, yh),
-            cornerRadius = ycorner
-        )
-        drawRoundRect(
-            brush = Brush.linearGradient(
-                listOf(Color(0xFFF2D968), Color(0xFFE2BF42)),
-                start = Offset(yx, yy),
-                end = Offset(yx + yw, yy + yh)
-            ),
-            topLeft = Offset(yx, yy),
-            size = Size(yw, yh),
-            cornerRadius = ycorner
-        )
-        drawLine(blue.copy(alpha = 0.65f), Offset(yx + yw * 0.07f, yy + yh * 0.53f),
-            Offset(yx + yw * 0.90f, yy + yh * 0.53f), 0.5.dp.toPx())
-        printAt("ARCHIVE", yx + yw * 0.07f, yy + yh * 0.40f, 0.032f)
-        printAt("10-2026", yx + yw * 0.07f, yy + yh * 0.83f, 0.032f)
-        val badge = Offset(yx + yw * 0.83f, yy + yh * 0.28f)
-        drawCircle(blue, h * 0.019f, badge, style = Stroke(0.65.dp.toPx()))
-        printAt("13", badge.x - h * 0.012f, badge.y + h * 0.006f, 0.020f)
+    scale(scaleX = 0.80f, scaleY = 0.80f, pivot = Offset(yx, yy)) {
+        val ycorner = CornerRadius(h * 0.007f)
+        val pivot = Offset(yx + yw / 2f, yy + yh / 2f)
+        rotate(degrees = -9f, pivot = pivot) {
+            drawRoundRect(
+                Color.Black.copy(alpha = 0.13f),
+                topLeft = Offset(yx + 1.dp.toPx(), yy + 1.4.dp.toPx()),
+                size = Size(yw, yh),
+                cornerRadius = ycorner
+            )
+            drawRoundRect(
+                brush = Brush.linearGradient(
+                    listOf(Color(0xFFF2D968), Color(0xFFE2BF42)),
+                    start = Offset(yx, yy),
+                    end = Offset(yx + yw, yy + yh)
+                ),
+                topLeft = Offset(yx, yy),
+                size = Size(yw, yh),
+                cornerRadius = ycorner
+            )
+            drawLine(blue.copy(alpha = 0.65f), Offset(yx + yw * 0.07f, yy + yh * 0.53f),
+                Offset(yx + yw * 0.90f, yy + yh * 0.53f), 0.5.dp.toPx())
+            printAt("ARCHIVE", yx + yw * 0.07f, yy + yh * 0.40f, 0.032f)
+            printAt("10-2026", yx + yw * 0.07f, yy + yh * 0.83f, 0.032f)
+            val badge = Offset(yx + yw * 0.83f, yy + yh * 0.28f)
+            drawCircle(blue, h * 0.019f, badge, style = Stroke(0.65.dp.toPx()))
+            printAt("13", badge.x - h * 0.012f, badge.y + h * 0.006f, 0.020f)
+        }
     }
 }
