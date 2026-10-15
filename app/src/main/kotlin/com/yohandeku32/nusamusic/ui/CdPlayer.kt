@@ -556,8 +556,8 @@ private fun CdSongCarousel(
             contentPadding = PaddingValues(horizontal = ((maxWidth - 88.dp) / 2).coerceAtLeast(0.dp)),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            // A taller viewport accommodates the raised center and lower sides.
-            modifier = Modifier.height(142.dp)
+            // Leave room for the full disc at the crest and at the lower edges.
+            modifier = Modifier.height(152.dp)
         ) {
             items(songs, key = { it.id }) { item ->
                 val active = item.id == currentId
@@ -568,18 +568,20 @@ private fun CdSongCarousel(
                         scaleY = scale
                         alpha = if (active) 1f else 0.72f
 
-                        // Follow the reference's curved record shelf: the
-                        // center rises distinctly and neighboring records
-                        // descend progressively to both sides. Keep the
-                        // position in the GPU transform while scrolling.
+                        // Item offsets exclude the leading content padding.
+                        // Use the viewport offsets in that same coordinate
+                        // space so the crest stays at the screen's center.
                         val layout = listState.layoutInfo
-                        val center = layout.viewportSize.width * 0.5f
+                        val center = (layout.viewportStartOffset + layout.viewportEndOffset) * 0.5f
+                        val halfWidth = (layout.viewportEndOffset - layout.viewportStartOffset) * 0.5f
                         val visibleItem = layout.visibleItemsInfo.firstOrNull { it.key == item.id }
-                        translationY = if (visibleItem != null && center > 0f) {
+                        translationY = if (visibleItem != null && halfWidth > 0f) {
                             val itemCenter = visibleItem.offset + visibleItem.size * 0.5f
-                            val distance = ((itemCenter - center) / center).coerceIn(-1f, 1f)
-                            val arc = abs(distance).pow(1.25f)
-                            (-17f + 44f * arc).dp.toPx()
+                            val distance = ((itemCenter - center) / halfWidth).coerceIn(-1f, 1f)
+                            // A rounded crest, then a gentle drop on both sides,
+                            // matching the reference even while dragging.
+                            val arc = abs(distance).pow(1.65f)
+                            (-24f + 52f * arc).dp.toPx()
                         } else {
                             0f
                         }
