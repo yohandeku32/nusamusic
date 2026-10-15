@@ -22,6 +22,10 @@ object AudioCodecLoader {
     }
     private val metadataPermit = Semaphore(2)
 
+    /** Instant, non-blocking lookup for badges in recycled list rows. */
+    fun cached(uriString: String): AudioCodecInfo? =
+        synchronized(metadataCache) { metadataCache[uriString] }
+
     suspend fun load(context: Context, uriString: String): AudioCodecInfo? =
         withContext(Dispatchers.IO) {
             synchronized(metadataCache) {
