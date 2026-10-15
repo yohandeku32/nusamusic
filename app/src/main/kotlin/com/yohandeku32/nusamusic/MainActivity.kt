@@ -5802,8 +5802,11 @@ private fun LibrarySongListRow(
             ArtworkView(
                 song = song,
                 maxSizePx = 160,
-                loadDelayMs = 85L,
-                loadAllowed = loadDetails,
+                // Load visible thumbnails even while scrolling. The previous
+                // scroll gate left covers blank until the fling stopped.
+                // A brief debounce plus the shared 2-decoder limit keeps
+                // fast flings from flooding storage with abandoned requests.
+                loadDelayMs = 24L,
                 grainOverlay = false,
                 modifier = Modifier.fillMaxSize()
             )

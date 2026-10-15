@@ -177,7 +177,10 @@ fun CdPlayer(
                         // stay untouched and remain above the disc.
                         CdDisc(
                             song = visibleDiscSong,
-                            spinning = visibleDiscSong?.id == song?.id && isPlaying && isVisible,
+                            // Keep the disc motor running while the old artwork exits
+                            // and the new one enters; comparing song IDs caused
+                            // a brief deceleration on every Next/Shuffle swap.
+                            spinning = isPlaying && isVisible,
                             visible = isVisible,
                             artwork = artwork,
                             modifier = discModifier.graphicsLayer {
