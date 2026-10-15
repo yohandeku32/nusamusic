@@ -60,6 +60,7 @@ fun CdPlayer(
     durationMs: Long,
     viewportHeight: Dp,
     titleFontSize: Float,
+    titleFontFamily: FontFamily,
     shuffleEnabled: Boolean,
     repeatMode: Int,
     onPlayPause: () -> Unit,
@@ -92,7 +93,9 @@ fun CdPlayer(
             // Reserve exactly the same title slot for both one-line and
             // two-line song names. Otherwise SpaceBetween shifts the CD and
             // lower carousel each time a longer title wraps.
-            val titleSize = titleFontSize.coerceIn(18f, 26f)
+            // Preserve the compact CD design at the default 34sp setting,
+            // while allowing the entire Settings text-size range to take effect.
+            val titleSize = (titleFontSize * 26f / 34f).coerceIn(18f, 34f)
             val titleLineHeight = (titleSize * 1.25f).sp
             val titleSlotHeight = with(LocalDensity.current) {
                 (titleSize * 2.7f).sp.toDp()
@@ -144,6 +147,7 @@ fun CdPlayer(
                     ) {
                         Text(
                             text = song?.title ?: cdText("Pilih lagu", "Choose a song"),
+                            fontFamily = titleFontFamily,
                             fontSize = titleSize.sp,
                             lineHeight = titleLineHeight,
                             fontWeight = FontWeight.Medium,
