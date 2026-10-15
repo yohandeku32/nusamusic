@@ -1,6 +1,5 @@
 package com.yohandeku32.nusamusic.ui
 
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -42,8 +41,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yohandeku32.nusamusic.model.Song
 import java.util.Locale
-import kotlin.math.abs
-import kotlin.math.pow
 import kotlinx.coroutines.flow.first
 
 private val CdBackground = Color(0xFF111111)
@@ -318,7 +315,10 @@ private fun CdDiscSurface(
     rotationDegrees: () -> Float = { 0f },
     shadowElevation: Dp = 12.dp
 ) {
-    Box(modifier.shadow(shadowElevation, CircleShape), contentAlignment = Alignment.Center) {
+    Box(
+        if (shadowElevation > 0.dp) modifier.shadow(shadowElevation, CircleShape) else modifier,
+        contentAlignment = Alignment.Center
+    ) {
         // One cached GPU layer handles both disc clipping and rotation.
         // The album bitmap and hologram are rasterized when content changes,
         // while playback frames only update the transform.
@@ -539,48 +539,35 @@ private fun CdSongCarousel(
             contentPadding = PaddingValues(horizontal = ((maxWidth - itemSize) / 2).coerceAtLeast(0.dp)),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            // Reserve the 32dp edge drop plus room for the shared CD shadow,
-            // including when the full-size active disc is dragged to an edge.
-            modifier = Modifier.height(itemSize + 80.dp)
+            // All discs share one horizontal centre line; no per-frame arc
+            // translation or offscreen space for shadows is necessary.
+            modifier = Modifier.height(itemSize + 12.dp)
         ) {
             items(songs, key = { it.id }) { item ->
                 val active = item.id == currentId
-                val scale by animateFloatAsState(if (active) 1f else 0.84f, label = "CD selection")
+                // Size only changes when the active song changes, not on scroll.
+                // Avoid per-item graphicsLayer, animated scaling and layoutInfo
+                // reads during a drag to keep 120 Hz scrolling responsive.
+                val discSize = (itemSize - 12.dp) * if (active) 1f else 0.84f
                 Box(
-                    Modifier.size(itemSize).graphicsLayer {
-                        scaleX = scale
-                        scaleY = scale
-
-                        // Items and viewport offsets share the same coordinate
-                        // space, including the leading centering padding.
-                        // Read layout in the layer so scrolling updates the arc
-                        // without recomposing or re-decoding thumbnail artwork.
-                        val layout = listState.layoutInfo
-                        val center = (layout.viewportStartOffset + layout.viewportEndOffset) * 0.5f
-                        val halfWidth = (layout.viewportEndOffset - layout.viewportStartOffset) * 0.5f
-                        val visibleItem = layout.visibleItemsInfo.firstOrNull { it.key == item.id }
-                        translationY = if (visibleItem != null && halfWidth > 0f) {
-                            val itemCenter = visibleItem.offset + visibleItem.size * 0.5f
-                            val distance = ((itemCenter - center) / halfWidth).coerceIn(-1f, 1f)
-                            val arc = abs(distance).pow(1.65f)
-                            (-12f + 44f * arc).dp.toPx()
-                        } else {
-                            0f
-                        }
-                    }
-                        .border(0.75.dp, if (active) Color.White.copy(alpha = 0.65f) else Color.Transparent, CircleShape)
-                        // Suppress the default rectangular touch ripple. The disc
-                        // itself remains the full accessible tap target.
+                    Modifier
+                        .size(itemSize)
                         .clickable(
                             interactionSource = null,
                             indication = null,
                             role = Role.Button
                         ) { onSelectSong(item) }
-                        .semantics { selected = active; contentDescription = "${item.title}, ${item.artist}" }
-                        .padding(6.dp),
+                        .semantics {
+                            selected = active
+                            contentDescription = "${item.title}, ${item.artist}"
+                        },
                     contentAlignment = Alignment.Center
                 ) {
-                    CdDiscSurface(item, artwork, modifier = Modifier.fillMaxSize(), shadowElevation = 6.dp)
+                    CdDiscSurface(
+                        item, artwork,
+                        modifier = Modifier.size(discSize),
+                        shadowElevation = 0.dp
+                    )
                 }
             }
         }
