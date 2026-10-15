@@ -62,6 +62,21 @@ If you already built a matching AAR, copy it to
 Gradle build checks that it includes `libffmpegJNI.so`. An AAR without the
 native library is rejected.
 
+## One-click APK build on GitHub (no local Linux required)
+
+After the workflow is present on `main`, open your repository's **Actions** tab,
+select **Build FFmpeg-enabled Nusa APK**, then select **Run workflow**. The
+workflow installs Android NDK r26b, compiles the upstream FFmpeg native decoder,
+assembles an APK with `-PrequireFfmpegDecoder=true`, and uploads:
+
+- `nusa-ffmpeg-android-debug` — a debug APK with FFmpeg packaged;
+- `media3-ffmpeg-1_9_3-aar` — the matching native extension AAR.
+
+This manual native workflow is **separate** from the fast normal Android build.
+It may take considerable time because four Android architectures are compiled.
+A normal Android CI pass **does not mean** this native build succeeded: check
+the manual workflow run separately before using or distributing its APK.
+
 ## Production and licensing
 
 The AndroidX extension source is Apache-2.0. Its native FFmpeg components
