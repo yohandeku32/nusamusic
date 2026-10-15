@@ -202,7 +202,7 @@ fun CdPlayer(
                         .clip(RoundedCornerShape(topStart = 48.dp, topEnd = 48.dp))
                         .background(Brush.verticalGradient(listOf(Color(0xFF1B1B1B), Color(0xFF151515))))
                         .border(1.dp, Color.White.copy(alpha = 0.07f), RoundedCornerShape(topStart = 48.dp, topEnd = 48.dp))
-                        .navigationBarsPadding().padding(top = 10.dp, bottom = 24.dp),
+                        .navigationBarsPadding().padding(top = 10.dp, bottom = 8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Box(Modifier.size(28.dp, 3.dp).clip(CircleShape).background(Color(0xFF343434)))
@@ -215,7 +215,7 @@ fun CdPlayer(
                     OutlinedButton(
                         onClick = onLibrary,
                         modifier = Modifier.offset(y = (-8).dp)
-                            .defaultMinSize(minWidth = 80.dp, minHeight = 36.dp),
+                            .defaultMinSize(minWidth = 68.dp, minHeight = 30.dp),
                         shape = RoundedCornerShape(50),
                         border = BorderStroke(1.dp, Brush.linearGradient(listOf(
                             Color.White.copy(alpha = 0.32f),
@@ -226,7 +226,7 @@ fun CdPlayer(
                             containerColor = Color(0xFF1A1A1A),
                             contentColor = Color(0xFFEAEAE4)
                         ),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
                     ) {
                         Text(
                             cdText("Koleksi", "Library"),

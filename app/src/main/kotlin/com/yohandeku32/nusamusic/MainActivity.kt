@@ -37,7 +37,6 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.rememberOverscrollEffect
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.verticalScroll
@@ -2450,11 +2449,73 @@ private fun NusaMusicApp(
                     0 -> {
                         BoxWithConstraints(Modifier.fillMaxSize()) {
                         val playerViewportHeight = maxHeight
+                        if (playerPresentationMode == PlayerPresentationMode.CD) {
+                            // The CD page scrolls only its own content, without
+                            // the shared biography container or its black backdrop.
+                            CdPlayer(
+                                song = currentSong,
+                                songs = filtered,
+                                isPlaying = isPlaying,
+                                isVisible = pagerState.settledPage == 0,
+                                positionMsState = positionMsState,
+                                durationMs = durationMs,
+                                viewportHeight = playerViewportHeight,
+                                titleFontSize = titleFontSize,
+                                shuffleEnabled = shuffleEnabled,
+                                repeatMode = repeatMode,
+                                onPlayPause = {
+                                    when {
+                                        currentSong != null -> onTogglePlay()
+                                        filtered.isNotEmpty() -> onPlay(filtered.first(), filtered)
+                                        !permissionGranted && selectedMusicFolders.isEmpty() -> onRequestPermission()
+                                        else -> scope.launch { pagerState.animateScrollToPage(1) }
+                                    }
+                                },
+                                onPrevious = onPrevious,
+                                onNext = onNext,
+                                onSeek = onSeek,
+                                onShuffle = onToggleShuffle,
+                                onRepeat = onToggleRepeat,
+                                onSelectSong = { onPlay(it, filtered) },
+                                onSettings = { showSettings = true },
+                                onLibrary = { scope.launch { pagerState.animateScrollToPage(1) } },
+                                artwork = { cdSong, artworkModifier ->
+                                    androidx.compose.runtime.key(cdSong?.uri) {
+                                        ArtworkView(
+                                            song = cdSong,
+                                            maxSizePx = 512,
+                                            fallbackMaxSizePx = 128,
+                                            loadDelayMs = 40L,
+                                            modifier = artworkModifier
+                                        )
+                                    }
+                                },
+                                thumbnailArtwork = { cdSong, artworkModifier ->
+                                    androidx.compose.runtime.key(cdSong?.uri) {
+                                        ArtworkView(song = cdSong, maxSizePx = 128, loadDelayMs = 65L, modifier = artworkModifier)
+                                    }
+                                },
+                                emptyState = {
+                                    Text(
+                                        text = if (!permissionGranted && selectedMusicFolders.isEmpty()) {
+                                            nusaText("Izinkan akses musik untuk mulai memutar.", "Allow music access to start listening.")
+                                        } else nusaText("Tidak ada musik lokal", "No local music found"),
+                                        color = Color(0xFFA5A5A0),
+                                        fontSize = 12.sp,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.padding(24.dp)
+                                    )
+                                },
+                                modifier = Modifier.fillMaxSize()
+                                    .verticalScroll(
+                                        state = androidx.compose.foundation.rememberScrollState(),
+                                        overscrollEffect = null
+                                    )
+                            )
+                            return@BoxWithConstraints
+                        }
                         LazyColumn(
                             state = playerScrollState,
-                            overscrollEffect = if (playerPresentationMode == PlayerPresentationMode.CD) {
-                                null
-                            } else rememberOverscrollEffect(),
                             modifier = Modifier
                                 .fillMaxSize()
                                 .background(
@@ -2513,64 +2574,7 @@ private fun NusaMusicApp(
                                         )
                                     }
 
-                                    if (playerPresentationMode == PlayerPresentationMode.CD) {
-                                        CdPlayer(
-                                            song = currentSong,
-                                            songs = filtered,
-                                            isPlaying = isPlaying,
-                                            isVisible = pagerState.settledPage == 0,
-                                            positionMsState = positionMsState,
-                                            durationMs = durationMs,
-                                            viewportHeight = playerViewportHeight,
-                                            titleFontSize = titleFontSize,
-                                            shuffleEnabled = shuffleEnabled,
-                                            repeatMode = repeatMode,
-                                            onPlayPause = {
-                                                when {
-                                                    currentSong != null -> onTogglePlay()
-                                                    filtered.isNotEmpty() -> onPlay(filtered.first(), filtered)
-                                                    !permissionGranted && selectedMusicFolders.isEmpty() -> onRequestPermission()
-                                                    else -> scope.launch { pagerState.animateScrollToPage(1) }
-                                                }
-                                            },
-                                            onPrevious = onPrevious,
-                                            onNext = onNext,
-                                            onSeek = onSeek,
-                                            onShuffle = onToggleShuffle,
-                                            onRepeat = onToggleRepeat,
-                                            onSelectSong = { onPlay(it, filtered) },
-                                            onSettings = { showSettings = true },
-                                            onLibrary = { scope.launch { pagerState.animateScrollToPage(1) } },
-                                            artwork = { cdSong, artworkModifier ->
-                                                androidx.compose.runtime.key(cdSong?.uri) {
-                                                    ArtworkView(
-                                                        song = cdSong,
-                                                        maxSizePx = 512,
-                                                        fallbackMaxSizePx = 128,
-                                                        loadDelayMs = 40L,
-                                                        modifier = artworkModifier
-                                                    )
-                                                }
-                                            },
-                                            thumbnailArtwork = { cdSong, artworkModifier ->
-                                                androidx.compose.runtime.key(cdSong?.uri) {
-                                                    ArtworkView(song = cdSong, maxSizePx = 128, loadDelayMs = 65L, modifier = artworkModifier)
-                                                }
-                                            },
-                                            emptyState = {
-                                                Text(
-                                                    text = if (!permissionGranted && selectedMusicFolders.isEmpty()) {
-                                                        nusaText("Izinkan akses musik untuk mulai memutar.", "Allow music access to start listening.")
-                                                    } else nusaText("Tidak ada musik lokal", "No local music found"),
-                                                    color = Color(0xFFA5A5A0),
-                                                    fontSize = 12.sp,
-                                                    textAlign = TextAlign.Center,
-                                                    modifier = Modifier.padding(24.dp)
-                                                )
-                                            },
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-                                    } else if (playerPresentationMode == PlayerPresentationMode.VINYL) {
+                                    if (playerPresentationMode == PlayerPresentationMode.VINYL) {
                                         TurntablePlayer(
                                             title = currentSong?.title ?: nusaText("Pilih lagu", "Choose a song"),
                                             artist = currentSong?.artist ?: nusaText("Perpustakaan musik lokal Anda", "Your local music library"),
