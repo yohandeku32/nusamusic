@@ -541,13 +541,33 @@ private fun CdSongCarousel(
             contentPadding = PaddingValues(horizontal = ((maxWidth - 88.dp) / 2).coerceAtLeast(0.dp)),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.height(94.dp)
+            // Allow a small vertical arc without clipping the top or bottom discs.
+            modifier = Modifier.height(106.dp)
         ) {
             items(songs, key = { it.id }) { item ->
                 val active = item.id == currentId
                 val scale by animateFloatAsState(if (active) 1f else 0.76f, label = "CD selection")
                 Box(
-                    Modifier.size(88.dp).graphicsLayer { scaleX = scale; scaleY = scale; alpha = if (active) 1f else 0.55f }
+                    Modifier.size(88.dp).graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                        alpha = if (active) 1f else 0.55f
+
+                        // A gentle upward arc: the disc at the viewport center
+                        // sits slightly higher, while those at the edges sit
+                        // lower. Calculate on the graphics layer rather than
+                        // recomposing artwork for every scroll frame.
+                        val layout = listState.layoutInfo
+                        val center = layout.viewportSize.width * 0.5f
+                        val visibleItem = layout.visibleItemsInfo.firstOrNull { it.key == item.id }
+                        translationY = if (visibleItem != null && center > 0f) {
+                            val itemCenter = visibleItem.offset + visibleItem.size * 0.5f
+                            val distance = ((itemCenter - center) / center).coerceIn(-1f, 1f)
+                            (-6f + 12f * distance * distance).dp.toPx()
+                        } else {
+                            0f
+                        }
+                    }
                         .clip(CircleShape)
                         .border(1.dp, if (active) Color(0xFF999991) else Color.Transparent, CircleShape)
                         .clickable(role = Role.Button) { onSelectSong(item) }
