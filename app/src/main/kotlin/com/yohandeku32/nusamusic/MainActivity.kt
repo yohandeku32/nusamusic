@@ -1818,7 +1818,7 @@ private fun NusaMusicApp(
                                         ArtworkView(
                                             song = cdSong,
                                             maxSizePx = 512,
-                                            fallbackMaxSizePx = 128,
+                                            fallbackMaxSizePx = 256,
                                             loadDelayMs = 40L,
                                             modifier = artworkModifier
                                         )
@@ -1826,7 +1826,7 @@ private fun NusaMusicApp(
                                 },
                                 thumbnailArtwork = { cdSong, artworkModifier ->
                                     androidx.compose.runtime.key(cdSong?.uri) {
-                                        ArtworkView(song = cdSong, maxSizePx = 128, loadDelayMs = 65L, modifier = artworkModifier)
+                                        ArtworkView(song = cdSong, maxSizePx = 256, fallbackMaxSizePx = 128, loadDelayMs = 65L, modifier = artworkModifier)
                                     }
                                 },
                                 emptyState = {
