@@ -62,6 +62,7 @@ internal fun CdJewelCase(
         // They belong to the clear lid, not to an album's artwork.
         Canvas(Modifier.matchParentSize()) {
             drawClearLid()
+            drawClearCaseReflections()
             drawSpindle(Offset(size.width * 0.55f, size.height * 0.5f))
             drawJewelCaseStickers()
         }
@@ -186,6 +187,85 @@ private fun DrawScope.drawClearLid() {
     }
 }
 
+
+/**
+ * Subtle, stationary reflection in the transparent polycarbonate case.
+ * Broad low-alpha reflections and short specular edge highlights imply depth,
+ * rather than scratches, creases or plastic shrink-wrap.
+ */
+private fun DrawScope.drawClearCaseReflections() {
+    val w = size.width
+    val h = size.height
+    val glass = Color(0xFFEAF7FF)
+    val edge = 1.dp.toPx()
+
+    // Diffuse diagonal highlight reflecting from the smooth outer lid.
+    val reflectedWindow = Path().apply {
+        moveTo(w * 0.36f, h * 0.012f)
+        lineTo(w * 0.61f, h * 0.012f)
+        cubicTo(
+            w * 0.55f, h * 0.16f,
+            w * 0.40f, h * 0.44f,
+            w * 0.31f, h * 0.64f
+        )
+        lineTo(w * 0.26f, h * 0.68f)
+        close()
+    }
+    drawPath(
+        reflectedWindow,
+        brush = Brush.linearGradient(
+            colors = listOf(
+                glass.copy(alpha = 0.14f),
+                glass.copy(alpha = 0.045f),
+                Color.Transparent
+            ),
+            start = Offset(w * 0.44f, h * 0.04f),
+            end = Offset(w * 0.29f, h * 0.65f)
+        )
+    )
+
+    // Curved reflection on the other side creates a glassy sense of depth.
+    val rightGlare = Path().apply {
+        moveTo(w * 0.93f, h * 0.09f)
+        quadraticBezierTo(w * 0.967f, h * 0.31f, w * 0.947f, h * 0.54f)
+        quadraticBezierTo(w * 0.927f, h * 0.65f, w * 0.919f, h * 0.77f)
+        lineTo(w * 0.968f, h * 0.77f)
+        quadraticBezierTo(w * 0.985f, h * 0.48f, w * 0.978f, h * 0.24f)
+        close()
+    }
+    drawPath(
+        rightGlare,
+        brush = Brush.horizontalGradient(
+            colors = listOf(Color.Transparent, glass.copy(alpha = 0.105f)),
+            startX = w * 0.919f,
+            endX = w * 0.985f
+        )
+    )
+
+    // Thin polished glints at the folded lid edges, not plastic-wrap lines.
+    drawLine(
+        glass.copy(alpha = 0.27f),
+        Offset(w * 0.39f, h * 0.008f),
+        Offset(w * 0.66f, h * 0.008f),
+        strokeWidth = edge * 0.65f,
+        cap = StrokeCap.Round
+    )
+    drawLine(
+        glass.copy(alpha = 0.21f),
+        Offset(w * 0.966f, h * 0.12f),
+        Offset(w * 0.966f, h * 0.38f),
+        strokeWidth = edge * 0.62f,
+        cap = StrokeCap.Round
+    )
+    drawLine(
+        glass.copy(alpha = 0.17f),
+        Offset(w * 0.69f, h * 0.987f),
+        Offset(w * 0.90f, h * 0.987f),
+        strokeWidth = edge * 0.52f,
+        cap = StrokeCap.Round
+    )
+}
+
 private fun DrawScope.drawSpindle(centre: Offset) {
     val h = size.height
     val radius = h * 0.075f
@@ -307,20 +387,23 @@ private fun DrawScope.drawJewelCaseStickers() {
     scale(scaleX = 0.80f, scaleY = 0.80f, pivot = Offset(yx, yy)) {
         val pivot = Offset(yx + yw / 2f, yy + yh / 2f)
         rotate(degrees = -9f, pivot = pivot) {
-            // Tiny nicks in the bottom-right paper edge suggest a peeled sticker.
+            // Unlike the blue label's right-edge nicks, this adhesive date
+            // sticker has a small irregular piece missing at its upper-left.
+            // The rest of its edges stay mostly smooth, like peeled paper.
             val yellowEdge = Path().apply {
-                moveTo(yx + yw * 0.025f, yy)
-                lineTo(yx + yw * 0.951f, yy)
-                lineTo(yx + yw, yy + yh * 0.065f)
-                lineTo(yx + yw, yy + yh * 0.815f)
-                lineTo(yx + yw * 0.959f, yy + yh * 0.856f)
-                lineTo(yx + yw * 0.984f, yy + yh * 0.898f)
-                lineTo(yx + yw * 0.944f, yy + yh * 0.924f)
-                lineTo(yx + yw * 0.961f, yy + yh * 0.966f)
-                lineTo(yx + yw * 0.935f, yy + yh)
-                lineTo(yx + yw * 0.027f, yy + yh)
-                lineTo(yx, yy + yh * 0.963f)
-                lineTo(yx, yy + yh * 0.055f)
+                moveTo(yx + yw * 0.205f, yy)
+                lineTo(yx + yw * 0.93f, yy)
+                quadraticBezierTo(yx + yw, yy, yx + yw, yy + yh * 0.10f)
+                lineTo(yx + yw, yy + yh * 0.925f)
+                quadraticBezierTo(yx + yw, yy + yh, yx + yw * 0.928f, yy + yh)
+                lineTo(yx + yw * 0.055f, yy + yh)
+                quadraticBezierTo(yx, yy + yh, yx, yy + yh * 0.93f)
+                lineTo(yx, yy + yh * 0.39f)
+                lineTo(yx + yw * 0.046f, yy + yh * 0.344f)
+                lineTo(yx + yw * 0.085f, yy + yh * 0.285f)
+                lineTo(yx + yw * 0.063f, yy + yh * 0.236f)
+                lineTo(yx + yw * 0.145f, yy + yh * 0.161f)
+                lineTo(yx + yw * 0.098f, yy + yh * 0.082f)
                 close()
             }
             translate(left = 1.dp.toPx(), top = 1.3.dp.toPx()) {
@@ -346,6 +429,37 @@ private fun DrawScope.drawJewelCaseStickers() {
                 color = Color(0xFFB8953B).copy(alpha = 0.47f),
                 style = Stroke(0.55.dp.toPx())
             )
+            // A small turned-up paper tip exposes paler adhesive at the torn
+            // corner; short fibers suggest a different type of wear.
+            val peeledTip = Path().apply {
+                moveTo(yx + yw * 0.205f, yy)
+                lineTo(yx + yw * 0.145f, yy + yh * 0.161f)
+                lineTo(yx + yw * 0.270f, yy + yh * 0.125f)
+                close()
+            }
+            drawPath(
+                peeledTip,
+                brush = Brush.linearGradient(
+                    listOf(Color(0xFFFFF1BE), Color(0xFFD7B65F).copy(alpha = 0.86f)),
+                    start = Offset(yx + yw * 0.18f, yy),
+                    end = Offset(yx + yw * 0.24f, yy + yh * 0.18f)
+                )
+            )
+            drawLine(
+                Color(0xFF9A7C39).copy(alpha = 0.30f),
+                Offset(yx + yw * 0.145f, yy + yh * 0.161f),
+                Offset(yx + yw * 0.270f, yy + yh * 0.125f),
+                0.55.dp.toPx()
+            )
+            for (fiber in 0..3) {
+                val t = fiber / 4f
+                drawLine(
+                    Color(0xFFFFE9B1).copy(alpha = 0.56f),
+                    Offset(yx + yw * (0.018f + t * 0.06f), yy + yh * (0.370f - t * 0.11f)),
+                    Offset(yx + yw * (0.034f + t * 0.06f), yy + yh * (0.400f - t * 0.11f)),
+                    0.45.dp.toPx()
+                )
+            }
             drawLine(blue.copy(alpha = 0.65f), Offset(yx + yw * 0.07f, yy + yh * 0.53f),
                 Offset(yx + yw * 0.90f, yy + yh * 0.53f), 0.5.dp.toPx())
             printAt("ARCHIVE", yx + yw * 0.07f, yy + yh * 0.40f, 0.032f)
