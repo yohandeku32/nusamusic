@@ -6,6 +6,7 @@ on:
       - feat/bundled-ffmpeg-default-android-studio
     paths:
       - .github/workflows/vendor-ffmpeg-aar.yml
+      - scripts/build-ffmpeg-android.sh
   workflow_dispatch:
 
 permissions:
