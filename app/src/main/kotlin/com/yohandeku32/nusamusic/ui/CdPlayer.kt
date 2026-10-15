@@ -1,5 +1,6 @@
 package com.yohandeku32.nusamusic.ui
 
+import android.os.Build
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -8,7 +9,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -19,12 +19,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.graphicsLayer
@@ -40,8 +42,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.yohandeku32.nusamusic.model.Song
 import java.util.Locale
+import kotlin.math.abs
+import kotlin.math.pow
+import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.first
 
 private val CdBackground = Color(0xFF111111)
@@ -533,43 +539,85 @@ private fun CdSongCarousel(
     artwork: @Composable (Song?, Modifier) -> Unit,
     onSelectSong: (Song) -> Unit
 ) {
+    if (songs.isEmpty()) return
     val currentIndex = remember(songs, currentId) {
         songs.indexOfFirst { it.id == currentId }.coerceAtLeast(0)
     }
-    val listState = rememberLazyListState(initialFirstVisibleItemIndex = currentIndex)
-    // A song change (especially Shuffle) can jump across thousands of items:
-    // snap directly rather than animating every intermediate row and decoding
-    // their covers just to scroll past them.
+    val looping = songs.size >= CD_CAROUSEL_VISIBLE_COUNT
+    val listState = rememberLazyListState(
+        initialFirstVisibleItemIndex = initialCdCarouselIndex(currentIndex, songs.size)
+    )
+    // A virtual list supplies two neighbours on each side even for the first
+    // and last song. Smaller libraries keep their actual count, without copies.
     LaunchedEffect(currentId, songs) {
-        listState.scrollToItem(currentIndex)
+        val layout = listState.layoutInfo
+        val center = (layout.viewportStartOffset + layout.viewportEndOffset) * 0.5f
+        val around = layout.visibleItemsInfo.minByOrNull {
+            abs(it.offset + it.size * 0.5f - center)
+        }?.index ?: listState.firstVisibleItemIndex
+        val target = if (looping && around < CD_CAROUSEL_VISIBLE_COUNT) {
+            initialCdCarouselIndex(currentIndex, songs.size)
+        } else {
+            nearestCdCarouselIndex(currentIndex, songs.size, around)
+        }
+        listState.scrollToItem(target)
     }
-    // Compact discs keep the lower panel balanced without heavy transforms.
-    val itemSize = 104.dp
-    BoxWithConstraints(Modifier.fillMaxWidth()) {
+    val centerItemIndex by remember(listState) {
+        derivedStateOf {
+            val layout = listState.layoutInfo
+            val center = (layout.viewportStartOffset + layout.viewportEndOffset) * 0.5f
+            layout.visibleItemsInfo.minByOrNull {
+                abs(it.offset + it.size * 0.5f - center)
+            }?.index ?: listState.firstVisibleItemIndex
+        }
+    }
+    val density = LocalDensity.current
+    // Cache a small blur ladder rather than creating GPU effects on every
+    // scrolling frame. Older Android versions still get the soft edge fade.
+    val edgeBlurEffects = remember(density) {
+        List(9) { level ->
+            if (level > 0 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val radius = level * 0.5f * density.density
+                android.graphics.RenderEffect.createBlurEffect(
+                    radius, radius, android.graphics.Shader.TileMode.CLAMP
+                ).asComposeRenderEffect()
+            } else null
+        }
+    }
+    BoxWithConstraints(
+        Modifier.fillMaxWidth().clipToBounds().drawWithCache {
+            val edgeFade = Brush.horizontalGradient(
+                0f to Color(0xFF191919).copy(alpha = 0.75f),
+                0.18f to Color.Transparent,
+                0.82f to Color.Transparent,
+                1f to Color(0xFF191919).copy(alpha = 0.75f)
+            )
+            onDrawWithContent {
+                drawContent()
+                drawRect(edgeFade)
+            }
+        }
+    ) {
+        val slotWidth = maxWidth / CD_CAROUSEL_VISIBLE_COUNT
+        // Overlapping discs retain a prominent centre CD while five centres
+        // remain visible on narrow phones. Only visible artwork is composed.
+        val discSize = minOf(128.dp, maxWidth * 0.34f)
         LazyRow(
             state = listState,
             flingBehavior = rememberSnapFlingBehavior(listState),
-            contentPadding = PaddingValues(horizontal = ((maxWidth - itemSize) / 2).coerceAtLeast(0.dp)),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = PaddingValues(horizontal = (maxWidth - slotWidth) / 2),
             verticalAlignment = Alignment.CenterVertically,
-            // All discs share one horizontal centre line; no per-frame arc
-            // translation or offscreen space for shadows is necessary.
-            modifier = Modifier.height(itemSize + 8.dp)
+            modifier = Modifier.height(discSize + 64.dp)
         ) {
-            items(songs, key = { it.id }) { item ->
+            items(count = if (looping) Int.MAX_VALUE else songs.size, key = { it }) { index ->
+                val item = songs[index % songs.size]
                 val active = item.id == currentId
-                // Size only changes when the active song changes, not on scroll.
-                // Avoid per-item graphicsLayer, animated scaling and layoutInfo
-                // reads during a drag to keep 120 Hz scrolling responsive.
-                val discSize = (itemSize - 8.dp) * if (active) 1f else 0.8f
                 Box(
-                    Modifier
-                        .size(itemSize)
-                        .clickable(
-                            interactionSource = null,
-                            indication = null,
-                            role = Role.Button
-                        ) { onSelectSong(item) }
+                    Modifier.width(slotWidth).height(discSize)
+                        .zIndex((3 - abs(index - centerItemIndex)).coerceAtLeast(0).toFloat())
+                        .clickable(interactionSource = null, indication = null, role = Role.Button) {
+                            onSelectSong(item)
+                        }
                         .semantics {
                             selected = active
                             contentDescription = "${item.title}, ${item.artist}"
@@ -578,7 +626,23 @@ private fun CdSongCarousel(
                 ) {
                     CdDiscSurface(
                         item, artwork,
-                        modifier = Modifier.size(discSize),
+                        modifier = Modifier.requiredSize(discSize).graphicsLayer {
+                            val layout = listState.layoutInfo
+                            val center = (layout.viewportStartOffset + layout.viewportEndOffset) * 0.5f
+                            val visibleItem = layout.visibleItemsInfo.firstOrNull { it.index == index }
+                            val slotPx = with(density) { slotWidth.toPx() }
+                            val distance = if (visibleItem != null && slotPx > 0f) {
+                                abs((visibleItem.offset + visibleItem.size * 0.5f - center) / slotPx)
+                            } else 2.5f
+                            val edge = (distance / 2f).coerceIn(0f, 1f)
+                            val scale = 1f - 0.32f * edge
+                            scaleX = scale
+                            scaleY = scale
+                            translationY = with(density) { (-10f + 34f * edge.pow(1.65f)).dp.toPx() }
+                            val softness = ((distance - 0.75f) / 1.25f).coerceIn(0f, 1f)
+                            alpha = 1f - 0.22f * softness
+                            renderEffect = edgeBlurEffects[(softness * 8f).roundToInt()]
+                        },
                         shadowElevation = 0.dp
                     )
                 }
