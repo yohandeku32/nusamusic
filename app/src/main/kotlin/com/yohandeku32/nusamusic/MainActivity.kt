@@ -1973,11 +1973,13 @@ private fun NusaMusicApp(
                 ) {
                     PlayerButtonStyleOption(
                         title = "Vinyl",
-                        subtitle = nusaText(
-                            "Piringan hitam berputar.",
-                            "Rotating vinyl record."
-                        ),
+                        subtitle = if (PlayerPresentationMode.CD_ONLY_MODE) {
+                            nusaText("Sementara dinonaktifkan.", "Temporarily disabled.")
+                        } else {
+                            nusaText("Piringan hitam berputar.", "Rotating vinyl record.")
+                        },
                         selected = playerPresentationMode == PlayerPresentationMode.VINYL,
+                        enabled = !PlayerPresentationMode.CD_ONLY_MODE,
                         onClick = {
                             playerPresentationMode = PlayerPresentationMode.VINYL
                             uiPrefs.edit()
@@ -1991,11 +1993,13 @@ private fun NusaMusicApp(
                     )
                     PlayerButtonStyleOption(
                         title = nusaText("Sampul imersif", "Immersive art"),
-                        subtitle = nusaText(
-                            "Sampul album layar penuh.",
-                            "Full-cover album artwork."
-                        ),
+                        subtitle = if (PlayerPresentationMode.CD_ONLY_MODE) {
+                            nusaText("Sementara dinonaktifkan.", "Temporarily disabled.")
+                        } else {
+                            nusaText("Sampul album layar penuh.", "Full-cover album artwork.")
+                        },
                         selected = playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK,
+                        enabled = !PlayerPresentationMode.CD_ONLY_MODE,
                         onClick = {
                             playerPresentationMode = PlayerPresentationMode.IMMERSIVE_ARTWORK
                             uiPrefs.edit()
@@ -4359,10 +4363,12 @@ private fun PlayerButtonStyleOption(
     subtitle: String,
     selected: Boolean,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
 ) {
     Surface(
         onClick = onClick,
+        enabled = enabled,
         modifier = modifier.height(82.dp),
         shape = RoundedCornerShape(16.dp),
         color = if (selected) {
