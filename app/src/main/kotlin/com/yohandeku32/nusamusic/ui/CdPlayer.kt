@@ -114,7 +114,10 @@ fun CdPlayer(
                 }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Spacer(Modifier.height(18.dp))
-                    CdJewelCase(Modifier.size(width = discSize * 1.12f, height = discSize)) { discModifier ->
+                    CdJewelCase(
+                        modifier = Modifier.size(width = discSize * 1.12f, height = discSize),
+                        artistName = song?.artist
+                    ) { discModifier ->
                         // Switch to the new artwork immediately without a slide,
                         // scale or fade; keep the disc's normal rotation intact.
                         CdDisc(

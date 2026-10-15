@@ -33,6 +33,7 @@ import kotlin.math.sin
 @Composable
 internal fun CdJewelCase(
     modifier: Modifier = Modifier,
+    artistName: String? = null,
     disc: @Composable (Modifier) -> Unit
 ) {
     BoxWithConstraints(
@@ -64,7 +65,7 @@ internal fun CdJewelCase(
             drawClearLid()
             drawClearCaseReflections()
             drawSpindle(Offset(size.width * 0.55f, size.height * 0.5f))
-            drawJewelCaseStickers()
+            drawJewelCaseStickers(artistName)
         }
     }
 }
@@ -291,7 +292,7 @@ private fun DrawScope.drawSpindle(centre: Offset) {
  * Drawn as stationary vectors (no bitmap loading or per-track transitions),
  * with their own paper finish and ink so the rotating CD remains visible.
  */
-private fun DrawScope.drawJewelCaseStickers() {
+private fun DrawScope.drawJewelCaseStickers(artistName: String?) {
     val w = size.width
     val h = size.height
     val blue = Color(0xFF41698A)
@@ -370,7 +371,8 @@ private fun DrawScope.drawJewelCaseStickers() {
         printAt("B-SIDE", bx + bw * 0.072f, by + h * 0.059f, 0.032f)
         drawLine(blue.copy(alpha = 0.65f), Offset(bx + bw * 0.06f, by + h * 0.116f),
             Offset(bx + bw * 0.94f, by + h * 0.116f), 0.7.dp.toPx())
-        printAt("NUSA", bx + bw * 0.072f, by + h * 0.173f, 0.057f)
+        // Unlike the archival typesetting, the artist name is handwritten in marker.
+        drawArtistMarker(artistName, bx + bw * 0.072f, by + h * 0.175f, bw * 0.86f)
         printAt("MUSIC ARCHIVE", bx + bw * 0.072f, by + h * 0.211f, 0.027f)
         printAt("S/N 7738700", bx + bw * 0.072f, by + h * 0.258f, 0.027f)
         drawLine(blue.copy(alpha = 0.54f), Offset(bx + bw * 0.06f, by + h * 0.280f),
@@ -502,5 +504,64 @@ private fun DrawScope.drawStickerFibers(
                 center = Offset(x + fiberLength, y)
             )
         }
+    }
+}
+
+/**
+ * Marker-style artist name on the cream paper sticker.
+ * Uses Android's built-in casual handwriting face, gently slanted and
+ * inked twice for a subtle felt-tip appearance without bundling font assets.
+ */
+private fun DrawScope.drawArtistMarker(
+    artistName: String?,
+    x: Float,
+    baseline: Float,
+    availableWidth: Float
+) {
+    val h = size.height
+    val artist = artistName
+        ?.trim()
+        ?.replace(Regex("\\s+"), " ")
+        ?.takeIf { it.isNotEmpty() }
+        ?: "ARTIST"
+    val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        typeface = android.graphics.Typeface.create(
+            "casual", android.graphics.Typeface.NORMAL
+        )
+        color = android.graphics.Color.rgb(46, 76, 117)
+        textSkewX = -0.075f
+        isSubpixelText = true
+        style = android.graphics.Paint.Style.FILL_AND_STROKE
+        strokeJoin = android.graphics.Paint.Join.ROUND
+        strokeCap = android.graphics.Paint.Cap.ROUND
+        strokeWidth = h * 0.0010f
+        textSize = h * 0.050f
+    }
+
+    // Keep the full artist name when possible; compress only when necessary.
+    // Extremely long names get an ellipsis instead of spilling off the sticker.
+    val measured = paint.measureText(artist).coerceAtLeast(1f)
+    val targetSize = (paint.textSize * availableWidth / measured)
+        .coerceIn(h * 0.025f, h * 0.050f)
+    paint.textSize = targetSize
+    var display = artist
+    if (paint.measureText(display) > availableWidth) {
+        while (display.length > 1 && paint.measureText("$display…") > availableWidth) {
+            display = display.dropLast(1)
+        }
+        display += "…"
+    }
+
+    val canvas = drawContext.canvas.nativeCanvas
+    val saved = canvas.save()
+    try {
+        canvas.rotate(-2.0f, x, baseline)
+        // Faint ink bleed along the paper fibers; the main stroke stays sharp.
+        paint.alpha = 44
+        canvas.drawText(display, x + h * 0.0011f, baseline + h * 0.0016f, paint)
+        paint.alpha = 232
+        canvas.drawText(display, x, baseline, paint)
+    } finally {
+        canvas.restoreToCount(saved)
     }
 }
