@@ -349,13 +349,15 @@ private fun DrawScope.drawJewelCaseStickers(artistName: String?) {
             )
         )
         clipPath(paperEdge) {
-            drawStickerFibers(
+            drawStickerPaperTexture(
                 left = bx, top = by, width = bw, height = bh,
-                darkFiber = Color(0xFF7D8790), lightFiber = Color.White,
-                count = 75
+                darkFiber = Color(0xFF8E9690),
+                lightFiber = Color(0xFFFFFAEE),
+                stain = Color(0xFF947E63),
+                seed = 117, grainCount = 240
             )
         }
-        drawPath(paperEdge, blue.copy(alpha = 0.81f), style = Stroke(0.85.dp.toPx()))
+        drawPath(paperEdge, blue.copy(alpha = 0.58f), style = Stroke(0.65.dp.toPx()))
         // A bright exposed fiber at the small notch, not a plastic-wrap crease.
         drawLine(
             Color.White.copy(alpha = 0.56f),
@@ -379,6 +381,10 @@ private fun DrawScope.drawJewelCaseStickers(artistName: String?) {
             Offset(bx + bw * 0.94f, by + h * 0.280f), 0.6.dp.toPx())
         printAt("LIMITED", bx + bw * 0.072f, by + h * 0.327f, 0.043f)
         printAt("EDITION", bx + bw * 0.072f, by + h * 0.363f, 0.038f)
+        // A few faded ink pinholes sit over the print, like aged paper stock.
+        clipPath(paperEdge) {
+            drawStickerInkWear(bx, by, bw, bh, seed = 509, fleckCount = 24)
+        }
     }
 
     // Smaller angled mustard inventory sticker at the lower-right corner.
@@ -420,15 +426,17 @@ private fun DrawScope.drawJewelCaseStickers(artistName: String?) {
                 )
             )
             clipPath(yellowEdge) {
-                drawStickerFibers(
+                drawStickerPaperTexture(
                     left = yx, top = yy, width = yw, height = yh,
-                    darkFiber = Color(0xFF946E27), lightFiber = Color.White,
-                    count = 38
+                    darkFiber = Color(0xFF92733D),
+                    lightFiber = Color(0xFFFFF4CA),
+                    stain = Color(0xFFAA7633),
+                    seed = 931, grainCount = 125
                 )
             }
             drawPath(
                 yellowEdge,
-                color = Color(0xFFB8953B).copy(alpha = 0.47f),
+                color = Color(0xFFB8953B).copy(alpha = 0.34f),
                 style = Stroke(0.55.dp.toPx())
             )
             // A small turned-up paper tip exposes paler adhesive at the torn
@@ -469,41 +477,126 @@ private fun DrawScope.drawJewelCaseStickers(artistName: String?) {
             val badge = Offset(yx + yw * 0.83f, yy + yh * 0.28f)
             drawCircle(blue, h * 0.019f, badge, style = Stroke(0.65.dp.toPx()))
             printAt("13", badge.x - h * 0.012f, badge.y + h * 0.006f, 0.020f)
+            clipPath(yellowEdge) {
+                drawStickerInkWear(yx, yy, yw, yh, seed = 1601, fleckCount = 14)
+            }
         }
     }
 }
 
-/** Tiny fixed paper fibers and flecks. Deterministic, with no bitmap or animation. */
-private fun DrawScope.drawStickerFibers(
+/**
+ * Stable seeded randomness: paper wear should never move or flicker.
+ * No texture bitmap, network requests, animation or extra assets.
+ */
+private class PaperNoise(seed: Int) {
+    private var value = seed
+
+    fun next(): Float {
+        value = value * 1664525 + 1013904223
+        return ((value ushr 8) and 0x00FFFFFF) / 16777216f
+    }
+}
+
+/**
+ * Several different scales of paper stock: cloudy dye, soft pulp grain, and
+ * thin uneven fibers. Avoids the visible uniform hatch/fleck pattern.
+ * Call only inside a clipPath matching the sticker's torn-paper outline.
+ */
+private fun DrawScope.drawStickerPaperTexture(
     left: Float,
     top: Float,
     width: Float,
     height: Float,
     darkFiber: Color,
     lightFiber: Color,
-    count: Int
+    stain: Color,
+    seed: Int,
+    grainCount: Int
 ) {
-    val fine = 0.42.dp.toPx()
-    for (i in 0 until count) {
-        // Fixed low-discrepancy positions keep the same printed paper grain on every redraw.
-        val u = ((i * 37 + 19) % 101) / 101f
-        val v = ((i * 53 + 11) % 97) / 97f
-        val x = left + width * (0.065f + u * 0.87f)
-        val y = top + height * (0.045f + v * 0.90f)
-        val fiberLength = width * (0.009f + (i % 4) * 0.003f)
-        drawLine(
-            color = darkFiber.copy(alpha = if (i % 5 == 0) 0.14f else 0.075f),
-            start = Offset(x, y),
-            end = Offset(x + fiberLength, y + height * 0.002f),
-            strokeWidth = fine
+    val noise = PaperNoise(seed)
+
+    // Slight yellowing / absorptive dye variation, with very soft edges.
+    repeat(5) {
+        val center = Offset(
+            left + width * (0.05f + noise.next() * 0.90f),
+            top + height * (0.08f + noise.next() * 0.84f)
         )
-        if (i % 3 == 0) {
-            drawCircle(
-                color = lightFiber.copy(alpha = 0.15f),
-                radius = 0.36.dp.toPx(),
-                center = Offset(x + fiberLength, y)
+        val radius = width * (0.13f + noise.next() * 0.19f)
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(
+                    stain.copy(alpha = 0.024f + noise.next() * 0.038f),
+                    Color.Transparent
+                ),
+                center = center,
+                radius = radius
+            ),
+            radius = radius,
+            center = center
+        )
+    }
+
+    // Grain is tiny and irregular: different radii, tones and concentrations.
+    repeat(grainCount) {
+        val point = Offset(left + width * noise.next(), top + height * noise.next())
+        val fiberTone = if (noise.next() < 0.64f) darkFiber else lightFiber
+        val opacity = 0.034f + noise.next() * 0.10f
+        drawCircle(
+            color = fiberTone.copy(alpha = opacity),
+            radius = (0.15f + noise.next() * 0.33f).dp.toPx(),
+            center = point
+        )
+    }
+
+    // Curving short threads suggest cellulose, not repeated straight scratches.
+    repeat(grainCount / 6) {
+        val x = left + width * noise.next()
+        val y = top + height * noise.next()
+        val angle = noise.next() * (2f * PI.toFloat())
+        val length = width * (0.009f + noise.next() * 0.039f)
+        val dx = cos(angle) * length
+        val dy = sin(angle) * length
+        val bend = (noise.next() - 0.5f) * height * 0.012f
+        val fiber = Path().apply {
+            moveTo(x, y)
+            quadraticBezierTo(
+                x + dx * 0.48f - dy * 0.15f,
+                y + dy * 0.48f + bend,
+                x + dx,
+                y + dy
             )
         }
+        drawPath(
+            path = fiber,
+            color = (if (noise.next() < 0.6f) darkFiber else lightFiber)
+                .copy(alpha = 0.055f + noise.next() * 0.085f),
+            style = Stroke(
+                width = (0.24f + noise.next() * 0.24f).dp.toPx(),
+                cap = StrokeCap.Round
+            )
+        )
+    }
+}
+
+/** Infrequent pale voids in printed ink, as on older matte adhesive paper. */
+private fun DrawScope.drawStickerInkWear(
+    left: Float,
+    top: Float,
+    width: Float,
+    height: Float,
+    seed: Int,
+    fleckCount: Int
+) {
+    val noise = PaperNoise(seed)
+    repeat(fleckCount) {
+        drawCircle(
+            color = Color(0xFFFFF8E8).copy(alpha = 0.065f + noise.next() * 0.11f),
+            radius = (0.18f + noise.next() * 0.29f).dp.toPx(),
+            center = Offset(
+                left + width * noise.next(),
+                top + height * noise.next()
+            )
+        )
     }
 }
 
