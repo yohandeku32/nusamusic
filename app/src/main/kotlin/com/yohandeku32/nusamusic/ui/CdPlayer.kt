@@ -393,6 +393,21 @@ private fun CdDisc(
                         Color(0xFFADE5F2).copy(alpha = 0.30f)
                     ), center = discCenter
                 )
+                // Neutral silver highlights replace the rainbow diffraction effect.
+                // Cache the shader with the disc artwork, not per rotation frame.
+                val metallicHubBand = Brush.sweepGradient(
+                    listOf(
+                        Color(0xFF80888C),
+                        Color(0xFFD3DADE),
+                        Color(0xFFF5F7F7),
+                        Color(0xFF9BA5AA),
+                        Color(0xFF6F787D),
+                        Color(0xFFCAD2D5),
+                        Color(0xFFE8ECEE),
+                        Color(0xFF80888C)
+                    ),
+                    center = discCenter
+                )
                 onDrawBehind {
                     // Tinted lacquer and soft vignette make the real album
                     // artwork pop without drawing opaque shapes over it.
@@ -431,28 +446,17 @@ private fun CdDisc(
                         style = Stroke(width = 1.25.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
                     )
 
-                // Layered polycarbonate centre: an iridescent annular band,
+                // Layered polycarbonate centre: a slim brushed-silver band,
                 // transparent inner plastic, a recessed silver clamp and the
                 // genuine-sized spindle hole. All radii share one centre.
                 val hub = center
                 drawCircle(Color.Black.copy(alpha = 0.18f), radius * 0.405f, hub)
                 drawCircle(
-                    brush = Brush.sweepGradient(
-                        listOf(
-                            Color(0xFFC2DDE4),
-                            Color(0xFFF5F1CE),
-                            Color(0xFFDAB4D7),
-                            Color(0xFFB5D1F3),
-                            Color(0xFFF3E6B4),
-                            Color(0xFFE0EBEE),
-                            Color(0xFFC2DDE4)
-                        ),
-                        center = hub
-                    ),
+                    brush = metallicHubBand,
                     radius = radius * 0.370f,
                     center = hub,
-                    alpha = 0.78f,
-                    style = Stroke(width = radius * 0.068f)
+                    alpha = 0.88f,
+                    style = Stroke(width = radius * 0.056f)
                 )
                 drawCircle(
                     Color.White.copy(alpha = 0.57f), radius * 0.406f, hub,
