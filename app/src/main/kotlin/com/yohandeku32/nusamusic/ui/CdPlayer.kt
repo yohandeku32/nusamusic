@@ -97,8 +97,11 @@ fun CdPlayer(
             // while allowing the entire Settings text-size range to take effect.
             val titleSize = (titleFontSize * 26f / 34f).coerceIn(18f, 34f)
             val titleLineHeight = (titleSize * 1.25f).sp
-            val titleSlotHeight = with(LocalDensity.current) {
-                (titleSize * 2.7f).sp.toDp()
+            // Reserve space for up to two title lines plus the artist.
+            // Center the pair inside it: one-line titles and their artist rise
+            // together, while two-line titles stay close to their old position.
+            val titleAndArtistSlotHeight = with(LocalDensity.current) {
+                (titleSize * 2.7f).sp.toDp() + 4.dp + 16.sp.toDp()
             }
             Column(
                 Modifier.fillMaxWidth().heightIn(min = viewportHeight).statusBarsPadding(),
@@ -134,38 +137,42 @@ fun CdPlayer(
                         )
                     }
                     Spacer(Modifier.height(20.dp))
-                    // Keep a permanent two-line slot so the disc and carousel
-                    // do not jump as titles change. Bottom-align the title so
-                    // a single-line title stays close to the artist, just like
-                    // the last line of a two-line title.
+                    // Center title and artist as one unit within a fixed-height
+                    // slot. The gap stays at 4dp for both one- and two-line
+                    // titles, without moving the CD or lower controls.
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(titleSlotHeight)
+                            .height(titleAndArtistSlotHeight)
                             .padding(horizontal = 28.dp),
-                        contentAlignment = Alignment.BottomCenter
+                        contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = song?.title ?: cdText("Pilih lagu", "Choose a song"),
-                            fontFamily = titleFontFamily,
-                            fontSize = titleSize.sp,
-                            lineHeight = titleLineHeight,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                            textAlign = TextAlign.Center
-                        )
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = song?.title ?: cdText("Pilih lagu", "Choose a song"),
+                                fontFamily = titleFontFamily,
+                                fontSize = titleSize.sp,
+                                lineHeight = titleLineHeight,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = song?.artist?.takeIf { it.isNotBlank() }
+                                    ?: cdText("Koleksi musik Anda", "Your music collection"),
+                                color = Color(0xFFA5A5A0),
+                                fontSize = 12.sp,
+                                lineHeight = 16.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
                     }
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        song?.artist?.takeIf { it.isNotBlank() }
-                            ?: cdText("Koleksi musik Anda", "Your music collection"),
-                        color = Color(0xFFA5A5A0),
-                        fontSize = 12.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(horizontal = 28.dp)
-                    )
                     Row(
                         Modifier.padding(top = 12.dp, bottom = 14.dp),
                         verticalAlignment = Alignment.CenterVertically,
