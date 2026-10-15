@@ -300,47 +300,66 @@ private fun CdDisc(
     artwork: @Composable (Song?, Modifier) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // A single persistent frame loop for every Play/Pause transition.
-    // Do not cancel/restart it when playback toggles: at high refresh rates
-    // the coroutine handoff could skip a vsync and cause visible stutter.
-    var rotation by remember { mutableFloatStateOf(0f) }
-    val angularVelocity = remember { floatArrayOf(0f) }
-    val playingState = rememberUpdatedState(spinning)
+    // Keep the rotating layer independent from the parent composition and
+    // reuse a single frame loop across rapid Play / Pause changes. A finite
+    // ease-in/out is important: exponential drag never fully stops and can
+    // look like tiny irregular movements at the end on 120 Hz screens.
+    val angle = remember { mutableFloatStateOf(0f) }
+    val angularSpeed = remember { floatArrayOf(0f) }
+    val playbackState = rememberUpdatedState(spinning)
 
     LaunchedEffect(visible) {
         if (!visible) {
-            // Suspending the page also stops the frame loop, so the CD
-            // cannot use up 120 frames/second while off-screen.
-            angularVelocity[0] = 0f
+            // Preserve the disc angle when the player goes off-screen.
+            angularSpeed[0] = 0f
             return@LaunchedEffect
         }
 
         while (true) {
-            if (!playingState.value && angularVelocity[0] <= 0.025f) {
-                // At rest, consume zero animation frames until Play.
-                angularVelocity[0] = 0f
-                snapshotFlow { playingState.value }.first { it }
+            if (!playbackState.value && angularSpeed[0] <= 0f) {
+                // Zero frames/CPU work while paused and fully at rest.
+                snapshotFlow { playbackState.value }.first { it }
             }
-            var previousFrame = withFrameNanos { it }
-            while (playingState.value || angularVelocity[0] > 0.025f) {
+            var lastFrame = withFrameNanos { it }
+            var requestedPlaying = playbackState.value
+            var startSpeed = angularSpeed[0]
+            var elapsed = 0f
+
+            while (true) {
                 val now = withFrameNanos { it }
-                // Use actual vsync timestamps (8.3ms on 120Hz screens).
-                // Clamp only large stalls to avoid jumping many degrees.
-                val seconds = ((now - previousFrame) / 1_000_000_000f)
-                    .coerceIn(0f, 0.065f)
-                previousFrame = now
-                val target = if (playingState.value) 48f else 0f
-                val tau = if (playingState.value) 0.20f else 0.28f
-                val smoothing = 1f - kotlin.math.exp(-seconds / tau)
-                val oldSpeed = angularVelocity[0]
-                val newSpeed = oldSpeed + (target - oldSpeed) * smoothing
-                angularVelocity[0] = newSpeed
-                rotation = (rotation + (oldSpeed + newSpeed) * 0.5f * seconds) % 360f
+                val dt = ((now - lastFrame) / 1_000_000_000f).coerceIn(0f, 0.05f)
+                lastFrame = now
+
+                if (requestedPlaying != playbackState.value) {
+                    // Retarget the existing motion without cancelling/restarting
+                    // its coroutine, and keep angular velocity continuous.
+                    requestedPlaying = playbackState.value
+                    startSpeed = angularSpeed[0]
+                    elapsed = 0f
+                }
+
+                val duration = if (requestedPlaying) 0.75f else 0.85f
+                elapsed = (elapsed + dt).coerceAtMost(duration)
+                val fraction = elapsed / duration
+                val ease = fraction * fraction * (3f - 2f * fraction)
+                val targetSpeed = if (requestedPlaying) 48f else 0f
+                val nextSpeed = startSpeed + (targetSpeed - startSpeed) * ease
+                angle.floatValue = (
+                    angle.floatValue + (angularSpeed[0] + nextSpeed) * 0.5f * dt
+                ) % 360f
+                angularSpeed[0] = nextSpeed
+
+                // End the slowdown at exactly zero speed instead of drifting
+                // by sub-pixel amounts for several seconds.
+                if (!requestedPlaying && elapsed >= duration) {
+                    angularSpeed[0] = 0f
+                    break
+                }
             }
         }
     }
     Box(modifier.shadow(18.dp, CircleShape), contentAlignment = Alignment.Center) {
-        Box(Modifier.fillMaxSize().graphicsLayer { rotationZ = rotation }.clip(CircleShape)) {
+        Box(Modifier.fillMaxSize().graphicsLayer { rotationZ = angle.floatValue }.clip(CircleShape)) {
             artwork(song, Modifier.fillMaxSize())
             Canvas(Modifier.matchParentSize()) {
                 val radius = size.minDimension / 2f
