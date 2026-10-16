@@ -98,7 +98,7 @@ internal fun CdShelfCarousel(
         val slotWidth = maxWidth / CD_CAROUSEL_VISIBLE_COUNT
         val centeringPadding = (maxWidth - slotWidth) / 2
         val caseHeight = minOf(132.dp, maxWidth * 0.36f)
-        val caseWidth = caseHeight * 1.03f
+        val caseWidth = caseHeight
         val stageHeight = caseHeight * 1.45f + 20.dp
         val density = LocalDensity.current
         val caseWidthPx = with(density) { caseWidth.toPx() }
@@ -181,7 +181,7 @@ internal fun CdShelfCarousel(
                     CdAlbumCase(
                         selection.song, artwork, selection.song.id == currentId,
                         modifier = Modifier.matchParentSize(),
-                        angle = { -64f * (1f - progress.value) }
+                        angle = { CD_SHELF_REST_ANGLE * (1f - progress.value) }
                     )
                     // Actions arrive only after the case has come to rest.
                     // Confirming playback first completes the return animation.
