@@ -6,6 +6,14 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AnimatedArtworkResolverTest {
+    @Test
+    fun portraitArtworkIsPreferredAndSquareRemainsAFallback() {
+        assertEquals(listOf("tall", "square"), preferredAnimatedArtworkUrls("tall", "square"))
+        assertEquals(listOf("square"), preferredAnimatedArtworkUrls(null, "square"))
+        assertEquals(listOf("square"), preferredAnimatedArtworkUrls("null", "square"))
+        assertEquals(listOf("tall"), preferredAnimatedArtworkUrls("tall", "tall"))
+        assertEquals(emptyList<String>(), preferredAnimatedArtworkUrls(" ", null))
+    }
     private val metadata = ArtworkLookupMetadata("Song", "Singer", "Album (Deluxe Edition)")
     private val stream = "https://example.mzstatic.com/artwork.m3u8"
 

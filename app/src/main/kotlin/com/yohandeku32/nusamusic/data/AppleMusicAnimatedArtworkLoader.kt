@@ -160,12 +160,10 @@ object AppleMusicAnimatedArtworkLoader {
         return response
     }
 
-    private fun animatedUrls(json: JSONObject?): List<String> = sequenceOf("url_tall", "url")
-        .mapNotNull { key -> json?.optString(key)?.takeIf { it.isNotBlank() && it != "null" } }
-        .filter(::isAppleArtworkUrl)
-        .distinct()
-        .toList()
-
+    private fun animatedUrls(json: JSONObject?): List<String> = preferredAnimatedArtworkUrls(
+        tall = json?.optString("url_tall"),
+        square = json?.optString("url")
+    ).filter(::isAppleArtworkUrl)
     private fun isAppleArtworkUrl(value: String): Boolean = runCatching {
         val parsed = URL(value)
         val host = parsed.host.lowercase(Locale.ROOT)
