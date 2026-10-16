@@ -1,5 +1,8 @@
 package com.yohandeku32.nusamusic.ui
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -20,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.BlendMode
@@ -28,6 +32,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -45,6 +52,8 @@ import com.yohandeku32.nusamusic.model.Song
 import java.util.Locale
 import kotlin.math.abs
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 
 private val CdBackground = Color(0xFF111111)
 private val CdAccent = Color(0xFFB5DF51)
@@ -88,7 +97,44 @@ fun CdPlayer(
         onSurfaceVariant = Color(0xFFA5A5A0)
     )) {
         CompositionLocalProvider(LocalContentColor provides Color(0xFFF2F0E9)) {
-        BoxWithConstraints(modifier.background(CdBackground)) {
+        val transfer = remember { CdDiscTransferState() }
+        val flightProgress = remember { Animatable(0f) }
+        var rootOrigin by remember { mutableStateOf(Offset.Zero) }
+        var sourceBounds by remember { mutableStateOf<Rect?>(null) }
+        var flightOrigin by remember { mutableStateOf<Rect?>(null) }
+        var playerDiscBounds by remember { mutableStateOf<Rect?>(null) }
+        val latestSongId = rememberUpdatedState(song?.id)
+        val request = transfer.request
+        val loadingDisc = request != null && request.song.id == song?.id
+        LaunchedEffect(request, isVisible) {
+            val item = request ?: return@LaunchedEffect
+            try {
+                flightProgress.snapTo(0f)
+                if (!isVisible) return@LaunchedEffect
+                // Audio selection remains immediate. Wait for its UI update,
+                // then let the existing hinge finish before lifting the CD.
+                val selected = withTimeoutOrNull(1500) {
+                    snapshotFlow { latestSongId.value == item.song.id && playerDiscBounds != null }
+                        .first { it }
+                }
+                if (selected != true) return@LaunchedEffect
+                delay(560)
+                if (latestSongId.value != item.song.id || sourceBounds == null) return@LaunchedEffect
+                flightOrigin = sourceBounds
+                if (!transfer.fly(item)) return@LaunchedEffect
+                flightProgress.animateTo(1f, tween(780, easing = FastOutSlowInEasing))
+            } finally {
+                transfer.finish(item)
+            }
+        }
+        LaunchedEffect(song?.id, songs, isVisible) {
+            val item = transfer.request ?: return@LaunchedEffect
+            if (!isVisible || songs.none { it.id == item.song.id } ||
+                (transfer.phase == CdDiscTransferPhase.FLYING && song?.id != item.song.id)) {
+                transfer.finish(item)
+            }
+        }
+        BoxWithConstraints(modifier.background(CdBackground).onGloballyPositioned { rootOrigin = it.positionInRoot() }) {
             // Reserve the transport and collection first; the parent scrolls
             // naturally for compact screens or enlarged accessibility text.
             val discSize = minOf(maxWidth * 0.76f, (viewportHeight - 520.dp).coerceIn(160.dp, 340.dp))
@@ -128,15 +174,21 @@ fun CdPlayer(
                         modifier = Modifier.size(width = discSize * 1.12f, height = discSize),
                         artistName = song?.artist
                     ) { discModifier ->
-                        // Switch to the new artwork immediately without a slide,
-                        // scale or fade; keep the disc's normal rotation intact.
-                        CdDisc(
-                            song = song,
-                            spinning = isPlaying && isVisible,
-                            visible = isVisible,
-                            artwork = artwork,
-                            modifier = discModifier
-                        )
+                        key(song?.id) {
+                            CdDisc(
+                                song = song,
+                                spinning = isPlaying && isVisible && !loadingDisc,
+                                visible = isVisible && !loadingDisc,
+                                artwork = artwork,
+                                modifier = discModifier.onGloballyPositioned {
+                                    playerDiscBounds = it.boundsInRoot().translate(-rootOrigin)
+                                }.graphicsLayer {
+                                    alpha = if (!loadingDisc) 1f else if (transfer.phase == CdDiscTransferPhase.FLYING) {
+                                        ((flightProgress.value - 0.90f) / 0.10f).coerceIn(0f, 1f)
+                                    } else 0f
+                                }
+                            )
+                        }
                     }
                     Spacer(Modifier.height(20.dp))
                     // Center title and artist as one unit within a fixed-height
@@ -218,7 +270,22 @@ fun CdPlayer(
                     Box(Modifier.size(28.dp, 3.dp).clip(CircleShape).background(Color(0xFF343434)))
                     Spacer(Modifier.height(8.dp))
                     if (songs.isNotEmpty()) {
-                        CdSongCarousel(songs, song?.id, thumbnailArtwork, onSelectSong)
+                        CdSongCarousel(
+                            songs, song?.id, thumbnailArtwork, transfer,
+                            onDiscBounds = { index, bounds ->
+                                if (transfer.request?.index == index && transfer.phase == CdDiscTransferPhase.OPENING) {
+                                    sourceBounds = bounds.translate(-rootOrigin)
+                                }
+                            },
+                            onSelectSong = { index, item, bounds ->
+                                if (item.id != song?.id && isVisible && bounds != null &&
+                                    bounds.width > 0f && bounds.height > 0f && playerDiscBounds != null) {
+                                    sourceBounds = bounds.translate(-rootOrigin)
+                                    transfer.begin(index, item)
+                                }
+                                onSelectSong(item)
+                            }
+                        )
                     } else {
                         emptyState()
                     }
@@ -245,6 +312,26 @@ fun CdPlayer(
                         )
                     }
                 }
+            }
+            // A sibling of the lower panel can travel beyond its rounded clip
+            // and fade mask all the way into the measured player spindle.
+            val origin = flightOrigin
+            val target = playerDiscBounds
+            if (request != null && transfer.phase == CdDiscTransferPhase.FLYING &&
+                request.song.id == song?.id && origin != null && target != null && target.width > 0f) {
+                CdDiscSurface(
+                    request.song, artwork,
+                    Modifier.size(with(LocalDensity.current) { target.width.toDp() }).graphicsLayer {
+                        val p = flightProgress.value
+                        val center = origin.center + (target.center - origin.center) * p
+                        translationX = center.x - size.width / 2f
+                        translationY = center.y - size.height / 2f
+                        scaleX = (origin.width + (target.width - origin.width) * p) / size.width
+                        scaleY = (origin.height + (target.height - origin.height) * p) / size.height
+                        alpha = 1f - ((p - 0.90f) / 0.10f).coerceIn(0f, 1f)
+                    },
+                    shadowElevation = 6.dp
+                )
             }
         }
         }
@@ -322,7 +409,7 @@ private fun CdDisc(
 
 /** Shared CD finish; carousel discs reuse the player design without a rotation loop. */
 @Composable
-private fun CdDiscSurface(
+internal fun CdDiscSurface(
     song: Song?,
     artwork: @Composable (Song?, Modifier) -> Unit,
     modifier: Modifier = Modifier,
@@ -533,7 +620,9 @@ private fun CdDiscSurface(
 private fun CdSongCarousel(
     songs: List<Song>, currentId: Long?,
     artwork: @Composable (Song?, Modifier) -> Unit,
-    onSelectSong: (Song) -> Unit
+    transfer: CdDiscTransferState,
+    onDiscBounds: (Int, Rect) -> Unit,
+    onSelectSong: (Int, Song, Rect?) -> Unit
 ) {
     if (songs.isEmpty()) return
     val currentIndex = remember(songs, currentId) {
@@ -603,11 +692,12 @@ private fun CdSongCarousel(
             items(count = if (looping) Int.MAX_VALUE else songs.size, key = { it }) { index ->
                 val item = songs[index % songs.size]
                 val active = item.id == currentId
+                var discBounds by remember(index, item.id) { mutableStateOf<Rect?>(null) }
                 Box(
                     Modifier.width(slotWidth).heightIn(min = 48.dp).height(caseHeight)
                         .zIndex((3 - abs(index - centerItemIndex)).coerceAtLeast(0).toFloat())
                         .clickable(interactionSource = null, indication = null, role = Role.Button) {
-                            onSelectSong(item)
+                            onSelectSong(index, item, discBounds)
                         }
                         .semantics {
                             selected = active
@@ -619,6 +709,11 @@ private fun CdSongCarousel(
                         song = item,
                         artwork = artwork,
                         selected = active,
+                        showDisc = transfer.request?.index == index && transfer.phase == CdDiscTransferPhase.OPENING,
+                        onDiscBounds = { bounds ->
+                            discBounds = bounds
+                            onDiscBounds(index, bounds)
+                        },
                         modifier = Modifier.requiredSize(width = caseWidth, height = caseHeight).graphicsLayer {
                             val layout = listState.layoutInfo
                             val center = (layout.viewportStartOffset + layout.viewportEndOffset) * 0.5f

@@ -79,12 +79,13 @@ internal fun CdJewelCase(
 internal fun CdClearLid(
     modifier: Modifier = Modifier,
     artistName: String? = null,
-    showSpindle: Boolean = false
+    showSpindle: Boolean = false,
+    showStickers: Boolean = true
 ) {
     // This optional personal-use font stays local; public builds use the fallback.
     val context = LocalContext.current.applicationContext
-    val stickerFont = remember(context) {
-        try {
+    val stickerFont = remember(context, showStickers) {
+        if (!showStickers) null else try {
             android.graphics.Typeface.createFromAsset(context.assets, "fonts/Aerosoldier_PERSONAL_USE_ONLY.otf")
         } catch (_: RuntimeException) {
             null
@@ -94,7 +95,7 @@ internal fun CdClearLid(
         drawClearLid()
         drawClearCaseReflections()
         if (showSpindle) drawSpindle(Offset(size.width * 0.55f, size.height * 0.5f))
-        drawJewelCaseStickers(artistName, stickerFont)
+        if (showStickers) drawJewelCaseStickers(artistName, stickerFont)
     }
 }
 
