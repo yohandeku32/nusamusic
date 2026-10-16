@@ -1914,7 +1914,6 @@ private fun NusaMusicApp(
                                         ImmersiveArtwork(
                                             song = currentSong,
                                             animatedArtworkEnabled = animatedArtworkEnabled,
-                                            isVisible = pagerState.settledPage == 0,
                                             artistBottomPx = immersiveArtworkBottomPx,
                                             modifier = Modifier.matchParentSize()
                                         )
@@ -4256,7 +4255,6 @@ private fun immersiveScrimOpacity(bitmap: Bitmap?): Float {
 private fun ImmersiveArtwork(
     song: Song?,
     animatedArtworkEnabled: Boolean = true,
-    isVisible: Boolean = true,
     artistBottomPx: Float = Float.NaN,
     modifier: Modifier = Modifier
 ) {
@@ -4325,13 +4323,12 @@ private fun ImmersiveArtwork(
     }
 
     LaunchedEffect(
-        song?.id, song?.title, song?.artist, song?.album, animatedArtworkEnabled, isVisible, artworkReloadAttempt
+        song?.id, song?.title, song?.artist, song?.album, animatedArtworkEnabled, artworkReloadAttempt
     ) {
         if (!animatedArtworkEnabled || song == null) {
             animatedArtworkUrl = null
             return@LaunchedEffect
         }
-        if (!isVisible) return@LaunchedEffect
         repeat(2) { attempt ->
             val url = AppleMusicAnimatedArtworkLoader.loadAnimatedArtworkUrl(
                 context, song, forceRefresh = artworkReloadAttempt > 0 || attempt > 0
@@ -4467,7 +4464,7 @@ private fun ImmersiveArtwork(
             }
 
             val activeUrl = animatedArtworkUrl
-            if (animatedArtworkEnabled && isVisible && activeUrl != null) {
+            if (animatedArtworkEnabled && activeUrl != null) {
                 AnimatedArtworkVideoBackground(
                     url = activeUrl,
                     modifier = Modifier.fillMaxSize(),
