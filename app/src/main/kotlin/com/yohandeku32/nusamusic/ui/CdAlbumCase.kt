@@ -14,9 +14,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.dp
 import com.yohandeku32.nusamusic.model.Song
 
@@ -26,7 +29,9 @@ internal fun CdAlbumCase(
     song: Song,
     artwork: @Composable (Song?, Modifier) -> Unit,
     selected: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    showDisc: Boolean = false,
+    onDiscBounds: (Rect) -> Unit = {}
 ) {
     val opening = remember(song.id) { Animatable(0f) }
     // Selection owns the lid state: pausing leaves the disc in the main player
@@ -37,8 +42,13 @@ internal fun CdAlbumCase(
             opening.animateTo(target, animationSpec = tween(560, easing = FastOutSlowInEasing))
         }
     }
-    Box(modifier.shadow(6.dp, RoundedCornerShape(3.dp), clip = false)) {
+    BoxWithConstraints(modifier.shadow(6.dp, RoundedCornerShape(3.dp), clip = false)) {
         EmptyCdTray(selected, Modifier.matchParentSize())
+        val diameter = maxHeight * 0.85f
+        Box(Modifier.offset(x = maxWidth * 0.55f - diameter / 2, y = (maxHeight - diameter) / 2)
+            .size(diameter).onGloballyPositioned { onDiscBounds(it.boundsInRoot()) }) {
+            if (showDisc) CdDiscSurface(song, artwork, Modifier.matchParentSize(), shadowElevation = 0.dp)
+        }
         Box(Modifier.matchParentSize().graphicsLayer {
             transformOrigin = TransformOrigin(0.075f, 0.5f)
             rotationY = -125f * opening.value
@@ -101,6 +111,6 @@ private fun CdAlbumCoverLid(
                 top = maxHeight * 0.035f, bottom = maxHeight * 0.035f
             ).clip(RoundedCornerShape(1.dp))
         )
-        CdClearLid(Modifier.matchParentSize(), artistName = song.artist)
+        CdClearLid(Modifier.matchParentSize(), showStickers = false)
     }
 }
