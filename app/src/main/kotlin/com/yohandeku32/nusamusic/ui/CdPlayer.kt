@@ -286,7 +286,8 @@ fun CdPlayer(
                                     cdText("Kembalikan CD ke kotak", "Return CD to case")
                                 ) { returnAction.value(); true })
                             } else Modifier),
-                        artistName = displaySong?.artist
+                        artistName = displaySong?.artist,
+                        song = displaySong
                     ) { discModifier ->
                         key(displaySong?.id) {
                             CdDisc(

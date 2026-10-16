@@ -7,6 +7,17 @@ import org.junit.Test
 
 class AudioCodecInfoTest {
     @Test
+    fun hiResRequiresAtLeast24BitsForBothLosslessFormats() {
+        for (codec in listOf("FLAC", "Apple Lossless")) {
+            for (depth in listOf(null, 16, 20, 23)) {
+                assertFalse(AudioCodecInfo(codec, 192_000, depth).isHiRes)
+            }
+            for (depth in listOf(24, 32)) {
+                assertTrue(AudioCodecInfo(codec, 44_100, depth).isHiRes)
+            }
+        }
+    }
+    @Test
     fun dolbyStreamsGetTheirOwnFormatLabelAndBadge() {
         val formats = mapOf(
             "audio/ac3" to "Dolby Digital",
