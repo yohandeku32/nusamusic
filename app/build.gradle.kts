@@ -103,6 +103,9 @@ dependencies {
     implementation("androidx.media3:media3-session:1.9.3")
     implementation("androidx.media3:media3-ui:1.9.3")
     implementation("androidx.media3:media3-inspector:1.9.3")
+    // Last stable UI release on Compose 1.9; newer releases require Compose 1.10.
+    implementation("com.mocharealm.accompanist:lyrics-core:0.4.2")
+    implementation("com.mocharealm.accompanist:lyrics-ui:1.0.15")
     if (localFfmpegAar.isFile) {
         // The extension depends on Media3's decoder base module; keep all
         // Media3 dependencies at exactly the same version.

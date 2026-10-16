@@ -1,5 +1,18 @@
 # Third-party notices
 
+## Accompanist Lyrics
+
+Nusa uses Accompanist Lyrics Core **0.4.2** and Lyrics UI **1.0.15** from
+[6xingyv/accompanist-lyrics-core](https://github.com/6xingyv/accompanist-lyrics-core)
+and [6xingyv/accompanist-lyrics-ui](https://github.com/6xingyv/accompanist-lyrics-ui).
+Both are distributed under Apache License 2.0. These releases keep the lyrics
+renderer on the app's Compose 1.9 generation. The original license is included
+in `app/src/main/assets/licenses/accompanist-apache-2.0.txt`.
+
+Optional online lyrics are retrieved from [LRCLIB](https://lrclib.net), with
+attribution in the lyrics page. Imported lyrics are copied into app storage;
+online results are cached separately.
+
 NusaMusic integrates the **Decent USB Audio** engine from:
 
 https://github.com/Ma145/decent-player

@@ -60,6 +60,7 @@ import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Lyrics
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -149,6 +150,7 @@ import com.yohandeku32.nusamusic.data.ArtistImageLoader
 import com.yohandeku32.nusamusic.data.ArtistBiographyLoader
 import com.yohandeku32.nusamusic.data.ArtistNameUtils
 import com.yohandeku32.nusamusic.data.MusicRepository
+import com.yohandeku32.nusamusic.data.LyricsRepository
 import com.yohandeku32.nusamusic.model.PlayerPresentationMode
 import com.yohandeku32.nusamusic.model.LibraryContentState
 import com.yohandeku32.nusamusic.model.Song
@@ -167,6 +169,8 @@ import com.yohandeku32.nusamusic.ui.resolveArtworkBottom
 import com.yohandeku32.nusamusic.ui.ImmersiveArtworkPainter
 import com.yohandeku32.nusamusic.ui.ImmersiveArtistPage
 import com.yohandeku32.nusamusic.ui.ImmersiveArtistPageState
+import com.yohandeku32.nusamusic.ui.ImmersiveLyricsPage
+import com.yohandeku32.nusamusic.ui.ImmersiveLyricsState
 import com.yohandeku32.nusamusic.ui.MiuixHorizontalPager
 import com.yohandeku32.nusamusic.ui.animateMiuixScrollToPage
 import com.yohandeku32.nusamusic.ui.artworkBackdropColor
@@ -200,6 +204,7 @@ class MainActivity : ComponentActivity() {
     private var positionMs by playbackPositionState
     private var durationMs by mutableLongStateOf(0L)
     private var playerPageVisible = true
+    private var lyricsPageVisible = false
     private var permissionGranted by mutableStateOf(false)
     private var shuffleEnabled by mutableStateOf(false)
     private var repeatMode by mutableIntStateOf(Player.REPEAT_MODE_OFF)
@@ -483,6 +488,8 @@ class MainActivity : ComponentActivity() {
                 override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                     val id = mediaItem?.mediaId?.toLongOrNull()
                     currentSong = songs.firstOrNull { it.id == id } ?: currentSong
+                    positionMs = c.currentPosition.coerceAtLeast(0L)
+                    durationMs = c.duration.coerceAtLeast(0L)
                     persistPlaybackState(c, force = true)
                 }
 
@@ -507,8 +514,9 @@ class MainActivity : ComponentActivity() {
 
         lifecycleScope.launch {
             while (isActive) {
+                val playbackUiActive = lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)
                 controller?.let { c ->
-                    if (playerPageVisible) {
+                    if (playbackUiActive && (playerPageVisible || lyricsPageVisible)) {
                         positionMs = c.currentPosition.coerceAtLeast(0L)
                         durationMs = c.duration.coerceAtLeast(0L)
                     }
@@ -525,7 +533,11 @@ class MainActivity : ComponentActivity() {
                         persistPlaybackState(c)
                     }
                 }
-                delay(if (isPlaying && playerPageVisible) 250L else 1_000L)
+                delay(when {
+                    isPlaying && playbackUiActive && lyricsPageVisible -> 50L
+                    isPlaying && playbackUiActive && playerPageVisible -> 250L
+                    else -> 1_000L
+                })
             }
         }
 
@@ -596,7 +608,7 @@ class MainActivity : ComponentActivity() {
                     libraryCacheLoaded = libraryCacheLoaded,
                     libraryScanFailed = libraryScanFailed,
                     selectedMusicFolders = selectedMusicFolders,
-                    onPlayerPageVisibilityChanged = ::setPlayerPageVisible,
+                    onPlaybackPageVisibilityChanged = ::setPlaybackPageVisible,
                     onScanMusic = ::scanMusic,
                     onSelectMusicFolder = ::openMusicFolderPicker,
                     onRemoveMusicFolder = ::removeMusicFolder,
@@ -674,9 +686,10 @@ class MainActivity : ComponentActivity() {
         }.getOrNull()
     }
 
-    private fun setPlayerPageVisible(visible: Boolean) {
-        playerPageVisible = visible
-        if (!visible) return
+    private fun setPlaybackPageVisible(playerVisible: Boolean, lyricsVisible: Boolean) {
+        playerPageVisible = playerVisible
+        lyricsPageVisible = lyricsVisible
+        if (!playerVisible && !lyricsVisible) return
 
         controller?.let { c ->
             positionMs = c.currentPosition.coerceAtLeast(0L)
@@ -1097,6 +1110,7 @@ class MainActivity : ComponentActivity() {
 
     private fun seekTo(value: Long) {
         controller?.seekTo(value)
+        positionMs = value.coerceAtLeast(0L)
     }
 
     private fun shareCurrentSong(song: Song?) {
@@ -1409,7 +1423,7 @@ private fun NusaMusicApp(
     libraryCacheLoaded: Boolean,
     libraryScanFailed: Boolean,
     selectedMusicFolders: List<String>,
-    onPlayerPageVisibilityChanged: (Boolean) -> Unit,
+    onPlaybackPageVisibilityChanged: (Boolean, Boolean) -> Unit,
     onScanMusic: () -> Unit,
     onSelectMusicFolder: () -> Unit,
     onRemoveMusicFolder: (String) -> Unit,
@@ -1427,6 +1441,7 @@ private fun NusaMusicApp(
     }
 
     val context = androidx.compose.ui.platform.LocalContext.current
+    val lyricsState = remember(context) { ImmersiveLyricsState(LyricsRepository(context)) }
     val artistPageStates = remember { androidx.collection.LruCache<String, ImmersiveArtistPageState>(8) }
     val artistPageState = remember(artistKey) {
         artistPageStates.get(artistKey) ?: ImmersiveArtistPageState(
@@ -1611,12 +1626,13 @@ private fun NusaMusicApp(
     // The artist sits to the left, so a rightward swipe from the player opens it.
     val artistPageEnabled = playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
     val playerPage = if (artistPageEnabled) 1 else 0
-    val libraryPage = playerPage + 1
+    val lyricsPage = if (artistPageEnabled) playerPage + 1 else -1
+    val libraryPage = if (artistPageEnabled) playerPage + 2 else playerPage + 1
     var libraryWasVisible by remember { mutableStateOf(false) }
     val pagerState = androidx.compose.runtime.key(artistPageEnabled) {
         androidx.compose.foundation.pager.rememberPagerState(
             initialPage = if (libraryWasVisible) libraryPage else playerPage,
-            pageCount = { if (artistPageEnabled) 3 else 2 }
+            pageCount = { if (artistPageEnabled) 4 else 2 }
         )
     }
     val playerScrollState =
@@ -1673,7 +1689,8 @@ private fun NusaMusicApp(
     // Opening the library must not change the user's manually chosen scroll position.
     LaunchedEffect(pagerState.settledPage, playerPage) {
         libraryWasVisible = pagerState.settledPage == libraryPage
-        onPlayerPageVisibilityChanged(pagerState.settledPage == playerPage)
+        onPlaybackPageVisibilityChanged(pagerState.settledPage == playerPage,
+            artistPageEnabled && pagerState.settledPage == lyricsPage)
     }
 
     // CD is always dark, including when the device uses the light theme.
@@ -1843,8 +1860,8 @@ private fun NusaMusicApp(
                 backgroundColor = pageBackdrop,
                 modifier = Modifier.fillMaxSize()
             ) { page ->
-                when (page - playerPage) {
-                    -1 -> ImmersiveArtistPage(
+                when {
+                    artistPageEnabled && page == 0 -> ImmersiveArtistPage(
                         artistName = currentSong?.artist,
                         songs = songs,
                         currentSong = currentSong,
@@ -1859,7 +1876,7 @@ private fun NusaMusicApp(
                             ArtworkView(song = song, maxSizePx = 512, modifier = modifier, grainOverlay = false)
                         }
                     )
-                    0 -> {
+                    page == playerPage -> {
                         BoxWithConstraints(Modifier.fillMaxSize()) {
                         val playerViewportHeight = maxHeight
                         if (playerPresentationMode == PlayerPresentationMode.CD) {
@@ -2464,6 +2481,18 @@ private fun NusaMusicApp(
 
                                             Spacer(Modifier.weight(1f))
 
+                                            if (artistPageEnabled) {
+                                                IconButton(
+                                                    onClick = { scope.launch { pagerState.animateMiuixScrollToPage(lyricsPage) } },
+                                                    enabled = currentSong != null,
+                                                    modifier = Modifier.size(42.dp)
+                                                ) {
+                                                    Icon(Icons.Default.Lyrics,
+                                                        nusaText("Buka lirik • geser ke kiri", "Open lyrics • swipe left"),
+                                                        tint = Color.White, modifier = Modifier.size(22.dp))
+                                                }
+                                            }
+
                                             IconButton(
                                                 onClick = { onShare(currentSong) },
                                                 enabled = currentSong != null,
@@ -2539,7 +2568,22 @@ private fun NusaMusicApp(
                         }
                     }
 
-                    1 -> {
+                    artistPageEnabled && page == lyricsPage -> ImmersiveLyricsPage(
+                        song = currentSong,
+                        positionMs = positionMsState,
+                        durationMs = durationMs,
+                        isPlaying = isPlaying,
+                        isVisible = pagerState.settledPage == lyricsPage,
+                        state = lyricsState,
+                        scope = scope,
+                        onBack = { scope.launch { pagerState.animateMiuixScrollToPage(playerPage) } },
+                        onLibrary = { scope.launch { pagerState.animateMiuixScrollToPage(libraryPage) } },
+                        onSeek = onSeek,
+                        onTogglePlay = onTogglePlay,
+                        onPrevious = onPrevious,
+                        onNext = onNext
+                    )
+                    page == libraryPage -> {
                         val vinylLibrary = playerPresentationMode == PlayerPresentationMode.VINYL
                         val cdLibrary = playerPresentationMode == PlayerPresentationMode.CD
                         // Match the CD player's charcoal background and lime

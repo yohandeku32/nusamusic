@@ -89,6 +89,38 @@ Visited artist profiles keep their portrait, selected album, expanded biography,
 
 Most-played tracks use listening history stored on the device from this version onward; earlier plays cannot be reconstructed. A play counts once per track session after 30 seconds of listening, or half the track duration for shorter tracks. Pausing and seeking do not add listening time. Background playback is counted by the playback service, and repeat starts a new session. No listening history is sent to Deezer or Last.fm.
 
+## Immersive lyrics
+
+Immersive pages are ordered **Artist → Player → Lyrics → Songs**. Swipe left
+from the player or tap its lyrics icon. Lyrics follow playback, and tapping a
+timed line seeks to that part of the song. Playback controls remain available
+below the lyrics.
+
+Use the file icon to import a `.ttml` or `.lrc` file for the current song.
+Nusa copies validated imports into its own storage, so the file picker does
+not need to reopen on later visits or after restarting. Standard LRC supports
+repeated timestamps, translations and offset tags; Enhanced LRC and Apple
+TTML retain word/syllable timing. Line-timed TTML also works.
+
+In music folders already granted through **Select music folder**, Nusa can
+automatically read a sidecar with the same filename (`Song.flac` with
+`Song.ttml` or `Song.lrc`). Android audio permission alone does not grant
+access to non-audio sidecars: import the lyrics or grant their music folder.
+TTML is preferred when both sidecar formats exist.
+
+When local lyrics are unavailable, Nusa looks up LRCLIB using the local
+title, artist, album and duration. Results, including unsynced text, are
+cached for offline use; the remote cache retains up to 120 entries. Missing
+results expire after six hours, and **Search again** retries immediately.
+Network failures remain retryable. Explicit imports take priority. Up to
+eight visited songs keep their parsed lyrics and scroll position in memory,
+and swiping away does not cancel an in-progress lookup.
+
+Accompanist Core 0.4.2 and UI 1.0.15 are pinned to stay on Compose 1.9.
+The decoder and disk-cache tests cover timing, import validation, Unicode,
+cache expiration and replacement. Real-device lyric animation, SAF folder
+providers and online matching still require device testing.
+
 ## Development notes
 
 The app still needs more testing with large libraries, long playback sessions, and folder permissions after a restart. The USB DAC experiment is on hold, and bit-perfect hardware playback hasn't been verified.
