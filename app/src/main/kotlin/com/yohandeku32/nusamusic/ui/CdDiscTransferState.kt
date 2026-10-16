@@ -5,8 +5,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.yohandeku32.nusamusic.model.Song
 
-internal data class CdDiscTransfer(val token: Long, val index: Int, val song: Song)
-internal enum class CdDiscTransferPhase { OPENING, FLYING }
+internal data class CdDiscTransfer(val token: Long, val index: Int, val song: Song, val previousSongId: Long?)
+internal enum class CdDiscTransferPhase { OPENING, FLYING, SEATING, ARRIVED }
 
 /** A replaced or cancelled insertion cannot complete a newer selection. */
 internal class CdDiscTransferState {
@@ -16,8 +16,8 @@ internal class CdDiscTransferState {
         private set
     private var token = 0L
 
-    fun begin(index: Int, song: Song): CdDiscTransfer {
-        return CdDiscTransfer(++token, index, song).also {
+    fun begin(index: Int, song: Song, previousSongId: Long? = null): CdDiscTransfer {
+        return CdDiscTransfer(++token, index, song, previousSongId).also {
             request = it
             phase = CdDiscTransferPhase.OPENING
         }
@@ -31,5 +31,18 @@ internal class CdDiscTransferState {
 
     fun finish(item: CdDiscTransfer) {
         if (request == item) request = null
+    }
+
+    fun seat(item: CdDiscTransfer): Boolean {
+        if (request != item || phase != CdDiscTransferPhase.FLYING) return false
+        phase = CdDiscTransferPhase.SEATING
+        return true
+    }
+
+    /** Release playback once, after the flight and stationary handoff finish. */
+    fun arrive(item: CdDiscTransfer): Song? {
+        if (request != item || phase != CdDiscTransferPhase.SEATING) return null
+        phase = CdDiscTransferPhase.ARRIVED
+        return item.song
     }
 }

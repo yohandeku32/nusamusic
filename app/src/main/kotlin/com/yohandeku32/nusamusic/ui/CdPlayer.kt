@@ -1,6 +1,7 @@
 package com.yohandeku32.nusamusic.ui
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
@@ -99,30 +100,46 @@ fun CdPlayer(
         CompositionLocalProvider(LocalContentColor provides Color(0xFFF2F0E9)) {
         val transfer = remember { CdDiscTransferState() }
         val flightProgress = remember { Animatable(0f) }
+        val seatingProgress = remember { Animatable(0f) }
+        val idlePosition = remember { mutableStateOf(0L) }
         var rootOrigin by remember { mutableStateOf(Offset.Zero) }
         var sourceBounds by remember { mutableStateOf<Rect?>(null) }
         var flightOrigin by remember { mutableStateOf<Rect?>(null) }
         var playerDiscBounds by remember { mutableStateOf<Rect?>(null) }
         val latestSongId = rememberUpdatedState(song?.id)
+        val selectSong = rememberUpdatedState(onSelectSong)
         val request = transfer.request
-        val loadingDisc = request != null && request.song.id == song?.id
+        val displaySong = request?.song ?: song
+        val loadingDisc = request != null
         LaunchedEffect(request, isVisible) {
             val item = request ?: return@LaunchedEffect
             try {
                 flightProgress.snapTo(0f)
+                seatingProgress.snapTo(0f)
                 if (!isVisible) return@LaunchedEffect
-                // Audio selection remains immediate. Wait for its UI update,
-                // then let the existing hinge finish before lifting the CD.
-                val selected = withTimeoutOrNull(1500) {
-                    snapshotFlow { latestSongId.value == item.song.id && playerDiscBounds != null }
+                // Preview selection opens the case without starting audio.
+                val measured = withTimeoutOrNull(1500) {
+                    snapshotFlow { sourceBounds != null && playerDiscBounds?.width?.let { it > 0f } == true }
                         .first { it }
                 }
-                if (selected != true) return@LaunchedEffect
+                if (measured != true) return@LaunchedEffect
                 delay(560)
-                if (latestSongId.value != item.song.id || sourceBounds == null) return@LaunchedEffect
+                if (sourceBounds == null) return@LaunchedEffect
                 flightOrigin = sourceBounds
                 if (!transfer.fly(item)) return@LaunchedEffect
-                flightProgress.animateTo(1f, tween(780, easing = FastOutSlowInEasing))
+                flightProgress.animateTo(1f, tween(900, easing = CubicBezierEasing(0.22f, 0f, 0.12f, 1f)))
+                if (!transfer.seat(item)) return@LaunchedEffect
+                // Both discs now share the same bounds and artwork. Hand off
+                // while stationary, then let the final seated frame render.
+                seatingProgress.animateTo(1f, tween(180, easing = FastOutSlowInEasing))
+                withFrameNanos { }
+                transfer.arrive(item)?.let { selected ->
+                    selectSong.value(selected)
+                    // Keep the seated artwork until the audio state catches up.
+                    withTimeoutOrNull(1500) {
+                        snapshotFlow { latestSongId.value }.first { it == selected.id }
+                    }
+                }
             } finally {
                 transfer.finish(item)
             }
@@ -130,7 +147,8 @@ fun CdPlayer(
         LaunchedEffect(song?.id, songs, isVisible) {
             val item = transfer.request ?: return@LaunchedEffect
             if (!isVisible || songs.none { it.id == item.song.id } ||
-                (transfer.phase == CdDiscTransferPhase.FLYING && song?.id != item.song.id)) {
+                (song?.id != item.previousSongId &&
+                    !(transfer.phase == CdDiscTransferPhase.ARRIVED && song?.id == item.song.id))) {
                 transfer.finish(item)
             }
         }
@@ -165,27 +183,31 @@ fun CdPlayer(
                         Icon(Icons.Default.MoreHoriz, cdText("Pengaturan", "Settings"))
                     }
                 }
-                key(song?.id) {
-                    CdTimeline(positionMsState, durationMs, song != null, onSeek)
+                key(displaySong?.id) {
+                    CdTimeline(
+                        if (loadingDisc) idlePosition else positionMsState,
+                        request?.song?.durationMs ?: durationMs,
+                        hasSong = song != null && !loadingDisc,
+                        onSeek = onSeek
+                    )
                 }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Spacer(Modifier.height(18.dp))
                     CdJewelCase(
                         modifier = Modifier.size(width = discSize * 1.12f, height = discSize),
-                        artistName = song?.artist
+                        artistName = displaySong?.artist
                     ) { discModifier ->
-                        key(song?.id) {
+                        key(displaySong?.id) {
                             CdDisc(
-                                song = song,
+                                song = displaySong,
                                 spinning = isPlaying && isVisible && !loadingDisc,
                                 visible = isVisible && !loadingDisc,
                                 artwork = artwork,
                                 modifier = discModifier.onGloballyPositioned {
                                     playerDiscBounds = it.boundsInRoot().translate(-rootOrigin)
                                 }.graphicsLayer {
-                                    alpha = if (!loadingDisc) 1f else if (transfer.phase == CdDiscTransferPhase.FLYING) {
-                                        ((flightProgress.value - 0.90f) / 0.10f).coerceIn(0f, 1f)
-                                    } else 0f
+                                    alpha = if (!loadingDisc || transfer.phase == CdDiscTransferPhase.SEATING ||
+                                        transfer.phase == CdDiscTransferPhase.ARRIVED) 1f else 0f
                                 }
                             )
                         }
@@ -203,7 +225,7 @@ fun CdPlayer(
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                text = song?.title ?: cdText("Pilih lagu", "Choose a song"),
+                                text = displaySong?.title ?: cdText("Pilih lagu", "Choose a song"),
                                 fontFamily = titleFontFamily,
                                 fontSize = titleSize.sp,
                                 lineHeight = titleLineHeight,
@@ -215,7 +237,7 @@ fun CdPlayer(
                             )
                             Spacer(Modifier.height(4.dp))
                             Text(
-                                text = song?.artist?.takeIf { it.isNotBlank() }
+                                text = displaySong?.artist?.takeIf { it.isNotBlank() }
                                     ?: cdText("Koleksi musik Anda", "Your music collection"),
                                 color = Color(0xFFA5A5A0),
                                 fontSize = 12.sp,
@@ -239,11 +261,11 @@ fun CdPlayer(
                             Icon(Icons.Default.SkipPrevious, cdText("Sebelumnya", "Previous"), Modifier.size(27.dp))
                         }
                         FilledIconButton(
-                            onClick = onPlayPause, modifier = Modifier.size(54.dp),
+                            onClick = onPlayPause, enabled = !loadingDisc, modifier = Modifier.size(54.dp),
                             colors = IconButtonDefaults.filledIconButtonColors(containerColor = Color(0xFFEDEDE7), contentColor = CdBackground)
                         ) {
-                            Icon(if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                if (isPlaying) cdText("Jeda", "Pause") else cdText("Putar", "Play"), Modifier.size(29.dp))
+                            Icon(if (isPlaying && !loadingDisc) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                if (isPlaying && !loadingDisc) cdText("Jeda", "Pause") else cdText("Putar", "Play"), Modifier.size(29.dp))
                         }
                         IconButton(onClick = onNext, enabled = song != null) {
                             Icon(Icons.Default.SkipNext, cdText("Berikutnya", "Next"), Modifier.size(27.dp))
@@ -271,7 +293,7 @@ fun CdPlayer(
                     Spacer(Modifier.height(8.dp))
                     if (songs.isNotEmpty()) {
                         CdSongCarousel(
-                            songs, song?.id, thumbnailArtwork, transfer,
+                            songs, displaySong?.id, thumbnailArtwork, transfer,
                             onDiscBounds = { index, bounds ->
                                 if (transfer.request?.index == index && transfer.phase == CdDiscTransferPhase.OPENING) {
                                     sourceBounds = bounds.translate(-rootOrigin)
@@ -281,9 +303,13 @@ fun CdPlayer(
                                 if (item.id != song?.id && isVisible && bounds != null &&
                                     bounds.width > 0f && bounds.height > 0f && playerDiscBounds != null) {
                                     sourceBounds = bounds.translate(-rootOrigin)
-                                    transfer.begin(index, item)
+                                    val replacingInsertion = transfer.request != null
+                                    transfer.begin(index, item, song?.id)
+                                    if (!replacingInsertion && isPlaying && song != null) onPlayPause()
+                                } else {
+                                    transfer.request?.let(transfer::finish)
+                                    onSelectSong(item)
                                 }
-                                onSelectSong(item)
                             }
                         )
                     } else {
@@ -317,8 +343,8 @@ fun CdPlayer(
             // and fade mask all the way into the measured player spindle.
             val origin = flightOrigin
             val target = playerDiscBounds
-            if (request != null && transfer.phase == CdDiscTransferPhase.FLYING &&
-                request.song.id == song?.id && origin != null && target != null && target.width > 0f) {
+            if (request != null && transfer.phase in listOf(CdDiscTransferPhase.FLYING, CdDiscTransferPhase.SEATING) &&
+                origin != null && target != null && target.width > 0f) {
                 CdDiscSurface(
                     request.song, artwork,
                     Modifier.size(with(LocalDensity.current) { target.width.toDp() }).graphicsLayer {
@@ -328,9 +354,9 @@ fun CdPlayer(
                         translationY = center.y - size.height / 2f
                         scaleX = (origin.width + (target.width - origin.width) * p) / size.width
                         scaleY = (origin.height + (target.height - origin.height) * p) / size.height
-                        alpha = 1f - ((p - 0.90f) / 0.10f).coerceIn(0f, 1f)
+                        alpha = 1f - seatingProgress.value
                     },
-                    shadowElevation = 6.dp
+                    shadowElevation = if (transfer.phase == CdDiscTransferPhase.SEATING) 0.dp else 12.dp
                 )
             }
         }
