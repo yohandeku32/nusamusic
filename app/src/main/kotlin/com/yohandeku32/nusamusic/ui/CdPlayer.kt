@@ -61,7 +61,6 @@ import androidx.compose.ui.zIndex
 import com.yohandeku32.nusamusic.model.Song
 import java.util.Locale
 import kotlin.math.abs
-import kotlin.math.sin
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
@@ -217,6 +216,7 @@ fun CdPlayer(
             }
         }
         BoxWithConstraints(modifier.background(CdBackground).onGloballyPositioned { rootOrigin = it.positionInRoot() }) {
+            val viewportWidthPx = with(LocalDensity.current) { maxWidth.toPx() }
             // Reserve the transport and collection first; the parent scrolls
             // naturally for compact screens or enlarged accessibility text.
             val discSize = minOf(maxWidth * 0.76f, (viewportHeight - 520.dp).coerceIn(160.dp, 340.dp))
@@ -473,15 +473,25 @@ fun CdPlayer(
                     request.song, artwork,
                     Modifier.size(with(LocalDensity.current) { target.width.toDp() }).graphicsLayer {
                         val p = flightProgress.value
-                        val center = origin.center + (target.center - origin.center) * p
                         val lift = if (request.liftBeforeReturn) liftProgress.value else 0f
-                        val sideArc = exitSide * 64.dp.toPx() * lift * sin(Math.PI.toFloat() * p)
-                        translationX = center.x - size.width / 2f + sideArc
-                        translationY = center.y - size.height / 2f - 28.dp.toPx() * lift * p
-                        val liftedScale = 1f + 0.04f * lift * p
-                        scaleX = (origin.width + (target.width - origin.width) * p) / size.width * liftedScale
-                        scaleY = (origin.height + (target.height - origin.height) * p) / size.height * liftedScale
-                        rotationX = -10f * lift * p
+                        if (request.liftBeforeReturn) {
+                            // Swapping ejects the full-size disc horizontally at
+                            // player height. Only the explicit swipe returns it
+                            // down to the carousel tray.
+                            val distanceToEdge = if (exitSide < 0f) target.center.x else viewportWidthPx - target.center.x
+                            val exitDistance = distanceToEdge + size.width * 0.55f + 16.dp.toPx()
+                            translationX = target.center.x - size.width / 2f + exitSide * exitDistance * (1f - p)
+                            translationY = target.center.y - size.height / 2f - 28.dp.toPx() * lift
+                            scaleX = 1f + 0.04f * lift
+                            scaleY = scaleX
+                            rotationX = -10f * lift
+                        } else {
+                            val center = origin.center + (target.center - origin.center) * p
+                            translationX = center.x - size.width / 2f
+                            translationY = center.y - size.height / 2f
+                            scaleX = (origin.width + (target.width - origin.width) * p) / size.width
+                            scaleY = (origin.height + (target.height - origin.height) * p) / size.height
+                        }
                         cameraDistance = size.width * 8f
                         alpha = 1f - seatingProgress.value
                     },
@@ -876,7 +886,8 @@ private fun CdSongCarousel(
                         selected = active && (transfer.storedSongId != item.id ||
                             transfer.request?.direction == CdDiscTransferDirection.INSERT),
                         showDisc = transfer.request?.song?.id == item.id &&
-                            transfer.phase in listOf(CdDiscTransferPhase.OPENING, CdDiscTransferPhase.CLOSING),
+                            (transfer.phase == CdDiscTransferPhase.OPENING ||
+                                (transfer.phase == CdDiscTransferPhase.CLOSING && transfer.request?.liftBeforeReturn != true)),
                         discRotation = discRotation,
                         onDiscBounds = { bounds ->
                             discBounds = bounds
