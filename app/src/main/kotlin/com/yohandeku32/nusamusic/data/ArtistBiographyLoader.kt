@@ -1,6 +1,8 @@
 package com.yohandeku32.nusamusic.data
 
 import android.net.Uri
+import android.content.Context
+import android.os.SystemClock
 import android.text.Html
 import android.text.Spanned
 import com.yohandeku32.nusamusic.BuildConfig
@@ -8,13 +10,15 @@ import com.yohandeku32.nusamusic.model.Song
 import com.yohandeku32.nusamusic.data.ArtistNameUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
 import java.nio.charset.StandardCharsets
-import java.util.concurrent.ConcurrentHashMap
+import java.io.File
 
 data class ArtistBiography(
     val artistName: String,
@@ -28,31 +32,51 @@ object ArtistBiographyLoader {
     private const val READ_TIMEOUT_MS = 8_000
     private const val API_ROOT = "https://ws.audioscrobbler.com/2.0/"
 
-    private val cache = ConcurrentHashMap<String, ArtistBiography>()
+    private val cache = androidx.collection.LruCache<String, ArtistBiography>(32)
+    private val failedLookups = androidx.collection.LruCache<String, Long>(32)
+    private val loadMutex = Mutex()
+    private const val RETRY_DELAY_MS = 5 * 60_000L
+
+    fun cached(artistName: String?): ArtistBiography? = cache.get(ArtistNameUtils.cacheKey(artistName))
 
     fun isConfigured(): Boolean = BuildConfig.LASTFM_API_KEY.isNotBlank()
 
-    suspend fun load(song: Song): ArtistBiography? = withContext(Dispatchers.IO) {
-        val artist = ArtistNameUtils.firstArtist(song.artist)
-        if (artist.isBlank() ||
-            artist.equals("Unknown artist", ignoreCase = true) ||
-            !isConfigured()
-        ) {
-            return@withContext null
+    suspend fun load(context: Context, song: Song): ArtistBiography? = withContext(Dispatchers.IO) {
+        loadMutex.withLock {
+            val artist = ArtistNameUtils.firstArtist(song.artist)
+            if (artist.isBlank() ||
+                artist.equals("Unknown artist", ignoreCase = true)
+            ) {
+                return@withLock null
+            }
+
+            val cacheKey = ArtistNameUtils.cacheKey(artist)
+            cache.get(cacheKey)?.let { return@withLock it }
+            val diskCache = ArtistBiographyDiskCache(File(context.filesDir, "artist_biographies"))
+            diskCache.read(artist)?.let {
+                cache.put(cacheKey, it)
+                return@withLock it
+            }
+            if (!isConfigured()) return@withLock null
+            val lastFailure = failedLookups.get(cacheKey)
+            if (lastFailure != null && SystemClock.elapsedRealtime() - lastFailure < RETRY_DELAY_MS) return@withLock null
+
+            // Request Indonesian first. Last.fm supports localized biographies
+            // when a translation exists, but not every artist has an Indonesian
+            // biography. Fall back to English so the section never disappears
+            // merely because an Indonesian translation is unavailable.
+            val result = loadFromLastFm(artist, "id")
+                ?: loadFromLastFm(artist, "en")
+
+            if (result != null) {
+                cache.put(cacheKey, result)
+                diskCache.write(artist, result)
+                failedLookups.remove(cacheKey)
+            } else {
+                failedLookups.put(cacheKey, SystemClock.elapsedRealtime())
+            }
+            result
         }
-
-        val cacheKey = artist.lowercase()
-        cache[cacheKey]?.let { return@withContext it }
-
-        // Request Indonesian first. Last.fm supports localized biographies
-        // when a translation exists, but not every artist has an Indonesian
-        // biography. Fall back to English so the section never disappears
-        // merely because an Indonesian translation is unavailable.
-        val result = loadFromLastFm(artist, "id")
-            ?: loadFromLastFm(artist, "en")
-
-        result?.let { cache[cacheKey] = it }
-        result
     }
 
     private fun loadFromLastFm(

@@ -5,6 +5,9 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import android.os.SystemClock
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
@@ -27,6 +30,13 @@ import java.security.MessageDigest
  */
 object ArtistImageLoader {
     private const val MAX_DOWNLOAD_BYTES = 4 * 1024 * 1024
+    private val loadMutex = Mutex()
+    private val failedLookups = androidx.collection.LruCache<String, Long>(32)
+
+    fun cached(artistName: String?, maxSize: Int = 256): Bitmap? {
+        val artist = ArtistNameUtils.firstArtist(artistName)
+        return memoryCache.get("${normalize(artist)}@${maxSize}")
+    }
 
     private val memoryCache = object :
         androidx.collection.LruCache<String, Bitmap>(8 * 1024) {
@@ -40,34 +50,44 @@ object ArtistImageLoader {
         artistName: String?,
         maxSize: Int = 256
     ): Bitmap? = withContext(Dispatchers.IO) {
-        val artist = artistName
-            ?.trim()
-            ?.takeIf { it.isNotEmpty() }
-            ?: return@withContext null
+        loadMutex.withLock {
+            val artist = artistName
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
+                ?: return@withLock null
 
-        val queryArtist = ArtistNameUtils.firstArtist(artist)
-        if (queryArtist.isBlank()) return@withContext null
+            val queryArtist = ArtistNameUtils.firstArtist(artist)
+            if (queryArtist.isBlank()) return@withLock null
 
-        val cacheKey = normalize(queryArtist)
-        val memoryKey = "${cacheKey}@${maxSize}"
+            val cacheKey = normalize(queryArtist)
+            val memoryKey = "${cacheKey}@${maxSize}"
 
-        memoryCache.get(memoryKey)?.let { return@withContext it }
+            memoryCache.get(memoryKey)?.let { return@withLock it }
 
-        val cacheFile = cacheFile(context, cacheKey)
-        decodeSampled(cacheFile, maxSize)?.let {
-            memoryCache.put(memoryKey, it)
-            return@withContext it
+            val cacheFile = cacheFile(context, cacheKey)
+            decodeSampled(cacheFile, maxSize)?.let {
+                memoryCache.put(memoryKey, it)
+                return@withLock it
+            }
+
+            val lastFailure = failedLookups.get(cacheKey)
+            if (lastFailure != null && SystemClock.elapsedRealtime() - lastFailure < 5 * 60_000L) return@withLock null
+            val imageUrl = searchDeezerArtistImage(queryArtist)
+            val saved = imageUrl?.let { downloadImage(it, cacheFile) }
+            if (saved == null) {
+                failedLookups.put(cacheKey, SystemClock.elapsedRealtime())
+                return@withLock null
+            }
+
+            decodeSampled(saved, maxSize)?.let {
+                memoryCache.put(memoryKey, it)
+                failedLookups.remove(cacheKey)
+                return@withLock it
+            }
+
+            failedLookups.put(cacheKey, SystemClock.elapsedRealtime())
+            null
         }
-
-        val imageUrl = searchDeezerArtistImage(queryArtist) ?: return@withContext null
-        val saved = downloadImage(imageUrl, cacheFile) ?: return@withContext null
-
-        decodeSampled(saved, maxSize)?.let {
-            memoryCache.put(memoryKey, it)
-            return@withContext it
-        }
-
-        null
     }
 
     private fun normalize(value: String): String {

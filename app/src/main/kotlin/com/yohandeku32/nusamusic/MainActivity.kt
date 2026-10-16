@@ -162,6 +162,7 @@ import com.yohandeku32.nusamusic.ui.VinylSongList
 import com.yohandeku32.nusamusic.ui.resolveArtworkBottom
 import com.yohandeku32.nusamusic.ui.ImmersiveArtworkPainter
 import com.yohandeku32.nusamusic.ui.ImmersiveArtistPage
+import com.yohandeku32.nusamusic.ui.ImmersiveArtistPageState
 import com.yohandeku32.nusamusic.ui.artworkBackdropColor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -1396,14 +1397,21 @@ private fun NusaMusicApp(
     var isFavorite by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var biographyExpanded by remember { mutableStateOf(false) }
-    var artistBiography by remember(currentSong?.artist) {
-        mutableStateOf<com.yohandeku32.nusamusic.data.ArtistBiography?>(null)
+    val artistKey = ArtistNameUtils.cacheKey(currentSong?.artist)
+    var artistBiography by remember(artistKey) {
+        mutableStateOf(ArtistBiographyLoader.cached(currentSong?.artist))
     }
-    var biographyLoading by remember(currentSong?.artist) {
+    var biographyLoading by remember(artistKey) {
         mutableStateOf(false)
     }
 
     val context = androidx.compose.ui.platform.LocalContext.current
+    val artistPageStates = remember { androidx.collection.LruCache<String, ImmersiveArtistPageState>(8) }
+    val artistPageState = remember(artistKey) {
+        artistPageStates.get(artistKey) ?: ImmersiveArtistPageState(
+            ArtistNameUtils.firstArtist(currentSong?.artist)
+        ).also { artistPageStates.put(artistKey, it) }
+    }
     val uiPrefs = remember(context) {
         context.getSharedPreferences("ui_preferences", android.content.Context.MODE_PRIVATE)
     }
@@ -1645,14 +1653,14 @@ private fun NusaMusicApp(
         }
     }
 
-    LaunchedEffect(currentSong?.artist, showArtistBiography) {
-        artistBiography = null
+    LaunchedEffect(artistKey, showArtistBiography) {
         biographyLoading = false
         if (!showArtistBiography) return@LaunchedEffect
+        if (artistBiography != null) return@LaunchedEffect
         biographyLoading =
             ArtistNameUtils.firstArtist(currentSong?.artist).isNotBlank()
         artistBiography = currentSong?.let {
-            ArtistBiographyLoader.load(it)
+            ArtistBiographyLoader.load(context, it)
         }
         biographyLoading = false
     }
@@ -1806,6 +1814,8 @@ private fun NusaMusicApp(
                         biography = artistBiography,
                         biographyLoading = biographyLoading,
                         isVisible = pagerState.settledPage == 0,
+                        state = artistPageState,
+                        onVisible = { artistPageState.loadPortrait(context, scope) },
                         onBack = { scope.launch { pagerState.animateScrollToPage(playerPage) } },
                         onPlay = onPlay,
                         artwork = { song, modifier ->
