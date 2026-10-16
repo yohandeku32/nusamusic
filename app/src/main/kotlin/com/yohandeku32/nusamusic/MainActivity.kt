@@ -2134,8 +2134,9 @@ private fun NusaMusicApp(
                                             // what is left and cannot push them down for a long title.
                                             val heroSpace = (playerContentHeight - titleBoxHeight - 322.dp)
                                                 .coerceIn(0.dp, playerContentHeight * 0.33f)
+                                            val metadataOffset = if (immersiveArtworkMode) 24.dp else 0.dp
                                             Spacer(
-                                                Modifier.height(heroSpace)
+                                                Modifier.height(heroSpace + metadataOffset)
                                             )
                                         }
 
