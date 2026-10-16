@@ -88,4 +88,74 @@ class CdDiscTransferStateTest {
         state.finish(item)
         assertNull(state.arrive(item))
     }
+
+    @Test fun returnCannotInterruptAnInsertionOrStartTwice() {
+        val state = CdDiscTransferState()
+        val insertion = state.begin(1, song(1))
+        assertNull(state.beginReturn(1, song(1)))
+        state.finish(insertion)
+        assertNotNull(state.beginReturn(1, song(1)))
+        assertNull(state.beginReturn(1, song(1)))
+    }
+
+    @Test fun caseClosesOnlyAfterTheReturningDiscReachesTheTray() {
+        val state = CdDiscTransferState()
+        val item = state.beginReturn(1, song(1))!!
+        assertFalse(state.close(item))
+        assertNull(state.storedSongId)
+        assertTrue(state.returnFlight(item))
+        assertFalse(state.returnFlight(item))
+        assertTrue(state.close(item))
+        assertNull(state.arrive(item))
+        state.finish(item)
+        assertEquals(1L, state.storedSongId)
+        assertNull(state.beginReturn(1, song(1)))
+    }
+
+    @Test fun reinsertingTheStoredSongResumesInsteadOfRestartingIt() {
+        val state = CdDiscTransferState()
+        val returned = state.beginReturn(1, song(1))!!
+        state.returnFlight(returned)
+        state.close(returned)
+        state.finish(returned)
+        val insertion = state.begin(1, song(1), previousSongId = 1)
+        assertTrue(insertion.resumePlayback)
+        state.fly(insertion)
+        state.seat(insertion)
+        assertEquals(song(1), state.arrive(insertion))
+        assertNull(state.storedSongId)
+    }
+
+    @Test fun anOldReturnCannotCloseAReplacementSelection() {
+        val state = CdDiscTransferState()
+        val returned = state.beginReturn(1, song(1))!!
+        state.returnFlight(returned)
+        val insertion = state.begin(2, song(2), previousSongId = 1)
+        assertFalse(state.close(returned))
+        state.finish(returned)
+        assertEquals(insertion, state.request)
+        assertNull(state.storedSongId)
+        assertFalse(insertion.resumePlayback)
+    }
+
+    @Test fun externalPlaybackRestoresTheStoredDiscButPausingKeepsItStored() {
+        val state = CdDiscTransferState()
+        val returned = state.beginReturn(1, song(1))!!
+        state.returnFlight(returned)
+        state.close(returned)
+        state.finish(returned)
+        state.syncPlayer(1, playing = false)
+        assertEquals(1L, state.storedSongId)
+        state.syncPlayer(1, playing = true)
+        assertNull(state.storedSongId)
+    }
+
+    @Test fun cancellingAReturnBeforeArrivalDoesNotStoreTheDisc() {
+        val state = CdDiscTransferState()
+        val returned = state.beginReturn(1, song(1))!!
+        state.returnFlight(returned)
+        state.finish(returned)
+        assertFalse(state.close(returned))
+        assertNull(state.storedSongId)
+    }
 }
