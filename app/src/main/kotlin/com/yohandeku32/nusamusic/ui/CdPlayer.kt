@@ -4,11 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -22,16 +18,13 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -40,10 +33,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.zIndex
 import com.yohandeku32.nusamusic.model.Song
 import java.util.Locale
-import kotlin.math.abs
 import kotlinx.coroutines.flow.first
 
 private val CdBackground = Color(0xFF111111)
@@ -218,7 +209,7 @@ fun CdPlayer(
                     Box(Modifier.size(28.dp, 3.dp).clip(CircleShape).background(Color(0xFF343434)))
                     Spacer(Modifier.height(8.dp))
                     if (songs.isNotEmpty()) {
-                        CdSongCarousel(songs, song?.id, thumbnailArtwork, onSelectSong)
+                        CdShelfCarousel(songs, song?.id, thumbnailArtwork, onSelectSong)
                     } else {
                         emptyState()
                     }
@@ -526,118 +517,6 @@ private fun CdDiscSurface(
             })
         }
         Box(Modifier.fillMaxSize(0.065f).clip(CircleShape).background(CdBackground).border(1.dp, Color.Black.copy(alpha = 0.5f), CircleShape))
-    }
-}
-
-@Composable
-private fun CdSongCarousel(
-    songs: List<Song>, currentId: Long?,
-    artwork: @Composable (Song?, Modifier) -> Unit,
-    onSelectSong: (Song) -> Unit
-) {
-    if (songs.isEmpty()) return
-    val currentIndex = remember(songs, currentId) {
-        songs.indexOfFirst { it.id == currentId }.coerceAtLeast(0)
-    }
-    val looping = songs.size >= CD_CAROUSEL_VISIBLE_COUNT
-    val listState = rememberLazyListState(
-        initialFirstVisibleItemIndex = initialCdCarouselIndex(currentIndex, songs.size)
-    )
-    // A virtual list supplies two neighbours on each side even for the first
-    // and last song. Smaller libraries keep their actual count, without copies.
-    LaunchedEffect(currentId, songs) {
-        val layout = listState.layoutInfo
-        val center = (layout.viewportStartOffset + layout.viewportEndOffset) * 0.5f
-        val around = layout.visibleItemsInfo.minByOrNull {
-            abs(it.offset + it.size * 0.5f - center)
-        }?.index ?: listState.firstVisibleItemIndex
-        val target = if (looping && around < CD_CAROUSEL_VISIBLE_COUNT) {
-            initialCdCarouselIndex(currentIndex, songs.size)
-        } else {
-            nearestCdCarouselIndex(currentIndex, songs.size, around)
-        }
-        listState.scrollToItem(target)
-    }
-    // Reorder only when a different case becomes closest to the centre.
-    // The cover in front then overlaps its neighbours in the correct order.
-    val centerItemIndex by remember(listState) {
-        derivedStateOf {
-            val layout = listState.layoutInfo
-            val center = (layout.viewportStartOffset + layout.viewportEndOffset) * 0.5f
-            layout.visibleItemsInfo.minByOrNull {
-                abs(it.offset + it.size * 0.5f - center)
-            }?.index ?: listState.firstVisibleItemIndex
-        }
-    }
-    BoxWithConstraints(
-        Modifier.widthIn(max = 360.dp).fillMaxWidth().graphicsLayer {
-            clip = true
-            compositingStrategy = CompositingStrategy.Offscreen
-        }.drawWithCache {
-            // Fade to the actual panel underneath on every supported Android
-            // version. The mask affects the carousel, not the screen canvas.
-            val edgeFade = Brush.horizontalGradient(
-                0f to Color.Transparent,
-                0.16f to Color.Black,
-                0.84f to Color.Black,
-                1f to Color.Transparent
-            )
-            onDrawWithContent {
-                drawContent()
-                drawRect(edgeFade, blendMode = BlendMode.DstIn)
-            }
-        }
-    ) {
-        val slotWidth = maxWidth / CD_CAROUSEL_VISIBLE_COUNT
-        // Five overlapping cases keep the stack compact, with a full cover
-        // in front and progressively smaller covers tucked behind each side.
-        val caseWidth = minOf(116.dp, maxWidth * 0.32f)
-        val caseHeight = caseWidth * 0.93f
-        LazyRow(
-            state = listState,
-            flingBehavior = rememberSnapFlingBehavior(listState),
-            contentPadding = PaddingValues(horizontal = (maxWidth - slotWidth) / 2),
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.height(caseHeight + 24.dp)
-        ) {
-            items(count = if (looping) Int.MAX_VALUE else songs.size, key = { it }) { index ->
-                val item = songs[index % songs.size]
-                val active = item.id == currentId
-                Box(
-                    Modifier.width(slotWidth).heightIn(min = 48.dp).height(caseHeight)
-                        .zIndex((3 - abs(index - centerItemIndex)).coerceAtLeast(0).toFloat())
-                        .clickable(interactionSource = null, indication = null, role = Role.Button) {
-                            onSelectSong(item)
-                        }
-                        .semantics {
-                            selected = active
-                            contentDescription = "${item.title}, ${item.artist}"
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    CdAlbumCase(
-                        song = item,
-                        artwork = artwork,
-                        selected = active,
-                        modifier = Modifier.requiredSize(width = caseWidth, height = caseHeight).graphicsLayer {
-                            val layout = listState.layoutInfo
-                            val center = (layout.viewportStartOffset + layout.viewportEndOffset) * 0.5f
-                            val visibleItem = layout.visibleItemsInfo.firstOrNull { it.index == index }
-                            val distance = if (visibleItem != null && visibleItem.size > 0) {
-                                (visibleItem.offset + visibleItem.size * 0.5f - center) / visibleItem.size
-                            } else 3f
-                            val depth = abs(distance).coerceAtMost(2f)
-                            val scale = 1f - 0.12f * depth
-                            scaleX = scale
-                            scaleY = scale
-                            rotationY = -distance.coerceIn(-2f, 2f) * 12f
-                            cameraDistance = size.width * 8f
-                            alpha = 1f - 0.14f * depth
-                        }
-                    )
-                }
-            }
-        }
     }
 }
 
