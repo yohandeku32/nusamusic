@@ -95,16 +95,18 @@ internal fun CdShelfCarousel(
     }
 
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val slotWidth = maxWidth / CD_CAROUSEL_VISIBLE_COUNT
-        val centeringPadding = (maxWidth - slotWidth) / 2
-        val caseHeight = minOf(132.dp, maxWidth * 0.36f)
-        val caseWidth = caseHeight
+        val slotWidth = (maxWidth / CD_CAROUSEL_VISIBLE_COUNT * 0.70f).coerceIn(48.dp, 52.dp)
+        val rackWidth = slotWidth * CD_CAROUSEL_VISIBLE_COUNT
+        val centeringPadding = (rackWidth - slotWidth) / 2
+        val caseWidth = minOf(132.dp, maxWidth * 0.36f)
+        val caseHeight = caseWidth * 0.90f
         val stageHeight = caseHeight * 1.45f + 20.dp
         val density = LocalDensity.current
         val caseWidthPx = with(density) { caseWidth.toPx() }
         val caseHeightPx = with(density) { caseHeight.toPx() }
         val stageHeightPx = with(density) { stageHeight.toPx() }
         val viewportWidthPx = with(density) { maxWidth.toPx() }
+        val rackLeftPx = with(density) { (maxWidth - rackWidth).toPx() / 2f }
         Box(Modifier.fillMaxWidth().height(stageHeight)) {
             LazyRow(
                 state = listState,
@@ -112,7 +114,7 @@ internal fun CdShelfCarousel(
                 flingBehavior = rememberSnapFlingBehavior(listState),
                 contentPadding = PaddingValues(horizontal = centeringPadding),
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxSize().graphicsLayer {
+                modifier = Modifier.align(Alignment.Center).width(rackWidth).fillMaxHeight().graphicsLayer {
                     clip = true
                     compositingStrategy = CompositingStrategy.Offscreen
                 }.drawWithCache {
@@ -141,7 +143,7 @@ internal fun CdShelfCarousel(
                                     val layout = listState.layoutInfo
                                     val item = layout.visibleItemsInfo.firstOrNull { it.index == index }
                                     val sourceX = item?.let {
-                                        it.offset - layout.viewportStartOffset + it.size * 0.5f
+                                        rackLeftPx + it.offset - layout.viewportStartOffset + it.size * 0.5f
                                     } ?: viewportWidthPx / 2f
                                     preview.show(CdShelfSelection(index, song, sourceX))
                                 }
