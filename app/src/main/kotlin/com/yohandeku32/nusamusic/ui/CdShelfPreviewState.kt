@@ -5,7 +5,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.yohandeku32.nusamusic.model.Song
 
-internal data class CdShelfSelection(val index: Int, val song: Song, val originCenterX: Float)
+internal data class CdShelfSelection(
+    val index: Int,
+    val song: Song,
+    val originCenterX: Float,
+    val originCenterY: Float
+)
 internal enum class CdShelfPreviewPhase { CLOSED, OPENING, READY, RETURNING }
 
 /** A preview never changes playback until a confirmed return has completed. */

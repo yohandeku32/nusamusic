@@ -6,7 +6,7 @@ import org.junit.Test
 
 class CdShelfPreviewStateTest {
     private fun item(id: Long) = CdShelfSelection(
-        id.toInt(), Song(id, "Song $id", "Artist", "Album", "song:$id", 60_000, id), 120f
+        id.toInt(), Song(id, "Song $id", "Artist", "Album", "song:$id", 60_000, id), 120f, 80f
     )
 
     @Test fun tappingACaseOnlyOpensAPreview() {
