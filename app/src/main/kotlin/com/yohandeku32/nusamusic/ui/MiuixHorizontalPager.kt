@@ -22,10 +22,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 
 // MIUIX-style critically damped settling: fluid, with no bounce past the page.
-private val pageSpring = spring<Float>(dampingRatio = 1f, stiffness = 146f, visibilityThreshold = 1f)
+internal val miuixPageSpring = spring<Float>(dampingRatio = 1f, stiffness = 146f, visibilityThreshold = 1f)
 
 internal suspend fun PagerState.animateMiuixScrollToPage(page: Int) {
-    animateScrollToPage(page = page, animationSpec = pageSpring)
+    animateScrollToPage(page = page, animationSpec = miuixPageSpring)
 }
 
 @Composable
@@ -33,6 +33,7 @@ internal fun MiuixHorizontalPager(
     state: PagerState,
     backgroundColor: Color,
     modifier: Modifier = Modifier,
+    userScrollEnabled: Boolean = true,
     content: @Composable (Int) -> Unit
 ) {
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
@@ -40,10 +41,11 @@ internal fun MiuixHorizontalPager(
         state = state,
         modifier = modifier.background(backgroundColor).clipToBounds(),
         beyondViewportPageCount = 1,
+        userScrollEnabled = userScrollEnabled,
         flingBehavior = PagerDefaults.flingBehavior(
             state = state,
             pagerSnapDistance = PagerSnapDistance.atMost(1),
-            snapAnimationSpec = pageSpring
+            snapAnimationSpec = miuixPageSpring
         )
     ) { page ->
         Box(

@@ -34,6 +34,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -172,6 +173,7 @@ import com.yohandeku32.nusamusic.ui.ImmersiveArtistPageState
 import com.yohandeku32.nusamusic.ui.ImmersiveLyricsPage
 import com.yohandeku32.nusamusic.ui.ImmersiveLyricsState
 import com.yohandeku32.nusamusic.ui.MiuixHorizontalPager
+import com.yohandeku32.nusamusic.ui.MiuixPlayerLyricsPager
 import com.yohandeku32.nusamusic.ui.animateMiuixScrollToPage
 import com.yohandeku32.nusamusic.ui.artworkBackdropColor
 import kotlinx.coroutines.Dispatchers
@@ -1626,13 +1628,15 @@ private fun NusaMusicApp(
     // The artist sits to the left, so a rightward swipe from the player opens it.
     val artistPageEnabled = playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
     val playerPage = if (artistPageEnabled) 1 else 0
-    val lyricsPage = if (artistPageEnabled) playerPage + 1 else -1
-    val libraryPage = if (artistPageEnabled) playerPage + 2 else playerPage + 1
+    val libraryPage = playerPage + 1
+    val lyricsPagerState = androidx.compose.runtime.key(artistPageEnabled) {
+        androidx.compose.foundation.pager.rememberPagerState(pageCount = { 2 })
+    }
     var libraryWasVisible by remember { mutableStateOf(false) }
     val pagerState = androidx.compose.runtime.key(artistPageEnabled) {
         androidx.compose.foundation.pager.rememberPagerState(
             initialPage = if (libraryWasVisible) libraryPage else playerPage,
-            pageCount = { if (artistPageEnabled) 4 else 2 }
+            pageCount = { if (artistPageEnabled) 3 else 2 }
         )
     }
     val playerScrollState =
@@ -1687,10 +1691,11 @@ private fun NusaMusicApp(
     }
 
     // Opening the library must not change the user's manually chosen scroll position.
-    LaunchedEffect(pagerState.settledPage, playerPage) {
+    LaunchedEffect(pagerState.settledPage, lyricsPagerState.settledPage, playerPage) {
         libraryWasVisible = pagerState.settledPage == libraryPage
-        onPlaybackPageVisibilityChanged(pagerState.settledPage == playerPage,
-            artistPageEnabled && pagerState.settledPage == lyricsPage)
+        onPlaybackPageVisibilityChanged(
+            pagerState.settledPage == playerPage && (!artistPageEnabled || lyricsPagerState.settledPage == 0),
+            artistPageEnabled && pagerState.settledPage == playerPage && lyricsPagerState.settledPage == 1)
     }
 
     // CD is always dark, including when the device uses the light theme.
@@ -1839,6 +1844,242 @@ private fun NusaMusicApp(
         }
     }
 
+    // The player and lyrics render the same progress, transport and action buttons.
+    val playerControls: @Composable () -> Unit = {
+        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+            val immersiveArtworkMode = artistPageEnabled
+            PlaybackProgress(
+                positionMsState = positionMsState,
+                durationMs = durationMs,
+                enabled = currentSong != null && durationMs > 0L,
+                onSeek = onSeek,
+                immersive = playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp)
+            )
+
+            Spacer(Modifier.height(5.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                if (immersiveArtworkMode) {
+                    IconButton(
+                        onClick = onPrevious,
+                        enabled = currentSong != null,
+                        modifier = Modifier.size(76.dp)
+                    ) {
+                        Icon(
+                            Icons.Rounded.FastRewind,
+                            contentDescription = nusaText("Sebelumnya", "Previous"),
+                            tint = Color.White,
+                            modifier = Modifier.size(54.dp)
+                        )
+                    }
+                } else {
+                    TransportPillButton(
+                        icon = Icons.Rounded.FastRewind,
+                        contentDescription = nusaText("Sebelumnya", "Previous"),
+                        onClick = onPrevious,
+                        enabled = currentSong != null,
+                        realistic = realisticControls
+                    )
+                }
+
+                Spacer(Modifier.width(if (immersiveArtworkMode) 8.dp else 12.dp))
+
+                if (immersiveArtworkMode) {
+                    IconButton(
+                        onClick = if (currentSong == null) onRequestPermission else onTogglePlay,
+                        enabled = true,
+                        modifier = Modifier.size(104.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isPlaying) {
+                                Icons.Rounded.Pause
+                            } else {
+                                Icons.Rounded.PlayArrow
+                            },
+                            contentDescription = if (isPlaying) {
+                                nusaText("Jeda", "Pause")
+                            } else {
+                                nusaText("Putar", "Play")
+                            },
+                            tint = Color.White,
+                            modifier = Modifier.size(80.dp)
+                        )
+                    }
+                } else {
+                    PlayerControlButton(
+                        realistic = realisticControls,
+                        icon = if (isPlaying) {
+                            Icons.Rounded.Pause
+                        } else {
+                            Icons.Rounded.PlayArrow
+                        },
+                        contentDescription = if (isPlaying) {
+                            nusaText("Jeda", "Pause")
+                        } else {
+                            nusaText("Putar", "Play")
+                        },
+                        onClick = if (currentSong == null) {
+                            onRequestPermission
+                        } else {
+                            onTogglePlay
+                        },
+                        enabled = true,
+                        modifier = Modifier.size(84.dp),
+                        iconSize = 40.dp
+                    )
+                }
+
+                Spacer(Modifier.width(if (immersiveArtworkMode) 8.dp else 12.dp))
+
+                if (immersiveArtworkMode) {
+                    IconButton(
+                        onClick = onNext,
+                        enabled = currentSong != null,
+                        modifier = Modifier.size(76.dp)
+                    ) {
+                        Icon(
+                            Icons.Rounded.FastForward,
+                            contentDescription = nusaText("Berikutnya", "Next"),
+                            tint = Color.White,
+                            modifier = Modifier.size(54.dp)
+                        )
+                    }
+                } else {
+                    TransportPillButton(
+                        icon = Icons.Rounded.FastForward,
+                        contentDescription = nusaText("Berikutnya", "Next"),
+                        onClick = onNext,
+                        enabled = currentSong != null,
+                        realistic = realisticControls
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(18.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val biographyArrowRotation by animateFloatAsState(
+                    targetValue = if (biographyExpanded) 180f else 0f,
+                    animationSpec = tween(
+                        durationMillis = 380,
+                        easing = androidx.compose.animation.core.FastOutSlowInEasing
+                    ),
+                    label = "biographyArrowRotation"
+                )
+
+                IconButton(
+                    onClick = {
+                        if (artistPageEnabled) {
+                            scope.launch { pagerState.animateMiuixScrollToPage(0); lyricsPagerState.scrollToPage(0) }
+                            return@IconButton
+                        }
+                        biographyExpanded = !biographyExpanded
+                        scope.launch {
+                            if (biographyExpanded) {
+                                val viewportHeight =
+                                    playerScrollState.layoutInfo.viewportEndOffset -
+                                        playerScrollState.layoutInfo.viewportStartOffset
+
+                                playerScrollState.animateScrollBy(
+                                    value = viewportHeight.toFloat(),
+                                    animationSpec = androidx.compose.animation.core.tween(
+                                        durationMillis = 520,
+                                        easing = androidx.compose.animation.core.FastOutSlowInEasing
+                                    )
+                                )
+                            } else {
+                                playerScrollState.animateScrollToItem(
+                                    index = 0,
+                                    scrollOffset = 0
+                                )
+                            }
+                        }
+                    },
+                    modifier = Modifier.size(42.dp)
+                ) {
+                    if (artistPageEnabled) {
+                        Icon(
+                            Icons.Default.ArrowBack,
+                            contentDescription = nusaText("Buka halaman artis • geser ke kanan", "Open artist page • swipe right"),
+                            tint = Color.White,
+                            modifier = Modifier.size(25.dp)
+                        )
+                    } else BiographyArrowIcon(
+                        modifier = Modifier
+                            .size(25.dp)
+                            .graphicsLayer {
+                                rotationZ = biographyArrowRotation
+                            },
+                        color = if (
+                            playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
+                        ) Color.White else MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                Spacer(Modifier.weight(1f))
+
+                if (artistPageEnabled) {
+                    IconButton(
+                        onClick = { scope.launch { lyricsPagerState.animateMiuixScrollToPage(if (lyricsPagerState.currentPage == 0) 1 else 0) } },
+                        enabled = currentSong != null,
+                        modifier = Modifier.size(42.dp)
+                    ) {
+                        Icon(if (lyricsPagerState.targetPage == 1) Icons.Default.KeyboardArrowDown else Icons.Default.Lyrics,
+                            if (lyricsPagerState.targetPage == 1) nusaText("Kembali ke pemutar • geser ke bawah", "Back to player • swipe down") else nusaText("Buka lirik • geser ke atas", "Open lyrics • swipe up"),
+                            tint = Color.White, modifier = Modifier.size(22.dp))
+                    }
+                }
+
+                IconButton(
+                    onClick = { onShare(currentSong) },
+                    enabled = currentSong != null,
+                    modifier = Modifier.size(42.dp)
+                ) {
+                    ChatGptStyleShareIcon(
+                        modifier = Modifier.size(22.dp),
+                        color = if (
+                            playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
+                        ) Color.White else Color.Unspecified
+                    )
+                }
+
+                IconButton(
+                    onClick = { isFavorite = !isFavorite },
+                    enabled = currentSong != null,
+                    modifier = Modifier.size(42.dp)
+                ) {
+                    NusaFavoriteIcon(
+                        selected = isFavorite,
+                        color = if (
+                            playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
+                        ) Color.White else Color.Unspecified,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+
+            if (playerPresentationMode == PlayerPresentationMode.VINYL) {
+                Spacer(Modifier.height(8.dp))
+                AudioQualityPill(song = currentSong)
+            } else {
+                Spacer(Modifier.height(36.dp))
+            }
+        }
+    }
+
     val pageBackdrop = when (playerPresentationMode) {
         PlayerPresentationMode.CD -> Color(0xFF111111)
         PlayerPresentationMode.IMMERSIVE_ARTWORK -> Color.Black
@@ -1858,6 +2099,7 @@ private fun NusaMusicApp(
             MiuixHorizontalPager(
                 state = pagerState,
                 backgroundColor = pageBackdrop,
+                userScrollEnabled = !artistPageEnabled || (lyricsPagerState.currentPage == 0 && !lyricsPagerState.isScrollInProgress),
                 modifier = Modifier.fillMaxSize()
             ) { page ->
                 when {
@@ -1877,6 +2119,28 @@ private fun NusaMusicApp(
                         }
                     )
                     page == playerPage -> {
+                        MiuixPlayerLyricsPager(
+                            enabled = artistPageEnabled,
+                            state = lyricsPagerState,
+                            backgroundColor = pageBackdrop
+                        ) { verticalPage ->
+                            if (verticalPage == 1) {
+                            ImmersiveLyricsPage(
+                                song = currentSong,
+                                positionMs = positionMsState,
+                                durationMs = durationMs,
+                                isVisible = pagerState.settledPage == playerPage && lyricsPagerState.settledPage == 1,
+                                state = lyricsState,
+                                scope = scope,
+                                onBack = { scope.launch { lyricsPagerState.animateMiuixScrollToPage(0) } },
+                                onLibrary = { scope.launch {
+                                    pagerState.animateMiuixScrollToPage(libraryPage)
+                                    lyricsPagerState.scrollToPage(0)
+                                } },
+                                onSeek = onSeek,
+                                controls = playerControls
+                            )
+                            } else {
                         BoxWithConstraints(Modifier.fillMaxSize()) {
                         val playerViewportHeight = maxHeight
                         if (playerPresentationMode == PlayerPresentationMode.CD) {
@@ -1946,6 +2210,7 @@ private fun NusaMusicApp(
                         }
                         LazyColumn(
                             state = playerScrollState,
+                            userScrollEnabled = !artistPageEnabled,
                             modifier = Modifier
                                 .fillMaxSize()
                                 .background(
@@ -1997,7 +2262,7 @@ private fun NusaMusicApp(
                                     if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
                                         ImmersiveArtwork(
                                             song = currentSong,
-                                            animatedArtworkEnabled = animatedArtworkEnabled,
+                                            animatedArtworkEnabled = animatedArtworkEnabled && pagerState.settledPage == playerPage && lyricsPagerState.settledPage == 0,
                                             artistBottomPx = immersiveArtworkBottomPx,
                                             modifier = Modifier.matchParentSize()
                                         )
@@ -2298,235 +2563,7 @@ private fun NusaMusicApp(
                                             Spacer(Modifier.height(16.dp))
                                         }
 
-                                        PlaybackProgress(
-                                            positionMsState = positionMsState,
-                                            durationMs = durationMs,
-                                            enabled = currentSong != null && durationMs > 0L,
-                                            onSeek = onSeek,
-                                            immersive = playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK,
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(horizontal = 12.dp)
-                                        )
-
-                                        Spacer(Modifier.height(5.dp))
-
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth(),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.Center
-                                        ) {
-                                            if (immersiveArtworkMode) {
-                                                IconButton(
-                                                    onClick = onPrevious,
-                                                    enabled = currentSong != null,
-                                                    modifier = Modifier.size(76.dp)
-                                                ) {
-                                                    Icon(
-                                                        Icons.Rounded.FastRewind,
-                                                        contentDescription = nusaText("Sebelumnya", "Previous"),
-                                                        tint = Color.White,
-                                                        modifier = Modifier.size(54.dp)
-                                                    )
-                                                }
-                                            } else {
-                                                TransportPillButton(
-                                                    icon = Icons.Rounded.FastRewind,
-                                                    contentDescription = nusaText("Sebelumnya", "Previous"),
-                                                    onClick = onPrevious,
-                                                    enabled = currentSong != null,
-                                                    realistic = realisticControls
-                                                )
-                                            }
-
-                                            Spacer(Modifier.width(if (immersiveArtworkMode) 8.dp else 12.dp))
-
-                                            if (immersiveArtworkMode) {
-                                                IconButton(
-                                                    onClick = if (currentSong == null) onRequestPermission else onTogglePlay,
-                                                    enabled = true,
-                                                    modifier = Modifier.size(104.dp)
-                                                ) {
-                                                    Icon(
-                                                        imageVector = if (isPlaying) {
-                                                            Icons.Rounded.Pause
-                                                        } else {
-                                                            Icons.Rounded.PlayArrow
-                                                        },
-                                                        contentDescription = if (isPlaying) {
-                                                            nusaText("Jeda", "Pause")
-                                                        } else {
-                                                            nusaText("Putar", "Play")
-                                                        },
-                                                        tint = Color.White,
-                                                        modifier = Modifier.size(80.dp)
-                                                    )
-                                                }
-                                            } else {
-                                                PlayerControlButton(
-                                                    realistic = realisticControls,
-                                                    icon = if (isPlaying) {
-                                                        Icons.Rounded.Pause
-                                                    } else {
-                                                        Icons.Rounded.PlayArrow
-                                                    },
-                                                    contentDescription = if (isPlaying) {
-                                                        nusaText("Jeda", "Pause")
-                                                    } else {
-                                                        nusaText("Putar", "Play")
-                                                    },
-                                                    onClick = if (currentSong == null) {
-                                                        onRequestPermission
-                                                    } else {
-                                                        onTogglePlay
-                                                    },
-                                                    enabled = true,
-                                                    modifier = Modifier.size(84.dp),
-                                                    iconSize = 40.dp
-                                                )
-                                            }
-
-                                            Spacer(Modifier.width(if (immersiveArtworkMode) 8.dp else 12.dp))
-
-                                            if (immersiveArtworkMode) {
-                                                IconButton(
-                                                    onClick = onNext,
-                                                    enabled = currentSong != null,
-                                                    modifier = Modifier.size(76.dp)
-                                                ) {
-                                                    Icon(
-                                                        Icons.Rounded.FastForward,
-                                                        contentDescription = nusaText("Berikutnya", "Next"),
-                                                        tint = Color.White,
-                                                        modifier = Modifier.size(54.dp)
-                                                    )
-                                                }
-                                            } else {
-                                                TransportPillButton(
-                                                    icon = Icons.Rounded.FastForward,
-                                                    contentDescription = nusaText("Berikutnya", "Next"),
-                                                    onClick = onNext,
-                                                    enabled = currentSong != null,
-                                                    realistic = realisticControls
-                                                )
-                                            }
-                                        }
-
-                                        Spacer(Modifier.height(10.dp))
-                                        Spacer(Modifier.height(12.dp))
-                                        Spacer(Modifier.height(18.dp))
-
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            val biographyArrowRotation by animateFloatAsState(
-                                                targetValue = if (biographyExpanded) 180f else 0f,
-                                                animationSpec = tween(
-                                                    durationMillis = 380,
-                                                    easing = androidx.compose.animation.core.FastOutSlowInEasing
-                                                ),
-                                                label = "biographyArrowRotation"
-                                            )
-
-                                            IconButton(
-                                                onClick = {
-                                                    if (artistPageEnabled) {
-                                                        scope.launch { pagerState.animateMiuixScrollToPage(0) }
-                                                        return@IconButton
-                                                    }
-                                                    biographyExpanded = !biographyExpanded
-                                                    scope.launch {
-                                                        if (biographyExpanded) {
-                                                            val viewportHeight =
-                                                                playerScrollState.layoutInfo.viewportEndOffset -
-                                                                    playerScrollState.layoutInfo.viewportStartOffset
-
-                                                            playerScrollState.animateScrollBy(
-                                                                value = viewportHeight.toFloat(),
-                                                                animationSpec = androidx.compose.animation.core.tween(
-                                                                    durationMillis = 520,
-                                                                    easing = androidx.compose.animation.core.FastOutSlowInEasing
-                                                                )
-                                                            )
-                                                        } else {
-                                                            playerScrollState.animateScrollToItem(
-                                                                index = 0,
-                                                                scrollOffset = 0
-                                                            )
-                                                        }
-                                                    }
-                                                },
-                                                modifier = Modifier.size(42.dp)
-                                            ) {
-                                                if (artistPageEnabled) {
-                                                    Icon(
-                                                        Icons.Default.ArrowBack,
-                                                        contentDescription = nusaText("Buka halaman artis • geser ke kanan", "Open artist page • swipe right"),
-                                                        tint = Color.White,
-                                                        modifier = Modifier.size(25.dp)
-                                                    )
-                                                } else BiographyArrowIcon(
-                                                    modifier = Modifier
-                                                        .size(25.dp)
-                                                        .graphicsLayer {
-                                                            rotationZ = biographyArrowRotation
-                                                        },
-                                                    color = if (
-                                                        playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
-                                                    ) Color.White else MaterialTheme.colorScheme.onSurface
-                                                )
-                                            }
-
-                                            Spacer(Modifier.weight(1f))
-
-                                            if (artistPageEnabled) {
-                                                IconButton(
-                                                    onClick = { scope.launch { pagerState.animateMiuixScrollToPage(lyricsPage) } },
-                                                    enabled = currentSong != null,
-                                                    modifier = Modifier.size(42.dp)
-                                                ) {
-                                                    Icon(Icons.Default.Lyrics,
-                                                        nusaText("Buka lirik • geser ke kiri", "Open lyrics • swipe left"),
-                                                        tint = Color.White, modifier = Modifier.size(22.dp))
-                                                }
-                                            }
-
-                                            IconButton(
-                                                onClick = { onShare(currentSong) },
-                                                enabled = currentSong != null,
-                                                modifier = Modifier.size(42.dp)
-                                            ) {
-                                                ChatGptStyleShareIcon(
-                                                    modifier = Modifier.size(22.dp),
-                                                    color = if (
-                                                        playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
-                                                    ) Color.White else Color.Unspecified
-                                                )
-                                            }
-
-                                            IconButton(
-                                                onClick = { isFavorite = !isFavorite },
-                                                enabled = currentSong != null,
-                                                modifier = Modifier.size(42.dp)
-                                            ) {
-                                                NusaFavoriteIcon(
-                                                    selected = isFavorite,
-                                                    color = if (
-                                                        playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
-                                                    ) Color.White else Color.Unspecified,
-                                                    modifier = Modifier.size(22.dp)
-                                                )
-                                            }
-                                        }
-
-                                        if (playerPresentationMode == PlayerPresentationMode.VINYL) {
-                                            Spacer(Modifier.height(8.dp))
-                                            AudioQualityPill(song = currentSong)
-                                        } else {
-                                            Spacer(Modifier.height(36.dp))
-                                        }
+                                        playerControls()
 
                                         if (!hasMusicAccess) {
                                             Text(
@@ -2568,21 +2605,9 @@ private fun NusaMusicApp(
                         }
                     }
 
-                    artistPageEnabled && page == lyricsPage -> ImmersiveLyricsPage(
-                        song = currentSong,
-                        positionMs = positionMsState,
-                        durationMs = durationMs,
-                        isPlaying = isPlaying,
-                        isVisible = pagerState.settledPage == lyricsPage,
-                        state = lyricsState,
-                        scope = scope,
-                        onBack = { scope.launch { pagerState.animateMiuixScrollToPage(playerPage) } },
-                        onLibrary = { scope.launch { pagerState.animateMiuixScrollToPage(libraryPage) } },
-                        onSeek = onSeek,
-                        onTogglePlay = onTogglePlay,
-                        onPrevious = onPrevious,
-                        onNext = onNext
-                    )
+                        }
+                    }
+
                     page == libraryPage -> {
                         val vinylLibrary = playerPresentationMode == PlayerPresentationMode.VINYL
                         val cdLibrary = playerPresentationMode == PlayerPresentationMode.CD
@@ -3766,7 +3791,7 @@ private fun SimpleProgressBar(
             }
             .pointerInput(durationMs, enabled) {
                 if (enabled && durationMs > 0L) {
-                    detectDragGestures(
+                    detectHorizontalDragGestures(
                         onDragStart = { offset ->
                             val fraction =
                                 (offset.x / size.width.toFloat()).coerceIn(0f, 1f)
@@ -3774,7 +3799,7 @@ private fun SimpleProgressBar(
                         },
                         onDragEnd = {},
                         onDragCancel = {},
-                        onDrag = { change, _ ->
+                        onHorizontalDrag = { change, _ ->
                             change.consume()
                             val fraction =
                                 (change.position.x / size.width.toFloat()).coerceIn(0f, 1f)
