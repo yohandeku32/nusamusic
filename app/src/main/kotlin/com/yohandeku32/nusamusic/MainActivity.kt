@@ -161,6 +161,7 @@ import com.yohandeku32.nusamusic.ui.TurntableLabels
 import com.yohandeku32.nusamusic.ui.VinylSongList
 import com.yohandeku32.nusamusic.ui.resolveArtworkBottom
 import com.yohandeku32.nusamusic.ui.ImmersiveArtworkPainter
+import com.yohandeku32.nusamusic.ui.ImmersiveArtistPage
 import com.yohandeku32.nusamusic.ui.artworkBackdropColor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -1563,10 +1564,17 @@ private fun NusaMusicApp(
         listOf('#') + ('A'..'Z')
     }
 
-    val pagerState = androidx.compose.foundation.pager.rememberPagerState(
-        initialPage = 0,
-        pageCount = { 2 }
-    )
+    // The artist sits to the left, so a rightward swipe from the player opens it.
+    val artistPageEnabled = playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
+    val playerPage = if (artistPageEnabled) 1 else 0
+    val libraryPage = playerPage + 1
+    var libraryWasVisible by remember { mutableStateOf(false) }
+    val pagerState = androidx.compose.runtime.key(artistPageEnabled) {
+        androidx.compose.foundation.pager.rememberPagerState(
+            initialPage = if (libraryWasVisible) libraryPage else playerPage,
+            pageCount = { if (artistPageEnabled) 3 else 2 }
+        )
+    }
     val playerScrollState =
         androidx.compose.foundation.lazy.rememberLazyListState()
     val libraryListState =
@@ -1619,8 +1627,9 @@ private fun NusaMusicApp(
     }
 
     // Opening the library must not change the user's manually chosen scroll position.
-    LaunchedEffect(pagerState.settledPage) {
-        onPlayerPageVisibilityChanged(pagerState.settledPage == 0)
+    LaunchedEffect(pagerState.settledPage, playerPage) {
+        libraryWasVisible = pagerState.settledPage == libraryPage
+        onPlayerPageVisibilityChanged(pagerState.settledPage == playerPage)
     }
 
     // CD is always dark, including when the device uses the light theme.
@@ -1628,7 +1637,7 @@ private fun NusaMusicApp(
         val activity = context as? ComponentActivity
         val insets = activity?.let { WindowCompat.getInsetsController(it.window, it.window.decorView) }
         val previousLightNavigation = insets?.isAppearanceLightNavigationBars
-        if (playerPresentationMode == PlayerPresentationMode.CD && pagerState.settledPage == 0) {
+        if (playerPresentationMode == PlayerPresentationMode.CD && pagerState.settledPage == playerPage) {
             insets?.isAppearanceLightNavigationBars = false
         }
         onDispose {
@@ -1789,7 +1798,20 @@ private fun NusaMusicApp(
                 modifier = Modifier.fillMaxSize(),
                 beyondViewportPageCount = 1
             ) { page ->
-                when (page) {
+                when (page - playerPage) {
+                    -1 -> ImmersiveArtistPage(
+                        artistName = currentSong?.artist,
+                        songs = songs,
+                        currentSong = currentSong,
+                        biography = artistBiography,
+                        biographyLoading = biographyLoading,
+                        isVisible = pagerState.settledPage == 0,
+                        onBack = { scope.launch { pagerState.animateScrollToPage(playerPage) } },
+                        onPlay = onPlay,
+                        artwork = { song, modifier ->
+                            ArtworkView(song = song, maxSizePx = 512, modifier = modifier, grainOverlay = false)
+                        }
+                    )
                     0 -> {
                         BoxWithConstraints(Modifier.fillMaxSize()) {
                         val playerViewportHeight = maxHeight
@@ -1800,7 +1822,7 @@ private fun NusaMusicApp(
                                 song = currentSong,
                                 songs = filtered,
                                 isPlaying = isPlaying,
-                                isVisible = pagerState.settledPage == 0,
+                                isVisible = pagerState.settledPage == playerPage,
                                 positionMsState = positionMsState,
                                 durationMs = durationMs,
                                 viewportHeight = playerViewportHeight,
@@ -1814,7 +1836,7 @@ private fun NusaMusicApp(
                                         currentSong != null -> onTogglePlay()
                                         filtered.isNotEmpty() -> onPlay(filtered.first(), filtered)
                                         !permissionGranted && selectedMusicFolders.isEmpty() -> onRequestPermission()
-                                        else -> scope.launch { pagerState.animateScrollToPage(1) }
+                                        else -> scope.launch { pagerState.animateScrollToPage(libraryPage) }
                                     }
                                 },
                                 onPrevious = onPrevious,
@@ -1824,7 +1846,7 @@ private fun NusaMusicApp(
                                 onRepeat = onToggleRepeat,
                                 onSelectSong = { onPlay(it, filtered) },
                                 onSettings = { showSettings = true },
-                                onLibrary = { scope.launch { pagerState.animateScrollToPage(1) } },
+                                onLibrary = { scope.launch { pagerState.animateScrollToPage(libraryPage) } },
                                 artwork = { cdSong, artworkModifier ->
                                     androidx.compose.runtime.key(cdSong?.uri) {
                                         ArtworkView(
@@ -1927,7 +1949,7 @@ private fun NusaMusicApp(
                                             titleFontSize = titleFontSize,
                                             viewportHeight = playerViewportHeight,
                                             isPlaying = isPlaying,
-                                            isVisible = pagerState.settledPage == 0,
+                                            isVisible = pagerState.settledPage == playerPage,
                                             hasSong = currentSong != null,
                                             positionMsState = positionMsState,
                                             durationMs = durationMs,
@@ -1953,7 +1975,7 @@ private fun NusaMusicApp(
                                                     currentSong != null -> onTogglePlay()
                                                     filtered.isNotEmpty() -> onPlay(filtered.first(), filtered)
                                                     !permissionGranted && selectedMusicFolders.isEmpty() -> onRequestPermission()
-                                                    else -> scope.launch { pagerState.animateScrollToPage(1) }
+                                                    else -> scope.launch { pagerState.animateScrollToPage(libraryPage) }
                                                 }
                                             },
                                             onPrevious = onPrevious,
@@ -1964,7 +1986,7 @@ private fun NusaMusicApp(
                                             record = { recordModifier ->
                                                 VinylRecord(
                                                     song = currentSong,
-                                                    isPlaying = isPlaying && pagerState.settledPage == 0,
+                                                    isPlaying = isPlaying && pagerState.settledPage == playerPage,
                                                     modifier = recordModifier
                                                 )
                                             },
@@ -2350,6 +2372,10 @@ private fun NusaMusicApp(
 
                                             IconButton(
                                                 onClick = {
+                                                    if (artistPageEnabled) {
+                                                        scope.launch { pagerState.animateScrollToPage(0) }
+                                                        return@IconButton
+                                                    }
                                                     biographyExpanded = !biographyExpanded
                                                     scope.launch {
                                                         if (biographyExpanded) {
@@ -2374,7 +2400,14 @@ private fun NusaMusicApp(
                                                 },
                                                 modifier = Modifier.size(42.dp)
                                             ) {
-                                                BiographyArrowIcon(
+                                                if (artistPageEnabled) {
+                                                    Icon(
+                                                        Icons.Default.ArrowBack,
+                                                        contentDescription = nusaText("Buka halaman artis • geser ke kanan", "Open artist page • swipe right"),
+                                                        tint = Color.White,
+                                                        modifier = Modifier.size(25.dp)
+                                                    )
+                                                } else BiographyArrowIcon(
                                                     modifier = Modifier
                                                         .size(25.dp)
                                                         .graphicsLayer {
@@ -2450,7 +2483,7 @@ private fun NusaMusicApp(
                             }
                             }
 
-                            if (showArtistBiography) {
+                            if (showArtistBiography && !artistPageEnabled) {
                                 item {
                                     ArtistBiographySection(
                                         artistName = currentSong?.artist,
@@ -2501,7 +2534,7 @@ private fun NusaMusicApp(
                                 IconButton(
                                     onClick = {
                                         scope.launch {
-                                            pagerState.animateScrollToPage(0)
+                                            pagerState.animateScrollToPage(playerPage)
                                         }
                                     }
                                 ) {
