@@ -82,6 +82,7 @@ fun CdPlayer(
     viewportHeight: Dp,
     titleFontSize: Float,
     titleFontFamily: FontFamily,
+    roundedCarouselCorners: Boolean,
     shuffleEnabled: Boolean,
     repeatMode: Int,
     onPlayPause: () -> Unit,
@@ -389,12 +390,14 @@ fun CdPlayer(
                         }
                     }
                 }
+                val carouselCornerRadius = if (roundedCarouselCorners) 48.dp else 0.dp
+                val carouselPanelShape = RoundedCornerShape(topStart = carouselCornerRadius, topEnd = carouselCornerRadius)
                 Column(
                     Modifier.fillMaxWidth()
                         .padding(top = 8.dp)
-                        .clip(RoundedCornerShape(topStart = 48.dp, topEnd = 48.dp))
+                        .clip(carouselPanelShape)
                         .background(Brush.verticalGradient(listOf(Color(0xFF1B1B1B), Color(0xFF151515))))
-                        .border(1.dp, Color.White.copy(alpha = 0.07f), RoundedCornerShape(topStart = 48.dp, topEnd = 48.dp))
+                        .border(1.dp, Color.White.copy(alpha = 0.07f), carouselPanelShape)
                         .navigationBarsPadding().padding(top = 10.dp, bottom = 8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {

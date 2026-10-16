@@ -1424,6 +1424,9 @@ private fun NusaMusicApp(
     var animatedArtworkEnabled by remember {
         mutableStateOf(uiPrefs.getBoolean("animated_artwork_enabled", true))
     }
+    var roundedCarouselCorners by remember {
+        mutableStateOf(uiPrefs.getBoolean("rounded_carousel_corners", true))
+    }
     var immersiveArtworkBottomPx by remember { mutableFloatStateOf(Float.NaN) }
     val immersiveFrameCoordinates = remember { mutableStateOf<LayoutCoordinates?>(null) }
     val immersiveArtistCoordinates = remember { mutableStateOf<LayoutCoordinates?>(null) }
@@ -1728,6 +1731,11 @@ private fun NusaMusicApp(
                     }
                 },
                 animatedArtworkEnabled = animatedArtworkEnabled,
+                roundedCarouselCorners = roundedCarouselCorners,
+                onRoundedCarouselCornersChange = { rounded ->
+                    roundedCarouselCorners = rounded
+                    uiPrefs.edit().putBoolean("rounded_carousel_corners", rounded).apply()
+                },
                 onAnimatedArtworkChange = { enabled ->
                     animatedArtworkEnabled = enabled
                     uiPrefs.edit().putBoolean("animated_artwork_enabled", enabled).apply()
@@ -1796,6 +1804,7 @@ private fun NusaMusicApp(
                                 viewportHeight = playerViewportHeight,
                                 titleFontSize = titleFontSize,
                                 titleFontFamily = titleFontFamily,
+                                roundedCarouselCorners = roundedCarouselCorners,
                                 shuffleEnabled = shuffleEnabled,
                                 repeatMode = repeatMode,
                                 onPlayPause = {
