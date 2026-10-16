@@ -15,6 +15,7 @@ The current version is **3.13.4** (`versionCode 46`). It runs on Android 10 and 
 - Music scanning through MediaStore and folders you select, including subfolders. Tracks shorter than 10 seconds are skipped.
 - Saved playback state, including the current track, position, shuffle, and repeat settings.
 - Artist portraits from Deezer and biographies from Last.fm.
+- In Immersive art, swipe right from the player to open the artist page (swipe left to return). It has a monochrome Deezer portrait fading into black, Last.fm biography, your five most-played local tracks, and a two-column grid of local albums. Tap an album to browse and play its tracks; the back button returns to the artist overview, then to the player. The library remains one leftward swipe from the player.
 - System fonts and custom TTF or OTF files for the player title.
 
 The folder scanner recognises AAC, ALAC, FLAC, M4A, MP3, OGG, OPUS, WAV, and WMA files. Playback support depends on the codecs available on the device.
@@ -78,6 +79,10 @@ LASTFM_API_KEY=YOUR_LASTFM_API_KEY
 You can also use the `LASTFM_API_KEY` Gradle property or environment variable. The build uses the first non-empty value from `local.properties`, the Gradle property, then the environment variable. Keep keys and `local.properties` out of Git. The key is included in the APK at build time.
 
 The lookup uses the first artist in a multi-artist tag. It requests an Indonesian biography first and falls back to English if needed.
+
+The artist page matches the same primary artist in local tags, ignoring case and extra whitespace. Album grouping uses album tags, including tracks scanned from selected folders. Deezer and Last.fm supply the portrait and biography only; all playable songs and albums come from your scanned local library. Without a connection or Last.fm key, local albums and playback remain available, and the page shows a portrait placeholder or a biography unavailable message.
+
+Most-played tracks use listening history stored on the device from this version onward; earlier plays cannot be reconstructed. A play counts once per track session after 30 seconds of listening, or half the track duration for shorter tracks. Pausing and seeking do not add listening time. Background playback is counted by the playback service, and repeat starts a new session. No listening history is sent to Deezer or Last.fm.
 
 ## Development notes
 

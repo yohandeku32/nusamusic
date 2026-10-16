@@ -18,6 +18,8 @@ import androidx.media3.exoplayer.source.ShuffleOrder
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.yohandeku32.nusamusic.MainActivity
+import com.yohandeku32.nusamusic.data.ListeningCounter
+import com.yohandeku32.nusamusic.data.PlaybackHistory
 
 @OptIn(UnstableApi::class)
 class PlaybackService : MediaSessionService() {
@@ -30,6 +32,20 @@ class PlaybackService : MediaSessionService() {
     private var expectedPrimaryMediaId: String? = null
     private var expectedNextMediaId: String? = null
     private var handoffDone = false
+    private val listeningCounter = ListeningCounter()
+    private val listeningTick = object : Runnable {
+        override fun run() {
+            recordListening()
+            crossfadeHandler.postDelayed(this, 1_000L)
+        }
+    }
+
+    private fun recordListening() {
+        val player = primaryPlayer ?: return
+        val uri = player.currentMediaItem?.localConfiguration?.uri?.toString()
+        listeningCounter.sample(uri, player.isPlaying, android.os.SystemClock.elapsedRealtime(), player.duration)
+            ?.let { PlaybackHistory.record(this, it) }
+    }
 
     private val crossfadeTick = object : Runnable {
         override fun run() {
@@ -90,12 +106,19 @@ class PlaybackService : MediaSessionService() {
         primaryPlayer = player
 
         player.addListener(object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                recordListening()
+            }
+
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                 Log.e("NusaCrossfade", "PRIMARY PLAYER ERROR", error)
                 cancelCrossfade(restorePrimaryVolume = true)
             }
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                // Repeat-one must start a new listening session even for the same URI.
+                listeningCounter.reset()
+                recordListening()
                 // A manual next/previous or an unexpected automatic transition
                 // invalidates the in-flight crossfade. The normal transition
                 // caused by our explicit handoff is already handled by
@@ -127,6 +150,7 @@ class PlaybackService : MediaSessionService() {
             .build()
 
         crossfadeHandler.post(crossfadeTick)
+        crossfadeHandler.post(listeningTick)
     }
 
     private fun updateCrossfade() {
