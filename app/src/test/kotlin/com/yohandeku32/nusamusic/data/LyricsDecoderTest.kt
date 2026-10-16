@@ -1,0 +1,68 @@
+package com.yohandeku32.nusamusic.data
+
+import com.mocharealm.accompanist.lyrics.core.model.karaoke.KaraokeLine
+import com.mocharealm.accompanist.lyrics.core.model.synced.SyncedLine
+import org.junit.Assert.*
+import org.junit.Test
+
+class LyricsDecoderTest {
+    @Test fun repeatedTimestampsAreExpandedAndSorted() {
+        val lyrics = LyricsDecoder.decode("[00:10][00:30.5]Chorus\n[00:20.123]Verse", 40_000)
+        assertEquals(listOf(10_000, 20_123, 30_500), lyrics.lines.map { it.start })
+        assertEquals(listOf("Chorus", "Verse", "Chorus"), lyrics.lines.map { (it as SyncedLine).content })
+        assertEquals(listOf(20_123, 30_500, 40_000), lyrics.lines.map { it.end })
+    }
+    @Test fun positiveOffsetAdvancesLyricsAndClampsBeforeZero() {
+        val lines = LyricsDecoder.decode("[offset:+500]\n[00:00.20]First\n[00:03]Second", 8_000).lines
+        assertEquals(0, lines[0].start)
+        assertEquals(2_500, lines[1].start)
+        assertEquals(7_500, lines[1].end)
+    }
+    @Test fun negativeOffsetDelaysLyrics() {
+        assertEquals(1_300, LyricsDecoder.decode("[offset:-300]\n[00:01]Hello", 5_000).lines.first().start)
+    }
+    @Test fun translationSharesItsOriginalLine() {
+        val line = LyricsDecoder.decode("[00:01.50]Hello\n[00:01.50]Halo", 5_000).lines.single() as SyncedLine
+        assertEquals("Hello", line.content)
+        assertEquals("Halo", line.translation)
+    }
+    @Test fun enhancedLrcRetainsWordTimingAndLastWordDuration() {
+        val line = LyricsDecoder.decode("[00:01.000]<00:01.000>Hello <00:02.000>world<00:03.000>\n[00:04.000]Next", 8_000).lines.first() as KaraokeLine
+        assertEquals(listOf(1_000, 2_000), line.syllables.map { it.start })
+        assertTrue(line.syllables.all { it.duration > 0 })
+        assertEquals(3_000, line.syllables.last().end)
+    }
+    @Test fun enhancedLrcNormalizesWholeSecondsAndTenths() {
+        val line = LyricsDecoder.decode("[00:01]<00:01>Hello <00:02.5>world", 5_000).lines.single() as KaraokeLine
+        assertEquals(listOf(1_000, 2_500), line.syllables.map { it.start })
+        assertEquals(5_000, line.syllables.last().end)
+    }
+    @Test fun ttmlPreservesWordsAndXmlEntities() {
+        val content = """<tt xmlns="http://www.w3.org/ns/ttml"><body><div><p begin="00:01.000" end="00:04.000"><span begin="00:01.000" end="00:02.000">You &amp; </span><span begin="00:02.000" end="00:04.000">me</span></p></div></body></tt>"""
+        val line = LyricsDecoder.decode(content, 8_000).lines.single() as KaraokeLine
+        assertEquals(listOf(1_000, 2_000), line.syllables.map { it.start })
+        assertEquals("You & me", line.syllables.joinToString("") { it.content })
+    }
+    @Test fun ttmlSupportsLineTimingSecondsAndDurations() {
+        val line = LyricsDecoder.decode("""<tt xmlns="http://www.w3.org/ns/ttml"><body><div><p begin="1.5s" dur="2500ms">Hello world</p></div></body></tt>""", 8_000).lines.single() as KaraokeLine
+        assertEquals(1_500, line.start)
+        assertEquals(4_000, line.end)
+        assertEquals("Hello world", line.syllables.single().content)
+    }
+    @Test fun prefixedTtmlElementsWork() {
+        val lines = LyricsDecoder.decode("""<tt:tt xmlns:tt="http://www.w3.org/ns/ttml"><tt:body><tt:div><tt:p begin="00:01" end="00:03">Halo</tt:p></tt:div></tt:body></tt:tt>""", 5_000).lines
+        assertEquals(1_000, lines.single().start)
+    }
+    @Test(expected = IllegalArgumentException::class) fun rejectsUntimedImport() {
+        LyricsDecoder.decode("just plain text", 5_000)
+    }
+    @Test(expected = IllegalArgumentException::class) fun rejectsUntimedTtml() {
+        LyricsDecoder.decode("<tt><body><div><p>Hello</p></div></body></tt>", 5_000)
+    }
+    @Test(expected = IllegalArgumentException::class) fun rejectsExternalEntities() {
+        LyricsDecoder.decode("""<!DOCTYPE tt [<!ENTITY leak SYSTEM "file:///private">]><tt><p begin="1s" end="3s">&leak;</p></tt>""", 5_000)
+    }
+    @Test(expected = IllegalArgumentException::class) fun rejectsOversizedInput() {
+        LyricsDecoder.decode("a".repeat(LyricsDecoder.MAX_BYTES + 1), 5_000)
+    }
+}
