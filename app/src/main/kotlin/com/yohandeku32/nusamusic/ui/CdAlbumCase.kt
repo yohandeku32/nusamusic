@@ -81,6 +81,7 @@ internal fun CdAlbumCase(
     val density = LocalDensity.current
     BoxWithConstraints(modifier) {
         val widthPx = with(density) { maxWidth.toPx() }
+        val cameraDistancePx = with(density) { maxOf(maxWidth * 3.2f, maxHeight * 4f).toPx() }
         val spineLabelWidth = maxHeight - 12.dp
         val shape = RoundedCornerShape(3.dp)
         Box(
@@ -90,9 +91,9 @@ internal fun CdAlbumCase(
                 transformOrigin = TransformOrigin(0f, 0.5f)
                 rotationY = degrees
                 translationX = (size.width - projectedWidth) / 2f
-                // A closer camera makes the far cover edge recede into the
-                // shelf, while retaining enough distance to avoid clipping.
-                cameraDistance = size.width * 3.2f
+                // Account for the long cases in the vertical rack so their
+                // far edge stays within the shelf instead of flaring outward.
+                cameraDistance = cameraDistancePx
                 this.shape = shape
                 shadowElevation = 3.dp.toPx()
             }.background(Color(0xFF15191B), shape)
@@ -123,7 +124,7 @@ internal fun CdAlbumCase(
                 transformOrigin = TransformOrigin(1f, 0.5f)
                 rotationY = degrees + 90f
                 translationX = (widthPx - projectedWidth) / 2f - size.width
-                cameraDistance = widthPx * 3.2f
+                cameraDistance = cameraDistancePx
             }.background(spineColor).drawWithCache {
                 val edge = Brush.horizontalGradient(listOf(Color.Black.copy(alpha = 0.18f), Color.Transparent, Color.White.copy(alpha = 0.18f)))
                 onDrawWithContent {
