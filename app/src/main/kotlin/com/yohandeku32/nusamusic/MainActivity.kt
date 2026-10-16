@@ -167,6 +167,8 @@ import com.yohandeku32.nusamusic.ui.resolveArtworkBottom
 import com.yohandeku32.nusamusic.ui.ImmersiveArtworkPainter
 import com.yohandeku32.nusamusic.ui.ImmersiveArtistPage
 import com.yohandeku32.nusamusic.ui.ImmersiveArtistPageState
+import com.yohandeku32.nusamusic.ui.MiuixHorizontalPager
+import com.yohandeku32.nusamusic.ui.animateMiuixScrollToPage
 import com.yohandeku32.nusamusic.ui.artworkBackdropColor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -1820,14 +1822,15 @@ private fun NusaMusicApp(
         }
     }
 
+    val pageBackdrop = when (playerPresentationMode) {
+        PlayerPresentationMode.CD -> Color(0xFF111111)
+        PlayerPresentationMode.IMMERSIVE_ARTWORK -> Color.Black
+        else -> MaterialTheme.colorScheme.background
+    }
     Scaffold(
         // The CD player uses a permanently dark surface even on phones in
         // light mode. Match it behind the swipeable library to avoid flashes.
-        containerColor = if (playerPresentationMode == PlayerPresentationMode.CD) {
-            Color(0xFF111111)
-        } else {
-            MaterialTheme.colorScheme.background
-        },
+        containerColor = pageBackdrop,
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0)
     ) { padding ->
         Box(
@@ -1835,10 +1838,10 @@ private fun NusaMusicApp(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            androidx.compose.foundation.pager.HorizontalPager(
+            MiuixHorizontalPager(
                 state = pagerState,
-                modifier = Modifier.fillMaxSize(),
-                beyondViewportPageCount = 1
+                backgroundColor = pageBackdrop,
+                modifier = Modifier.fillMaxSize()
             ) { page ->
                 when (page - playerPage) {
                     -1 -> ImmersiveArtistPage(
@@ -1850,7 +1853,7 @@ private fun NusaMusicApp(
                         isVisible = pagerState.settledPage == 0,
                         state = artistPageState,
                         onVisible = { artistPageState.loadPortrait(context, scope) },
-                        onBack = { scope.launch { pagerState.animateScrollToPage(playerPage) } },
+                        onBack = { scope.launch { pagerState.animateMiuixScrollToPage(playerPage) } },
                         onPlay = onPlay,
                         artwork = { song, modifier ->
                             ArtworkView(song = song, maxSizePx = 512, modifier = modifier, grainOverlay = false)
@@ -1880,7 +1883,7 @@ private fun NusaMusicApp(
                                         currentSong != null -> onTogglePlay()
                                         filtered.isNotEmpty() -> onPlay(filtered.first(), filtered)
                                         !permissionGranted && selectedMusicFolders.isEmpty() -> onRequestPermission()
-                                        else -> scope.launch { pagerState.animateScrollToPage(libraryPage) }
+                                        else -> scope.launch { pagerState.animateMiuixScrollToPage(libraryPage) }
                                     }
                                 },
                                 onPrevious = onPrevious,
@@ -1890,7 +1893,7 @@ private fun NusaMusicApp(
                                 onRepeat = onToggleRepeat,
                                 onSelectSong = { onPlay(it, filtered) },
                                 onSettings = { showSettings = true },
-                                onLibrary = { scope.launch { pagerState.animateScrollToPage(libraryPage) } },
+                                onLibrary = { scope.launch { pagerState.animateMiuixScrollToPage(libraryPage) } },
                                 artwork = { cdSong, artworkModifier ->
                                     androidx.compose.runtime.key(cdSong?.uri) {
                                         ArtworkView(
@@ -2017,7 +2020,7 @@ private fun NusaMusicApp(
                                                     currentSong != null -> onTogglePlay()
                                                     filtered.isNotEmpty() -> onPlay(filtered.first(), filtered)
                                                     !permissionGranted && selectedMusicFolders.isEmpty() -> onRequestPermission()
-                                                    else -> scope.launch { pagerState.animateScrollToPage(libraryPage) }
+                                                    else -> scope.launch { pagerState.animateMiuixScrollToPage(libraryPage) }
                                                 }
                                             },
                                             onPrevious = onPrevious,
@@ -2413,7 +2416,7 @@ private fun NusaMusicApp(
                                             IconButton(
                                                 onClick = {
                                                     if (artistPageEnabled) {
-                                                        scope.launch { pagerState.animateScrollToPage(0) }
+                                                        scope.launch { pagerState.animateMiuixScrollToPage(0) }
                                                         return@IconButton
                                                     }
                                                     biographyExpanded = !biographyExpanded
@@ -2574,7 +2577,7 @@ private fun NusaMusicApp(
                                 IconButton(
                                     onClick = {
                                         scope.launch {
-                                            pagerState.animateScrollToPage(playerPage)
+                                            pagerState.animateMiuixScrollToPage(playerPage)
                                         }
                                     }
                                 ) {

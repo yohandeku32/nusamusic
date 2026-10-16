@@ -18,6 +18,7 @@ The current version is **3.13.4** (`versionCode 46`). It runs on Android 10 and 
 - Saved playback state, including the current track, position, shuffle, and repeat settings.
 - Artist portraits from Deezer and biographies from Last.fm.
 - In Immersive art, swipe right from the player to open the artist page (swipe left to return). It has a monochrome Deezer portrait fading into black, Last.fm biography, your five most-played local tracks, and a two-column grid of local albums. Tap an album to browse and play its tracks; the back button returns to the artist overview, then to the player. The library remains one leftward swipe from the player.
+- Main-page swipes use MIUIX-inspired motion: a full-width foreground slide, quarter-speed parallax on the covered page, a dimmed background, and rounded leading corners during the transition. Swipes and navigation buttons share critically damped spring settling. The effect follows drag progress directly, supports right-to-left layouts, and leaves the settled page square and fully opaque.
 - System fonts and custom TTF or OTF files for the player title.
 
 The folder scanner recognises AAC, ALAC, FLAC, M4A, MP3, OGG, OPUS, WAV, and WMA files. Playback support depends on the codecs available on the device.
