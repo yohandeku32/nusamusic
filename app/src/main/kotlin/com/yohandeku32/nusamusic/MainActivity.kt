@@ -154,6 +154,7 @@ import com.yohandeku32.nusamusic.ui.VinylLabelPainter
 import com.yohandeku32.nusamusic.ui.VinylPainter
 import com.yohandeku32.nusamusic.ui.VinylShadowPainter
 import com.yohandeku32.nusamusic.ui.PlayerSettingsContent
+import com.yohandeku32.nusamusic.ui.CdSongGrid
 import com.yohandeku32.nusamusic.ui.CdPlayer
 import com.yohandeku32.nusamusic.ui.TurntablePlayer
 import com.yohandeku32.nusamusic.ui.TurntableLabels
@@ -2566,7 +2567,20 @@ private fun NusaMusicApp(
                                 onRefresh = onScanMusic,
                                 modifier = Modifier.fillMaxSize()
                             ) {
-                                if (vinylLibrary &&
+                                if (cdLibrary &&
+                                    (permissionGranted || selectedMusicFolders.isNotEmpty()) &&
+                                    filtered.isNotEmpty()
+                                ) {
+                                    CdSongGrid(
+                                        songs = filtered,
+                                        currentSongId = currentSong?.id,
+                                        onPlay = { onPlay(it, filtered) },
+                                        artwork = { song, artworkModifier ->
+                                            ArtworkView(song = song, maxSizePx = 512, modifier = artworkModifier)
+                                        },
+                                        modifier = Modifier.fillMaxSize().padding(top = 76.dp)
+                                    )
+                                } else if (vinylLibrary &&
                                     (permissionGranted || selectedMusicFolders.isNotEmpty()) &&
                                     filtered.isNotEmpty()
                                 ) {

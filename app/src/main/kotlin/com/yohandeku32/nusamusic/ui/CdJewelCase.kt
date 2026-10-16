@@ -39,6 +39,7 @@ import java.util.Locale
 internal fun CdJewelCase(
     modifier: Modifier = Modifier,
     artistName: String? = null,
+    showStickers: Boolean = true,
     disc: @Composable (Modifier) -> Unit
 ) {
     BoxWithConstraints(
@@ -70,7 +71,7 @@ internal fun CdJewelCase(
         // into an independent layer. Rotating frames can then reuse that layer
         // instead of submitting the sticker's hundreds of tiny draw operations.
         // Changing songs still invalidates the artist text as normal.
-        CdClearLid(Modifier.matchParentSize(), artistName, showSpindle = true)
+        CdClearLid(Modifier.matchParentSize(), artistName, showSpindle = true, showStickers = showStickers)
     }
 }
 
