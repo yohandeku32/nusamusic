@@ -158,4 +158,70 @@ class CdDiscTransferStateTest {
         assertFalse(state.close(returned))
         assertNull(state.storedSongId)
     }
+
+    @Test fun replacementDiscWaitsForTheOldCaseToFinishClosing() {
+        val state = CdDiscTransferState()
+        val old = state.beginReturn(1, song(1), liftBeforeReturn = true)!!
+        assertTrue(state.queueInsertion(old, 2, song(2)))
+        assertNull(state.completeReturn(old))
+        state.returnFlight(old)
+        assertNull(state.completeReturn(old))
+        state.close(old)
+        assertEquals(CdPendingInsertion(2, song(2)), state.completeReturn(old))
+        assertNull(state.completeReturn(old))
+        assertEquals(1L, state.storedSongId)
+        assertNull(state.request)
+    }
+
+    @Test fun rapidChoicesKeepTheSameOutgoingFlightAndUseTheLatestSong() {
+        val state = CdDiscTransferState()
+        val old = state.beginReturn(1, song(1), liftBeforeReturn = true)!!
+        state.queueInsertion(old, 2, song(2))
+        state.returnFlight(old)
+        state.queueInsertion(old, 3, song(3))
+        assertEquals(old, state.request)
+        state.close(old)
+        assertEquals(CdPendingInsertion(3, song(3)), state.completeReturn(old))
+    }
+
+    @Test fun cancellingTheOutgoingDiscDropsTheQueuedSong() {
+        val state = CdDiscTransferState()
+        val old = state.beginReturn(1, song(1))!!
+        state.queueInsertion(old, 2, song(2))
+        state.finish(old)
+        assertNull(state.pendingInsertion)
+        assertNull(state.completeReturn(old))
+    }
+
+    @Test fun removingTheQueuedSongStillLetsTheOldDiscReturnSafely() {
+        val state = CdDiscTransferState()
+        val old = state.beginReturn(1, song(1))!!
+        state.queueInsertion(old, 2, song(2))
+        state.discardRemovedPending(listOf(song(1)))
+        assertNull(state.pendingInsertion)
+        state.returnFlight(old)
+        state.close(old)
+        assertNull(state.completeReturn(old))
+        assertEquals(1L, state.storedSongId)
+    }
+
+    @Test fun insertionCannotAcceptAnOutgoingQueue() {
+        val state = CdDiscTransferState()
+        val incoming = state.begin(1, song(1))
+        assertFalse(state.queueInsertion(incoming, 2, song(2)))
+        assertNull(state.pendingInsertion)
+    }
+
+    @Test fun aStaleOutgoingCallbackCannotReplaceANewerInsertion() {
+        val state = CdDiscTransferState()
+        val old = state.beginReturn(1, song(1))!!
+        state.queueInsertion(old, 2, song(2))
+        state.returnFlight(old)
+        state.close(old)
+        val next = state.begin(3, song(3), previousSongId = 1)
+        assertNull(state.completeReturn(old))
+        assertFalse(state.queueInsertion(old, 2, song(2)))
+        assertEquals(next, state.request)
+        assertNull(state.pendingInsertion)
+    }
 }

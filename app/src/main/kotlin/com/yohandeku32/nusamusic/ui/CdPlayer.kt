@@ -14,6 +14,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitVerticalTouchSlopOrCancellation
 import androidx.compose.foundation.gestures.verticalDrag
+import androidx.compose.foundation.gestures.stopScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -60,6 +61,7 @@ import androidx.compose.ui.zIndex
 import com.yohandeku32.nusamusic.model.Song
 import java.util.Locale
 import kotlin.math.abs
+import kotlin.math.sin
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
@@ -109,6 +111,7 @@ fun CdPlayer(
         val transfer = remember { CdDiscTransferState() }
         val flightProgress = remember { Animatable(0f) }
         val seatingProgress = remember { Animatable(0f) }
+        val liftProgress = remember { Animatable(0f) }
         val idlePosition = remember { mutableStateOf(0L) }
         var rootOrigin by remember { mutableStateOf(Offset.Zero) }
         var sourceBounds by remember { mutableStateOf<Rect?>(null) }
@@ -116,7 +119,10 @@ fun CdPlayer(
         var playerDiscBounds by remember { mutableStateOf<Rect?>(null) }
         var activeCaseBounds by remember { mutableStateOf<Rect?>(null) }
         var activeCaseIndex by remember { mutableStateOf<Int?>(null) }
+        var pendingCaseBounds by remember { mutableStateOf<Rect?>(null) }
+        var exitSide by remember { mutableFloatStateOf(0f) }
         val latestSongId = rememberUpdatedState(song?.id)
+        val latestSongs = rememberUpdatedState(songs)
         val latestPlaying = rememberUpdatedState(isPlaying)
         val togglePlay = rememberUpdatedState(onPlayPause)
         val selectSong = rememberUpdatedState(onSelectSong)
@@ -125,6 +131,7 @@ fun CdPlayer(
         val loadingDisc = request != null
         val storedDisc = transfer.storedSongId == displaySong?.id && displaySong != null &&
             request?.direction != CdDiscTransferDirection.INSERT
+        val noDisc = storedDisc || displaySong == null
         val discAngle = remember(displaySong?.id) { mutableFloatStateOf(0f) }
         fun returnDisc() {
             val current = song ?: return
@@ -135,6 +142,7 @@ fun CdPlayer(
         }
         val returnAction = rememberUpdatedState({ returnDisc() })
         val swipeThreshold = with(LocalDensity.current) { 56.dp.toPx() }
+        val sideThreshold = with(LocalDensity.current) { 24.dp.toPx() }
         val canReturn = song != null && !loadingDisc && !storedDisc && isVisible && activeCaseBounds != null
         LaunchedEffect(request, isVisible) {
             val item = request ?: return@LaunchedEffect
@@ -147,14 +155,26 @@ fun CdPlayer(
                     flightOrigin = sourceBounds ?: return@LaunchedEffect
                     flightProgress.snapTo(1f)
                     seatingProgress.snapTo(0f)
+                    liftProgress.snapTo(0f)
+                    val horizontal = (flightOrigin?.center?.x ?: 0f) - (playerDiscBounds?.center?.x ?: 0f)
+                    exitSide = if (abs(horizontal) > sideThreshold) {
+                        if (horizontal < 0f) -1f else 1f
+                    } else if ((transfer.pendingInsertion?.index ?: item.index) > item.index) -1f else 1f
                     if (!transfer.returnFlight(item)) return@LaunchedEffect
+                    if (item.liftBeforeReturn) liftProgress.animateTo(1f, tween(240, easing = FastOutSlowInEasing))
                     flightProgress.animateTo(0f, tween(900, easing = CubicBezierEasing(0.22f, 0f, 0.12f, 1f)))
                     if (!transfer.close(item)) return@LaunchedEffect
                     delay(560)
+                    val next = transfer.completeReturn(item)
+                    if (next != null && latestSongs.value.any { it.id == next.song.id }) {
+                        sourceBounds = pendingCaseBounds
+                        transfer.begin(next.index, next.song, latestSongId.value)
+                    }
                     return@LaunchedEffect
                 }
                 flightProgress.snapTo(0f)
                 seatingProgress.snapTo(0f)
+                liftProgress.snapTo(0f)
                 if (!isVisible) return@LaunchedEffect
                 // Preview selection opens the case without starting audio.
                 val measured = withTimeoutOrNull(1500) {
@@ -187,6 +207,7 @@ fun CdPlayer(
         }
         LaunchedEffect(song?.id, songs, isVisible, isPlaying) {
             transfer.syncPlayer(song?.id, isPlaying)
+            transfer.discardRemovedPending(songs)
             val item = transfer.request ?: return@LaunchedEffect
             if (!isVisible || songs.none { it.id == item.song.id } ||
                 (item.direction == CdDiscTransferDirection.RETURN && isPlaying) ||
@@ -228,8 +249,8 @@ fun CdPlayer(
                 }
                 key(displaySong?.id) {
                     CdTimeline(
-                        if (loadingDisc) idlePosition else positionMsState,
-                        request?.song?.durationMs ?: durationMs,
+                        if (loadingDisc || noDisc) idlePosition else positionMsState,
+                        if (noDisc) 0L else request?.song?.durationMs ?: durationMs,
                         hasSong = song != null && !loadingDisc && !storedDisc,
                         onSeek = onSeek
                     )
@@ -293,7 +314,7 @@ fun CdPlayer(
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                text = displaySong?.title ?: cdText("Pilih lagu", "Choose a song"),
+                                text = if (noDisc) "No CD" else displaySong?.title.orEmpty(),
                                 fontFamily = titleFontFamily,
                                 fontSize = titleSize.sp,
                                 lineHeight = titleLineHeight,
@@ -305,8 +326,9 @@ fun CdPlayer(
                             )
                             Spacer(Modifier.height(4.dp))
                             Text(
-                                text = displaySong?.artist?.takeIf { it.isNotBlank() }
-                                    ?: cdText("Koleksi musik Anda", "Your music collection"),
+                                text = if (noDisc) cdText("Masukkan CD dari koleksi di bawah", "Insert a CD from your collection")
+                                    else displaySong?.artist?.takeIf { it.isNotBlank() }
+                                        ?: cdText("Koleksi musik Anda", "Your music collection"),
                                 color = Color(0xFFA5A5A0),
                                 fontSize = 12.sp,
                                 lineHeight = 16.sp,
@@ -376,17 +398,37 @@ fun CdPlayer(
                                     activeCaseBounds = localBounds
                                     activeCaseIndex = index
                                 }
+                                if (transfer.pendingInsertion?.song?.id == songId && bounds.width > 0f && bounds.height > 0f) {
+                                    pendingCaseBounds = localBounds
+                                }
                                 if (transfer.request?.song?.id == songId &&
+                                    bounds.width > 0f && bounds.height > 0f &&
                                     transfer.phase in listOf(CdDiscTransferPhase.OPENING, CdDiscTransferPhase.PREPARING_RETURN)) {
                                     sourceBounds = localBounds
                                 }
                             },
                             onSelectSong = { index, item, bounds ->
-                                if ((item.id != song?.id || transfer.storedSongId == item.id) && isVisible && bounds != null &&
+                                val returning = transfer.request?.takeIf { it.direction == CdDiscTransferDirection.RETURN }
+                                if (returning != null && bounds != null) {
+                                    pendingCaseBounds = bounds.translate(-rootOrigin)
+                                    transfer.queueInsertion(returning, index, item)
+                                } else if ((item.id != song?.id || transfer.storedSongId == item.id) && isVisible && bounds != null &&
                                     bounds.width > 0f && bounds.height > 0f && playerDiscBounds != null) {
-                                    sourceBounds = bounds.translate(-rootOrigin)
                                     val replacingInsertion = transfer.request != null
-                                    transfer.begin(index, item, song?.id)
+                                    val current = song
+                                    val oldCase = activeCaseBounds
+                                    val oldIndex = activeCaseIndex
+                                    if (!replacingInsertion && current != null && !storedDisc && oldCase != null && oldIndex != null &&
+                                        songs.any { it.id == current.id }) {
+                                        sourceBounds = oldCase
+                                        pendingCaseBounds = bounds.translate(-rootOrigin)
+                                        transfer.beginReturn(oldIndex, current, liftBeforeReturn = true)?.let {
+                                            transfer.queueInsertion(it, index, item)
+                                        }
+                                    } else {
+                                        sourceBounds = bounds.translate(-rootOrigin)
+                                        transfer.begin(index, item, song?.id)
+                                    }
                                     if (!replacingInsertion && isPlaying && song != null) onPlayPause()
                                 } else {
                                     transfer.request?.let(transfer::finish)
@@ -432,10 +474,15 @@ fun CdPlayer(
                     Modifier.size(with(LocalDensity.current) { target.width.toDp() }).graphicsLayer {
                         val p = flightProgress.value
                         val center = origin.center + (target.center - origin.center) * p
-                        translationX = center.x - size.width / 2f
-                        translationY = center.y - size.height / 2f
-                        scaleX = (origin.width + (target.width - origin.width) * p) / size.width
-                        scaleY = (origin.height + (target.height - origin.height) * p) / size.height
+                        val lift = if (request.liftBeforeReturn) liftProgress.value else 0f
+                        val sideArc = exitSide * 64.dp.toPx() * lift * sin(Math.PI.toFloat() * p)
+                        translationX = center.x - size.width / 2f + sideArc
+                        translationY = center.y - size.height / 2f - 28.dp.toPx() * lift * p
+                        val liftedScale = 1f + 0.04f * lift * p
+                        scaleX = (origin.width + (target.width - origin.width) * p) / size.width * liftedScale
+                        scaleY = (origin.height + (target.height - origin.height) * p) / size.height * liftedScale
+                        rotationX = -10f * lift * p
+                        cameraDistance = size.width * 8f
                         alpha = 1f - seatingProgress.value
                     },
                     rotationDegrees = { discAngle.floatValue },
@@ -745,6 +792,10 @@ private fun CdSongCarousel(
     // A virtual list supplies two neighbours on each side even for the first
     // and last song. Smaller libraries keep their actual count, without copies.
     LaunchedEffect(currentId, songs, transfer.request?.token) {
+        if (transfer.request != null) listState.stopScroll()
+        // During a swap the old case keeps its real left/right shelf position.
+        // Recenter only once its CD is stored and the next case starts opening.
+        if (transfer.request?.liftBeforeReturn == true) return@LaunchedEffect
         val layout = listState.layoutInfo
         val center = (layout.viewportStartOffset + layout.viewportEndOffset) * 0.5f
         val around = layout.visibleItemsInfo.minByOrNull {
