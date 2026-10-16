@@ -1,6 +1,5 @@
 package com.yohandeku32.nusamusic.ui
 
-import android.graphics.Bitmap
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -8,7 +7,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -29,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 import com.yohandeku32.nusamusic.data.*
 import com.yohandeku32.nusamusic.model.Song
 import java.util.Locale
@@ -43,6 +42,8 @@ fun ImmersiveArtistPage(
     biography: ArtistBiography?,
     biographyLoading: Boolean,
     isVisible: Boolean,
+    state: ImmersiveArtistPageState,
+    onVisible: () -> Unit,
     onBack: () -> Unit,
     onPlay: (Song, List<Song>) -> Unit,
     artwork: @Composable (Song, Modifier) -> Unit
@@ -62,20 +63,21 @@ fun ImmersiveArtistPage(
         onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }
     val popular = remember(tracks, counts) { ArtistLibrary.mostPlayed(tracks, counts) }
-    var portrait by remember(artist) { mutableStateOf<Bitmap?>(null) }
-    var portraitLoading by remember(artist) { mutableStateOf(false) }
-    LaunchedEffect(artist, isVisible) {
-        if (!isVisible || artist.isBlank() || portrait != null) return@LaunchedEffect
-        portraitLoading = true
-        portrait = ArtistImageLoader.load(context, artist, maxSize = 768)
-        portraitLoading = false
+    val portrait = state.portrait
+    val portraitLoading = state.portraitLoading
+    LaunchedEffect(state, isVisible) {
+        if (isVisible) onVisible()
     }
-    var selectedAlbumKey by remember(artist) { mutableStateOf<String?>(null) }
-    var bioExpanded by remember(artist) { mutableStateOf(false) }
+    var selectedAlbumKey by state::selectedAlbumKey
+    var bioExpanded by state::bioExpanded
     val selectedAlbum = albums.firstOrNull { it.key == selectedAlbumKey }
-    val listState = rememberLazyListState()
-    LaunchedEffect(artist, selectedAlbumKey) { listState.scrollToItem(0) }
-    fun back() { if (selectedAlbumKey != null) selectedAlbumKey = null else onBack() }
+    val listState = state.listState
+    val scope = rememberCoroutineScope()
+    fun selectAlbum(key: String?) {
+        selectedAlbumKey = key
+        scope.launch { listState.scrollToItem(0) }
+    }
+    fun back() { if (selectedAlbumKey != null) selectAlbum(null) else onBack() }
     BackHandler(enabled = isVisible) { back() }
 
     MaterialTheme(colorScheme = darkColorScheme(background = Color.Black, surface = Color(0xFF151515), primary = Color.White)) {
@@ -188,7 +190,7 @@ fun ImmersiveArtistPage(
                 items(albums.chunked(2), key = { "albums:${it.first().key}" }) { row ->
                     Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         row.forEach { album ->
-                            Column(Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).clickable { selectedAlbumKey = album.key }.padding(bottom = 8.dp)) {
+                            Column(Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).clickable { selectAlbum(album.key) }.padding(bottom = 8.dp)) {
                                 artwork(album.tracks.first(), Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(10.dp)))
                                 Text(album.title.ifBlank { artistText("Album tanpa judul", "Untitled album") }, color = Color.White,
                                     fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis,

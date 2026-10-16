@@ -9,6 +9,10 @@ package com.yohandeku32.nusamusic.data
  */
 object ArtistNameUtils {
 
+    fun cacheKey(raw: String?): String = java.text.Normalizer.normalize(
+        firstArtist(raw), java.text.Normalizer.Form.NFC
+    ).lowercase(java.util.Locale.ROOT).replace(Regex("\\s+"), " ").trim()
+
     fun firstArtist(raw: String?): String {
         val value = raw?.trim().orEmpty()
         if (value.isBlank()) return ""

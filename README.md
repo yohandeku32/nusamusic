@@ -82,6 +82,8 @@ The lookup uses the first artist in a multi-artist tag. It requests an Indonesia
 
 The artist page matches the same primary artist in local tags, ignoring case and extra whitespace. Album grouping uses album tags, including tracks scanned from selected folders. Deezer and Last.fm supply the portrait and biography only; all playable songs and albums come from your scanned local library. Without a connection or Last.fm key, local albums and playback remain available, and the page shows a portrait placeholder or a biography unavailable message.
 
+Visited artist profiles keep their portrait, selected album, expanded biography, and scroll position while you swipe between the artist, player, and library pages. Up to eight profiles are kept in memory. Deezer portraits and successful Last.fm biographies are also saved on the device and reused after reopening the app, including offline. A swipe away does not cancel a portrait download, and failed lookups wait five minutes before retrying rather than requesting the same missing data on every visit. Local albums and listening-history rankings still update when your collection or playback history changes.
+
 Most-played tracks use listening history stored on the device from this version onward; earlier plays cannot be reconstructed. A play counts once per track session after 30 seconds of listening, or half the track duration for shorter tracks. Pausing and seeking do not add listening time. Background playback is counted by the playback service, and repeat starts a new session. No listening history is sent to Deezer or Last.fm.
 
 ## Development notes
