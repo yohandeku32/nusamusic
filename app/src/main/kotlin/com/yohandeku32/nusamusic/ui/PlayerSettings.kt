@@ -49,6 +49,8 @@ internal fun PlayerSettingsContent(
     playerPresentationMode: PlayerPresentationMode,
     onPresentationSelected: (PlayerPresentationMode) -> Unit,
     animatedArtworkEnabled: Boolean,
+    roundedCarouselCorners: Boolean,
+    onRoundedCarouselCornersChange: (Boolean) -> Unit,
     onAnimatedArtworkChange: (Boolean) -> Unit,
     realisticControls: Boolean,
     onRealisticControlsChange: (Boolean) -> Unit,
@@ -121,6 +123,14 @@ internal fun PlayerSettingsContent(
                         )
                     }
                     SettingsDivider()
+                    if (playerPresentationMode == PlayerPresentationMode.CD) {
+                        SettingToggle(
+                            settingsText("Sudut carousel melengkung", "Rounded carousel corners"),
+                            settingsText("Aktif: melengkung. Nonaktif: lurus.", "On: rounded. Off: square."),
+                            roundedCarouselCorners, onRoundedCarouselCornersChange
+                        )
+                        SettingsDivider()
+                    }
                     SettingToggle(
                         settingsText("Animasi sampul", "Animated artwork"),
                         settingsText("Gerakan pada sampul album yang didukung.", "Motion for supported album artwork."),
