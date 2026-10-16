@@ -97,16 +97,17 @@ internal fun CdShelfCarousel(
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val caseWidth = minOf(132.dp, maxWidth * 0.36f)
         val caseHeight = caseWidth * 0.90f
+        val rackWidth = maxWidth - 32.dp
+        // With the case rotated onto its side, its height becomes the shelf's
+        // visible width. Leave room for the perspective at the far cover edge.
+        val shelfCaseHeight = maxOf(caseHeight, (rackWidth - 16.dp) * 0.90f)
         // Turn the angled cases onto their sides, keeping the spine text
         // horizontal as the shelf stacks and scrolls from top to bottom.
         val slotHeight = caseWidth * 0.30f + 2.dp
         val rackHeight = slotHeight * CD_CAROUSEL_VISIBLE_COUNT
-        val rackWidth = caseHeight + 24.dp
         val centeringPadding = (rackHeight - slotHeight) / 2
         val stageHeight = maxOf(rackHeight + 16.dp, caseHeight * 1.45f + 20.dp)
         val density = LocalDensity.current
-        val caseWidthPx = with(density) { caseWidth.toPx() }
-        val caseHeightPx = with(density) { caseHeight.toPx() }
         val stageHeightPx = with(density) { stageHeight.toPx() }
         val viewportWidthPx = with(density) { maxWidth.toPx() }
         val rackTopPx = with(density) { (stageHeight - rackHeight).toPx() / 2f }
@@ -160,7 +161,7 @@ internal fun CdShelfCarousel(
                     ) {
                         CdAlbumCase(
                             song, artwork, playing,
-                            Modifier.requiredSize(caseWidth, caseHeight).graphicsLayer {
+                            Modifier.requiredSize(caseWidth, shelfCaseHeight).graphicsLayer {
                                 rotationZ = 90f
                                 alpha = if (lifted) 0f else 1f
                             }
@@ -169,19 +170,18 @@ internal fun CdShelfCarousel(
                 }
             }
             if (selection != null) {
+                val previewCaseHeight = shelfCaseHeight + (caseHeight - shelfCaseHeight) * progress.value
                 Box(
                     Modifier.matchParentSize().graphicsLayer { alpha = progress.value * 0.64f }
                         .background(Color(0xFF0B0D0D))
                         .clickable(interactionSource = null, indication = null) { returnToShelf(false) }
                 )
                 Box(
-                    Modifier.requiredSize(caseWidth, caseHeight)
+                    Modifier.align(Alignment.Center).requiredSize(caseWidth, previewCaseHeight)
                         .graphicsLayer {
                             val p = progress.value
-                            translationX = selection.originCenterX - caseWidthPx / 2f +
-                                (viewportWidthPx / 2f - selection.originCenterX) * p
-                            translationY = selection.originCenterY - caseHeightPx / 2f +
-                                (stageHeightPx / 2f - selection.originCenterY) * p
+                            translationX = (selection.originCenterX - viewportWidthPx / 2f) * (1f - p)
+                            translationY = (selection.originCenterY - stageHeightPx / 2f) * (1f - p)
                             rotationZ = 90f * (1f - p)
                             scaleX = 1f + 0.30f * p
                             scaleY = 1f + 0.30f * p
