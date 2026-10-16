@@ -34,7 +34,8 @@ object ArtworkLoader {
     fun cached(
         uriString: String,
         maxSize: Int = 512,
-        cacheKey: String? = null
+        cacheKey: String? = null,
+        allowSmallerPreview: Boolean = true
     ): Bitmap? {
         val identity = cacheKey ?: uriString
         cache.get("$identity@$maxSize")?.let { return it }
@@ -45,6 +46,7 @@ object ArtworkLoader {
                 cache.get("$identity@$size")?.let { return it }
             }
         }
+        if (!allowSmallerPreview) return null
         for (index in commonSizes.indices.reversed()) {
             val size = commonSizes[index]
             if (size < maxSize) {
