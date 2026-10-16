@@ -1429,6 +1429,7 @@ private fun NusaMusicApp(
         mutableStateOf(uiPrefs.getBoolean("rounded_carousel_corners", true))
     }
     var immersiveArtworkBottomPx by remember { mutableFloatStateOf(Float.NaN) }
+    var immersiveHasQualityBadge by remember { mutableStateOf(true) }
     val immersiveFrameCoordinates = remember { mutableStateOf<LayoutCoordinates?>(null) }
     val immersiveArtistCoordinates = remember { mutableStateOf<LayoutCoordinates?>(null) }
 
@@ -2134,7 +2135,10 @@ private fun NusaMusicApp(
                                             // what is left and cannot push them down for a long title.
                                             val heroSpace = (playerContentHeight - titleBoxHeight - 322.dp)
                                                 .coerceIn(0.dp, playerContentHeight * 0.33f)
-                                            val metadataOffset = if (immersiveArtworkMode) 24.dp else 0.dp
+                                            val metadataOffset = if (immersiveArtworkMode) {
+                                                // Move metadata into the unused pill area for lossy tracks.
+                                                24.dp + if (immersiveHasQualityBadge) 0.dp else 32.dp
+                                            } else 0.dp
                                             Spacer(
                                                 Modifier.height(heroSpace + metadataOffset)
                                             )
@@ -2202,8 +2206,12 @@ private fun NusaMusicApp(
                                         )
 
                                         if (immersiveArtworkMode) {
-                                            Spacer(Modifier.height(10.dp))
-                                            AudioQualityPill(song = currentSong, immersive = true)
+                                            if (immersiveHasQualityBadge) Spacer(Modifier.height(10.dp))
+                                            AudioQualityPill(
+                                                song = currentSong,
+                                                immersive = true,
+                                                onBadgeVisibilityChanged = { immersiveHasQualityBadge = it }
+                                            )
                                             Spacer(Modifier.weight(1f))
                                         } else {
                                             Spacer(Modifier.height(16.dp))
@@ -3191,7 +3199,8 @@ private enum class AudioQualityBadge {
 @Composable
 private fun AudioQualityPill(
     song: Song?,
-    immersive: Boolean = false
+    immersive: Boolean = false,
+    onBadgeVisibilityChanged: ((Boolean) -> Unit)? = null
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var codecInfo by remember { mutableStateOf<AudioCodecInfo?>(null) }
@@ -3227,6 +3236,13 @@ private fun AudioQualityPill(
         else -> null
     }
     val metadataMatchesSong = song != null && resolvedCodecUri == song.uri
+    val badgeVisibilityCallback by rememberUpdatedState(onBadgeVisibilityChanged)
+    LaunchedEffect(song?.uri, resolvedCodecUri, badge) {
+        // Retain the previous layout until metadata for the new track is resolved.
+        if (song == null || resolvedCodecUri == song.uri) {
+            badgeVisibilityCallback?.invoke(badge != null)
+        }
+    }
 
     Crossfade(
         targetState = badge,
