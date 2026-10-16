@@ -31,6 +31,7 @@ internal fun CdAlbumCase(
     selected: Boolean,
     modifier: Modifier = Modifier,
     showDisc: Boolean = false,
+    discRotation: () -> Float = { 0f },
     onDiscBounds: (Rect) -> Unit = {}
 ) {
     val opening = remember(song.id) { Animatable(0f) }
@@ -47,7 +48,7 @@ internal fun CdAlbumCase(
         val diameter = maxHeight * 0.85f
         Box(Modifier.offset(x = maxWidth * 0.55f - diameter / 2, y = (maxHeight - diameter) / 2)
             .size(diameter).onGloballyPositioned { onDiscBounds(it.boundsInRoot()) }) {
-            if (showDisc) CdDiscSurface(song, artwork, Modifier.matchParentSize(), shadowElevation = 0.dp)
+            if (showDisc) CdDiscSurface(song, artwork, Modifier.matchParentSize(), rotationDegrees = discRotation, shadowElevation = 0.dp)
         }
         Box(Modifier.matchParentSize().graphicsLayer {
             transformOrigin = TransformOrigin(0.075f, 0.5f)
