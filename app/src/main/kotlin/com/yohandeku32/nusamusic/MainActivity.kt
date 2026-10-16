@@ -147,6 +147,7 @@ import com.yohandeku32.nusamusic.data.ArtistBiographyLoader
 import com.yohandeku32.nusamusic.data.ArtistNameUtils
 import com.yohandeku32.nusamusic.data.MusicRepository
 import com.yohandeku32.nusamusic.model.PlayerPresentationMode
+import com.yohandeku32.nusamusic.model.LibraryContentState
 import com.yohandeku32.nusamusic.model.Song
 import com.yohandeku32.nusamusic.playback.PlaybackService
 import com.yohandeku32.nusamusic.ui.vinylLabelDiameter
@@ -210,7 +211,8 @@ class MainActivity : ComponentActivity() {
     private var selectedMusicFolders by mutableStateOf<List<String>>(emptyList())
     private var isScanningMusic by mutableStateOf(false)
     private var automaticMusicScanJob: Job? = null
-    private var libraryCacheLoaded = false
+    private var libraryCacheLoaded by mutableStateOf(false)
+    private var libraryScanFailed by mutableStateOf(false)
     private var scanAfterCacheLoad = false
 
     private val musicContentObserver = object : ContentObserver(
@@ -576,6 +578,8 @@ class MainActivity : ComponentActivity() {
                     shuffleEnabled = shuffleEnabled,
                     repeatMode = repeatMode,
                     isScanningMusic = isScanningMusic,
+                    libraryCacheLoaded = libraryCacheLoaded,
+                    libraryScanFailed = libraryScanFailed,
                     selectedMusicFolders = selectedMusicFolders,
                     onPlayerPageVisibilityChanged = ::setPlayerPageVisible,
                     onScanMusic = ::scanMusic,
@@ -803,23 +807,17 @@ class MainActivity : ComponentActivity() {
                 songs = cachedSongs
             }
 
+            val shouldScan = (cachedSongs == null || scanAfterCacheLoad) &&
+                (permissionGranted || selectedMusicFolders.isNotEmpty())
+            scanAfterCacheLoad = false
             libraryCacheLoaded = true
+            // Start the initial scan before playback restoration can suspend.
+            // Compose must not draw a ready-but-empty library in that gap.
+            if (shouldScan) scanMusic()
 
             controller?.let { c ->
                 syncCurrentSong(c)
                 restorePlaybackStateIfNeeded(c)
-            }
-
-            if (cachedSongs == null &&
-                (permissionGranted || selectedMusicFolders.isNotEmpty())
-            ) {
-                scanAfterCacheLoad = false
-                scanMusic()
-            } else if (scanAfterCacheLoad && permissionGranted && cachedSongs == null) {
-                scanAfterCacheLoad = false
-                scanMusic()
-            } else {
-                scanAfterCacheLoad = false
             }
         }
     }
@@ -962,16 +960,22 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun scanMusic() {
+        if (!libraryCacheLoaded) {
+            scanAfterCacheLoad = true
+            return
+        }
         if (isScanningMusic) return
         if (!permissionGranted && selectedMusicFolders.isEmpty()) {
             return
         }
 
         automaticMusicScanJob?.cancel()
+        libraryScanFailed = false
         isScanningMusic = true
 
         lifecycleScope.launch {
             val result = runCatching { refreshSongs() }
+            libraryScanFailed = result.isFailure
             isScanningMusic = false
 
             val message = result.fold(
@@ -1387,6 +1391,8 @@ private fun NusaMusicApp(
     shuffleEnabled: Boolean,
     repeatMode: Int,
     isScanningMusic: Boolean,
+    libraryCacheLoaded: Boolean,
+    libraryScanFailed: Boolean,
     selectedMusicFolders: List<String>,
     onPlayerPageVisibilityChanged: (Boolean) -> Unit,
     onScanMusic: () -> Unit,
@@ -1562,6 +1568,21 @@ private fun NusaMusicApp(
         sortedLibrary = prepared
     }
     val filtered = sortedLibrary.songs
+    val hasMusicAccess = permissionGranted || selectedMusicFolders.isNotEmpty()
+    val libraryContentState = LibraryContentState.resolve(
+        hasSongs = songs.isNotEmpty(),
+        hasAccess = hasMusicAccess,
+        cacheLoaded = libraryCacheLoaded,
+        scanning = isScanningMusic,
+        scanFailed = libraryScanFailed
+    )
+    val emptyLibraryMessage = when (libraryContentState) {
+        LibraryContentState.LOADING -> nusaText("Memuat koleksi musik…", "Loading your music…")
+        LibraryContentState.PERMISSION_REQUIRED -> nusaText("Izinkan akses musik untuk mulai memutar.", "Allow music access to start listening.")
+        LibraryContentState.SCAN_FAILED -> nusaText("Musik belum dapat dimuat. Coba pindai ulang.", "Unable to load music. Try scanning again.")
+        LibraryContentState.EMPTY -> nusaText("Tidak ada musik lokal", "No local music found")
+        LibraryContentState.CONTENT -> ""
+    }
     val alphabetTargets = sortedLibrary.alphabetTargets
 
     // Sorting is a visual library action; it must never reconstruct or move
@@ -1875,9 +1896,7 @@ private fun NusaMusicApp(
                                 },
                                 emptyState = {
                                     Text(
-                                        text = if (!permissionGranted && selectedMusicFolders.isEmpty()) {
-                                            nusaText("Izinkan akses musik untuk mulai memutar.", "Allow music access to start listening.")
-                                        } else nusaText("Tidak ada musik lokal", "No local music found"),
+                                        text = emptyLibraryMessage,
                                         color = Color(0xFFA5A5A0),
                                         fontSize = 12.sp,
                                         textAlign = TextAlign.Center,
@@ -2026,9 +2045,7 @@ private fun NusaMusicApp(
                                             emptyState = {
                                                 if (filtered.isEmpty()) {
                                                     Text(
-                                                        text = if (!permissionGranted && selectedMusicFolders.isEmpty()) {
-                                                            nusaText("Izinkan akses musik untuk mulai memutar.", "Allow music access to start listening.")
-                                                        } else nusaText("Tidak ada musik lokal", "No local music found"),
+                                                        text = emptyLibraryMessage,
                                                         fontSize = 12.sp,
                                                         textAlign = TextAlign.Center,
                                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -2466,7 +2483,7 @@ private fun NusaMusicApp(
                                             Spacer(Modifier.height(36.dp))
                                         }
 
-                                        if (!permissionGranted) {
+                                        if (!hasMusicAccess) {
                                             Text(
                                                 nusaText("Izinkan Nusa mengakses file audio Anda.", "Give Nusa access to your audio files."),
                                                 color = Color(0xFF9D9D9D),
@@ -2481,7 +2498,7 @@ private fun NusaMusicApp(
                                             }
                                         } else if (filtered.isEmpty()) {
                                             Text(
-                                                nusaText("Tidak ada musik lokal", "No local music found"),
+                                                emptyLibraryMessage,
                                                 color = Color(0xFF9D9D9D),
                                                 fontSize = 14.sp
                                             )
@@ -2720,10 +2737,7 @@ private fun NusaMusicApp(
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Text(
-                                                nusaText(
-                                                    "Tidak ada musik lokal",
-                                                    "No local music found"
-                                                ),
+                                                emptyLibraryMessage,
                                                 color = Color(0xFF9D9D9D),
                                                 fontSize = 14.sp
                                             )

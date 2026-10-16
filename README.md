@@ -12,6 +12,7 @@ The current version is **3.13.4** (`versionCode 46`). It runs on Android 10 and 
 - Background playback, notification controls, shuffle, and repeat through AndroidX Media3.
 - Crossfade from 1 to 12 seconds, with a default of 5 seconds when enabled.
 - A local library with album artwork, A–Z navigation, and sorting by title, artist, album, date added, or duration.
+- Startup distinguishes a library still loading from a confirmed empty collection. Cached songs appear as soon as they are ready; an initial scan shows a loading message until it completes, and a failed scan shows a retry message.
 - Music scanning through MediaStore and folders you select, including subfolders. Tracks shorter than 10 seconds are skipped.
 - Saved playback state, including the current track, position, shuffle, and repeat settings.
 - Artist portraits from Deezer and biographies from Last.fm.
