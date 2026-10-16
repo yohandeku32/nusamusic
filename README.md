@@ -13,6 +13,7 @@ The current version is **3.13.4** (`versionCode 46`). It runs on Android 10 and 
 - Crossfade from 1 to 12 seconds, with a default of 5 seconds when enabled.
 - A local library with album artwork, A–Z navigation, and sorting by title, artist, album, date added, or duration.
 - Startup distinguishes a library still loading from a confirmed empty collection. Cached songs appear as soon as they are ready; an initial scan shows a loading message until it completes, and a failed scan shows a retry message.
+- The Immersive art player keeps its footer free of library-empty/loading messages; library status remains on the library page. Its last static cover, blurred backdrop, and colours are saved as one small launch preview and warmed in the background on reopening, without waiting for the scanned library or reopening the audio file. The first usable cover appears immediately, with crossfades retained for subsequent cover changes. The full-resolution cover and optional animation continue loading in the background.
 - Music scanning through MediaStore and folders you select, including subfolders. Tracks shorter than 10 seconds are skipped.
 - Saved playback state, including the current track, position, shuffle, and repeat settings.
 - Artist portraits from Deezer and biographies from Last.fm.

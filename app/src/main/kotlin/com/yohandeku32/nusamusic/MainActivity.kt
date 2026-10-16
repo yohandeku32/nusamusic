@@ -117,6 +117,7 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
@@ -139,6 +140,8 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.yohandeku32.nusamusic.data.ArtworkLoader
 import com.yohandeku32.nusamusic.data.ArtworkBlur
+import com.yohandeku32.nusamusic.data.ImmersiveArtworkCache
+import com.yohandeku32.nusamusic.data.ImmersiveArtworkSnapshot
 import com.yohandeku32.nusamusic.data.AppleMusicAnimatedArtworkLoader
 import com.yohandeku32.nusamusic.data.AudioCodecInfo
 import com.yohandeku32.nusamusic.data.AudioCodecLoader
@@ -448,6 +451,16 @@ class MainActivity : ComponentActivity() {
         // Restore the last track before Compose draws the first frame. The full
         // library and Media3 controller can finish initializing in the background.
         currentSong = readLastSongForLaunch()
+        if (PlayerPresentationMode.fromPreference(
+                uiPrefsForFonts().getString("player_presentation_mode", null)
+            ) == PlayerPresentationMode.IMMERSIVE_ARTWORK
+        ) {
+            currentSong?.let { song ->
+                // Warm the small launch preview in parallel with the library read,
+                // so Compose can use it on its first frame whenever already ready.
+                lifecycleScope.launch { ImmersiveArtworkCache.restore(this@MainActivity, song) }
+            }
+        }
         loadCachedSongs()
         if (!permissionGranted) {
             permissionLauncher.launch(permission)
@@ -2496,7 +2509,7 @@ private fun NusaMusicApp(
                                                     contentDescription = nusaText("Izinkan akses musik", "Allow music access")
                                                 )
                                             }
-                                        } else if (filtered.isEmpty()) {
+                                        } else if (playerPresentationMode != PlayerPresentationMode.IMMERSIVE_ARTWORK && filtered.isEmpty()) {
                                             Text(
                                                 emptyLibraryMessage,
                                                 color = Color(0xFF9D9D9D),
@@ -4318,9 +4331,22 @@ private fun ImmersiveArtwork(
     val context = androidx.compose.ui.platform.LocalContext.current
     // Retain the current frame while the next song's artwork is decoded. Resetting
     // these states on every URI change briefly exposed the empty placeholder.
-    var artwork by remember { mutableStateOf<Bitmap?>(null) }
-    var staticBlur by remember { mutableStateOf<Bitmap?>(null) }
-    var backdrop by remember { mutableStateOf(Color(0xFF141414)) }
+    val initialSnapshot = remember { song?.let { ImmersiveArtworkCache.cached(it) } }
+    val initialCover = remember {
+        initialSnapshot?.cover ?: song?.let {
+            ArtworkLoader.cached(it.uri, 1_600, it.albumId.takeIf { id -> id > 0L }?.toString())
+        }
+    }
+    var artwork by remember { mutableStateOf(initialCover) }
+    var staticBlur by remember { mutableStateOf(initialSnapshot?.blur) }
+    var backdrop by remember { mutableStateOf(initialSnapshot?.let { Color(it.backdrop) } ?: Color(0xFF141414)) }
+    var hasPresentedArtwork by remember { mutableStateOf(initialCover != null) }
+    LaunchedEffect(artwork) {
+        if (artwork != null && !hasPresentedArtwork) {
+            androidx.compose.runtime.withFrameNanos { }
+            hasPresentedArtwork = true
+        }
+    }
     var animatedArtworkUrl by remember(song?.id, song?.uri) { mutableStateOf<String?>(null) }
     var artworkReloadAttempt by remember(song?.uri) { mutableIntStateOf(0) }
     // Freeze the first usable animated frame's colours for the entire song,
@@ -4346,6 +4372,19 @@ private fun ImmersiveArtwork(
             artwork = bitmap
             staticBlur = prepared?.first
             backdrop = prepared?.second ?: Color(0xFF141414)
+            if (bitmap != null && prepared != null) {
+                ImmersiveArtworkCache.save(context, targetSong,
+                    ImmersiveArtworkSnapshot(bitmap, prepared.first, prepared.second.toArgb()))
+            }
+        }
+
+        // Restore the small prepared preview before reopening the audio file.
+        // It includes the blur and palette, so the first cover needs no extra preparation.
+        val restored = ImmersiveArtworkCache.restore(context, targetSong)
+        if (restored != null) {
+            artwork = restored.cover
+            staticBlur = restored.blur
+            backdrop = Color(restored.backdrop)
         }
 
         val cachedFullArtwork = ArtworkLoader.cached(
@@ -4356,6 +4395,8 @@ private fun ImmersiveArtwork(
         )
         if (cachedFullArtwork != null) {
             if (cachedFullArtwork !== artwork) publish(cachedFullArtwork)
+            else if (staticBlur == null) publish(cachedFullArtwork)
+            else if (restored != null) ImmersiveArtworkCache.save(context, targetSong, restored)
             return@LaunchedEffect
         }
 
@@ -4366,7 +4407,7 @@ private fun ImmersiveArtwork(
             maxSize = 512,
             cacheKey = albumCacheKey
         )
-        if (cachedPreview != null && cachedPreview !== artwork) {
+        if (restored == null && cachedPreview != null && cachedPreview !== artwork) {
             publish(cachedPreview)
         }
 
@@ -4376,7 +4417,8 @@ private fun ImmersiveArtwork(
             maxSize = 1_600,
             cacheKey = albumCacheKey
         )
-        if (loaded !== artwork) publish(loaded)
+        if (loaded != null && loaded !== artwork) publish(loaded)
+        else if (loaded == null && restored == null && cachedPreview == null) publish(null)
     }
 
     LaunchedEffect(
@@ -4404,7 +4446,7 @@ private fun ImmersiveArtwork(
     val targetScrimOpacity = remember(activeBlur) { immersiveScrimOpacity(activeBlur) }
     val scrimOpacity by animateFloatAsState(
         targetValue = targetScrimOpacity,
-        animationSpec = tween(durationMillis = 360),
+        animationSpec = tween(durationMillis = if (hasPresentedArtwork) 360 else 0),
         label = "immersiveScrimOpacity"
     )
     // The animated frame supplies both the frozen blur and its actual colours.
@@ -4413,7 +4455,7 @@ private fun ImmersiveArtwork(
         targetValue = if (animatedArtworkEnabled && animatedArtworkUrl != null) {
             frozenAnimatedBackdrop ?: backdrop
         } else backdrop,
-        animationSpec = tween(durationMillis = 500),
+        animationSpec = tween(durationMillis = if (hasPresentedArtwork) 500 else 0),
         label = "immersiveBackdrop"
     )
 
@@ -4425,7 +4467,7 @@ private fun ImmersiveArtwork(
         // Match the cover crop and extend its blurred edge colours without reflections.
         Crossfade(
             targetState = activeBlur,
-            animationSpec = tween(durationMillis = 360),
+            animationSpec = tween(durationMillis = if (hasPresentedArtwork) 360 else 0),
             label = "immersiveBlur",
             modifier = Modifier.matchParentSize()
         ) { blurBitmap ->
@@ -4498,7 +4540,7 @@ private fun ImmersiveArtwork(
         ) {
             Crossfade(
                 targetState = artwork,
-                animationSpec = tween(durationMillis = 360),
+                animationSpec = tween(durationMillis = if (hasPresentedArtwork) 360 else 0),
                 label = "immersiveCover",
                 modifier = Modifier.fillMaxSize()
             ) { cover ->
@@ -4510,7 +4552,7 @@ private fun ImmersiveArtwork(
                         alignment = Alignment.TopCenter,
                         modifier = Modifier.fillMaxSize()
                     )
-                } else {
+                } else if (song == null) {
                     Icon(
                         Icons.Default.MusicNote,
                         contentDescription = null,
