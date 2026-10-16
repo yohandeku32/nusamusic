@@ -33,7 +33,8 @@ internal fun CdSongGrid(
             Column(Modifier.fillMaxWidth().clickable(onClickLabel = "Putar ${song.title}") { onPlay(song) }) {
                 CdJewelCase(
                     modifier = Modifier.fillMaxWidth().aspectRatio(1.12f),
-                    showStickers = false
+                    showStickers = false,
+                    song = song
                 ) { discModifier ->
                     CdDiscSurface(song, artwork, discModifier, shadowElevation = 0.dp)
                 }
