@@ -291,8 +291,9 @@ fun CdPlayer(
                         key(displaySong?.id) {
                             CdDisc(
                                 song = displaySong,
-                                spinning = isPlaying && isVisible && !loadingDisc && !storedDisc,
-                                visible = isVisible && !loadingDisc && !storedDisc,
+                                // Page visibility gates gestures, not playback rotation.
+                                spinning = isPlaying && !loadingDisc && !storedDisc,
+                                visible = !loadingDisc && !storedDisc,
                                 angle = discAngle,
                                 artwork = artwork,
                                 modifier = discModifier.onGloballyPositioned {
