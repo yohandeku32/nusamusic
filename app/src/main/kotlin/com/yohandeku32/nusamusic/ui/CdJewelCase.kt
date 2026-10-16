@@ -40,7 +40,6 @@ internal fun CdJewelCase(
     modifier: Modifier = Modifier,
     artistName: String? = null,
     showStickers: Boolean = true,
-    song: com.yohandeku32.nusamusic.model.Song? = null,
     disc: @Composable (Modifier) -> Unit
 ) {
     BoxWithConstraints(
@@ -73,7 +72,6 @@ internal fun CdJewelCase(
         // instead of submitting the sticker's hundreds of tiny draw operations.
         // Changing songs still invalidates the artist text as normal.
         CdClearLid(Modifier.matchParentSize(), artistName, showSpindle = true, showStickers = showStickers)
-        CdHiResBadge(song, Modifier.align(androidx.compose.ui.Alignment.BottomEnd).then(Modifier.offset(x = (-8).dp, y = (-8).dp)))
     }
 }
 

@@ -31,12 +31,18 @@ internal fun CdSongGrid(
         items(count = songs.size, key = { songs[it].id }, contentType = { "cd-song" }) { index ->
             val song = songs[index]
             Column(Modifier.fillMaxWidth().clickable(onClickLabel = "Putar ${song.title}") { onPlay(song) }) {
-                CdJewelCase(
-                    modifier = Modifier.fillMaxWidth().aspectRatio(1.12f),
-                    showStickers = false,
-                    song = song
-                ) { discModifier ->
-                    CdDiscSurface(song, artwork, discModifier, shadowElevation = 0.dp)
+                Box(Modifier.fillMaxWidth().aspectRatio(1.12f)) {
+                    CdJewelCase(
+                        modifier = Modifier.matchParentSize(),
+                        showStickers = false
+                    ) { discModifier ->
+                        CdDiscSurface(song, artwork, discModifier, shadowElevation = 0.dp)
+                    }
+                    CdHiResBadge(
+                        song,
+                        Modifier.align(androidx.compose.ui.Alignment.BottomEnd)
+                            .offset(x = (-8).dp, y = (-8).dp)
+                    )
                 }
                 Spacer(Modifier.height(10.dp))
                 Text(

@@ -113,6 +113,5 @@ private fun CdAlbumCoverLid(
             ).clip(RoundedCornerShape(1.dp))
         )
         CdClearLid(Modifier.matchParentSize(), showStickers = false)
-        CdHiResBadge(song, Modifier.align(androidx.compose.ui.Alignment.BottomEnd).padding(6.dp))
     }
 }
