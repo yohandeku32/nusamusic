@@ -4204,7 +4204,7 @@ private suspend fun prepareImmersiveArtwork(bitmap: Bitmap): Pair<Bitmap, Color>
         val pixels = IntArray(64) { index ->
             val x = ((index % 8 + 0.5f) / 8f * bitmap.width).toInt()
                 .coerceIn(0, bitmap.width - 1)
-            val y = ((0.55f + (index / 8 + 0.5f) / 8f * 0.40f) * bitmap.height).toInt()
+            val y = ((index / 8 + 0.5f) / 8f * bitmap.height).toInt()
                 .coerceIn(0, bitmap.height - 1)
             bitmap.getPixel(x, y)
         }
@@ -4391,7 +4391,7 @@ private fun ImmersiveArtwork(
             )
         }
 
-        // A light frosted wash keeps the cover palette visible beneath the controls.
+        // Blend toward the dominant cover tone without lifting dark artwork with white.
         Box(
             Modifier
                 .matchParentSize()
@@ -4399,10 +4399,10 @@ private fun ImmersiveArtwork(
                     Brush.verticalGradient(
                         0.00f to Color.Transparent,
                         0.28f to Color.Transparent,
-                        0.48f to animatedBackdrop.copy(alpha = 0.04f),
-                        0.68f to animatedBackdrop.copy(alpha = 0.08f),
-                        0.84f to Color.White.copy(alpha = 0.10f),
-                        1.00f to Color.White.copy(alpha = 0.18f)
+                        0.48f to animatedBackdrop.copy(alpha = 0.12f),
+                        0.68f to animatedBackdrop.copy(alpha = 0.35f),
+                        0.84f to animatedBackdrop.copy(alpha = 0.65f),
+                        1.00f to animatedBackdrop.copy(alpha = 0.90f)
                     )
                 )
         )
