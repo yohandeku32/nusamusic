@@ -131,6 +131,9 @@ fun CdPlayer(
         val storedDisc = transfer.storedSongId == displaySong?.id && displaySong != null &&
             request?.direction != CdDiscTransferDirection.INSERT
         val noDisc = storedDisc || displaySong == null
+        val insertingDisc = request?.direction == CdDiscTransferDirection.INSERT &&
+            transfer.phase != CdDiscTransferPhase.ARRIVED
+        val ejectingDisc = request?.direction == CdDiscTransferDirection.RETURN
         val discAngle = remember(displaySong?.id) { mutableFloatStateOf(0f) }
         fun returnDisc() {
             val current = song ?: return
@@ -314,7 +317,12 @@ fun CdPlayer(
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                text = if (noDisc) "No CD" else displaySong?.title.orEmpty(),
+                                text = when {
+                                    noDisc -> "No CD"
+                                    insertingDisc -> cdText("Memasukkan CD…", "Inserting CD…")
+                                    ejectingDisc -> cdText("Mengeluarkan CD…", "Ejecting CD…")
+                                    else -> displaySong?.title.orEmpty()
+                                },
                                 fontFamily = titleFontFamily,
                                 fontSize = titleSize.sp,
                                 lineHeight = titleLineHeight,
@@ -326,9 +334,12 @@ fun CdPlayer(
                             )
                             Spacer(Modifier.height(4.dp))
                             Text(
-                                text = if (noDisc) cdText("Masukkan CD dari koleksi di bawah", "Insert a CD from your collection")
-                                    else displaySong?.artist?.takeIf { it.isNotBlank() }
-                                        ?: cdText("Koleksi musik Anda", "Your music collection"),
+                                text = when {
+                                    noDisc -> cdText("Masukkan CD dari koleksi di bawah", "Insert a CD from your collection")
+                                    insertingDisc || ejectingDisc -> ""
+                                    else -> displaySong?.artist?.takeIf { it.isNotBlank() }
+                                        ?: cdText("Koleksi musik Anda", "Your music collection")
+                                },
                                 color = Color(0xFFA5A5A0),
                                 fontSize = 12.sp,
                                 lineHeight = 16.sp,
