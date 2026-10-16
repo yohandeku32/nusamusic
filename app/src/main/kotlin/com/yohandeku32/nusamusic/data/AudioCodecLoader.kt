@@ -51,6 +51,13 @@ object AudioCodecLoader {
         val uri = runCatching { Uri.parse(uriString) }.getOrNull()
             ?: return null
 
+        // STREAMINFO is authoritative for native FLAC, even when MediaExtractor
+        // fails or exposes the decoder's PCM output rather than source bit depth.
+        val flac = runCatching {
+            context.contentResolver.openInputStream(uri)?.use(::readFlacCodecInfo)
+        }.getOrNull()
+        if (flac != null) return flac
+
         val extractor = MediaExtractor()
         try {
             extractor.setDataSource(context, uri, null)
