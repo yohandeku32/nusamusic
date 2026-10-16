@@ -41,20 +41,6 @@ internal fun CdJewelCase(
     artistName: String? = null,
     disc: @Composable (Modifier) -> Unit
 ) {
-    // This font is a locally supplied, optional asset. Never commit the
-    // personal-use-only font itself to the public source repository.
-    val context = LocalContext.current.applicationContext
-    val stickerFont = remember(context) {
-        try {
-            android.graphics.Typeface.createFromAsset(
-                context.assets,
-                "fonts/Aerosoldier_PERSONAL_USE_ONLY.otf"
-            )
-        } catch (_: RuntimeException) {
-            null // Safe fallback for builds without the optional local asset.
-        }
-    }
-
     BoxWithConstraints(
         modifier.shadow(
             elevation = 12.dp,
@@ -84,20 +70,35 @@ internal fun CdJewelCase(
         // into an independent layer. Rotating frames can then reuse that layer
         // instead of submitting the sticker's hundreds of tiny draw operations.
         // Changing songs still invalidates the artist text as normal.
-        Canvas(
-            Modifier.matchParentSize().graphicsLayer {
-                compositingStrategy = CompositingStrategy.Offscreen
-            }
-        ) {
-            drawClearLid()
-            drawClearCaseReflections()
-            drawSpindle(Offset(size.width * 0.55f, size.height * 0.5f))
-            drawJewelCaseStickers(artistName, stickerFont)
-        }
+        CdClearLid(Modifier.matchParentSize(), artistName, showSpindle = true)
     }
 }
 
-private fun DrawScope.drawClearTray() {
+/** The player and carousel share the same clear plastic and archival decals. */
+@Composable
+internal fun CdClearLid(
+    modifier: Modifier = Modifier,
+    artistName: String? = null,
+    showSpindle: Boolean = false
+) {
+    // This optional personal-use font stays local; public builds use the fallback.
+    val context = LocalContext.current.applicationContext
+    val stickerFont = remember(context) {
+        try {
+            android.graphics.Typeface.createFromAsset(context.assets, "fonts/Aerosoldier_PERSONAL_USE_ONLY.otf")
+        } catch (_: RuntimeException) {
+            null
+        }
+    }
+    Canvas(modifier.graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }) {
+        drawClearLid()
+        drawClearCaseReflections()
+        if (showSpindle) drawSpindle(Offset(size.width * 0.55f, size.height * 0.5f))
+        drawJewelCaseStickers(artistName, stickerFont)
+    }
+}
+
+internal fun DrawScope.drawClearTray() {
     val w = size.width
     val h = size.height
     val edge = 1.dp.toPx()
@@ -153,7 +154,7 @@ private fun DrawScope.drawClearTray() {
     }
 }
 
-private fun DrawScope.drawClearLid() {
+internal fun DrawScope.drawClearLid() {
     val w = size.width
     val h = size.height
     val edge = 1.dp.toPx()
@@ -221,7 +222,7 @@ private fun DrawScope.drawClearLid() {
  * Broad low-alpha reflections and short specular edge highlights imply depth,
  * rather than scratches, creases or plastic shrink-wrap.
  */
-private fun DrawScope.drawClearCaseReflections() {
+internal fun DrawScope.drawClearCaseReflections() {
     val w = size.width
     val h = size.height
     val glass = Color(0xFFEAF7FF)
@@ -294,7 +295,7 @@ private fun DrawScope.drawClearCaseReflections() {
     )
 }
 
-private fun DrawScope.drawSpindle(centre: Offset) {
+internal fun DrawScope.drawSpindle(centre: Offset) {
     val h = size.height
     val radius = h * 0.075f
     val edge = 1.dp.toPx()
