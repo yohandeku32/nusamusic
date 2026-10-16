@@ -5,15 +5,12 @@ enum class PlayerPresentationMode(val preferenceValue: String) {
     CD("cd"),
     IMMERSIVE_ARTWORK("immersive_artwork");
 
-    companion object {
-        // Temporary presentation policy: CD is the only available player.
-        // Switch this flag off to restore Vinyl/Immersive selection later;
-        // leave the enum entries and their saved preference values intact.
-        const val CD_ONLY_MODE = true
+    val isAvailable: Boolean
+        get() = this != VINYL
 
+    companion object {
         fun fromPreference(value: String?): PlayerPresentationMode {
-            if (CD_ONLY_MODE) return CD
-            return entries.firstOrNull { it.preferenceValue == value } ?: VINYL
+            return entries.firstOrNull { it.preferenceValue == value && it.isAvailable } ?: CD
         }
     }
 }

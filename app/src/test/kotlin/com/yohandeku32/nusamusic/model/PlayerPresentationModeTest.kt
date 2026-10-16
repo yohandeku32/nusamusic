@@ -1,37 +1,27 @@
 package com.yohandeku32.nusamusic.model
 
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
+import org.junit.Assert.*
 import org.junit.Test
 
 class PlayerPresentationModeTest {
     @Test
-    fun onlyCdIsCurrentlyEnabled() {
-        assertTrue(PlayerPresentationMode.CD_ONLY_MODE)
+    fun cdAndImmersiveAreAvailableWhileVinylRemainsDisabled() {
+        assertTrue(PlayerPresentationMode.CD.isAvailable)
+        assertTrue(PlayerPresentationMode.IMMERSIVE_ARTWORK.isAvailable)
+        assertFalse(PlayerPresentationMode.VINYL.isAvailable)
     }
 
     @Test
-    fun oldVinylAndImmersivePreferencesLoadCdWhileDisabled() {
-        assertEquals(
-            PlayerPresentationMode.CD,
-            PlayerPresentationMode.fromPreference(PlayerPresentationMode.VINYL.preferenceValue)
-        )
-        assertEquals(
-            PlayerPresentationMode.CD,
-            PlayerPresentationMode.fromPreference(PlayerPresentationMode.IMMERSIVE_ARTWORK.preferenceValue)
-        )
+    fun enabledModesRestoreTheirSavedSelection() {
+        for (mode in listOf(PlayerPresentationMode.CD, PlayerPresentationMode.IMMERSIVE_ARTWORK)) {
+            assertEquals(mode, PlayerPresentationMode.fromPreference(mode.preferenceValue))
+        }
     }
 
     @Test
-    fun cdAndUnknownPreferencesAlsoLoadCd() {
-        assertEquals(PlayerPresentationMode.CD, PlayerPresentationMode.fromPreference("cd"))
-        assertEquals(PlayerPresentationMode.CD, PlayerPresentationMode.fromPreference(null))
-        assertEquals(PlayerPresentationMode.CD, PlayerPresentationMode.fromPreference("unknown"))
-    }
-
-    @Test
-    fun inactiveModesKeepTheirPreferenceIdentifiersForLater() {
-        assertEquals("vinyl", PlayerPresentationMode.VINYL.preferenceValue)
-        assertEquals("immersive_artwork", PlayerPresentationMode.IMMERSIVE_ARTWORK.preferenceValue)
+    fun disabledAndUnknownPreferencesFallBackToCd() {
+        for (value in listOf(null, "unknown", "vinyl")) {
+            assertEquals(PlayerPresentationMode.CD, PlayerPresentationMode.fromPreference(value))
+        }
     }
 }

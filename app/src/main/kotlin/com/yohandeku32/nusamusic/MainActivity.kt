@@ -1726,7 +1726,7 @@ private fun NusaMusicApp(
                 onResetCustomTitleFont = onResetCustomTitleFont,
                 playerPresentationMode = playerPresentationMode,
                 onPresentationSelected = { mode ->
-                    if (!PlayerPresentationMode.CD_ONLY_MODE || mode == PlayerPresentationMode.CD) {
+                    if (mode.isAvailable) {
                         playerPresentationMode = mode
                         uiPrefs.edit().putString("player_presentation_mode", mode.preferenceValue).apply()
                     }
@@ -4279,7 +4279,8 @@ private fun ImmersiveArtwork(
         val cachedFullArtwork = ArtworkLoader.cached(
             uriString = targetSong.uri,
             maxSize = 1_600,
-            cacheKey = albumCacheKey
+            cacheKey = albumCacheKey,
+            allowSmallerPreview = false
         )
         if (cachedFullArtwork != null) {
             if (cachedFullArtwork !== artwork) publish(cachedFullArtwork)

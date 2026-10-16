@@ -107,19 +107,18 @@ internal fun PlayerSettingsContent(
                         )
                         SettingChoice(
                             "Vinyl",
-                            if (PlayerPresentationMode.CD_ONLY_MODE) settingsText("Sementara dinonaktifkan", "Temporarily disabled")
+                            if (!PlayerPresentationMode.VINYL.isAvailable) settingsText("Sementara dinonaktifkan", "Temporarily disabled")
                             else settingsText("Piringan hitam berputar.", "A spinning vinyl record."),
                             Icons.Default.GraphicEq, playerPresentationMode == PlayerPresentationMode.VINYL,
                             { onPresentationSelected(PlayerPresentationMode.VINYL) },
-                            enabled = !PlayerPresentationMode.CD_ONLY_MODE
+                            enabled = PlayerPresentationMode.VINYL.isAvailable
                         )
                         SettingChoice(
                             settingsText("Sampul imersif", "Immersive artwork"),
-                            if (PlayerPresentationMode.CD_ONLY_MODE) settingsText("Sementara dinonaktifkan", "Temporarily disabled")
-                            else settingsText("Sampul album memenuhi layar.", "Edge-to-edge album artwork."),
+                            settingsText("Sampul album memenuhi layar.", "Edge-to-edge album artwork."),
                             Icons.Default.CropOriginal, playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK,
                             { onPresentationSelected(PlayerPresentationMode.IMMERSIVE_ARTWORK) },
-                            enabled = !PlayerPresentationMode.CD_ONLY_MODE
+                            enabled = PlayerPresentationMode.IMMERSIVE_ARTWORK.isAvailable
                         )
                     }
                     SettingsDivider()
