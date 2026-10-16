@@ -31,6 +31,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlin.math.cos
 
+internal const val CD_SHELF_REST_ANGLE = -76f
+
 /** Two independently projected faces keep the spine readable on the angled shelf. */
 @Composable
 internal fun CdAlbumCase(
@@ -38,7 +40,7 @@ internal fun CdAlbumCase(
     artwork: @Composable (Song?, Modifier) -> Unit,
     selected: Boolean,
     modifier: Modifier = Modifier,
-    angle: () -> Float = { -64f }
+    angle: () -> Float = { CD_SHELF_REST_ANGLE }
 ) {
     val fallback = remember(song.albumId, song.album) {
         val palette = listOf(Color(0xFF53657C), Color(0xFFD2D4C9), Color(0xFFA15C45), Color(0xFF657B40), Color(0xFF4B575B))
@@ -86,7 +88,9 @@ internal fun CdAlbumCase(
                 transformOrigin = TransformOrigin(0f, 0.5f)
                 rotationY = degrees
                 translationX = (size.width - projectedWidth) / 2f
-                cameraDistance = size.width * 10f
+                // A closer camera makes the far cover edge recede into the
+                // shelf, while retaining enough distance to avoid clipping.
+                cameraDistance = size.width * 3.2f
                 this.shape = shape
                 shadowElevation = 5.dp.toPx()
             }.background(Color(0xFF15191B), shape)
@@ -117,7 +121,7 @@ internal fun CdAlbumCase(
                 transformOrigin = TransformOrigin(1f, 0.5f)
                 rotationY = degrees + 90f
                 translationX = (widthPx - projectedWidth) / 2f - size.width
-                cameraDistance = widthPx * 10f
+                cameraDistance = widthPx * 3.2f
             }.background(spineColor).drawWithCache {
                 val edge = Brush.horizontalGradient(listOf(Color.Black.copy(alpha = 0.18f), Color.Transparent, Color.White.copy(alpha = 0.18f)))
                 onDrawWithContent {
