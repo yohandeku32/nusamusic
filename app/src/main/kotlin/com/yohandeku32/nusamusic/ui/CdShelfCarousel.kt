@@ -10,7 +10,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.stopScroll
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -95,30 +95,33 @@ internal fun CdShelfCarousel(
     }
 
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val slotWidth = (maxWidth / CD_CAROUSEL_VISIBLE_COUNT * 0.70f).coerceIn(48.dp, 52.dp)
-        val rackWidth = slotWidth * CD_CAROUSEL_VISIBLE_COUNT
-        val centeringPadding = (rackWidth - slotWidth) / 2
         val caseWidth = minOf(132.dp, maxWidth * 0.36f)
         val caseHeight = caseWidth * 0.90f
-        val stageHeight = caseHeight * 1.45f + 20.dp
+        // Turn the angled cases onto their sides, keeping the spine text
+        // horizontal as the shelf stacks and scrolls from top to bottom.
+        val slotHeight = caseWidth * 0.30f + 2.dp
+        val rackHeight = slotHeight * CD_CAROUSEL_VISIBLE_COUNT
+        val rackWidth = caseHeight + 24.dp
+        val centeringPadding = (rackHeight - slotHeight) / 2
+        val stageHeight = maxOf(rackHeight + 16.dp, caseHeight * 1.45f + 20.dp)
         val density = LocalDensity.current
         val caseWidthPx = with(density) { caseWidth.toPx() }
         val caseHeightPx = with(density) { caseHeight.toPx() }
         val stageHeightPx = with(density) { stageHeight.toPx() }
         val viewportWidthPx = with(density) { maxWidth.toPx() }
-        val rackLeftPx = with(density) { (maxWidth - rackWidth).toPx() / 2f }
+        val rackTopPx = with(density) { (stageHeight - rackHeight).toPx() / 2f }
         Box(Modifier.fillMaxWidth().height(stageHeight)) {
-            LazyRow(
+            LazyColumn(
                 state = listState,
                 userScrollEnabled = selection == null,
                 flingBehavior = rememberSnapFlingBehavior(listState),
-                contentPadding = PaddingValues(horizontal = centeringPadding),
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.align(Alignment.Center).width(rackWidth).fillMaxHeight().graphicsLayer {
+                contentPadding = PaddingValues(vertical = centeringPadding),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.align(Alignment.Center).width(rackWidth).height(rackHeight).graphicsLayer {
                     clip = true
                     compositingStrategy = CompositingStrategy.Offscreen
                 }.drawWithCache {
-                    val edgeFade = Brush.horizontalGradient(
+                    val edgeFade = Brush.verticalGradient(
                         0f to Color.Transparent, 0.10f to Color.Black,
                         0.90f to Color.Black, 1f to Color.Transparent
                     )
@@ -133,7 +136,7 @@ internal fun CdShelfCarousel(
                     val playing = song.id == currentId
                     val lifted = selection?.index == index
                     Box(
-                        Modifier.width(slotWidth).height(caseHeight)
+                        Modifier.fillMaxWidth().height(slotHeight)
                             .clickable(
                                 enabled = selection == null,
                                 interactionSource = null, indication = null, role = Role.Button
@@ -142,10 +145,10 @@ internal fun CdShelfCarousel(
                                     listState.stopScroll()
                                     val layout = listState.layoutInfo
                                     val item = layout.visibleItemsInfo.firstOrNull { it.index == index }
-                                    val sourceX = item?.let {
-                                        rackLeftPx + it.offset - layout.viewportStartOffset + it.size * 0.5f
-                                    } ?: viewportWidthPx / 2f
-                                    preview.show(CdShelfSelection(index, song, sourceX))
+                                    val sourceY = item?.let {
+                                        rackTopPx + it.offset - layout.viewportStartOffset + it.size * 0.5f
+                                    } ?: stageHeightPx / 2f
+                                    preview.show(CdShelfSelection(index, song, viewportWidthPx / 2f, sourceY))
                                 }
                             }
                             .semantics {
@@ -157,7 +160,10 @@ internal fun CdShelfCarousel(
                     ) {
                         CdAlbumCase(
                             song, artwork, playing,
-                            Modifier.requiredSize(caseWidth, caseHeight).graphicsLayer { alpha = if (lifted) 0f else 1f }
+                            Modifier.requiredSize(caseWidth, caseHeight).graphicsLayer {
+                                rotationZ = 90f
+                                alpha = if (lifted) 0f else 1f
+                            }
                         )
                     }
                 }
@@ -174,7 +180,9 @@ internal fun CdShelfCarousel(
                             val p = progress.value
                             translationX = selection.originCenterX - caseWidthPx / 2f +
                                 (viewportWidthPx / 2f - selection.originCenterX) * p
-                            translationY = (stageHeightPx - caseHeightPx) / 2f - 8.dp.toPx() * p
+                            translationY = selection.originCenterY - caseHeightPx / 2f +
+                                (stageHeightPx / 2f - selection.originCenterY) * p
+                            rotationZ = 90f * (1f - p)
                             scaleX = 1f + 0.30f * p
                             scaleY = 1f + 0.30f * p
                         }

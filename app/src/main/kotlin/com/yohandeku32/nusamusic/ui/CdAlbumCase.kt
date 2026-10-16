@@ -18,6 +18,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -92,7 +94,7 @@ internal fun CdAlbumCase(
                 // shelf, while retaining enough distance to avoid clipping.
                 cameraDistance = size.width * 3.2f
                 this.shape = shape
-                shadowElevation = 5.dp.toPx()
+                shadowElevation = 3.dp.toPx()
             }.background(Color(0xFF15191B), shape)
                 .border(0.8.dp, if (selected) Color(0xFFE9EBDD) else Color.White.copy(alpha = 0.25f), shape)
                 .clip(shape)
@@ -115,7 +117,7 @@ internal fun CdAlbumCase(
             }
         }
         Box(
-            Modifier.width(14.dp).fillMaxHeight().graphicsLayer {
+            Modifier.width(8.dp).fillMaxHeight().graphicsLayer {
                 val degrees = angle()
                 val projectedWidth = widthPx * cos(Math.toRadians(degrees.toDouble())).toFloat()
                 transformOrigin = TransformOrigin(1f, 0.5f)
@@ -137,8 +139,9 @@ internal fun CdAlbumCase(
                     append("  ")
                     append(song.artist)
                 },
-                modifier = Modifier.requiredSize(width = spineLabelWidth, height = 14.dp).graphicsLayer { rotationZ = -90f },
-                color = spineInk, fontSize = 8.sp, lineHeight = 12.sp,
+                modifier = Modifier.requiredSize(width = spineLabelWidth, height = 8.dp).graphicsLayer { rotationZ = -90f },
+                color = spineInk, fontSize = 7.sp, lineHeight = 8.sp,
+                style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false)),
                 maxLines = 1, overflow = TextOverflow.Ellipsis
             )
         }
