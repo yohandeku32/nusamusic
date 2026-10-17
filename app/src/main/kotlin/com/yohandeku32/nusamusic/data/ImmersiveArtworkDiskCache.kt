@@ -39,7 +39,7 @@ internal class ImmersiveArtworkDiskCache(private val file: File) {
             }
         }
         val metadata = Properties().apply { load(ByteArrayInputStream(entries["metadata"] ?: return null)) }
-        if (metadata.getProperty("version") != "1" || metadata.getProperty("key") != key) return null
+        if (metadata.getProperty("version") != VERSION || metadata.getProperty("key") != key) return null
         ImmersiveArtworkBytes(key,
             entries["cover"]?.takeIf { it.isNotEmpty() } ?: return null,
             entries["blur"]?.takeIf { it.isNotEmpty() } ?: return null,
@@ -55,7 +55,7 @@ internal class ImmersiveArtworkDiskCache(private val file: File) {
             temporary = File.createTempFile("immersive-preview-", ".tmp", directory)
             val metadata = ByteArrayOutputStream().also { output ->
                 Properties().apply {
-                    setProperty("version", "1")
+                    setProperty("version", VERSION)
                     setProperty("key", value.key)
                     setProperty("backdrop", value.backdrop.toString())
                 }.store(output, null)
@@ -80,5 +80,9 @@ internal class ImmersiveArtworkDiskCache(private val file: File) {
         }
     }
 
-    private companion object { const val MAX_BYTES = 4 * 1024 * 1024 }
+    private companion object {
+        // Version 2 preserves artwork shapes with a gentler blur. Rebuild old previews.
+        const val VERSION = "2"
+        const val MAX_BYTES = 4 * 1024 * 1024
+    }
 }
