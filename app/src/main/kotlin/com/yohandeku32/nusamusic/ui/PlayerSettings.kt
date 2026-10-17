@@ -15,6 +15,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -23,6 +24,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yohandeku32.nusamusic.BuildConfig
@@ -36,6 +38,14 @@ private fun settingsText(id: String, en: String): String =
 /** Presentation only: the player owns preferences and the existing folder/font launchers. */
 @Composable
 internal fun PlayerSettingsContent(
+    lyricsFontSize: Float,
+    onLyricsFontSizeChange: (Float) -> Unit,
+    onLyricsFontSizeChangeFinished: () -> Unit,
+    hasLyricsSong: Boolean,
+    lyricsLoading: Boolean,
+    lyricsImportFailed: Boolean,
+    onImportLyrics: () -> Unit,
+    onRetryLyrics: () -> Unit,
     titleFontSize: Float,
     onTitleFontSizeChange: (Float) -> Unit,
     onTitleFontSizeChangeFinished: () -> Unit,
@@ -68,6 +78,7 @@ internal fun PlayerSettingsContent(
     modifier: Modifier = Modifier
 ) {
     val colors = MaterialTheme.colorScheme
+    val uriHandler = LocalUriHandler.current
     Column(modifier.fillMaxWidth().fillMaxHeight(0.92f)) {
         Row(
             Modifier.fillMaxWidth().padding(start = 24.dp, end = 12.dp, bottom = 20.dp),
@@ -135,6 +146,35 @@ internal fun PlayerSettingsContent(
                         settingsText("Gerakan pada sampul album yang didukung.", "Motion for supported album artwork."),
                         animatedArtworkEnabled, onAnimatedArtworkChange
                     )
+                }
+            }
+            item(key = "lyrics") {
+                SettingsSection(settingsText("Lirik", "Lyrics")) {
+                    Surface(shape = RoundedCornerShape(16.dp), color = colors.surfaceVariant.copy(alpha = 0.45f)) {
+                        Text(settingsText("Musik menemani harimu", "Music follows your day"),
+                            Modifier.fillMaxWidth().padding(20.dp), fontSize = lyricsFontSize.sp,
+                            lineHeight = (lyricsFontSize * 1.25f).sp, textAlign = TextAlign.Center, fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(Modifier.height(16.dp))
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text(settingsText("Ukuran lirik", "Lyrics size"), Modifier.weight(1f), fontWeight = FontWeight.Medium)
+                        SettingValue("${lyricsFontSize.toInt()} sp")
+                    }
+                    Slider(value = lyricsFontSize, onValueChange = onLyricsFontSizeChange,
+                        onValueChangeFinished = onLyricsFontSizeChangeFinished, valueRange = 18f..48f, steps = 29,
+                        modifier = Modifier.semantics { contentDescription = settingsText("Ukuran lirik", "Lyrics size") })
+                    RangeLabels("18 sp", "48 sp")
+                    if (hasLyricsSong) {
+                        SettingsDivider()
+                        SettingAction(settingsText("Impor lirik", "Import lyrics"),
+                            settingsText("Pilih file .TTML atau .LRC untuk lagu saat ini", "Choose a .TTML or .LRC file for the current song"),
+                            Icons.Default.FileOpen, onImportLyrics)
+                        if (lyricsImportFailed) Text(settingsText("File lirik tidak valid", "Invalid lyrics file"), color = colors.error)
+                        TextButton(onClick = onRetryLyrics, enabled = !lyricsLoading) {
+                            Text(settingsText("Cari ulang lirik", "Find lyrics again"))
+                        }
+                    }
+                    TextButton(onClick = { uriHandler.openUri("https://lrclib.net") }) { Text("LRCLIB ↗") }
                 }
             }
             item(key = "typography") {

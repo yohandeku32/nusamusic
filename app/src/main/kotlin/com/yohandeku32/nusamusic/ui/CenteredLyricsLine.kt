@@ -1,0 +1,84 @@
+package com.yohandeku32.nusamusic.ui
+
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.Text
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.ui.unit.dp
+import com.mocharealm.accompanist.lyrics.core.model.ISyncedLine
+import com.mocharealm.accompanist.lyrics.core.model.karaoke.KaraokeLine
+import com.mocharealm.accompanist.lyrics.core.model.synced.SyncedLine
+import com.mocharealm.accompanist.lyrics.ui.composable.lyrics.*
+import com.mocharealm.accompanist.lyrics.ui.utils.isRtl
+
+/** Reuse Accompanist's timed word drawing, but center each wrapped row. */
+@Composable
+internal fun CenteredKaraokeLine(
+    line: KaraokeLine,
+    focused: Boolean,
+    time: () -> Int,
+    style: TextStyle,
+    onSeek: (ISyncedLine) -> Unit
+) {
+    val opacity = animateFloatAsState(if (line.isAccompaniment) { if (focused) 0.6f else 0.2f } else { if (focused) 1f else 0.4f }, label = "lyricOpacity")
+    val textMeasurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val textStyle = remember(style) { style.copy(textDirection = TextDirection.Content) }
+    val rtl = remember(line) { line.syllables.any { it.content.isRtl() } }
+    Column(Modifier.fillMaxWidth().clickable { onSeek(line) }.padding(horizontal = 16.dp, vertical = 8.dp)
+        .graphicsLayer { alpha = opacity.value }) {
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val width = constraints.maxWidth.toFloat()
+            // Every measurement depends on text size, available width, and system font scale.
+            val wrapped = remember(line, textStyle, textMeasurer, density, width) {
+                val space = textMeasurer.measure(" ", textStyle).size.width.toFloat()
+                val syllables = measureSyllablesAndDetermineAnimation(line.syllables, textMeasurer, textStyle, line.isAccompaniment, space)
+                calculateBalancedLines(syllables, width, textMeasurer, textStyle)
+            }
+            val lineHeight = remember(textMeasurer, textStyle, density) { textMeasurer.measure("M", textStyle).size.height.toFloat() }
+            val layouts = remember(wrapped, width, lineHeight, rtl) {
+                calculateStaticLineLayout(wrapped, false, width, lineHeight, rtl).mapIndexed { row, syllables ->
+                    val offset = Offset((width - wrapped[row].totalWidth) / 2f, 0f)
+                    syllables.map { it.copy(position = it.position + offset, wordPivot = it.wordPivot + offset) }
+                }
+            }
+            val height = with(density) { (lineHeight * wrapped.size).toDp() } + 8.dp
+            Canvas(Modifier.fillMaxWidth().height(height).semantics {
+                contentDescription = line.syllables.joinToString("") { it.content }
+            }) {
+                drawLyricsLine(layouts, time(), Color.White, BlendMode.SrcOver, rtl)
+            }
+        }
+        line.translation?.let { Translation(it, style) }
+    }
+}
+
+@Composable
+internal fun CenteredSyncedLine(line: SyncedLine, focused: Boolean, style: TextStyle, onSeek: (ISyncedLine) -> Unit) {
+    val opacity = animateFloatAsState(if (focused) 1f else 0.4f, label = "lyricOpacity")
+    Column(Modifier.fillMaxWidth().clickable { onSeek(line) }.padding(horizontal = 16.dp, vertical = 8.dp)
+        .graphicsLayer { alpha = opacity.value }) {
+        Text(line.content, Modifier.fillMaxWidth(), style = style, color = Color.White, textAlign = TextAlign.Center)
+        line.translation?.let { Translation(it, style) }
+    }
+}
+
+@Composable
+private fun Translation(text: String, style: TextStyle) {
+    Text(text, Modifier.fillMaxWidth(), style = style.copy(fontSize = style.fontSize * 0.65f, lineHeight = style.lineHeight * 0.65f),
+        color = Color.White.copy(alpha = 0.6f), textAlign = TextAlign.Center)
+}

@@ -10,7 +10,7 @@ renderer on the app's Compose 1.9 generation. The original license is included
 in `app/src/main/assets/licenses/accompanist-apache-2.0.txt`.
 
 Optional online lyrics are retrieved from [LRCLIB](https://lrclib.net), with
-attribution in the lyrics page. Imported lyrics are copied into app storage;
+attribution in Settings → Lyrics. Imported lyrics are copied into app storage;
 online results are cached separately.
 
 NusaMusic integrates the **Decent USB Audio** engine from:

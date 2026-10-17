@@ -94,8 +94,8 @@ Most-played tracks use listening history stored on the device from this version 
 Horizontal immersive pages are ordered **Artist → Player → Songs**. Tap the
 lyrics icon, or swipe up on the cover, to flip the artwork into lyrics. The
 lyrics occupy the area from the top of the cover through the Hi-Res pill
-boundary. They do not open a separate page below the player. Close or Android
-Back flips to artwork again.
+boundary. They do not open a separate page below the player. The close action
+below the lyrics or Android Back flips to artwork again.
 
 The main progress bar and all playback/action controls stay in place below
 the flip. The lyrics back face is transparent over the **same prepared blur
@@ -104,20 +104,25 @@ Animated cover video pauses during the flip/lyrics view. The cover, metadata
 and Hi-Res pill turn away while the lyrics turn in; the background and controls
 do not rotate. Measured control bounds keep the lyrics clear of the seek bar.
 
-Only useful actions remain in the panel header. Repeated headings, storage
-badges and loading descriptions are removed; LRCLIB attribution and retry
-are in the options menu. Lyrics, empty states and actions explicitly use light
-colors, including when the device is using the light theme.
+The lyrics panel has no header icons. Lyrics and translations are centered,
+including each wrapped karaoke row. **Settings → Lyrics** provides a live size
+preview and a persistent **18–48 sp** slider (32 sp by default), independently
+of the song-title font. Close lyrics to access the player's settings button.
+Imports, retry and LRCLIB attribution are also available in that settings section.
+Lyrics, empty states and actions explicitly use light colors, including when
+the device is using the light theme.
 
 Lyrics follow playback, and tapping a timed line seeks to it. Accompanist's
-line/word components are composed lazily for the visible rows instead of
-premeasuring the whole song. A retained observable clock resumes after hidden
+word drawing and layout functions are used lazily for the visible rows instead
+of premeasuring the whole song. Measurements refresh on size, width and system
+font-scale changes. A retained observable clock resumes after hidden
 loads, reopening, and seeks. An interval index handles overlapping TTML voices;
 new scroll targets replace old animations. Manual browsing pauses following
 until scrolling stops and 2.5 seconds pass. Zero-duration words are normalized
 to avoid non-finite karaoke progress.
 
-Use the file icon to import a `.ttml` or `.lrc` file for the current song.
+Use **Settings → Lyrics → Import lyrics** to import a `.ttml` or `.lrc` file
+for the current song, or the import button when lyrics are unavailable.
 Nusa copies validated imports into its own storage, so the file picker does
 not need to reopen on later visits or after restarting. Standard LRC supports
 repeated timestamps, translations and offset tags; Enhanced LRC and Apple
