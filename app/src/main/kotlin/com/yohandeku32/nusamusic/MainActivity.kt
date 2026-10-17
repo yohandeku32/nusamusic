@@ -1457,6 +1457,11 @@ private fun NusaMusicApp(
     var titleFontSize by remember {
         mutableStateOf(uiPrefs.getFloat("title_font_size", 34f))
     }
+    var lyricsFontSize by remember {
+        mutableFloatStateOf(uiPrefs.getFloat("lyrics_font_size", 32f).let {
+            if (it.isFinite()) it.coerceIn(18f, 48f) else 32f
+        })
+    }
     var titleFontName by remember {
         mutableStateOf(
             uiPrefs.getString("title_font_family", "Serif") ?: "Serif"
@@ -1669,6 +1674,17 @@ private fun NusaMusicApp(
         derivedStateOf { !libraryListState.isScrollInProgress }
     }
     val scope = rememberCoroutineScope()
+    var lyricsImportTarget by remember { mutableStateOf<Song?>(null) }
+    val lyricsPicker = androidx.activity.compose.rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        val target = lyricsImportTarget
+        lyricsImportTarget = null
+        if (uri != null && target != null) lyricsState.import(target, uri, scope)
+    }
+    fun chooseLyricsFile() {
+        val target = currentSong ?: return
+        lyricsImportTarget = target
+        lyricsPicker.launch(arrayOf("*/*"))
+    }
     var alphabetVisible by remember { mutableStateOf(false) }
     var alphabetDragging by remember { mutableStateOf(false) }
     var alphabetHideJob by remember { mutableStateOf<Job?>(null) }
@@ -1800,6 +1816,16 @@ private fun NusaMusicApp(
             }
 
             PlayerSettingsContent(
+                lyricsFontSize = lyricsFontSize,
+                onLyricsFontSizeChange = { lyricsFontSize = it },
+                onLyricsFontSizeChangeFinished = {
+                    uiPrefs.edit().putFloat("lyrics_font_size", lyricsFontSize).apply()
+                },
+                hasLyricsSong = currentSong != null,
+                lyricsLoading = currentSong?.let { lyricsState.forSong(it).loading } == true,
+                lyricsImportFailed = currentSong?.let { lyricsState.forSong(it).importFailed } == true,
+                onImportLyrics = ::chooseLyricsFile,
+                onRetryLyrics = { currentSong?.let { lyricsState.load(it, scope, retry = true) } },
                 titleFontSize = titleFontSize,
                 onTitleFontSizeChange = { titleFontSize = it },
                 onTitleFontSizeChangeFinished = {
@@ -2280,6 +2306,8 @@ private fun NusaMusicApp(
                                             val controlTop = if (immersiveControlsTopPx.isFinite()) with(LocalDensity.current) { immersiveControlsTopPx.toDp() } else playerViewportHeight - 270.dp
                                             val lyricHeight = minOf(desiredBottom, controlTop - 8.dp).coerceIn(0.dp, playerViewportHeight)
                                             ImmersiveLyricsPanel(
+                                                fontSize = lyricsFontSize,
+                                                onImport = ::chooseLyricsFile,
                                                 song = currentSong,
                                                 positionMs = positionMsState,
                                                 durationMs = durationMs,

@@ -11,7 +11,6 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -21,8 +20,6 @@ import com.mocharealm.accompanist.lyrics.core.model.ISyncedLine
 import com.mocharealm.accompanist.lyrics.core.model.SyncedLyrics
 import com.mocharealm.accompanist.lyrics.core.model.karaoke.KaraokeLine
 import com.mocharealm.accompanist.lyrics.core.model.synced.SyncedLine
-import com.mocharealm.accompanist.lyrics.ui.composable.lyrics.KaraokeLineText
-import com.mocharealm.accompanist.lyrics.ui.composable.lyrics.SyncedLineItem
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlin.math.abs
@@ -35,6 +32,7 @@ internal fun SyncedLyricsView(
     visible: Boolean,
     listState: LazyListState,
     onSeek: (ISyncedLine) -> Unit,
+    fontSize: Float,
     modifier: Modifier = Modifier
 ) {
     val clock = remember { LyricsPlaybackClock(position, visible) }
@@ -51,17 +49,19 @@ internal fun SyncedLyricsView(
             browsing = false
         }
     }
-    LaunchedEffect(frame.anchor, visible, browsing) {
+    LaunchedEffect(frame.anchor, visible, browsing, fontSize) {
         if (!visible || browsing || frame.anchor < 0) return@LaunchedEffect
         snapshotFlow { listState.layoutInfo.totalItemsCount }.first { it > frame.anchor }
+        // Allow resized rows to finish measurement before choosing the scroll distance.
+        withFrameNanos { }
         val target = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == frame.anchor }
         // Do not skip a new target just because our previous animation was running.
         // LaunchedEffect cancels that animation and follows the newest line instead.
         if (target == null) listState.scrollToItem(frame.anchor)
         else if (abs(target.offset) > 2) listState.animateScrollBy(target.offset.toFloat(), tween(240))
     }
-    val normalStyle = remember { TextStyle(color = Color.White, fontSize = 32.sp, lineHeight = 40.sp, fontWeight = FontWeight.Bold) }
-    val backgroundStyle = remember { TextStyle(color = Color.White, fontSize = 20.sp, lineHeight = 28.sp, fontWeight = FontWeight.SemiBold) }
+    val normalStyle = remember(fontSize) { TextStyle(color = Color.White, fontSize = fontSize.sp, lineHeight = (fontSize * 1.25f).sp, fontWeight = FontWeight.Bold) }
+    val backgroundStyle = remember(fontSize) { TextStyle(color = Color.White, fontSize = (fontSize * 0.625f).sp, lineHeight = (fontSize * 0.875f).sp, fontWeight = FontWeight.SemiBold) }
     BoxWithConstraints(modifier) {
         LazyColumn(
             state = listState,
@@ -70,25 +70,18 @@ internal fun SyncedLyricsView(
         ) {
             itemsIndexed(lyrics.lines, key = { index, _ -> index }, contentType = { _, line -> if (line is KaraokeLine) "karaoke" else "line" }) { index, line ->
                 when (line) {
-                    is KaraokeLine -> KaraokeLineText(
+                    is KaraokeLine -> CenteredKaraokeLine(
                         line = line,
-                        onLineClicked = onSeek,
-                        onLinePressed = {},
-                        currentTimeProvider = clock.read,
-                        isFocused = index in frame.active,
-                        normalLineTextStyle = normalStyle,
-                        accompanimentLineTextStyle = backgroundStyle,
-                        activeColor = Color.White,
-                        blendMode = BlendMode.SrcOver
+                        onSeek = onSeek,
+                        time = clock.read,
+                        focused = index in frame.active,
+                        style = if (line.isAccompaniment) backgroundStyle else normalStyle
                     )
-                    is SyncedLine -> SyncedLineItem(
+                    is SyncedLine -> CenteredSyncedLine(
                         line = line,
-                        isFocused = index in frame.active,
-                        onLineClicked = onSeek,
-                        onLinePressed = {},
-                        textStyle = normalStyle,
-                        textColor = Color.White,
-                        blendMode = BlendMode.SrcOver
+                        focused = index in frame.active,
+                        onSeek = onSeek,
+                        style = normalStyle
                     )
                 }
             }
