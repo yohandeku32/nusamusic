@@ -1,5 +1,9 @@
 package com.yohandeku32.nusamusic.ui
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.VectorConverter
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
@@ -16,15 +20,15 @@ import androidx.compose.ui.unit.sp
 import com.mocharealm.accompanist.lyrics.core.model.ISyncedLine
 import com.mocharealm.accompanist.lyrics.core.model.SyncedLyrics
 import com.mocharealm.accompanist.lyrics.core.model.karaoke.KaraokeLine
-import com.mocharealm.accompanist.lyrics.core.model.synced.SyncedLine
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
 private data class LyricsDisplayRow(val line: Int, val gap: LyricsGap? = null)
 
-/** Keep Accompanist's word renderer; own lazy composition and scroll following. */
+/** Compose centered syllable rows lazily and follow the active line or countdown. */
 @Composable
 internal fun SyncedLyricsView(
     lyrics: SyncedLyrics,
@@ -37,6 +41,7 @@ internal fun SyncedLyricsView(
 ) {
     val clock = remember { LyricsPlaybackClock(position, visible) }
     SideEffect { clock.update(position, visible) }
+    val drawTime = rememberSyllableClock(clock, visible)
     val timeline = remember(lyrics) { LyricsTimeline(lyrics.lines) }
     val rows = remember(timeline) {
         val gaps = timeline.gaps.associateBy { it.nextLine }
@@ -107,23 +112,29 @@ internal fun SyncedLyricsView(
                     return@itemsIndexed
                 }
                 val index = row.line
-                val line = lyrics.lines[index]
-                when (line) {
-                    is KaraokeLine -> CenteredKaraokeLine(
-                        line = line,
-                        onSeek = onSeek,
-                        time = clock.read,
-                        focused = index in frame.active,
-                        style = if (line.isAccompaniment) backgroundStyle else normalStyle
-                    )
-                    is SyncedLine -> CenteredSyncedLine(
-                        line = line,
-                        focused = index in frame.active,
-                        onSeek = onSeek,
-                        style = normalStyle
-                    )
-                }
+                val original = lyrics.lines[index]
+                val line = remember(original) { SyllableTiming.forDisplay(original) }
+                CenteredKaraokeLine(
+                    line = line,
+                    onSeek = { onSeek(original) },
+                    time = drawTime,
+                    focused = index in frame.active,
+                    style = if (line.isAccompaniment) backgroundStyle else normalStyle
+                )
             }
         }
     }
+}
+
+/** Interpolate playback samples in drawing, while seeks and hidden pages update immediately. */
+@Composable
+private fun rememberSyllableClock(clock: LyricsPlaybackClock, visible: Boolean): () -> Int {
+    val animated = remember(clock) { Animatable(clock.read(), Int.VectorConverter) }
+    LaunchedEffect(clock, visible) {
+        snapshotFlow { clock.read() }.collectLatest { target ->
+            if (!visible || target < animated.value || abs(target.toLong() - animated.value) > 250) animated.snapTo(target)
+            else if (target != animated.value) animated.animateTo(target, tween(50, easing = LinearEasing))
+        }
+    }
+    return remember(animated) { { animated.value } }
 }
