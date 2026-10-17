@@ -77,4 +77,33 @@ class LyricsDecoderTest {
     @Test(expected = IllegalArgumentException::class) fun rejectsOversizedInput() {
         LyricsDecoder.decode("a".repeat(LyricsDecoder.MAX_BYTES + 1), 5_000)
     }
+    @Test fun ttmlContainerPaddingDoesNotKeepTheSingerActiveThroughSilence() {
+        val line = LyricsDecoder.decode("""<tt><body><p begin="0s" end="30s"><span begin="5s" end="7s">Hello</span><span begin="7s" end="30s"> </span></p></body></tt>""", 35_000).lines.single()
+        assertEquals(5_000, line.start)
+        assertEquals(7_000, line.end)
+        assertEquals(7_000, (line as KaraokeLine).syllables.maxOf { it.end })
+    }
+    @Test fun actualWordStartsAreResortedAfterContainerPaddingIsRemoved() {
+        val lines = LyricsDecoder.decode("""<tt><body><p begin="0s" end="10s"><span begin="5s" end="7s">Later</span></p><p begin="2s" end="4s">Earlier</p></body></tt>""", 12_000).lines
+        assertEquals(listOf(2_000, 5_000), lines.map { it.start })
+    }
+    @Test fun longStartOnlyLrcHoldsAreEstimatedWithoutMovingTheNextStart() {
+        val lines = LyricsDecoder.decode("[00:05]Hello\n[00:25]Next", 50_000).lines
+        assertTrue(lines.first().end in 8_000..14_000)
+        assertEquals(25_000, lines.last().start)
+        assertTrue(lines.last().end < 50_000)
+    }
+    @Test fun explicitBlankLrcEndPreservesALongHeldLine() {
+        val lines = LyricsDecoder.decode("[00:05]Hello\n[00:25]\n[00:35]Next", 40_000).lines
+        assertEquals(25_000, lines.first().end)
+        assertEquals(35_000, lines.last().start)
+    }
+    @Test fun explicitEnhancedEndPreservesALongHeldWord() {
+        val line = LyricsDecoder.decode("[00:01]<00:01>Hello<00:20>\n[00:30]Next", 35_000).lines.first()
+        assertEquals(20_000, line.end)
+    }
+    @Test fun missingEnhancedEndDoesNotHoldTheLastWordThroughALongBreak() {
+        val line = LyricsDecoder.decode("[00:01]<00:01>Hello <00:02>world\n[00:30]Next", 35_000).lines.first()
+        assertTrue(line.end in 5_000..11_000)
+    }
 }

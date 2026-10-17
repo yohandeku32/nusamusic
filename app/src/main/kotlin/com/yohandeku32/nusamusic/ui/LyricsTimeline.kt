@@ -3,7 +3,8 @@ package com.yohandeku32.nusamusic.ui
 import com.mocharealm.accompanist.lyrics.core.model.ISyncedLine
 import com.mocharealm.accompanist.lyrics.core.model.karaoke.KaraokeLine
 
-internal data class LyricsFrame(val anchor: Int, val active: Set<Int>)
+internal data class LyricsGap(val start: Int, val end: Int, val nextLine: Int)
+internal data class LyricsFrame(val anchor: Int, val active: Set<Int>, val gap: LyricsGap? = null)
 
 /** Start-sorted lyrics can have overlapping, non-monotonic end times (duets/backgrounds). */
 internal class LyricsTimeline(private val lines: List<ISyncedLine>) {
@@ -12,6 +13,14 @@ internal class LyricsTimeline(private val lines: List<ISyncedLine>) {
     private val maxEnds = IntArray((lines.size * 4).coerceAtLeast(1))
     private val main = lines.indices.filter { (lines[it] as? KaraokeLine)?.isAccompaniment != true }.toIntArray()
     private val anchors = if (main.isNotEmpty()) main else IntArray(lines.size) { it }
+    // Union all voices so an overlapping/background singer never produces a false break.
+    val gaps: List<LyricsGap> = buildList {
+        var coveredUntil = 0
+        lines.forEachIndexed { index, line ->
+            if (line.start.toLong() - coveredUntil >= 3_000) add(LyricsGap(coveredUntil, line.start, index))
+            coveredUntil = maxOf(coveredUntil, line.end)
+        }
+    }
 
     init {
         require(starts.indices.drop(1).all { starts[it - 1] <= starts[it] })
@@ -49,6 +58,13 @@ internal class LyricsTimeline(private val lines: List<ISyncedLine>) {
             }
             candidates[(low - 1).coerceAtLeast(0)]
         }
-        return LyricsFrame(anchor, active)
+        var low = 0
+        var high = gaps.size
+        while (low < high) {
+            val middle = (low + high) / 2
+            if (gaps[middle].start <= position) low = middle + 1 else high = middle
+        }
+        val gap = gaps.getOrNull(low - 1)?.takeIf { position < it.end && active.isEmpty() }
+        return LyricsFrame(anchor, active, gap)
     }
 }

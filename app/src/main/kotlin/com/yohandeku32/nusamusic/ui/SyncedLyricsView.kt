@@ -22,6 +22,8 @@ import kotlinx.coroutines.flow.first
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
+private data class LyricsDisplayRow(val line: Int, val gap: LyricsGap? = null)
+
 /** Keep Accompanist's word renderer; own lazy composition and scroll following. */
 @Composable
 internal fun SyncedLyricsView(
@@ -36,8 +38,20 @@ internal fun SyncedLyricsView(
     val clock = remember { LyricsPlaybackClock(position, visible) }
     SideEffect { clock.update(position, visible) }
     val timeline = remember(lyrics) { LyricsTimeline(lyrics.lines) }
+    val rows = remember(timeline) {
+        val gaps = timeline.gaps.associateBy { it.nextLine }
+        buildList {
+            lyrics.lines.indices.forEach { index ->
+                gaps[index]?.let { add(LyricsDisplayRow(index, it)) }
+                add(LyricsDisplayRow(index))
+            }
+        }
+    }
+    val lineRows = remember(rows) { rows.indices.filter { rows[it].gap == null }.toIntArray() }
+    val gapRows = remember(rows) { rows.indices.filter { rows[it].gap != null }.associateBy { rows[it].gap } }
     // List composition changes only when focus changes; word drawing reads the live clock.
     val frame by remember(timeline, clock) { derivedStateOf(structuralEqualityPolicy()) { timeline.frame(clock.read()) } }
+    val followRow = frame.gap?.let { gapRows[it] } ?: lineRows.getOrNull(frame.anchor) ?: -1
     val dragging by listState.interactionSource.collectIsDraggedAsState()
     val motion = remember(listState) { LyricsFollowMotion() }
     var positioned by remember(listState) { mutableStateOf(false) }
@@ -52,13 +66,13 @@ internal fun SyncedLyricsView(
     val normalStyle = remember(fontSize) { TextStyle(color = Color.White, fontSize = fontSize.sp, lineHeight = (fontSize * 1.25f).sp, fontWeight = FontWeight.Bold) }
     val backgroundStyle = remember(fontSize) { TextStyle(color = Color.White, fontSize = (fontSize * 0.625f).sp, lineHeight = (fontSize * 0.875f).sp, fontWeight = FontWeight.SemiBold) }
     BoxWithConstraints(modifier) {
-        LaunchedEffect(frame.anchor, visible, browsing, fontSize, maxHeight, maxWidth) {
-            if (!visible || browsing || dragging || frame.anchor < 0) {
+        LaunchedEffect(followRow, visible, browsing, fontSize, maxHeight, maxWidth) {
+            if (!visible || browsing || dragging || followRow < 0) {
                 motion.reset()
                 if (!visible) positioned = false
                 return@LaunchedEffect
             }
-            snapshotFlow { listState.layoutInfo.totalItemsCount }.first { it > frame.anchor }
+            snapshotFlow { listState.layoutInfo.totalItemsCount }.first { it > followRow }
             // Wait for the current font size and viewport padding to be measured.
             withFrameNanos { }
             fun viewportCenter(): Float = with(listState.layoutInfo) {
@@ -66,14 +80,14 @@ internal fun SyncedLyricsView(
             }
             if (!positioned) {
                 motion.reset()
-                listState.scrollToItem(frame.anchor, -viewportCenter().roundToInt())
-            } else if (listState.layoutInfo.visibleItemsInfo.none { it.index == frame.anchor }) {
+                listState.scrollToItem(followRow, -viewportCenter().roundToInt())
+            } else if (listState.layoutInfo.visibleItemsInfo.none { it.index == followRow }) {
                 // A seek or a return from manual browsing may be far away. Animate there,
                 // then refine the center using the real wrapped row height.
                 motion.reset()
-                listState.animateScrollToItem(frame.anchor, -viewportCenter().roundToInt())
+                listState.animateScrollToItem(followRow, -viewportCenter().roundToInt())
             }
-            val target = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == frame.anchor }
+            val target = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == followRow }
                 ?: return@LaunchedEffect
             val distance = target.offset + target.size / 2f - viewportCenter()
             if (!positioned) listState.scroll { scrollBy(distance) }
@@ -86,7 +100,14 @@ internal fun SyncedLyricsView(
             // First and last rows must also have enough room to reach the center.
             contentPadding = PaddingValues(vertical = maxHeight / 2)
         ) {
-            itemsIndexed(lyrics.lines, key = { index, _ -> index }, contentType = { _, line -> if (line is KaraokeLine) "karaoke" else "line" }) { index, line ->
+            itemsIndexed(rows, key = { _, row -> "${if (row.gap == null) "line" else "gap"}:${row.line}" },
+                contentType = { _, row -> if (row.gap != null) "gap" else if (lyrics.lines[row.line] is KaraokeLine) "karaoke" else "line" }) { _, row ->
+                if (row.gap != null) {
+                    LyricsGapDots(row.gap, clock.read, active = frame.gap == row.gap)
+                    return@itemsIndexed
+                }
+                val index = row.line
+                val line = lyrics.lines[index]
                 when (line) {
                     is KaraokeLine -> CenteredKaraokeLine(
                         line = line,

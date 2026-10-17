@@ -19,7 +19,7 @@ class LyricsTimelineTest {
     }
     @Test fun gapHoldsThePreviousLineUntilTheNextOneStarts() {
         val timeline = LyricsTimeline(listOf(line(1_000, 2_000), line(8_000, 10_000)))
-        assertEquals(LyricsFrame(0, emptySet()), timeline.frame(5_000))
+        assertEquals(LyricsFrame(0, emptySet(), LyricsGap(2_000, 8_000, 1)), timeline.frame(5_000))
         assertEquals(LyricsFrame(1, setOf(1)), timeline.frame(8_000))
     }
     @Test fun seekingBackwardRecomputesFocusWithoutRememberingTheOldIndex() {
@@ -41,11 +41,39 @@ class LyricsTimelineTest {
     }
     @Test fun emptyAndIntroStatesHaveSafeAnchors() {
         assertEquals(LyricsFrame(-1, emptySet()), LyricsTimeline(emptyList()).frame(0))
-        assertEquals(LyricsFrame(0, emptySet()), LyricsTimeline(listOf(line(5_000, 6_000))).frame(0))
+        assertEquals(LyricsFrame(0, emptySet(), LyricsGap(0, 5_000, 0)), LyricsTimeline(listOf(line(5_000, 6_000))).frame(0))
     }
     @Test fun largeLyricsSupportDistantSeeksInBothDirections() {
         val timeline = LyricsTimeline(List(8_000) { line(it * 1_000, (it + 1) * 1_000) })
         assertEquals(LyricsFrame(7_900, setOf(7_900)), timeline.frame(7_900_500))
         assertEquals(LyricsFrame(10, setOf(10)), timeline.frame(10_500))
+    }
+    @Test fun introAndBreakCountdownEndExactlyWhenSingingStarts() {
+        val timeline = LyricsTimeline(listOf(line(5_000, 7_000), line(12_000, 14_000)))
+        assertEquals(LyricsGap(0, 5_000, 0), timeline.frame(4_999).gap)
+        assertNull(timeline.frame(5_000).gap)
+        assertEquals(setOf(0), timeline.frame(5_000).active)
+        assertEquals(LyricsGap(7_000, 12_000, 1), timeline.frame(7_000).gap)
+        assertTrue(timeline.frame(7_000).active.isEmpty())
+        assertNull(timeline.frame(12_000).gap)
+        assertEquals(setOf(1), timeline.frame(12_000).active)
+    }
+    @Test fun backgroundAndOverlappingVoicesSuppressFalseCountdowns() {
+        val timeline = LyricsTimeline(listOf(karaoke(0, 2_000), karaoke(1_000, 9_000, true), karaoke(12_000, 14_000)))
+        assertNull(timeline.frame(5_000).gap)
+        assertEquals(setOf(1), timeline.frame(5_000).active)
+        assertEquals(LyricsGap(9_000, 12_000, 2), timeline.frame(10_000).gap)
+    }
+    @Test fun shortSilenceIsInactiveWithoutAFlashingCountdown() {
+        val timeline = LyricsTimeline(listOf(line(0, 2_000), line(4_000, 5_000)))
+        assertTrue(timeline.frame(3_000).active.isEmpty())
+        assertNull(timeline.frame(3_000).gap)
+    }
+    @Test fun seekRecomputesBreakAndOutroNeverCountsDownToANonexistentLine() {
+        val timeline = LyricsTimeline(listOf(line(5_000, 7_000), line(12_000, 14_000)))
+        assertNull(timeline.frame(20_000).gap)
+        assertTrue(timeline.frame(20_000).active.isEmpty())
+        assertEquals(LyricsGap(7_000, 12_000, 1), timeline.frame(10_000).gap)
+        assertEquals(LyricsGap(0, 5_000, 0), timeline.frame(1_000).gap)
     }
 }
