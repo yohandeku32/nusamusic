@@ -34,6 +34,20 @@ object LyricsDecoder {
                 is KaraokeLine -> line.syllables.any { it.content.isNotBlank() }
                 else -> false
             }
+        }.map { line ->
+            fun start(time: Int) = time.coerceIn(0, Int.MAX_VALUE - 1)
+            when (line) {
+                is KaraokeLine -> {
+                    val syllables = line.syllables.map { syllable ->
+                        val begin = start(syllable.start)
+                        syllable.copy(start = begin, end = syllable.end.coerceAtLeast(begin + 1))
+                    }
+                    val begin = start(line.start)
+                    line.copy(start = begin, end = maxOf(line.end, begin + 1, syllables.maxOfOrNull { it.end } ?: 0), syllables = syllables)
+                }
+                is SyncedLine -> line.copy(start = start(line.start), end = line.end.coerceAtLeast(start(line.start) + 1))
+                else -> line
+            }
         }
         require(lines.isNotEmpty() && lines.size <= 8_000) { "No supported timed lyrics" }
         return parsed.copy(lines = lines)
@@ -42,7 +56,7 @@ object LyricsDecoder {
     private fun time(match: MatchResult): Int = (
         match.groupValues[1].toLong() * 60_000 + match.groupValues[2].toLong() * 1_000 +
             match.groupValues[3].padEnd(3, '0').toLong()
-        ).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+        ).coerceAtMost(Int.MAX_VALUE.toLong() - 1).toInt()
 
     private fun parseLrc(content: String, duration: Int): SyncedLyrics {
         val offset = (offsetTag.find(content)?.groupValues?.get(1)?.toLongOrNull() ?: 0L)

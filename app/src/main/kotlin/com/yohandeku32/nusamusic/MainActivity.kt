@@ -35,6 +35,8 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -170,10 +172,9 @@ import com.yohandeku32.nusamusic.ui.resolveArtworkBottom
 import com.yohandeku32.nusamusic.ui.ImmersiveArtworkPainter
 import com.yohandeku32.nusamusic.ui.ImmersiveArtistPage
 import com.yohandeku32.nusamusic.ui.ImmersiveArtistPageState
-import com.yohandeku32.nusamusic.ui.ImmersiveLyricsPage
+import com.yohandeku32.nusamusic.ui.ImmersiveLyricsPanel
 import com.yohandeku32.nusamusic.ui.ImmersiveLyricsState
 import com.yohandeku32.nusamusic.ui.MiuixHorizontalPager
-import com.yohandeku32.nusamusic.ui.MiuixPlayerLyricsPager
 import com.yohandeku32.nusamusic.ui.animateMiuixScrollToPage
 import com.yohandeku32.nusamusic.ui.artworkBackdropColor
 import kotlinx.coroutines.Dispatchers
@@ -523,7 +524,7 @@ class MainActivity : ComponentActivity() {
                         durationMs = c.duration.coerceAtLeast(0L)
                     }
                     isPlaying = c.isPlaying
-                    syncCurrentSong(c)
+                    if (currentSong?.id != c.currentMediaItem?.mediaId?.toLongOrNull()) syncCurrentSong(c)
 
                     // Persist the position periodically so a process restart
                     // can return to the same song and approximate position.
@@ -1475,12 +1476,23 @@ private fun NusaMusicApp(
     var roundedCarouselCorners by remember {
         mutableStateOf(uiPrefs.getBoolean("rounded_carousel_corners", true))
     }
+    var lyricsRequested by remember(playerPresentationMode) { mutableStateOf(false) }
+    val lyricsFlip = animateFloatAsState(
+        targetValue = if (lyricsRequested && playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) 180f else 0f,
+        animationSpec = tween(560, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+        label = "immersiveLyricsFlip"
+    )
+    val flipInFlight by remember(lyricsFlip) { derivedStateOf { lyricsFlip.value > 0f } }
+    var immersiveLyricsBottomPx by remember { mutableFloatStateOf(Float.NaN) }
+    var immersiveControlsTopPx by remember { mutableFloatStateOf(Float.NaN) }
+    val immersiveQualityCoordinates = remember { mutableStateOf<LayoutCoordinates?>(null) }
     var immersiveArtworkBottomPx by remember { mutableFloatStateOf(Float.NaN) }
     var immersiveHasQualityBadge by remember { mutableStateOf(true) }
     val immersiveFrameCoordinates = remember { mutableStateOf<LayoutCoordinates?>(null) }
     val immersiveArtistCoordinates = remember { mutableStateOf<LayoutCoordinates?>(null) }
 
     fun updateImmersiveArtworkBottom() {
+        if (lyricsFlip.value != 0f) return
         val frame = immersiveFrameCoordinates.value ?: return
         val artist = immersiveArtistCoordinates.value ?: return
         if (!frame.isAttached || !artist.isAttached) return
@@ -1491,6 +1503,17 @@ private fun NusaMusicApp(
         if (bottom.isFinite() && bottom > 0f &&
             (!immersiveArtworkBottomPx.isFinite() || abs(bottom - immersiveArtworkBottomPx) > 0.5f)
         ) immersiveArtworkBottomPx = bottom
+    }
+    fun updateImmersiveLyricsBottom() {
+        if (lyricsFlip.value != 0f) return
+        val frame = immersiveFrameCoordinates.value ?: return
+        val quality = immersiveQualityCoordinates.value ?: return
+        if (!frame.isAttached || !quality.isAttached) return
+        val bottom = frame.localPositionOf(quality, androidx.compose.ui.geometry.Offset(0f, quality.size.height.toFloat())).y
+        if (bottom.isFinite() && bottom > 0f && (!immersiveLyricsBottomPx.isFinite() || abs(bottom - immersiveLyricsBottomPx) > 0.5f)) immersiveLyricsBottomPx = bottom
+    }
+    LaunchedEffect(flipInFlight) {
+        if (!flipInFlight) { updateImmersiveArtworkBottom(); updateImmersiveLyricsBottom() }
     }
     var customTitleTypeface by remember {
         mutableStateOf<Typeface?>(null)
@@ -1629,9 +1652,6 @@ private fun NusaMusicApp(
     val artistPageEnabled = playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
     val playerPage = if (artistPageEnabled) 1 else 0
     val libraryPage = playerPage + 1
-    val lyricsPagerState = androidx.compose.runtime.key(artistPageEnabled) {
-        androidx.compose.foundation.pager.rememberPagerState(pageCount = { 2 })
-    }
     var libraryWasVisible by remember { mutableStateOf(false) }
     val pagerState = androidx.compose.runtime.key(artistPageEnabled) {
         androidx.compose.foundation.pager.rememberPagerState(
@@ -1691,11 +1711,11 @@ private fun NusaMusicApp(
     }
 
     // Opening the library must not change the user's manually chosen scroll position.
-    LaunchedEffect(pagerState.settledPage, lyricsPagerState.settledPage, playerPage) {
+    LaunchedEffect(pagerState.settledPage, lyricsRequested, playerPage) {
         libraryWasVisible = pagerState.settledPage == libraryPage
         onPlaybackPageVisibilityChanged(
-            pagerState.settledPage == playerPage && (!artistPageEnabled || lyricsPagerState.settledPage == 0),
-            artistPageEnabled && pagerState.settledPage == playerPage && lyricsPagerState.settledPage == 1)
+            pagerState.settledPage == playerPage && (!artistPageEnabled || !lyricsRequested),
+            artistPageEnabled && pagerState.settledPage == playerPage && lyricsRequested)
     }
 
     // CD is always dark, including when the device uses the light theme.
@@ -1846,7 +1866,15 @@ private fun NusaMusicApp(
 
     // The player and lyrics render the same progress, transport and action buttons.
     val playerControls: @Composable () -> Unit = {
-        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(Modifier.fillMaxWidth().onGloballyPositioned { coordinates ->
+            if (artistPageEnabled) {
+                val frame = immersiveFrameCoordinates.value
+                if (frame != null && frame.isAttached && coordinates.isAttached) {
+                    val top = frame.localPositionOf(coordinates, androidx.compose.ui.geometry.Offset.Zero).y
+                    if (top.isFinite() && (!immersiveControlsTopPx.isFinite() || abs(top - immersiveControlsTopPx) > 0.5f)) immersiveControlsTopPx = top
+                }
+            }
+        }, horizontalAlignment = Alignment.CenterHorizontally) {
             val immersiveArtworkMode = artistPageEnabled
             PlaybackProgress(
                 positionMsState = positionMsState,
@@ -1983,7 +2011,7 @@ private fun NusaMusicApp(
                 IconButton(
                     onClick = {
                         if (artistPageEnabled) {
-                            scope.launch { pagerState.animateMiuixScrollToPage(0); lyricsPagerState.scrollToPage(0) }
+                            scope.launch { pagerState.animateMiuixScrollToPage(0); lyricsRequested = false }
                             return@IconButton
                         }
                         biographyExpanded = !biographyExpanded
@@ -2033,12 +2061,12 @@ private fun NusaMusicApp(
 
                 if (artistPageEnabled) {
                     IconButton(
-                        onClick = { scope.launch { lyricsPagerState.animateMiuixScrollToPage(if (lyricsPagerState.currentPage == 0) 1 else 0) } },
+                        onClick = { lyricsRequested = !lyricsRequested },
                         enabled = currentSong != null,
                         modifier = Modifier.size(42.dp)
                     ) {
-                        Icon(if (lyricsPagerState.targetPage == 1) Icons.Default.KeyboardArrowDown else Icons.Default.Lyrics,
-                            if (lyricsPagerState.targetPage == 1) nusaText("Kembali ke pemutar • geser ke bawah", "Back to player • swipe down") else nusaText("Buka lirik • geser ke atas", "Open lyrics • swipe up"),
+                        Icon(if (lyricsRequested) Icons.Default.Close else Icons.Default.Lyrics,
+                            if (lyricsRequested) nusaText("Tutup lirik", "Close lyrics") else nusaText("Buka lirik", "Open lyrics"),
                             tint = Color.White, modifier = Modifier.size(22.dp))
                     }
                 }
@@ -2099,7 +2127,6 @@ private fun NusaMusicApp(
             MiuixHorizontalPager(
                 state = pagerState,
                 backgroundColor = pageBackdrop,
-                userScrollEnabled = !artistPageEnabled || (lyricsPagerState.currentPage == 0 && !lyricsPagerState.isScrollInProgress),
                 modifier = Modifier.fillMaxSize()
             ) { page ->
                 when {
@@ -2119,28 +2146,6 @@ private fun NusaMusicApp(
                         }
                     )
                     page == playerPage -> {
-                        MiuixPlayerLyricsPager(
-                            enabled = artistPageEnabled,
-                            state = lyricsPagerState,
-                            backgroundColor = pageBackdrop
-                        ) { verticalPage ->
-                            if (verticalPage == 1) {
-                            ImmersiveLyricsPage(
-                                song = currentSong,
-                                positionMs = positionMsState,
-                                durationMs = durationMs,
-                                isVisible = pagerState.settledPage == playerPage && lyricsPagerState.settledPage == 1,
-                                state = lyricsState,
-                                scope = scope,
-                                onBack = { scope.launch { lyricsPagerState.animateMiuixScrollToPage(0) } },
-                                onLibrary = { scope.launch {
-                                    pagerState.animateMiuixScrollToPage(libraryPage)
-                                    lyricsPagerState.scrollToPage(0)
-                                } },
-                                onSeek = onSeek,
-                                controls = playerControls
-                            )
-                            } else {
                         BoxWithConstraints(Modifier.fillMaxSize()) {
                         val playerViewportHeight = maxHeight
                         if (playerPresentationMode == PlayerPresentationMode.CD) {
@@ -2238,6 +2243,7 @@ private fun NusaMusicApp(
                                                 Modifier.onGloballyPositioned { coordinates ->
                                                     immersiveFrameCoordinates.value = coordinates
                                                     updateImmersiveArtworkBottom()
+                                                    updateImmersiveLyricsBottom()
                                                 }
                                             } else Modifier
                                         )
@@ -2262,10 +2268,34 @@ private fun NusaMusicApp(
                                     if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
                                         ImmersiveArtwork(
                                             song = currentSong,
-                                            animatedArtworkEnabled = animatedArtworkEnabled && pagerState.settledPage == playerPage && lyricsPagerState.settledPage == 0,
+                                            animatedArtworkEnabled = animatedArtworkEnabled && pagerState.settledPage == playerPage,
+                                            coverRotationY = lyricsFlip,
+                                            onOpenLyrics = { if (currentSong != null) lyricsRequested = true },
                                             artistBottomPx = immersiveArtworkBottomPx,
                                             modifier = Modifier.matchParentSize()
                                         )
+                                        if (lyricsRequested || flipInFlight) {
+                                            val fallbackBottom = playerViewportHeight * 0.58f
+                                            val desiredBottom = if (immersiveLyricsBottomPx.isFinite()) with(LocalDensity.current) { immersiveLyricsBottomPx.toDp() } else fallbackBottom
+                                            val controlTop = if (immersiveControlsTopPx.isFinite()) with(LocalDensity.current) { immersiveControlsTopPx.toDp() } else playerViewportHeight - 270.dp
+                                            val lyricHeight = minOf(desiredBottom, controlTop - 8.dp).coerceIn(0.dp, playerViewportHeight)
+                                            ImmersiveLyricsPanel(
+                                                song = currentSong,
+                                                positionMs = positionMsState,
+                                                durationMs = durationMs,
+                                                isVisible = lyricsRequested && pagerState.settledPage == playerPage,
+                                                state = lyricsState,
+                                                scope = scope,
+                                                onBack = { lyricsRequested = false },
+                                                onSeek = onSeek,
+                                                modifier = Modifier.fillMaxWidth().height(lyricHeight).zIndex(3f).graphicsLayer {
+                                                    rotationY = lyricsFlip.value - 180f
+                                                    alpha = if (lyricsFlip.value >= 90f) 1f else 0f
+                                                    cameraDistance = 12f * this.density
+                                                    clip = true
+                                                }
+                                            )
+                                        }
                                     }
 
                                     if (playerPresentationMode == PlayerPresentationMode.VINYL) {
@@ -2373,6 +2403,7 @@ private fun NusaMusicApp(
                                     )
 
                                     TopAppBar(
+                                        modifier = Modifier.graphicsLayer { alpha = if (!artistPageEnabled || lyricsFlip.value <= 90f) 1f else 0f },
                                         title = { },
                                         colors = TopAppBarDefaults.topAppBarColors(
                                             containerColor = if (
@@ -2403,7 +2434,7 @@ private fun NusaMusicApp(
                                             }
                                         },
                                         actions = {
-                                            IconButton(onClick = { showSettings = true }) {
+                                            IconButton(onClick = { showSettings = true }, enabled = !artistPageEnabled || !lyricsRequested) {
                                                 Icon(
                                                     Icons.Default.MoreHoriz,
                                                     contentDescription = nusaText("Pengaturan", "Settings"),
@@ -2507,7 +2538,13 @@ private fun NusaMusicApp(
                                         Box(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .height(titleBoxHeight),
+                                                .height(titleBoxHeight)
+                                                .graphicsLayer {
+                                                    if (immersiveArtworkMode) {
+                                                        rotationY = lyricsFlip.value; cameraDistance = 12f * this.density
+                                                        alpha = if (lyricsFlip.value <= 90f) 1f else 0f
+                                                    }
+                                                },
                                             contentAlignment = Alignment.BottomCenter
                                         ) {
                                             Text(
@@ -2530,11 +2567,18 @@ private fun NusaMusicApp(
                                             currentSong?.artist ?: nusaText("Perpustakaan musik lokal Anda", "Your local music library"),
                                             modifier = Modifier
                                                 .fillMaxWidth()
+                                                .graphicsLayer {
+                                                    if (immersiveArtworkMode) {
+                                                        rotationY = lyricsFlip.value; cameraDistance = 12f * this.density
+                                                        alpha = if (lyricsFlip.value <= 90f) 1f else 0f
+                                                    }
+                                                }
                                                 .then(
                                                     if (immersiveArtworkMode) {
                                                         Modifier.onGloballyPositioned { coordinates ->
                                                             immersiveArtistCoordinates.value = coordinates
                                                             updateImmersiveArtworkBottom()
+                                                    updateImmersiveLyricsBottom()
                                                         }
                                                     } else Modifier
                                                 ),
@@ -2553,11 +2597,19 @@ private fun NusaMusicApp(
 
                                         if (immersiveArtworkMode) {
                                             if (immersiveHasQualityBadge) Spacer(Modifier.height(10.dp))
-                                            AudioQualityPill(
-                                                song = currentSong,
-                                                immersive = true,
-                                                onBadgeVisibilityChanged = { immersiveHasQualityBadge = it }
-                                            )
+                                            Box(Modifier.onGloballyPositioned {
+                                                immersiveQualityCoordinates.value = it
+                                                updateImmersiveLyricsBottom()
+                                            }.graphicsLayer {
+                                                rotationY = lyricsFlip.value; cameraDistance = 12f * this.density
+                                                alpha = if (lyricsFlip.value <= 90f) 1f else 0f
+                                            }) {
+                                                AudioQualityPill(
+                                                    song = currentSong,
+                                                    immersive = true,
+                                                    onBadgeVisibilityChanged = { immersiveHasQualityBadge = it }
+                                                )
+                                            }
                                             Spacer(Modifier.weight(1f))
                                         } else {
                                             Spacer(Modifier.height(16.dp))
@@ -2602,9 +2654,6 @@ private fun NusaMusicApp(
                                 }
                             }
                         }
-                        }
-                    }
-
                         }
                     }
 
@@ -4397,10 +4446,13 @@ private fun immersiveScrimOpacity(bitmap: Bitmap?): Float {
 private fun ImmersiveArtwork(
     song: Song?,
     animatedArtworkEnabled: Boolean = true,
+    coverRotationY: State<Float>? = null,
+    onOpenLyrics: (() -> Unit)? = null,
     artistBottomPx: Float = Float.NaN,
     modifier: Modifier = Modifier
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
+    val coverAtRest by remember(coverRotationY) { derivedStateOf { (coverRotationY?.value ?: 0f) == 0f } }
     // Retain the current frame while the next song's artwork is decoded. Resetting
     // these states on every URI change briefly exposed the empty placeholder.
     val initialSnapshot = remember { song?.let { ImmersiveArtworkCache.cached(it) } }
@@ -4598,7 +4650,21 @@ private fun ImmersiveArtwork(
                 .fillMaxWidth()
                 .height(sharpHeight)
                 .align(Alignment.TopCenter)
+                .pointerInput(onOpenLyrics, coverAtRest) {
+                    if (onOpenLyrics != null && coverAtRest) {
+                        var drag = 0f
+                        val threshold = 64.dp.toPx()
+                        detectVerticalDragGestures(
+                            onDragStart = { drag = 0f },
+                            onDragEnd = { if (drag < -threshold) onOpenLyrics() },
+                            onVerticalDrag = { change, amount -> drag += amount; change.consume() }
+                        )
+                    }
+                }
                 .graphicsLayer {
+                    rotationY = coverRotationY?.value ?: 0f
+                    alpha = if (rotationY <= 90f) 1f else 0f
+                    cameraDistance = 12f * this.density
                     clip = true
                     compositingStrategy = CompositingStrategy.Offscreen
                 }
@@ -4635,7 +4701,7 @@ private fun ImmersiveArtwork(
             }
 
             val activeUrl = animatedArtworkUrl
-            if (animatedArtworkEnabled && activeUrl != null) {
+            if (animatedArtworkEnabled && activeUrl != null && coverAtRest) {
                 AnimatedArtworkVideoBackground(
                     url = activeUrl,
                     modifier = Modifier.fillMaxSize(),

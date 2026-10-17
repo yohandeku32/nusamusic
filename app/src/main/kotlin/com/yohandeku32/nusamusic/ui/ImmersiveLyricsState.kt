@@ -70,7 +70,8 @@ class ImmersiveLyricsState(private val repository: LyricsRepository) {
                 state.data = repository.import(song, uri)
                 state.attempted = true
                 state.failed = false
-                state.list.scrollToItem(0)
+                // The renderer positions a new import at the live playback time.
+                // An external scroll-to-zero here can override its initial follow request.
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { if (state.generation == generation) state.importFailed = true }
             finally {

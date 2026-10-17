@@ -6,6 +6,18 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class LyricsDecoderTest {
+    @Test fun zeroDurationTtmlWordsProduceFiniteKaraokeProgress() {
+        val content = """<tt><body><p begin="1s" end="1s"><span begin="1s" end="1s">Hello</span></p></body></tt>"""
+        val line = LyricsDecoder.decode(content, 5_000).lines.single() as KaraokeLine
+        assertTrue(line.duration > 0)
+        assertTrue(line.syllables.single().duration > 0)
+        assertTrue(line.syllables.single().progress(1_000).isFinite())
+    }
+    @Test fun offsetClippedWordTimingCannotDivideByZero() {
+        val line = LyricsDecoder.decode("[offset:5000]\n[00:01]<00:01>Hello<00:02>", 8_000).lines.single() as KaraokeLine
+        assertTrue(line.duration > 0)
+        assertTrue(line.syllables.single().progress(0).isFinite())
+    }
     @Test fun repeatedTimestampsAreExpandedAndSorted() {
         val lyrics = LyricsDecoder.decode("[00:10][00:30.5]Chorus\n[00:20.123]Verse", 40_000)
         assertEquals(listOf(10_000, 20_123, 30_500), lyrics.lines.map { it.start })
