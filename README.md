@@ -91,19 +91,31 @@ Most-played tracks use listening history stored on the device from this version 
 
 ## Immersive lyrics
 
-Horizontal immersive pages are ordered **Artist → Player → Songs**. Lyrics
-sit below the player: swipe up or tap the lyrics icon to open them. Swipe down
-on the lyrics header or controls, or use Back, to return to the player. The
-lyric text remains vertically scrollable; dragging down at the top also returns
-to the player. Horizontal page swipes are disabled while lyrics are open.
+Horizontal immersive pages are ordered **Artist → Player → Songs**. Tap the
+lyrics icon, or swipe up on the cover, to flip the artwork into lyrics. The
+lyrics occupy the area from the top of the cover through the Hi-Res pill
+boundary. They do not open a separate page below the player. Close or Android
+Back flips to artwork again.
 
-The lyrics page uses the **same progress bar and playback/action controls**
-as the main immersive player, including previous/play/next, artist, share and
-favorite buttons. The lyrics button becomes a return arrow while lyrics are
-open. Progress seeking responds to horizontal drags, leaving upward/downward
-gestures for navigation. Lyrics follow playback, and tapping a timed line
-seeks to that part of the song. Both swipe directions use the MIUIX settling
-spring; the lyrics page slides up over the player with parallax.
+The main progress bar and all playback/action controls stay in place below
+the flip. The lyrics back face is transparent over the **same prepared blur
+and palette as the main player**, including its frozen animated-artwork tone.
+Animated cover video pauses during the flip/lyrics view. The cover, metadata
+and Hi-Res pill turn away while the lyrics turn in; the background and controls
+do not rotate. Measured control bounds keep the lyrics clear of the seek bar.
+
+Only useful actions remain in the panel header. Repeated headings, storage
+badges and loading descriptions are removed; LRCLIB attribution and retry
+are in the options menu. Lyrics, empty states and actions explicitly use light
+colors, including when the device is using the light theme.
+
+Lyrics follow playback, and tapping a timed line seeks to it. Accompanist's
+line/word components are composed lazily for the visible rows instead of
+premeasuring the whole song. A retained observable clock resumes after hidden
+loads, reopening, and seeks. An interval index handles overlapping TTML voices;
+new scroll targets replace old animations. Manual browsing pauses following
+until scrolling stops and 2.5 seconds pass. Zero-duration words are normalized
+to avoid non-finite karaoke progress.
 
 Use the file icon to import a `.ttml` or `.lrc` file for the current song.
 Nusa copies validated imports into its own storage, so the file picker does
@@ -126,9 +138,11 @@ eight visited songs keep their parsed lyrics and scroll position in memory,
 and swiping away does not cancel an in-progress lookup.
 
 Accompanist Core 0.4.2 and UI 1.0.15 are pinned to stay on Compose 1.9.
-The decoder and disk-cache tests cover timing, import validation, Unicode,
-cache expiration and replacement. Real-device lyric animation, SAF folder
-providers and online matching still require device testing.
+The decoder, disk-cache, retained-clock and timeline tests cover timing,
+import validation, Unicode, cache expiration/replacement, hidden loads,
+reopening, seeks, overlapping voices and zero-duration syllables. Real-device
+flip animation, touch/scroll feel, SAF providers and online matching still
+require phone testing.
 
 ## Development notes
 
