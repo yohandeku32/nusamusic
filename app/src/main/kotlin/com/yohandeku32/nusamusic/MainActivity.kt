@@ -2294,7 +2294,9 @@ private fun NusaMusicApp(
                                     if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
                                         ImmersiveArtwork(
                                             song = currentSong,
-                                            animatedArtworkEnabled = animatedArtworkEnabled && pagerState.settledPage == playerPage,
+                                            // Keep the retained player page's video alive while swiping
+                                            // to the library or artist page and back.
+                                            animatedArtworkEnabled = animatedArtworkEnabled,
                                             coverRotationY = lyricsFlip,
                                             onOpenLyrics = if (LYRICS_ENABLED) ({ if (currentSong != null) lyricsRequested = true }) else null,
                                             artistBottomPx = immersiveArtworkBottomPx,
