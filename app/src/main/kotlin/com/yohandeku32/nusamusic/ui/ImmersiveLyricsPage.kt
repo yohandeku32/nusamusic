@@ -7,7 +7,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -17,7 +16,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -41,16 +39,13 @@ fun ImmersiveLyricsPage(
     song: Song?,
     positionMs: State<Long>,
     durationMs: Long,
-    isPlaying: Boolean,
     isVisible: Boolean,
     state: ImmersiveLyricsState,
     scope: CoroutineScope,
     onBack: () -> Unit,
     onLibrary: () -> Unit,
     onSeek: (Long) -> Unit,
-    onTogglePlay: () -> Unit,
-    onPrevious: () -> Unit,
-    onNext: () -> Unit
+    controls: @Composable () -> Unit
 ) {
     val entry = song?.let { state.forSong(it) }
     var importTarget by remember { mutableStateOf<Song?>(null) }
@@ -157,41 +152,8 @@ fun ImmersiveLyricsPage(
                         if (source == "LRCLIB") TextButton(onClick = { uriHandler.openUri("https://lrclib.net") }) { Text("LRCLIB ↗", fontSize = 11.sp) }
                     }
                 }
-                key(song?.uri) {
-                    LyricsTransport(positionMs, durationMs.coerceAtLeast(song?.durationMs ?: 0), song != null, isPlaying,
-                        onSeek, onTogglePlay, onPrevious, onNext)
-                }
+                Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp)) { controls() }
             }
-        }
-    }
-}
-
-@Composable
-private fun LyricsTransport(
-    position: State<Long>, duration: Long, enabled: Boolean, isPlaying: Boolean,
-    onSeek: (Long) -> Unit, onTogglePlay: () -> Unit, onPrevious: () -> Unit, onNext: () -> Unit
-) {
-    var dragging by remember { mutableStateOf<Float?>(null) }
-    val fraction = dragging ?: if (duration > 0) (position.value.toFloat() / duration).coerceIn(0f, 1f) else 0f
-    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)) {
-        Slider(value = fraction, enabled = enabled && duration > 0,
-            onValueChange = { dragging = it }, onValueChangeFinished = {
-                dragging?.let { onSeek((it * duration).toLong()) }; dragging = null
-            }, colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color.White,
-                inactiveTrackColor = Color.White.copy(alpha = .2f)), modifier = Modifier.height(36.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            fun time(ms: Long) = "${ms / 60_000}:${(ms / 1_000 % 60).toString().padStart(2, '0')}"
-            Text(time((fraction * duration).toLong()), color = Color.White.copy(alpha = .5f), fontSize = 11.sp)
-            Text(time(duration), color = Color.White.copy(alpha = .5f), fontSize = 11.sp)
-        }
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-            IconButton(onClick = onPrevious, enabled = enabled, modifier = Modifier.size(56.dp)) { Icon(Icons.Default.SkipPrevious, lyricsText("Sebelumnya", "Previous"), Modifier.size(30.dp)) }
-            IconButton(onClick = onTogglePlay, enabled = enabled, modifier = Modifier.padding(horizontal = 20.dp).size(64.dp)
-                .clip(RoundedCornerShape(32.dp)).background(Color.White.copy(alpha = .1f))) {
-                Icon(if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                    if (isPlaying) lyricsText("Jeda", "Pause") else lyricsText("Putar", "Play"), Modifier.size(38.dp))
-            }
-            IconButton(onClick = onNext, enabled = enabled, modifier = Modifier.size(56.dp)) { Icon(Icons.Default.SkipNext, lyricsText("Berikutnya", "Next"), Modifier.size(30.dp)) }
         }
     }
 }

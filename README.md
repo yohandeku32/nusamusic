@@ -91,10 +91,19 @@ Most-played tracks use listening history stored on the device from this version 
 
 ## Immersive lyrics
 
-Immersive pages are ordered **Artist → Player → Lyrics → Songs**. Swipe left
-from the player or tap its lyrics icon. Lyrics follow playback, and tapping a
-timed line seeks to that part of the song. Playback controls remain available
-below the lyrics.
+Horizontal immersive pages are ordered **Artist → Player → Songs**. Lyrics
+sit below the player: swipe up or tap the lyrics icon to open them. Swipe down
+on the lyrics header or controls, or use Back, to return to the player. The
+lyric text remains vertically scrollable; dragging down at the top also returns
+to the player. Horizontal page swipes are disabled while lyrics are open.
+
+The lyrics page uses the **same progress bar and playback/action controls**
+as the main immersive player, including previous/play/next, artist, share and
+favorite buttons. The lyrics button becomes a return arrow while lyrics are
+open. Progress seeking responds to horizontal drags, leaving upward/downward
+gestures for navigation. Lyrics follow playback, and tapping a timed line
+seeks to that part of the song. Both swipe directions use the MIUIX settling
+spring; the lyrics page slides up over the player with parallax.
 
 Use the file icon to import a `.ttml` or `.lrc` file for the current song.
 Nusa copies validated imports into its own storage, so the file picker does
