@@ -1483,7 +1483,7 @@ private fun NusaMusicApp(
     }
     var lyricsRequested by remember(playerPresentationMode) { mutableStateOf(false) }
     val lyricsFlip = animateFloatAsState(
-        targetValue = if (lyricsRequested && playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) 180f else 0f,
+        targetValue = if (LYRICS_ENABLED && lyricsRequested && playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) 180f else 0f,
         animationSpec = tween(560, easing = androidx.compose.animation.core.FastOutSlowInEasing),
         label = "immersiveLyricsFlip"
     )
@@ -1822,8 +1822,8 @@ private fun NusaMusicApp(
                     uiPrefs.edit().putFloat("lyrics_font_size", lyricsFontSize).apply()
                 },
                 hasLyricsSong = currentSong != null,
-                lyricsLoading = currentSong?.let { lyricsState.forSong(it).loading } == true,
-                lyricsImportFailed = currentSong?.let { lyricsState.forSong(it).importFailed } == true,
+                lyricsLoading = LYRICS_ENABLED && currentSong?.let { lyricsState.forSong(it).loading } == true,
+                lyricsImportFailed = LYRICS_ENABLED && currentSong?.let { lyricsState.forSong(it).importFailed } == true,
                 onImportLyrics = ::chooseLyricsFile,
                 onRetryLyrics = { currentSong?.let { lyricsState.load(it, scope, retry = true) } },
                 titleFontSize = titleFontSize,
@@ -2085,7 +2085,7 @@ private fun NusaMusicApp(
 
                 Spacer(Modifier.weight(1f))
 
-                if (artistPageEnabled) {
+                if (LYRICS_ENABLED && artistPageEnabled) {
                     IconButton(
                         onClick = { lyricsRequested = !lyricsRequested },
                         enabled = currentSong != null,
@@ -2296,11 +2296,11 @@ private fun NusaMusicApp(
                                             song = currentSong,
                                             animatedArtworkEnabled = animatedArtworkEnabled && pagerState.settledPage == playerPage,
                                             coverRotationY = lyricsFlip,
-                                            onOpenLyrics = { if (currentSong != null) lyricsRequested = true },
+                                            onOpenLyrics = if (LYRICS_ENABLED) ({ if (currentSong != null) lyricsRequested = true }) else null,
                                             artistBottomPx = immersiveArtworkBottomPx,
                                             modifier = Modifier.matchParentSize()
                                         )
-                                        if (lyricsRequested || flipInFlight) {
+                                        if (LYRICS_ENABLED && (lyricsRequested || flipInFlight)) {
                                             val fallbackBottom = playerViewportHeight * 0.58f
                                             val desiredBottom = if (immersiveLyricsBottomPx.isFinite()) with(LocalDensity.current) { immersiveLyricsBottomPx.toDp() } else fallbackBottom
                                             val controlTop = if (immersiveControlsTopPx.isFinite()) with(LocalDensity.current) { immersiveControlsTopPx.toDp() } else playerViewportHeight - 270.dp
