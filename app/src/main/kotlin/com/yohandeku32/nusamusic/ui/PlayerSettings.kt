@@ -28,6 +28,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yohandeku32.nusamusic.BuildConfig
+import com.yohandeku32.nusamusic.LYRICS_ENABLED
 import com.yohandeku32.nusamusic.TITLE_FONT_OPTIONS
 import com.yohandeku32.nusamusic.model.PlayerPresentationMode
 import java.util.Locale
@@ -148,7 +149,7 @@ internal fun PlayerSettingsContent(
                     )
                 }
             }
-            item(key = "lyrics") {
+            if (LYRICS_ENABLED) item(key = "lyrics") {
                 SettingsSection(settingsText("Lirik", "Lyrics")) {
                     Surface(shape = RoundedCornerShape(16.dp), color = colors.surfaceVariant.copy(alpha = 0.45f)) {
                         Text(settingsText("Musik menemani harimu", "Music follows your day"),
