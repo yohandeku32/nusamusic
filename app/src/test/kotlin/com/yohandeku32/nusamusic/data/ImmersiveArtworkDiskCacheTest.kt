@@ -5,6 +5,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
+import java.util.Properties
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
@@ -26,6 +27,28 @@ class ImmersiveArtworkDiskCacheTest {
         cache.write(sample)
         assertNull(cache.read("album:13"))
         assertNull(cache.read("uri:12"))
+    }
+
+    @Test fun oldBlurPreviewIsRebuiltAfterTheRenderingChange() {
+        val file = File(temporary.newFolder(), "preview.zip")
+        ZipOutputStream(file.outputStream()).use { zip ->
+            zip.putNextEntry(ZipEntry("metadata"))
+            Properties().apply {
+                setProperty("version", "1")
+                setProperty("key", sample.key)
+                setProperty("backdrop", sample.backdrop.toString())
+            }.store(zip, null)
+            zip.closeEntry()
+            for ((name, bytes) in listOf("cover" to sample.cover, "blur" to sample.blur)) {
+                zip.putNextEntry(ZipEntry(name))
+                zip.write(bytes)
+                zip.closeEntry()
+            }
+        }
+        val cache = ImmersiveArtworkDiskCache(file)
+        assertNull(cache.read(sample.key))
+        assertTrue(cache.write(sample))
+        assertArrayEquals(sample.blur, cache.read(sample.key)!!.blur)
     }
 
     @Test fun replacementKeepsOnlyTheLastPreviewAndNoTemporaryFiles() {

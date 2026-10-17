@@ -4466,8 +4466,9 @@ private fun immersiveScrimOpacity(bitmap: Bitmap?): Float {
         }
     }
     val brightness = kotlin.math.sqrt(brightnessSquared / 64f)
-    // Light tint protection for legibility, not a dark veil over artwork colours.
-    return (0.02f + brightness * 0.08f).coerceIn(0.03f, 0.11f)
+    // Bright covers need neutral shading behind white controls now that the
+    // tonal glaze is translucent. Dark artwork keeps its colour and contrast.
+    return (0.06f + brightness * 0.50f).coerceIn(0.08f, 0.56f)
 }
 
 @Composable
@@ -4616,7 +4617,8 @@ private fun ImmersiveArtwork(
         val sharpHeight = with(LocalDensity.current) { sharpBottom.toDp() }
         val fadeSpan = sharpBottom * 0.72f
 
-        // Match the cover crop and extend its blurred edge colours without reflections.
+        // Fill the entire viewport with artwork detail. Scaling to sharpBottom
+        // clamps the last image row across the controls, making the blur look solid.
         Crossfade(
             targetState = activeBlur,
             animationSpec = tween(durationMillis = if (hasPresentedArtwork) 360 else 0),
@@ -4628,11 +4630,11 @@ private fun ImmersiveArtwork(
                     .matchParentSize()
                     .drawWithCache {
                         val paint = if (
-                            blurBitmap != null && size.width > 0f && sharpBottom > 0f
+                            blurBitmap != null && size.width > 0f && size.height > 0f
                         ) {
                             val scale = maxOf(
                                 size.width / blurBitmap.width,
-                                sharpBottom / blurBitmap.height
+                                size.height / blurBitmap.height
                             )
                             val matrix = android.graphics.Matrix().apply {
                                 setScale(scale, scale)
@@ -4656,7 +4658,7 @@ private fun ImmersiveArtwork(
             )
         }
 
-        // Blend toward the dominant cover tone without lifting dark artwork with white.
+        // A light tonal glaze keeps the artwork visible through the controls.
         Box(
             Modifier
                 .matchParentSize()
@@ -4664,10 +4666,10 @@ private fun ImmersiveArtwork(
                     Brush.verticalGradient(
                         0.00f to Color.Transparent,
                         0.28f to Color.Transparent,
-                        0.48f to animatedBackdrop.copy(alpha = 0.12f),
-                        0.68f to animatedBackdrop.copy(alpha = 0.35f),
-                        0.84f to animatedBackdrop.copy(alpha = 0.65f),
-                        1.00f to animatedBackdrop.copy(alpha = 0.90f)
+                        0.48f to animatedBackdrop.copy(alpha = 0.04f),
+                        0.68f to animatedBackdrop.copy(alpha = 0.08f),
+                        0.84f to animatedBackdrop.copy(alpha = 0.12f),
+                        1.00f to animatedBackdrop.copy(alpha = 0.18f)
                     )
                 )
         )
