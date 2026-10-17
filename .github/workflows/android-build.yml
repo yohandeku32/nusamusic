@@ -30,7 +30,8 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          # Accompanist Lyrics Core's JVM test dependency uses Java 21 bytecode.
+          java-version: "21"
           cache: gradle
       - name: Compile Android sources and run unit tests
         run: |

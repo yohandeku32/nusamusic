@@ -39,7 +39,7 @@ Create the `assets/fonts` folders if they do not exist, then rebuild the APK wit
 
 You'll need:
 
-- JDK 17 or newer.
+- JDK 21 or newer for the full test suite (Accompanist Core's JVM dependency uses Java 21 bytecode). Android source/target compatibility remains Java 17.
 - Android SDK Platform 36 and Build Tools 36.0.0.
 - Gradle 9.6.0 or newer, as required by Android Gradle Plugin 9.4.0.
 
