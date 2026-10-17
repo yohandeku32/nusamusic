@@ -41,14 +41,16 @@ object LyricsDecoder {
                     val syllables = line.syllables.map { syllable ->
                         val begin = start(syllable.start)
                         syllable.copy(start = begin, end = syllable.end.coerceAtLeast(begin + 1))
-                    }
-                    val begin = start(line.start)
-                    line.copy(start = begin, end = maxOf(line.end, begin + 1, syllables.maxOfOrNull { it.end } ?: 0), syllables = syllables)
+                    }.dropWhile { it.content.isBlank() }.dropLastWhile { it.content.isBlank() }
+                    val sung = syllables.filter { it.content.isNotBlank() }
+                    val begin = sung.minOf { it.start }
+                    // Container and whitespace timing can include an instrumental passage.
+                    line.copy(start = begin, end = sung.maxOf { it.end }.coerceAtLeast(begin + 1), syllables = syllables)
                 }
                 is SyncedLine -> line.copy(start = start(line.start), end = line.end.coerceAtLeast(start(line.start) + 1))
                 else -> line
             }
-        }
+        }.sortedBy { it.start }
         require(lines.isNotEmpty() && lines.size <= 8_000) { "No supported timed lyrics" }
         return parsed.copy(lines = lines)
     }
@@ -83,6 +85,7 @@ object LyricsDecoder {
             if (text.isBlank()) return@forEachIndexed
             val translation = texts.drop(1).map { it.second }.filter { it.isNotBlank() }
                 .joinToString("\n").ifBlank { null }
+            val explicitBlankEnd = grouped.getOrNull(index + 1)?.value?.all { it.second.isBlank() } == true
             // Normalize whole-second and one-digit fractional tags for the upstream parser.
             val wordTags = wordStamp.findAll(text).toList()
             val normalizedText = text.replace(wordStamp) { "<${clock(time(it))}>" }
@@ -90,7 +93,9 @@ object LyricsDecoder {
                 .lines.firstOrNull() as? KaraokeLine else null
             val line = if (enhanced != null) {
                 val terminal = wordTags.last().takeIf { it.range.last == text.lastIndex }?.let(::time)
-                val wordEnd = (terminal ?: end).coerceAtLeast(enhanced.syllables.last().start + 1)
+                val lastWord = enhanced.syllables.last()
+                val inferred = if (explicitBlankEnd) end else inferredLrcEnd(lastWord.start, end, lastWord.content)
+                val wordEnd = (terminal ?: inferred).coerceAtLeast(lastWord.start + 1)
                 enhanced.copy(
                     end = wordEnd,
                     syllables = enhanced.syllables.mapIndexed { i, syllable ->
@@ -98,10 +103,19 @@ object LyricsDecoder {
                         syllable.copy(end = syllableEnd.coerceAtLeast(syllable.start + 1))
                     }, translation = translation
                 )
-            } else SyncedLine(text, translation, start, end)
+            } else SyncedLine(text, translation, start, if (explicitBlankEnd) end else inferredLrcEnd(start, end, text))
             result += shift(line, offset)
         }
         return SyncedLyrics(result)
+    }
+
+    /** Start-only LRC cannot identify silence exactly. Infer only unusually long holds. */
+    private fun inferredLrcEnd(start: Int, next: Int, text: String): Int {
+        if (next.toLong() - start < 12_000) return next
+        val characters = text.codePointCount(0, text.length)
+        val words = text.trim().split(Regex("\\s+")).size
+        val estimated = (characters.toLong() * 90 + words * 150L).coerceIn(3_000, 9_000)
+        return (start.toLong() + estimated).coerceAtMost(next.toLong()).toInt()
     }
 
     private fun shift(line: ISyncedLine, offset: Long): ISyncedLine {

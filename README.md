@@ -59,7 +59,13 @@ Build the debug APK:
 ./gradlew :app:assembleDebug
 ```
 
-The APK is written to `app/build/outputs/apk/debug/app-debug.apk`. To run Android lint:
+The APK is written to `app/build/outputs/apk/debug/app-debug.apk`.
+
+Push and pull-request checks compile Android sources and run unit tests without
+packaging an APK. Run **Nusa Android build** manually in GitHub Actions when an
+APK download is needed; only manual runs assemble and upload it.
+
+To run Android lint:
 
 ```sh
 ./gradlew :app:lintDebug
@@ -117,6 +123,14 @@ including the first and last rows. Following uses a damped spring that retains
 velocity when the target changes; offscreen seek targets animate into view.
 Focus opacity and scale ease between rows, and transparent top/bottom edge
 masks fade preceding and upcoming lyrics over the same player background.
+Intros and vocal breaks of at least three seconds have a centered three-dot
+indicator. The dots breathe from playback time and fill one by one during the
+last three seconds before singing resumes; pausing and seeking keep them in
+sync. No lyric is highlighted during detected breaks, and no countdown is invented
+after the final line. All overlapping voices must finish before a break starts.
+TTML uses actual nonblank word timing, excluding padded containers. Start-only
+LRC holds of at least 12 seconds use a conservative text-length estimate when
+there is no explicit ending; this is a timing heuristic, not audio analysis.
 Lyrics follow playback, and tapping a timed line seeks to it. Accompanist's
 word drawing and layout functions are used lazily for the visible rows instead
 of premeasuring the whole song. Measurements refresh on size, width and system
