@@ -1,6 +1,8 @@
 package com.yohandeku32.nusamusic.ui
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -34,13 +36,11 @@ internal fun CenteredKaraokeLine(
     style: TextStyle,
     onSeek: (ISyncedLine) -> Unit
 ) {
-    val opacity = animateFloatAsState(if (line.isAccompaniment) { if (focused) 0.6f else 0.2f } else { if (focused) 1f else 0.4f }, label = "lyricOpacity")
     val textMeasurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val textStyle = remember(style) { style.copy(textDirection = TextDirection.Content) }
     val rtl = remember(line) { line.syllables.any { it.content.isRtl() } }
-    Column(Modifier.fillMaxWidth().clickable { onSeek(line) }.padding(horizontal = 16.dp, vertical = 8.dp)
-        .graphicsLayer { alpha = opacity.value }) {
+    LyricsLineContainer(focused, { onSeek(line) }, if (line.isAccompaniment) 0.6f else 1f, if (line.isAccompaniment) 0.2f else 0.4f) {
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             val width = constraints.maxWidth.toFloat()
             // Every measurement depends on text size, available width, and system font scale.
@@ -69,12 +69,29 @@ internal fun CenteredKaraokeLine(
 
 @Composable
 internal fun CenteredSyncedLine(line: SyncedLine, focused: Boolean, style: TextStyle, onSeek: (ISyncedLine) -> Unit) {
-    val opacity = animateFloatAsState(if (focused) 1f else 0.4f, label = "lyricOpacity")
-    Column(Modifier.fillMaxWidth().clickable { onSeek(line) }.padding(horizontal = 16.dp, vertical = 8.dp)
-        .graphicsLayer { alpha = opacity.value }) {
+    LyricsLineContainer(focused, { onSeek(line) }) {
         Text(line.content, Modifier.fillMaxWidth(), style = style, color = Color.White, textAlign = TextAlign.Center)
         line.translation?.let { Translation(it, style) }
     }
+}
+
+@Composable
+private fun LyricsLineContainer(
+    focused: Boolean,
+    onClick: () -> Unit,
+    activeOpacity: Float = 1f,
+    inactiveOpacity: Float = 0.4f,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    val opacity = animateFloatAsState(if (focused) activeOpacity else inactiveOpacity,
+        tween(420, easing = FastOutSlowInEasing), label = "lyricOpacity")
+    val scale = animateFloatAsState(if (focused) 1f else 0.97f,
+        tween(420, easing = FastOutSlowInEasing), label = "lyricScale")
+    Column(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 8.dp).graphicsLayer {
+        alpha = opacity.value
+        scaleX = scale.value
+        scaleY = scale.value
+    }, content = content)
 }
 
 @Composable

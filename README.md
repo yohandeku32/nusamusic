@@ -112,6 +112,11 @@ Imports, retry and LRCLIB attribution are also available in that settings sectio
 Lyrics, empty states and actions explicitly use light colors, including when
 the device is using the light theme.
 
+The active timed row follows the vertical center of the lyrics viewport,
+including the first and last rows. Following uses a damped spring that retains
+velocity when the target changes; offscreen seek targets animate into view.
+Focus opacity and scale ease between rows, and transparent top/bottom edge
+masks fade preceding and upcoming lyrics over the same player background.
 Lyrics follow playback, and tapping a timed line seeks to it. Accompanist's
 word drawing and layout functions are used lazily for the visible rows instead
 of premeasuring the whole song. Measurements refresh on size, width and system

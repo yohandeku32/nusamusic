@@ -1,7 +1,5 @@
 package com.yohandeku32.nusamusic.ui
 
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
@@ -14,7 +12,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mocharealm.accompanist.lyrics.core.model.ISyncedLine
 import com.mocharealm.accompanist.lyrics.core.model.SyncedLyrics
@@ -23,6 +20,7 @@ import com.mocharealm.accompanist.lyrics.core.model.synced.SyncedLine
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 /** Keep Accompanist's word renderer; own lazy composition and scroll following. */
 @Composable
@@ -41,6 +39,8 @@ internal fun SyncedLyricsView(
     // List composition changes only when focus changes; word drawing reads the live clock.
     val frame by remember(timeline, clock) { derivedStateOf(structuralEqualityPolicy()) { timeline.frame(clock.read()) } }
     val dragging by listState.interactionSource.collectIsDraggedAsState()
+    val motion = remember(listState) { LyricsFollowMotion() }
+    var positioned by remember(listState) { mutableStateOf(false) }
     var browsing by remember { mutableStateOf(false) }
     LaunchedEffect(dragging) {
         if (dragging) browsing = true else if (browsing) {
@@ -49,24 +49,42 @@ internal fun SyncedLyricsView(
             browsing = false
         }
     }
-    LaunchedEffect(frame.anchor, visible, browsing, fontSize) {
-        if (!visible || browsing || frame.anchor < 0) return@LaunchedEffect
-        snapshotFlow { listState.layoutInfo.totalItemsCount }.first { it > frame.anchor }
-        // Allow resized rows to finish measurement before choosing the scroll distance.
-        withFrameNanos { }
-        val target = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == frame.anchor }
-        // Do not skip a new target just because our previous animation was running.
-        // LaunchedEffect cancels that animation and follows the newest line instead.
-        if (target == null) listState.scrollToItem(frame.anchor)
-        else if (abs(target.offset) > 2) listState.animateScrollBy(target.offset.toFloat(), tween(240))
-    }
     val normalStyle = remember(fontSize) { TextStyle(color = Color.White, fontSize = fontSize.sp, lineHeight = (fontSize * 1.25f).sp, fontWeight = FontWeight.Bold) }
     val backgroundStyle = remember(fontSize) { TextStyle(color = Color.White, fontSize = (fontSize * 0.625f).sp, lineHeight = (fontSize * 0.875f).sp, fontWeight = FontWeight.SemiBold) }
     BoxWithConstraints(modifier) {
+        LaunchedEffect(frame.anchor, visible, browsing, fontSize, maxHeight, maxWidth) {
+            if (!visible || browsing || dragging || frame.anchor < 0) {
+                motion.reset()
+                if (!visible) positioned = false
+                return@LaunchedEffect
+            }
+            snapshotFlow { listState.layoutInfo.totalItemsCount }.first { it > frame.anchor }
+            // Wait for the current font size and viewport padding to be measured.
+            withFrameNanos { }
+            fun viewportCenter(): Float = with(listState.layoutInfo) {
+                (viewportStartOffset + viewportEndOffset) / 2f
+            }
+            if (!positioned) {
+                motion.reset()
+                listState.scrollToItem(frame.anchor, -viewportCenter().roundToInt())
+            } else if (listState.layoutInfo.visibleItemsInfo.none { it.index == frame.anchor }) {
+                // A seek or a return from manual browsing may be far away. Animate there,
+                // then refine the center using the real wrapped row height.
+                motion.reset()
+                listState.animateScrollToItem(frame.anchor, -viewportCenter().roundToInt())
+            }
+            val target = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == frame.anchor }
+                ?: return@LaunchedEffect
+            val distance = target.offset + target.size / 2f - viewportCenter()
+            if (!positioned) listState.scroll { scrollBy(distance) }
+            else if (abs(distance) > 1f) motion.move(listState, distance)
+            positioned = true
+        }
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(top = 48.dp, bottom = (maxHeight - 48.dp).coerceAtLeast(48.dp))
+            modifier = Modifier.fillMaxSize().lyricsEdgeFade(),
+            // First and last rows must also have enough room to reach the center.
+            contentPadding = PaddingValues(vertical = maxHeight / 2)
         ) {
             itemsIndexed(lyrics.lines, key = { index, _ -> index }, contentType = { _, line -> if (line is KaraokeLine) "karaoke" else "line" }) { index, line ->
                 when (line) {
