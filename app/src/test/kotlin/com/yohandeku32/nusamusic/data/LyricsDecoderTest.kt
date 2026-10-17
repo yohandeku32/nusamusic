@@ -106,4 +106,16 @@ class LyricsDecoderTest {
         val line = LyricsDecoder.decode("[00:01]<00:01>Hello <00:02>world\n[00:30]Next", 35_000).lines.first()
         assertTrue(line.end in 5_000..11_000)
     }
+    @Test fun ttmlRetainsAdjacentSyllablesInsideTheSameWord() {
+        val line = LyricsDecoder.decode("""<tt><body><p begin="1s" end="2.3s"><span begin="1s" end="1.4s">ber</span><span begin="1.4s" end="1.8s">sa</span><span begin="1.8s" end="2.3s">ma</span></p></body></tt>""", 5_000).lines.single() as KaraokeLine
+        assertEquals(listOf("ber", "sa", "ma"), line.syllables.map { it.content })
+        assertEquals(listOf(1_000, 1_400, 1_800), line.syllables.map { it.start })
+        assertEquals(listOf(1_400, 1_800, 2_300), line.syllables.map { it.end })
+    }
+    @Test fun enhancedLrcRetainsAdjacentSyllablesInsideTheSameWord() {
+        val line = LyricsDecoder.decode("[00:01.000]<00:01.000>ber<00:01.400>sa<00:01.800>ma<00:02.300>", 5_000).lines.single() as KaraokeLine
+        assertEquals(listOf("ber", "sa", "ma"), line.syllables.map { it.content })
+        assertEquals(listOf(1_000, 1_400, 1_800), line.syllables.map { it.start })
+        assertEquals(listOf(1_400, 1_800, 2_300), line.syllables.map { it.end })
+    }
 }

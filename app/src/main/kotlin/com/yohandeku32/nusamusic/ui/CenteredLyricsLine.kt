@@ -10,7 +10,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
@@ -23,11 +22,10 @@ import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
 import com.mocharealm.accompanist.lyrics.core.model.ISyncedLine
 import com.mocharealm.accompanist.lyrics.core.model.karaoke.KaraokeLine
-import com.mocharealm.accompanist.lyrics.core.model.synced.SyncedLine
 import com.mocharealm.accompanist.lyrics.ui.composable.lyrics.*
 import com.mocharealm.accompanist.lyrics.ui.utils.isRtl
 
-/** Reuse Accompanist's timed word drawing, but center each wrapped row. */
+/** Reuse Accompanist's wrapping, then paint each syllable from its own timestamps. */
 @Composable
 internal fun CenteredKaraokeLine(
     line: KaraokeLine,
@@ -46,7 +44,8 @@ internal fun CenteredKaraokeLine(
             // Every measurement depends on text size, available width, and system font scale.
             val wrapped = remember(line, textStyle, textMeasurer, density, width) {
                 val space = textMeasurer.measure(" ", textStyle).size.width.toFloat()
-                val syllables = measureSyllablesAndDetermineAnimation(line.syllables, textMeasurer, textStyle, line.isAccompaniment, space)
+                // Our painter owns animation; skip upstream whole-word character measurements.
+                val syllables = measureSyllablesAndDetermineAnimation(line.syllables, textMeasurer, textStyle, true, space)
                 calculateBalancedLines(syllables, width, textMeasurer, textStyle)
             }
             val lineHeight = remember(textMeasurer, textStyle, density) { textMeasurer.measure("M", textStyle).size.height.toFloat() }
@@ -60,17 +59,9 @@ internal fun CenteredKaraokeLine(
             Canvas(Modifier.fillMaxWidth().height(height).semantics {
                 contentDescription = line.syllables.joinToString("") { it.content }
             }) {
-                drawLyricsLine(layouts, time(), Color.White, BlendMode.SrcOver, rtl)
+                drawSyllableLyrics(layouts, time(), focused)
             }
         }
-        line.translation?.let { Translation(it, style) }
-    }
-}
-
-@Composable
-internal fun CenteredSyncedLine(line: SyncedLine, focused: Boolean, style: TextStyle, onSeek: (ISyncedLine) -> Unit) {
-    LyricsLineContainer(focused, { onSeek(line) }) {
-        Text(line.content, Modifier.fillMaxWidth(), style = style, color = Color.White, textAlign = TextAlign.Center)
         line.translation?.let { Translation(it, style) }
     }
 }

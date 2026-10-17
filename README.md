@@ -132,13 +132,28 @@ TTML uses actual nonblank word timing, excluding padded containers. Start-only
 LRC holds of at least 12 seconds use a conservative text-length estimate when
 there is no explicit ending; this is a timing heuristic, not audio analysis.
 Lyrics follow playback, and tapping a timed line seeks to it. Accompanist's
-word drawing and layout functions are used lazily for the visible rows instead
+layout functions and Nusa's syllable painter are used lazily for visible rows instead
 of premeasuring the whole song. Measurements refresh on size, width and system
 font-scale changes. A retained observable clock resumes after hidden
 loads, reopening, and seeks. An interval index handles overlapping TTML voices;
 new scroll targets replace old animations. Manual browsing pauses following
 until scrolling stops and 2.5 seconds pass. Zero-duration words are normalized
 to avoid non-finite karaoke progress.
+
+Karaoke highlights sweep through each timed syllable independently, with a
+subtle lift/glow while it is sung. Authored TTML spans and Enhanced LRC segments
+keep their exact boundaries, including overlaps and silence between syllables.
+The drawing clock interpolates playback samples; pauses freeze it and seeks
+reset it immediately. Centering, font size, fades and break countdowns remain.
+For line-only LRC or a single line-timed TTML span, Nusa estimates word timing
+inside the existing line interval, preserving spaces, Unicode clusters and
+CJK syllabic characters. These visual estimates do not recover real syllable
+timing from audio. Import a syllable-timed file for accurate vocal alignment.
+For example, Enhanced LRC can spell one word as separately timed syllables:
+
+```text
+[00:01.000]<00:01.000>ber<00:01.400>sa<00:01.800>ma<00:02.300>
+```
 
 Use **Settings → Lyrics → Import lyrics** to import a `.ttml` or `.lrc` file
 for the current song, or the import button when lyrics are unavailable.
