@@ -45,7 +45,8 @@ internal fun SyncedLyricsView(
     lyrics: SyncedLyrics, position: State<Long>, visible: Boolean,
     listState: LazyListState, motionState: LyricsMotionState,
     onSeek: (ISyncedLine) -> Unit, fontSize: Float, credits: SongCredits = SongCredits(), modifier: Modifier = Modifier,
-    inferredEnds: Set<LyricsUnitKey> = emptySet()
+    inferredEnds: Set<LyricsUnitKey> = emptySet(),
+    duetRightLines: Set<Int> = emptySet()
 ) {
     val clock = remember { LyricsPlaybackClock(position, visible) }
     SideEffect { clock.update(position, visible) }
@@ -248,6 +249,9 @@ internal fun SyncedLyricsView(
                         return if (item != null) (item.offset + item.size / 2f - centre) / density else 0f
                     }
                     val main = row.main
+                    // The second explicitly tagged TTML singer is drawn on
+                    // the right. Other/untagged lines retain the old layout.
+                    val duetRight = row.sourceIndex in duetRightLines
                     if (main != null) Column(Modifier.fillMaxWidth().graphicsLayer {
                         val now = clock.read()
                         val focus = lyricsMainFocusDepth(visualDistanceDp(), main.start, main.end, now,
@@ -267,9 +271,11 @@ internal fun SyncedLyricsView(
                         clip = false
                     }) {
                         if (main is KaraokeLine) CenteredKaraokeLine(main, clock.read, motionState,
-                            normalStyle, seekLine, onMainHeight = { mainHeights[index] = it }, expressions = expressions[main])
+                            normalStyle, seekLine, onMainHeight = { mainHeights[index] = it },
+                            expressions = expressions[main], alignEnd = duetRight)
                         else if (main is SyncedLine) LineSyncedLyricsRow(main, clock.read, motionState,
-                            normalStyle, onMainHeight = { mainHeights[index] = it }) { seekLine(main) }
+                            normalStyle, onMainHeight = { mainHeights[index] = it },
+                            alignEnd = duetRight) { seekLine(main) }
                     }
                     // Preserve the original backing-vocal blur and opacity.
                     if (row.backing.isNotEmpty()) Column(Modifier.fillMaxWidth().graphicsLayer {
