@@ -24,7 +24,13 @@ object LyricsDecoder {
         val content = raw.trimStart('\uFEFF').trim()
         val duration = durationMs.coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
         val parsed = if (content.startsWith('<')) {
-            TTMLParser.parse(normalizeTtml(content, duration))
+            val normalized = normalizeTtml(content, duration)
+            val ttml = TTMLParser.parse(normalized.first)
+            ttml.copy(lines = ttml.lines.map { line ->
+                if (line is KaraokeLine && (line.start to line.syllables.joinToString("") { it.content }.trim()) in normalized.second)
+                    SyncedLine(line.syllables.joinToString("") { it.content }, line.translation, line.start, line.end)
+                else line
+            })
         } else {
             parseLrc(content, duration)
         }
@@ -85,7 +91,6 @@ object LyricsDecoder {
             if (text.isBlank()) return@forEachIndexed
             val translation = texts.drop(1).map { it.second }.filter { it.isNotBlank() }
                 .joinToString("\n").ifBlank { null }
-            val explicitBlankEnd = grouped.getOrNull(index + 1)?.value?.all { it.second.isBlank() } == true
             // Normalize whole-second and one-digit fractional tags for the upstream parser.
             val wordTags = wordStamp.findAll(text).toList()
             val normalizedText = text.replace(wordStamp) { "<${clock(time(it))}>" }
@@ -94,7 +99,7 @@ object LyricsDecoder {
             val line = if (enhanced != null) {
                 val terminal = wordTags.last().takeIf { it.range.last == text.lastIndex }?.let(::time)
                 val lastWord = enhanced.syllables.last()
-                val inferred = if (explicitBlankEnd) end else inferredLrcEnd(lastWord.start, end, lastWord.content)
+                val inferred = end
                 val wordEnd = (terminal ?: inferred).coerceAtLeast(lastWord.start + 1)
                 enhanced.copy(
                     end = wordEnd,
@@ -103,19 +108,10 @@ object LyricsDecoder {
                         syllable.copy(end = syllableEnd.coerceAtLeast(syllable.start + 1))
                     }, translation = translation
                 )
-            } else SyncedLine(text, translation, start, if (explicitBlankEnd) end else inferredLrcEnd(start, end, text))
+            } else SyncedLine(text, translation, start, end)
             result += shift(line, offset)
         }
         return SyncedLyrics(result)
-    }
-
-    /** Start-only LRC cannot identify silence exactly. Infer only unusually long holds. */
-    private fun inferredLrcEnd(start: Int, next: Int, text: String): Int {
-        if (next.toLong() - start < 12_000) return next
-        val characters = text.codePointCount(0, text.length)
-        val words = text.trim().split(Regex("\\s+")).size
-        val estimated = (characters.toLong() * 90 + words * 150L).coerceIn(3_000, 9_000)
-        return (start.toLong() + estimated).coerceAtMost(next.toLong()).toInt()
     }
 
     private fun shift(line: ISyncedLine, offset: Long): ISyncedLine {
@@ -147,7 +143,7 @@ object LyricsDecoder {
     }
 
     /** Handle seconds/duration notation and line-timed TTML, which older Core omits. */
-    private fun normalizeTtml(content: String, duration: Int): String {
+    private fun normalizeTtml(content: String, duration: Int): Pair<String, Set<Pair<Int, String>>> {
         require(!content.contains("<!DOCTYPE", ignoreCase = true) && !content.contains("<!ENTITY", ignoreCase = true))
         val factory = DocumentBuilderFactory.newInstance().apply { isNamespaceAware = true }
         val builder = factory.newDocumentBuilder().apply {
@@ -160,6 +156,7 @@ object LyricsDecoder {
         val root = builder.parse(InputSource(StringReader(content))).documentElement
         require(root.localName == "tt" || root.nodeName == "tt")
         require(Regex("\\bbegin\\s*=").containsMatchIn(content)) { "TTML has no timed lyrics" }
+        val lineOnly = mutableSetOf<Pair<Int, String>>()
         var nodes = 0
         fun escaped(text: String) = text.replace("&", "&amp;").replace("<", "&lt;")
             .replace(">", "&gt;").replace("\"", "&quot;")
@@ -182,11 +179,20 @@ object LyricsDecoder {
             var children = buildString {
                 for (i in 0 until node.childNodes.length) append(render(node.childNodes.item(i), start, end, depth + 1))
             }
+            if (name == "p") {
+                val spans = node.getElementsByTagName("*")
+                val hasTimedUnit = (0 until spans.length).any { index ->
+                    val element = spans.item(index) as Element
+                    (element.localName ?: element.nodeName) == "span" && element.hasAttribute("begin")
+                }
+                if (!hasTimedUnit) lineOnly += start to node.textContent.trim()
+            }
             if (name == "p" && (0 until node.childNodes.length).none { node.childNodes.item(it) is Element }) {
                 children = "<span begin=\"${clock(start)}\" end=\"${clock(end)}\">$children</span>"
             }
             return "<$name$attributes>$children</$name>"
         }
-        return render(root, 0, duration, 0)
+        val rendered = render(root, 0, duration, 0)
+        return rendered to lineOnly
     }
 }

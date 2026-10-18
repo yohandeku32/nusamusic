@@ -44,8 +44,6 @@ internal fun PlayerSettingsContent(
     onLyricsFontSizeChangeFinished: () -> Unit,
     hasLyricsSong: Boolean,
     lyricsLoading: Boolean,
-    lyricsImportFailed: Boolean,
-    onImportLyrics: () -> Unit,
     onRetryLyrics: () -> Unit,
     titleFontSize: Float,
     onTitleFontSizeChange: (Float) -> Unit,
@@ -149,7 +147,7 @@ internal fun PlayerSettingsContent(
                     )
                 }
             }
-            if (LYRICS_ENABLED) item(key = "lyrics") {
+            if (LYRICS_ENABLED && playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) item(key = "lyrics") {
                 SettingsSection(settingsText("Lirik", "Lyrics")) {
                     Surface(shape = RoundedCornerShape(16.dp), color = colors.surfaceVariant.copy(alpha = 0.45f)) {
                         Text(settingsText("Musik menemani harimu", "Music follows your day"),
@@ -167,15 +165,11 @@ internal fun PlayerSettingsContent(
                     RangeLabels("18 sp", "48 sp")
                     if (hasLyricsSong) {
                         SettingsDivider()
-                        SettingAction(settingsText("Impor lirik", "Import lyrics"),
-                            settingsText("Pilih file .TTML atau .LRC untuk lagu saat ini", "Choose a .TTML or .LRC file for the current song"),
-                            Icons.Default.FileOpen, onImportLyrics)
-                        if (lyricsImportFailed) Text(settingsText("File lirik tidak valid", "Invalid lyrics file"), color = colors.error)
                         TextButton(onClick = onRetryLyrics, enabled = !lyricsLoading) {
-                            Text(settingsText("Cari ulang lirik", "Find lyrics again"))
+                            Text(settingsText("Baca ulang metadata lirik", "Reload embedded lyrics"))
                         }
                     }
-                    TextButton(onClick = { uriHandler.openUri("https://lrclib.net") }) { Text("LRCLIB ↗") }
+                    Text(settingsText("Lirik hanya dibaca dari metadata file audio.", "Lyrics are read only from audio file metadata."), color = colors.onSurfaceVariant)
                 }
             }
             item(key = "typography") {

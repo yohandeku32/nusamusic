@@ -1,9 +1,5 @@
 package com.yohandeku32.nusamusic.ui
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.VectorConverter
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
@@ -21,7 +17,6 @@ import com.mocharealm.accompanist.lyrics.core.model.ISyncedLine
 import com.mocharealm.accompanist.lyrics.core.model.SyncedLyrics
 import com.mocharealm.accompanist.lyrics.core.model.karaoke.KaraokeLine
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -41,7 +36,7 @@ internal fun SyncedLyricsView(
 ) {
     val clock = remember { LyricsPlaybackClock(position, visible) }
     SideEffect { clock.update(position, visible) }
-    val drawTime = rememberSyllableClock(clock, visible)
+    val drawTime = clock.read
     val timeline = remember(lyrics) { LyricsTimeline(lyrics.lines) }
     val rows = remember(timeline) {
         val gaps = timeline.gaps.associateBy { it.nextLine }
@@ -113,8 +108,11 @@ internal fun SyncedLyricsView(
                 }
                 val index = row.line
                 val original = lyrics.lines[index]
-                val line = remember(original) { SyllableTiming.forDisplay(original) }
-                CenteredKaraokeLine(
+                val line = original as? KaraokeLine
+                if (line == null) {
+                    LineSyncedLyricsRow(original as com.mocharealm.accompanist.lyrics.core.model.synced.SyncedLine,
+                        focused = index in frame.active, style = normalStyle, onSeek = { onSeek(original) })
+                } else CenteredKaraokeLine(
                     line = line,
                     onSeek = { onSeek(original) },
                     time = drawTime,
@@ -124,17 +122,4 @@ internal fun SyncedLyricsView(
             }
         }
     }
-}
-
-/** Interpolate playback samples in drawing, while seeks and hidden pages update immediately. */
-@Composable
-private fun rememberSyllableClock(clock: LyricsPlaybackClock, visible: Boolean): () -> Int {
-    val animated = remember(clock) { Animatable(clock.read(), Int.VectorConverter) }
-    LaunchedEffect(clock, visible) {
-        snapshotFlow { clock.read() }.collectLatest { target ->
-            if (!visible || target < animated.value || abs(target.toLong() - animated.value) > 250) animated.snapTo(target)
-            else if (target != animated.value) animated.animateTo(target, tween(50, easing = LinearEasing))
-        }
-    }
-    return remember(animated) { { animated.value } }
 }
