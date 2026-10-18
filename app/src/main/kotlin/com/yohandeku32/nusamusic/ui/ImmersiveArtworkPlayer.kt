@@ -166,6 +166,10 @@ internal fun ImmersiveArtworkPlayer(
                         .onSizeChanged { lyricHeaderHeightPx = it.height }
                         .graphicsLayer {
                             translationY = -headerLift.toPx() * lyricsTransition
+                            // The rising translucent sheet covers this header.
+                            // Fade the underlying text out with it to prevent
+                            // duplicated song metadata showing through lyrics.
+                            alpha = 1f - lyricsTransition
                         }
                 ) {
                 // Existing normal header stays unchanged at progress 0.
