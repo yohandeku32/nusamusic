@@ -13,9 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -35,29 +33,27 @@ internal fun ImmersiveArtworkScene(
     // artwork, black stays black; real album pixels alone create the ambience.
     BoxWithConstraints(modifier.background(Color.Black)) {
         val height = heroHeight.coerceAtMost(maxHeight)
-        // Crossfade the *actual album-derived bitmap*, not only the palette.
-        // Keep the old ambient during the transition so song changes never
-        // flash to a solid backdrop. The prepared image already carries both
-        // a broad blur and a softer detailed diffusion from the same cover.
-        Crossfade(targetState = blur, animationSpec = tween(if (animateChanges) 700 else 0), label = "immersiveAmbient",
-            modifier = Modifier.matchParentSize()) { bitmap ->
-            Box(Modifier.matchParentSize().drawWithCache {
-                val paint = bitmap?.let {
-                    val scale = maxOf(size.width / it.width, size.height / it.height) * 1.06f
-                    val matrix = android.graphics.Matrix().apply {
-                        setScale(scale, scale)
-                        postTranslate((size.width - it.width * scale) / 2f, (size.height - it.height * scale) / 2f)
-                    }
-                    val shader = android.graphics.BitmapShader(it, android.graphics.Shader.TileMode.CLAMP,
-                        android.graphics.Shader.TileMode.CLAMP).apply { setLocalMatrix(matrix) }
-                    android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG).apply { this.shader = shader }
-                }
-                onDrawBehind {
-                    if (paint != null) drawIntoCanvas {
-                        it.nativeCanvas.drawRect(0f, 0f, size.width, size.height, paint)
-                    }
-                }
-            })
+        // Draw the actual blurred cover through Compose's Image renderer,
+        // just like the visible album artwork. The previous native BitmapShader
+        // path could render a black ambient on some devices even when the blur
+        // bitmap existed, and its cover-scale crop discarded most of the image.
+        // FillBounds preserves the cover's complete colour areas and faint
+        // silhouette across the tall display; the image is already diffused.
+        // Crossfade the real images so track changes remain fluid.
+        Crossfade(
+            targetState = blur,
+            animationSpec = tween(if (animateChanges) 700 else 0),
+            label = "immersiveAmbient",
+            modifier = Modifier.matchParentSize()
+        ) { bitmap ->
+            if (bitmap != null) {
+                Image(
+                    bitmap = bitmap.asImageBitmap(),
+                    contentDescription = null,
+                    contentScale = ContentScale.FillBounds,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
         }
         // One gentle darkening pass over the REAL artwork. The separate
         // readability floor below already shades the control area, so these
