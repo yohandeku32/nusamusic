@@ -36,6 +36,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -73,7 +74,6 @@ internal fun ImmersiveArtworkPlayer(
     artwork: @Composable (Modifier, Dp, Float) -> Unit,
     progress: @Composable (Modifier) -> Unit,
     quality: @Composable () -> Unit,
-    miniArtwork: @Composable (Modifier) -> Unit = {},
     lyrics: @Composable (Modifier) -> Unit = {},
     modifier: Modifier = Modifier,
     contentInsets: WindowInsets = WindowInsets.safeDrawing
@@ -190,59 +190,62 @@ internal fun ImmersiveArtworkPlayer(
                             translationY = -headerLift.toPx() * lyricsTransition
                         }
                 ) {
-                // Existing normal header stays unchanged at progress 0.
-                // During Lyrics, a compact album tile joins the metadata as
-                // the title, artist and Hi-Res badge shrink together.
+                // Keep a single left-aligned metadata stack while Lyrics
+                // opens. No miniature cover is rendered in the top banner.
+                // Text sizes and vertical position animate smoothly together.
                 val expandedTitleSize = (titleFontSize *
                     if (compact) 0.72f else 0.78f).coerceIn(22f, 34f)
                 val expandedLineHeight = (titleFontSize *
                     if (compact) 0.84f else 0.90f).coerceIn(27f, 40f)
-                val compactTitleSize = if (compact) 16.5f else 18f
-                val compactLineHeight = if (compact) 20f else 22f
+                val compactTitleSize = if (compact) 14.5f else 15.5f
+                val compactLineHeight = if (compact) 18f else 19f
                 val titleSize = expandedTitleSize +
                     (compactTitleSize - expandedTitleSize) * lyricsTransition
                 val lineHeight = expandedLineHeight +
                     (compactLineHeight - expandedLineHeight) * lyricsTransition
 
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    AnimatedVisibility(
-                        visible = lyricsOpen,
-                        enter = expandHorizontally(tween(460, easing = FastOutSlowInEasing),
-                            expandFrom = Alignment.Start) + fadeIn(tween(340)),
-                        exit = shrinkHorizontally(tween(420, easing = FastOutSlowInEasing),
-                            shrinkTowards = Alignment.Start) + fadeOut(tween(260))
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.Start
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            miniArtwork(
-                                Modifier.size(if (compact) 44.dp else 48.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                            )
-                            Spacer(Modifier.width(10.dp))
-                        }
-                    }
-                    Column(Modifier.weight(1f)) {
-                        Text(title, fontFamily = titleFontFamily, fontWeight = FontWeight.Bold,
-                            fontSize = titleSize.sp, lineHeight = lineHeight.sp,
-                            color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        Row(Modifier.fillMaxWidth().padding(
-                            top = (6f - 3f * lyricsTransition).dp,
-                            bottom = (4f - 2f * lyricsTransition).dp
-                        ), verticalAlignment = Alignment.CenterVertically) {
-                            Text(artist,
-                                fontSize = (15f - 2.5f * lyricsTransition).sp,
-                                color = Color.White.copy(alpha = 0.72f),
-                                maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f)
-                                    .clickable(enabled = hasSong, onClick = onArtist))
-                            if (wide) {
-                                Spacer(Modifier.width(8.dp))
-                                Box(Modifier.graphicsLayer {
-                                    scaleX = 1f - 0.19f * lyricsTransition
-                                    scaleY = 1f - 0.19f * lyricsTransition
+                        Text(
+                            text = title,
+                            fontFamily = titleFontFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = titleSize.sp,
+                            lineHeight = lineHeight.sp,
+                            textAlign = TextAlign.Start,
+                            color = Color.White,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = artist,
+                            fontSize = (15f - 3.5f * lyricsTransition).sp,
+                            color = Color.White.copy(alpha = 0.72f),
+                            textAlign = TextAlign.Start,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.fillMaxWidth()
+                                .padding(top = (5f - 3f * lyricsTransition).dp)
+                                .clickable(enabled = hasSong, onClick = onArtist)
+                        )
+                        // One left-aligned quality label below title/artist,
+                        // also for wide displays. GPU scaling avoids layout
+                        // churn while the small Hi-Res text shrinks.
+                        Box(
+                            Modifier.align(Alignment.Start)
+                                .padding(top = (4f - 2f * lyricsTransition).dp)
+                                .graphicsLayer {
+                                    scaleX = 1f - 0.23f * lyricsTransition
+                                    scaleY = 1f - 0.23f * lyricsTransition
                                     transformOrigin = TransformOrigin(0f, 0f)
-                                }) { quality() }
-                            }
-                        }
+                                }
+                        ) { quality() }
                     }
                     AnimatedVisibility(
                         visible = !lyricsOpen,
@@ -260,15 +263,6 @@ internal fun ImmersiveArtworkPlayer(
                             )
                         }
                     }
-                }
-                if (!wide) Box(
-                    Modifier.padding(top = (6f - 3f * lyricsTransition).dp)
-                        .graphicsLayer {
-                            scaleX = 1f - 0.19f * lyricsTransition
-                            scaleY = 1f - 0.19f * lyricsTransition
-                            transformOrigin = TransformOrigin(0f, 0f)
-                        }
-                ) { quality() }
                 }
                 Column(Modifier.fillMaxWidth()
                     .onSizeChanged { transportHeightPx = it.height }) {
