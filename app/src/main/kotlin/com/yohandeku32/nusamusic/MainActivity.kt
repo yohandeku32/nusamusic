@@ -2018,14 +2018,6 @@ private fun NusaMusicApp(
                                         onSeek, immersive = true, modifier = progressModifier)
                                 },
                                 quality = { AudioQualityPill(song = currentSong, immersive = true) },
-                                miniArtwork = { tileModifier ->
-                                    ArtworkView(
-                                        song = currentSong,
-                                        maxSizePx = 160,
-                                        modifier = tileModifier,
-                                        grainOverlay = false
-                                    )
-                                },
                                 lyrics = { lyricsModifier ->
                                     ImmersiveLyricsPanel(
                                         song = currentSong,
