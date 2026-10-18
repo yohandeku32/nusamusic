@@ -86,7 +86,11 @@ internal fun ImmersiveArtworkPlayer(
         val controlsWidth = (288.dp + insetWidth).coerceIn(maxWidth * 0.46f, maxWidth * 0.58f)
         val controlsFraction = controlsWidth / maxWidth
         val compact = maxHeight < 720.dp || maxWidth < 370.dp
-        val horizontal = if (wide) 16.dp else if (compact) 20.dp else 24.dp
+        // More breathing room at both edges without changing icon scale.
+        val horizontal = if (wide) 20.dp else if (compact) 24.dp else 28.dp
+        // Lift the entire Now Playing stack, INCLUDING the lower action pill.
+        // Padding changes only when viewport size class changes, not per frame.
+        val playerBottomPadding = if (wide) 12.dp else 22.dp
         // Shift the transport row upward toward the progress bar while
         // keeping the overall vertical spacing and bottom pill position.
         val transportGap = when {
@@ -132,7 +136,7 @@ internal fun ImmersiveArtworkPlayer(
         val lyricsViewportTop = if (wide) targetHeaderTop + 48.dp
             else targetHeaderTop + 48.dp
         val lyricsBottomReserve = if (wide) bottomInset + 20.dp
-            else transportHeight + bottomInset + 24.dp
+            else transportHeight + bottomInset + playerBottomPadding + 12.dp
         val lyricsViewportHeight = (viewportHeight - lyricsViewportTop - lyricsBottomReserve)
             .coerceAtLeast(0.dp)
         // Keep the artwork balanced as the foreground adapts to the
@@ -207,7 +211,7 @@ internal fun ImmersiveArtworkPlayer(
                     .onSizeChanged { controlsHeightPx = it.height }
                     .padding(horizontal = horizontal)
                     .windowInsetsPadding(contentInsets.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal))
-                    .padding(bottom = 12.dp)
+                    .padding(bottom = playerBottomPadding)
             ) {
                 Column(
                     Modifier.fillMaxWidth()
