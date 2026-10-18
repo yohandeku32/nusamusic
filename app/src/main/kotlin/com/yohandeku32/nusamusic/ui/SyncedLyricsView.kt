@@ -88,8 +88,8 @@ internal fun SyncedLyricsView(
         }
     }
     val seekLine = remember(onSeek, interaction) { { line: ISyncedLine -> interaction.seek(); onSeek(line) } }
-    val normalStyle = remember(fontSize) { TextStyle(color = Color.White, fontSize = fontSize.sp, lineHeight = (fontSize * 1.25f).sp, fontWeight = FontWeight.Bold) }
-    val backgroundStyle = remember(fontSize) { TextStyle(color = Color.White, fontSize = (fontSize * 0.625f).sp, lineHeight = (fontSize * 0.875f).sp, fontWeight = FontWeight.SemiBold) }
+    val normalStyle = remember(fontSize) { TextStyle(color = Color.White, fontSize = fontSize.sp, lineHeight = (fontSize * 1.25f).sp, fontWeight = FontWeight.ExtraBold) }
+    val backgroundStyle = remember(fontSize) { TextStyle(color = Color.White, fontSize = (fontSize * 0.625f).sp, lineHeight = (fontSize * 0.875f).sp, fontWeight = FontWeight.Bold) }
     BoxWithConstraints(modifier) {
         val density = androidx.compose.ui.platform.LocalDensity.current.density
         val gapHeight = with(androidx.compose.ui.platform.LocalDensity.current) { lyricsGapRowHeight.toPx() }
