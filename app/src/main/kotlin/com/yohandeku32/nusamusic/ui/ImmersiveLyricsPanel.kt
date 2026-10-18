@@ -96,7 +96,7 @@ fun ImmersiveLyricsPanel(
                         onSeek(target)
                     },
                     fontSize = fontSize,
-                    credits = data.stored.credits,
+                    credits = com.yohandeku32.nusamusic.data.SongCredits(),
                     modifier = Modifier.fillMaxSize(),
                     inferredEnds = data.inferredEnds
                 )
@@ -116,9 +116,6 @@ fun ImmersiveLyricsPanel(
                             lineHeight = (fontSize * 1.25f).sp,
                             fontWeight = FontWeight.Bold
                         )
-                    }
-                    if (!data.stored.credits.isEmpty) item {
-                        LyricsCredits(data.stored.credits)
                     }
                 }
             }
