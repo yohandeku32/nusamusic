@@ -13,7 +13,7 @@ import androidx.compose.ui.unit.dp
 import kotlin.math.sqrt
 import java.util.Locale
 
-/** A temporary overlay, never a persistent list spacer. Every phase follows audio time. */
+/** Countdown glyphs inside a temporary measured gap row. Every phase follows audio time. */
 @Composable
 internal fun LyricsGapDots(gap: LyricsGap, time: () -> Int, modifier: Modifier = Modifier) {
     val seconds by remember(gap, time) { derivedStateOf {
@@ -24,7 +24,6 @@ internal fun LyricsGapDots(gap: LyricsGap, time: () -> Int, modifier: Modifier =
     Canvas(modifier.size(96.dp, 32.dp).graphicsLayer {
         val now = time()
         alpha = countdownOpacity(gap, now)
-        translationY = -(1f - countdownFollowOffset(gap, now)) * 32.dp.toPx()
     }.semantics { contentDescription = description }) {
         val now = time()
         if (countdownOpacity(gap, now) <= 0f) return@Canvas

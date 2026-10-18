@@ -10,7 +10,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -66,7 +65,7 @@ internal fun SyncedLyricsView(
     val normalStyle = remember(fontSize) { TextStyle(color = Color.White, fontSize = fontSize.sp, lineHeight = (fontSize * 1.25f).sp, fontWeight = FontWeight.Bold) }
     val backgroundStyle = remember(fontSize) { TextStyle(color = Color.White, fontSize = (fontSize * 0.625f).sp, lineHeight = (fontSize * 0.875f).sp, fontWeight = FontWeight.SemiBold) }
     BoxWithConstraints(modifier) {
-        val leadPadding = with(androidx.compose.ui.platform.LocalDensity.current) { 28.dp.toPx() }
+        val gapHeight = with(androidx.compose.ui.platform.LocalDensity.current) { lyricsGapRowHeight.toPx() }
         LaunchedEffect(visible, interaction.canFollow, fontSize, maxHeight, maxWidth, motionState.revision) {
             val motion = LyricsFollowMotion()
             val interactionGeneration = interaction.generation
@@ -76,26 +75,26 @@ internal fun SyncedLyricsView(
             fun distance(target: Int, offset: Float): Float {
                 val items = listState.layoutInfo.visibleItemsInfo
                 val item = items.firstOrNull { it.index == target }
-                val actualCenter = if (item != null) item.offset + (mainHeights[target] ?: item.size) / 2f else {
+                val actualCenter = if (item != null) item.offset + offset else {
                     val first = items.firstOrNull() ?: return 0f
                     var total = 0
                     var count = 0
                     for (visibleItem in items) if (visibleItem.index < display.rows.size) { total += visibleItem.size; count++ }
-                    val average = if (count > 0) (total.toFloat() / count).coerceAtLeast(1f) else leadPadding * 2f
-                    first.offset + (target - first.index) * average + average / 2f
+                    val average = if (count > 0) (total.toFloat() / count).coerceAtLeast(1f) else gapHeight
+                    first.offset + (target - first.index) * average + offset
                 }
-                return actualCenter - center() - offset
+                return actualCenter - center()
             }
-            fun leadFor(target: Int, gap: LyricsGap?, now: Int): Float {
-                if (gap == null) return 0f
-                val height = mainHeights[target]?.toFloat()
-                    ?: listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == target }?.size?.toFloat()
-                    ?: leadPadding * 2f
-                return (height / 2f + leadPadding) * countdownFollowOffset(gap, now)
+            fun anchorFor(target: Int, gap: LyricsGap?, now: Int): Float {
+                val fraction = gap?.let { countdownLayoutFraction(it, now) } ?: 0f
+                val measured = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == target }?.size?.toFloat()
+                val mainHeight = mainHeights[target]?.toFloat()
+                    ?: measured?.let { (it - gapHeight * fraction).coerceAtLeast(0f) } ?: gapHeight
+                return countdownRowAnchor(mainHeight, gapHeight, fraction)
             }
             var lastSource = timeline.frame(clock.read()).anchor
             var targetRow = -1
-            var targetLead = 0f
+            var targetAnchor = 0f
             fun updateTarget(now: Int): Boolean {
                 val current = frame
                 val source = current.gap?.nextLine ?: current.anchor.takeIf { it in current.active }
@@ -103,10 +102,10 @@ internal fun SyncedLyricsView(
                 if (source !in lyrics.lines.indices) return false
                 lastSource = source
                 targetRow = display.lineToRow[source]
-                targetLead = leadFor(targetRow, current.gap, now)
+                targetAnchor = anchorFor(targetRow, current.gap, now)
                 return true
             }
-            fun requestedOffset() = ((mainHeights[targetRow] ?: 0) / 2f - center() - targetLead).roundToInt()
+            fun requestedOffset() = (targetAnchor - center()).roundToInt()
             try {
                 val now = clock.read()
                 if (!updateTarget(now)) return@LaunchedEffect
@@ -125,7 +124,7 @@ internal fun SyncedLyricsView(
                     val audio = clock.read()
                     if (audio.toLong() >= followEnd) break
                     if (!updateTarget(audio)) continue
-                    val error = distance(targetRow, targetLead)
+                    val error = distance(targetRow, targetAnchor)
                     if (abs(error) <= 0.5f ||
                         (error > 0 && !listState.canScrollForward) || (error < 0 && !listState.canScrollBackward)) {
                         motion.reset()
@@ -142,7 +141,7 @@ internal fun SyncedLyricsView(
                             val latest = clock.read()
                             if (latest.toLong() >= followEnd) break
                             if (!updateTarget(latest)) break
-                            val error = distance(targetRow, targetLead)
+                            val error = distance(targetRow, targetAnchor)
                             if (abs(error) <= 0.5f) break
                             val limit = (listState.layoutInfo.viewportSize.height / 6f).coerceAtLeast(1f)
                             val step = motion.step(error, deltaMs).coerceIn(-limit, limit)
@@ -176,6 +175,8 @@ internal fun SyncedLyricsView(
         ) {
             itemsIndexed(display.rows, key = { _, row -> row.sourceIndex }, contentType = { _, _ -> "lyric-group" }) { index, row ->
                 Column(Modifier.fillMaxWidth()) {
+                    val gap = frame.gap?.takeIf { display.lineToRow[it.nextLine] == index }
+                    if (gap != null) LyricsGapRow(gap, clock.read)
                     val main = row.main
                     if (main is KaraokeLine) CenteredKaraokeLine(main, clock.read, motionState,
                         normalStyle, seekLine, onMainHeight = { mainHeights[index] = it })
@@ -195,9 +196,6 @@ internal fun SyncedLyricsView(
             if (!credits.isEmpty) item(key = "credits", contentType = "credits") {
                 LyricsCredits(credits, Modifier.padding(horizontal = 16.dp))
             }
-        }
-        frame.gap?.let { gap ->
-            LyricsGapDots(gap, clock.read, Modifier.align(Alignment.CenterStart).offset(y = (-28).dp).padding(start = 16.dp))
         }
     }
 }
