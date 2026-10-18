@@ -124,7 +124,9 @@ internal fun ImmersiveArtworkPlayer(
         var showLyricsContent by remember { mutableStateOf(false) }
         LaunchedEffect(lyricsOpen) {
             if (lyricsOpen) {
-                delay(460L)
+                // Reveal before the header fully settles; avoid a half-second blank pause.
+                // Alpha remains isolated from layout and lyrics text geometry.
+                delay(260L)
                 showLyricsContent = true
             } else {
                 showLyricsContent = false
@@ -167,7 +169,7 @@ internal fun ImmersiveArtworkPlayer(
                     .height(lyricsViewportHeight),
                 // Alpha-only animation avoids translating and relaying out
                 // the full, shader-heavy lyrics list during entrance/exit.
-                enter = fadeIn(animationSpec = tween(210)),
+                enter = fadeIn(animationSpec = tween(240)),
                 exit = fadeOut(animationSpec = tween(100))
             ) {
                 Box(Modifier.fillMaxSize()) {
