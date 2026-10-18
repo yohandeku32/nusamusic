@@ -1,8 +1,14 @@
 package com.yohandeku32.nusamusic.ui
 
+import android.graphics.Bitmap
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
@@ -15,9 +21,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -29,6 +37,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.Velocity
 import kotlinx.coroutines.launch
+import androidx.compose.ui.platform.LocalContext
+import com.yohandeku32.nusamusic.data.ImmersiveArtworkCache
+import com.yohandeku32.nusamusic.model.Song
 
 /**
  * In the same Compose window as the player: no ModalBottomSheet, fixed-height
@@ -41,6 +52,7 @@ import kotlinx.coroutines.launch
 @Composable
 internal fun ImmersiveExpandingLyricsSheet(
     visible: Boolean,
+    song: Song?,
     sheetHeight: Dp,
     onDismiss: () -> Unit,
     lyrics: @Composable (Modifier) -> Unit,
@@ -51,6 +63,19 @@ internal fun ImmersiveExpandingLyricsSheet(
     val velocityThreshold = with(density) { 900.dp.toPx() }
     val scope = rememberCoroutineScope()
     val latestDismiss by rememberUpdatedState(onDismiss)
+    val context = LocalContext.current
+    var ambientBlur by remember(song?.uri) {
+        mutableStateOf<Bitmap?>(song?.let { ImmersiveArtworkCache.cached(it)?.blur })
+    }
+    LaunchedEffect(song?.uri, visible) {
+        if (!visible || song == null) return@LaunchedEffect
+        // The player already prepared this exact album's blurred bitmap.
+        // Reuse its in-memory preview or disk copy; never draw the controls
+        // through a translucent overlay and never blur the UI itself.
+        ambientBlur = ImmersiveArtworkCache.cached(song)?.blur
+            ?: ImmersiveArtworkCache.restore(context, song)?.blur
+    }
+    val touchShield = remember { MutableInteractionSource() }
     val reveal = remember { Animatable(1f) } // 0 = fully open, 1 = offscreen
     var rendered by remember { mutableStateOf(visible) }
     var userDragging by remember { mutableStateOf(false) }
@@ -61,10 +86,12 @@ internal fun ImmersiveExpandingLyricsSheet(
     // Rendering resources are stable even while the animation is moving.
     val sheetShape = remember { RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp) }
     val sheetTint = remember {
+        // This glaze darkens an ALREADY-OPAQUE sheet made from real blurred
+        // album art. Its alpha controls ambience, not transparency to buttons.
         Brush.verticalGradient(
-            0f to Color(0xFF15151A).copy(alpha = 0.68f),
-            0.35f to Color(0xFF131319).copy(alpha = 0.64f),
-            1f to Color(0xFF08080D).copy(alpha = 0.76f)
+            0f to Color(0xFF0B0D13).copy(alpha = 0.65f),
+            0.42f to Color(0xFF0A0C14).copy(alpha = 0.70f),
+            1f to Color(0xFF07080D).copy(alpha = 0.84f)
         )
     }
 
@@ -165,8 +192,30 @@ internal fun ImmersiveExpandingLyricsSheet(
                 shape = sheetShape
                 clip = true
             }
-            .background(sheetTint)
+            // Fully opaque foundation + artwork-matched bitmap ensure that
+            // Play/Next/seek/pill never show through a "glass" gradient.
+            .background(Color(0xFF12141A))
+            // The whole sheet captures taps on blank pixels. Child gestures
+            // (lyrics scroll/tap-to-seek, handle drag, close arrow) still win.
+            .clickable(interactionSource = touchShield, indication = null) {}
     ) {
+        Crossfade(
+            targetState = ambientBlur,
+            animationSpec = tween(durationMillis = 450),
+            label = "immersiveLyricsAmbient",
+            modifier = Modifier.matchParentSize()
+        ) { bitmap ->
+            if (bitmap != null) {
+                Image(
+                    bitmap = bitmap.asImageBitmap(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
+        Box(Modifier.matchParentSize().background(sheetTint))
+
         Column(Modifier.fillMaxSize()) {
             // A real draggable region, not an artificial sheet-sized pointer
             // interceptor: scrolling/seek on the text remains interactive.
