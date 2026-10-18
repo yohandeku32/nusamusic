@@ -966,7 +966,8 @@ class MainActivity : ComponentActivity() {
                 extraFolderUris = folderUris,
                 cachedSongs = cachedSongs,
                 previousCheckpoint = checkpoint,
-                scanSelectedFolders = false
+                scanSelectedFolders = false,
+                includeMediaStore = permissionGranted
             )
         }
 
