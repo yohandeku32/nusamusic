@@ -35,7 +35,7 @@ internal fun LyricsGapDots(gap: LyricsGap, time: () -> Int, active: Boolean) {
     Box(Modifier.fillMaxWidth().height(72.dp), contentAlignment = Alignment.Center) {
         Canvas(Modifier.size(96.dp, 32.dp).graphicsLayer { alpha = opacity.value }
             .semantics { contentDescription = description }) {
-            val now = time()
+            val now = if (active) time() else gap.start
             val remaining = (gap.end.toLong() - now).coerceAtLeast(0)
             val leadIn = minOf(3_000, gap.end - gap.start).toFloat()
             val progress = if (active) (1f - remaining / leadIn).coerceIn(0f, 1f) else 0f

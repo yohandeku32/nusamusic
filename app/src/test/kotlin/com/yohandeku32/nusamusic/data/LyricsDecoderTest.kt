@@ -56,10 +56,10 @@ class LyricsDecoderTest {
         assertEquals("You & me", line.syllables.joinToString("") { it.content })
     }
     @Test fun ttmlSupportsLineTimingSecondsAndDurations() {
-        val line = LyricsDecoder.decode("""<tt xmlns="http://www.w3.org/ns/ttml"><body><div><p begin="1.5s" dur="2500ms">Hello world</p></div></body></tt>""", 8_000).lines.single() as KaraokeLine
+        val line = LyricsDecoder.decode("""<tt xmlns="http://www.w3.org/ns/ttml"><body><div><p begin="1.5s" dur="2500ms">Hello world</p></div></body></tt>""", 8_000).lines.single() as SyncedLine
         assertEquals(1_500, line.start)
         assertEquals(4_000, line.end)
-        assertEquals("Hello world", line.syllables.single().content)
+        assertEquals("Hello world", line.content)
     }
     @Test fun prefixedTtmlElementsWork() {
         val lines = LyricsDecoder.decode("""<tt:tt xmlns:tt="http://www.w3.org/ns/ttml"><tt:body><tt:div><tt:p begin="00:01" end="00:03">Halo</tt:p></tt:div></tt:body></tt:tt>""", 5_000).lines
@@ -87,11 +87,11 @@ class LyricsDecoderTest {
         val lines = LyricsDecoder.decode("""<tt><body><p begin="0s" end="10s"><span begin="5s" end="7s">Later</span></p><p begin="2s" end="4s">Earlier</p></body></tt>""", 12_000).lines
         assertEquals(listOf(2_000, 5_000), lines.map { it.start })
     }
-    @Test fun longStartOnlyLrcHoldsAreEstimatedWithoutMovingTheNextStart() {
+    @Test fun startOnlyLrcKeepsAuthoredBoundariesWithoutVocalEstimates() {
         val lines = LyricsDecoder.decode("[00:05]Hello\n[00:25]Next", 50_000).lines
-        assertTrue(lines.first().end in 8_000..14_000)
+        assertEquals(25_000, lines.first().end)
         assertEquals(25_000, lines.last().start)
-        assertTrue(lines.last().end < 50_000)
+        assertEquals(50_000, lines.last().end)
     }
     @Test fun explicitBlankLrcEndPreservesALongHeldLine() {
         val lines = LyricsDecoder.decode("[00:05]Hello\n[00:25]\n[00:35]Next", 40_000).lines
@@ -102,9 +102,9 @@ class LyricsDecoderTest {
         val line = LyricsDecoder.decode("[00:01]<00:01>Hello<00:20>\n[00:30]Next", 35_000).lines.first()
         assertEquals(20_000, line.end)
     }
-    @Test fun missingEnhancedEndDoesNotHoldTheLastWordThroughALongBreak() {
+    @Test fun missingEnhancedEndUsesNextAuthoredLineBoundary() {
         val line = LyricsDecoder.decode("[00:01]<00:01>Hello <00:02>world\n[00:30]Next", 35_000).lines.first()
-        assertTrue(line.end in 5_000..11_000)
+        assertEquals(30_000, line.end)
     }
     @Test fun ttmlRetainsAdjacentSyllablesInsideTheSameWord() {
         val line = LyricsDecoder.decode("""<tt><body><p begin="1s" end="2.3s"><span begin="1s" end="1.4s">ber</span><span begin="1.4s" end="1.8s">sa</span><span begin="1.8s" end="2.3s">ma</span></p></body></tt>""", 5_000).lines.single() as KaraokeLine

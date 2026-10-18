@@ -9,8 +9,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
@@ -50,16 +50,13 @@ internal fun CenteredKaraokeLine(
             }
             val lineHeight = remember(textMeasurer, textStyle, density) { textMeasurer.measure("M", textStyle).size.height.toFloat() }
             val layouts = remember(wrapped, width, lineHeight, rtl) {
-                calculateStaticLineLayout(wrapped, false, width, lineHeight, rtl).mapIndexed { row, syllables ->
-                    val offset = Offset((width - wrapped[row].totalWidth) / 2f, 0f)
-                    syllables.map { it.copy(position = it.position + offset, wordPivot = it.wordPivot + offset) }
-                }
+                calculateStaticLineLayout(wrapped, false, width, lineHeight, rtl)
             }
             val height = with(density) { (lineHeight * wrapped.size).toDp() } + 8.dp
             Canvas(Modifier.fillMaxWidth().height(height).semantics {
                 contentDescription = line.syllables.joinToString("") { it.content }
             }) {
-                drawSyllableLyrics(layouts, time(), focused)
+                drawSyllableLyrics(layouts, if (focused) time() else 0, focused)
             }
         }
         line.translation?.let { Translation(it, style) }
@@ -80,6 +77,7 @@ private fun LyricsLineContainer(
         tween(420, easing = FastOutSlowInEasing), label = "lyricScale")
     Column(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 8.dp).graphicsLayer {
         alpha = opacity.value
+        transformOrigin = TransformOrigin(0f, 0.5f)
         scaleX = scale.value
         scaleY = scale.value
     }, content = content)
@@ -88,5 +86,16 @@ private fun LyricsLineContainer(
 @Composable
 private fun Translation(text: String, style: TextStyle) {
     Text(text, Modifier.fillMaxWidth(), style = style.copy(fontSize = style.fontSize * 0.65f, lineHeight = style.lineHeight * 0.65f),
-        color = Color.White.copy(alpha = 0.6f), textAlign = TextAlign.Center)
+        color = Color.White.copy(alpha = 0.6f), textAlign = TextAlign.Start)
+}
+
+@Composable
+internal fun LineSyncedLyricsRow(
+    line: com.mocharealm.accompanist.lyrics.core.model.synced.SyncedLine,
+    focused: Boolean, style: TextStyle, onSeek: () -> Unit
+) {
+    LyricsLineContainer(focused, onSeek) {
+        Text(line.content, Modifier.fillMaxWidth(), style = style, color = Color.White, textAlign = TextAlign.Start)
+        line.translation?.let { Translation(it, style) }
+    }
 }

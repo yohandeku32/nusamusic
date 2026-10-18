@@ -55,4 +55,15 @@ class LyricsPlaybackClockTest {
         position.longValue = Long.MAX_VALUE
         assertEquals(Int.MAX_VALUE, clock.read())
     }
+    @Test fun pausedPositionDoesNotDriftAndSpeedChangesUseActualAudioTime() {
+        val audio = mutableLongStateOf(1_500)
+        val clock = LyricsPlaybackClock(audio, true)
+        val unit = com.mocharealm.accompanist.lyrics.core.model.karaoke.KaraokeSyllable("word", 1000, 3000)
+        repeat(120) { assertEquals(0.25f, syllableProgress(unit, clock.read()), 0f) }
+        // A 2x-speed player advances audio time by 1000 ms in 500 ms of wall time.
+        audio.longValue = 2500
+        assertEquals(0.75f, syllableProgress(unit, clock.read()), 0f)
+        audio.longValue = 500
+        assertEquals(0f, syllableProgress(unit, clock.read()), 0f)
+    }
 }
