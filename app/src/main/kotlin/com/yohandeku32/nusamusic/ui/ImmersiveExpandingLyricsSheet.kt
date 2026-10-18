@@ -58,6 +58,15 @@ internal fun ImmersiveExpandingLyricsSheet(
     val sheetSpring = remember {
         spring<Float>(dampingRatio = 0.91f, stiffness = 370f)
     }
+    // Rendering resources are stable even while the animation is moving.
+    val sheetShape = remember { RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp) }
+    val sheetTint = remember {
+        Brush.verticalGradient(
+            0f to Color(0xFF15151A).copy(alpha = 0.68f),
+            0.35f to Color(0xFF131319).copy(alpha = 0.64f),
+            1f to Color(0xFF08080D).copy(alpha = 0.76f)
+        )
+    }
 
     LaunchedEffect(visible, sheetHeightPx) {
         if (visible) {
@@ -153,16 +162,10 @@ internal fun ImmersiveExpandingLyricsSheet(
                 translationY = sheetHeightPx *
                     if (userDragging) dragFraction else reveal.value
                 // Rounded only at the top; bottom reaches the display edge.
-                shape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp)
+                shape = sheetShape
                 clip = true
             }
-            .background(
-                Brush.verticalGradient(
-                    0f to Color(0xFF15151A).copy(alpha = 0.58f),
-                    0.35f to Color(0xFF131319).copy(alpha = 0.64f),
-                    1f to Color(0xFF08080D).copy(alpha = 0.76f)
-                )
-            )
+            .background(sheetTint)
     ) {
         Column(Modifier.fillMaxSize()) {
             // A real draggable region, not an artificial sheet-sized pointer
