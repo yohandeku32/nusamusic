@@ -26,12 +26,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.TransformOrigin
@@ -106,13 +101,14 @@ internal fun ImmersiveArtworkPlayer(
         val controlsFraction = controlsWidth / maxWidth
         val compact = maxHeight < 720.dp || maxWidth < 370.dp
         val horizontal = if (wide) 16.dp else if (compact) 24.dp else 28.dp
-        // Preserve current vertical hierarchy, but give transport and pill
-        // independent breathing room. Short screens compress only the gap.
-        val transportPillGap = when {
+        // Equal gaps above and below transport keep its icons centred
+        // between the progress bar and the bottom action pill.
+        // Shorter viewports preserve the same balance with smaller gaps.
+        val transportGap = when {
             maxHeight < 640.dp -> 14.dp
-            wide -> 18.dp
-            compact -> 20.dp
-            else -> 26.dp
+            wide -> 16.dp
+            compact -> 18.dp
+            else -> 20.dp
         }
         var controlsHeightPx by remember { mutableIntStateOf(0) }
         val controlsHeight = with(density) { controlsHeightPx.toDp() }
@@ -147,9 +143,9 @@ internal fun ImmersiveArtworkPlayer(
         val sheetHeight = with(density) {
             (viewportHeightPx - sheetTopPx).coerceAtLeast(0).toDp()
         }
-        // The extra air beneath transport should not steal vertical space
-        // from the artwork: compensate only the newly introduced gap.
-        val addedTransportGap = (transportPillGap -
+        // Keep the artwork balanced as the foreground adapts to the
+        // compact, evenly spaced transport controls.
+        val addedTransportGap = (transportGap -
             (if (wide) 10.dp else if (compact) 14.dp else 16.dp)).coerceAtLeast(0.dp)
         val requestedHero = if (wide) maxHeight else
             (maxHeight - (if (controlsHeightPx > 0) controlsHeight else 320.dp) +
@@ -262,86 +258,35 @@ internal fun ImmersiveArtworkPlayer(
                 Column(Modifier.fillMaxWidth()
                     .onSizeChanged { transportHeightPx = it.height }) {
                 progress(Modifier.fillMaxWidth().padding(top = if (wide) 4.dp else if (compact) 10.dp else 14.dp))
-                Spacer(Modifier.height(if (wide) 6.dp else if (compact) 10.dp else 16.dp))
+                Spacer(Modifier.height(transportGap))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween) {
                     ImmersiveAction(NusaPlayerIcons.Shuffle,
                         if (shuffleEnabled) immersiveText("Acak aktif", "Shuffle on") else immersiveText("Acak nonaktif", "Shuffle off"),
                         onShuffle, hasSong, active = shuffleEnabled, iconSize = 21.dp)
-                    IconButton(onClick = onPrevious, enabled = hasSong, modifier = Modifier.size(48.dp)) {
+                    IconButton(onClick = onPrevious, enabled = hasSong, modifier = Modifier.size(52.dp)) {
                         Icon(NusaPlayerIcons.Previous, immersiveText("Sebelumnya", "Previous"),
-                            tint = Color.White.copy(alpha = if (hasSong) 0.94f else 0.3f), modifier = Modifier.size(29.dp))
+                            tint = Color.White.copy(alpha = if (hasSong) 0.94f else 0.3f),
+                            modifier = Modifier.size(32.dp))
                     }
-                    IconButton(onClick = onPlayPause,
-                        modifier = Modifier.size(if (compact) 64.dp else 68.dp)
-                            // Very soft depth around the floating control, while
-                            // keeping its hit target and playback behavior intact.
-                            .shadow(
-                                elevation = 3.dp,
-                                shape = CircleShape,
-                                ambientColor = Color.Black.copy(alpha = 0.13f),
-                                spotColor = Color.Black.copy(alpha = 0.18f)
-                            )
-                            .clip(CircleShape)
-                            .drawWithCache {
-                                // Size-aware brushes are created only when the
-                                // button size/density changes, never per frame.
-                                // Transparent layers keep the album ambience visible.
-                                val diameter = size.minDimension
-                                val glass = Brush.linearGradient(
-                                    colors = listOf(
-                                        Color.White.copy(alpha = 0.25f),
-                                        Color.White.copy(alpha = 0.13f),
-                                        Color.White.copy(alpha = 0.07f)
-                                    ),
-                                    start = Offset.Zero,
-                                    end = Offset(size.width, size.height)
-                                )
-                                val softReflection = Brush.radialGradient(
-                                    colors = listOf(
-                                        Color.White.copy(alpha = 0.19f),
-                                        Color.White.copy(alpha = 0.04f),
-                                        Color.Transparent
-                                    ),
-                                    center = Offset(size.width * 0.28f, size.height * 0.16f),
-                                    radius = diameter * 0.78f
-                                )
-                                val curvedDepth = Brush.radialGradient(
-                                    colors = listOf(
-                                        Color.Black.copy(alpha = 0.08f),
-                                        Color.Transparent
-                                    ),
-                                    center = Offset(size.width * 0.88f, size.height * 1.04f),
-                                    radius = diameter * 0.85f
-                                )
-                                val edgeLight = Brush.linearGradient(
-                                    colors = listOf(
-                                        Color.White.copy(alpha = 0.38f),
-                                        Color.White.copy(alpha = 0.17f),
-                                        Color.White.copy(alpha = 0.06f)
-                                    ),
-                                    start = Offset.Zero,
-                                    end = Offset(size.width, size.height)
-                                )
-                                val edgeWidth = 1.dp.toPx()
-                                onDrawBehind {
-                                    drawCircle(brush = glass)
-                                    drawCircle(brush = softReflection)
-                                    drawCircle(brush = curvedDepth)
-                                    drawCircle(
-                                        brush = edgeLight,
-                                        radius = (diameter - edgeWidth) / 2f,
-                                        style = Stroke(width = edgeWidth)
-                                    )
-                                }
-                            }) {
-                        Icon(if (isPlaying) NusaPlayerIcons.Pause else NusaPlayerIcons.Play,
+                    // Clean, background-free Play/Pause control.
+                    // The larger white glyph stays centred without glass,
+                    // a filled circle, border or drop shadow.
+                    IconButton(
+                        onClick = onPlayPause,
+                        modifier = Modifier.size(if (compact) 68.dp else 72.dp)
+                    ) {
+                        Icon(
+                            if (isPlaying) NusaPlayerIcons.Pause else NusaPlayerIcons.Play,
                             if (isPlaying) immersiveText("Jeda", "Pause") else immersiveText("Putar", "Play"),
-                            tint = Color.White, modifier = Modifier.size(if (compact) 35.dp else 38.dp))
+                            tint = Color.White,
+                            modifier = Modifier.size(if (compact) 38.dp else 41.dp)
+                        )
                     }
-                    IconButton(onClick = onNext, enabled = hasSong, modifier = Modifier.size(48.dp)) {
+                    IconButton(onClick = onNext, enabled = hasSong, modifier = Modifier.size(52.dp)) {
                         Icon(NusaPlayerIcons.Next, immersiveText("Berikutnya", "Next"),
-                            tint = Color.White.copy(alpha = if (hasSong) 0.94f else 0.3f), modifier = Modifier.size(29.dp))
+                            tint = Color.White.copy(alpha = if (hasSong) 0.94f else 0.3f),
+                            modifier = Modifier.size(32.dp))
                     }
                     ImmersiveAction(if (repeatMode == 1) NusaPlayerIcons.RepeatOne else NusaPlayerIcons.Repeat,
                         when (repeatMode) {
@@ -350,7 +295,7 @@ internal fun ImmersiveArtworkPlayer(
                             else -> immersiveText("Ulangi nonaktif", "Repeat off")
                         }, onRepeat, hasSong, active = repeatMode != 0, iconSize = 21.dp)
                 }
-                Spacer(Modifier.height(transportPillGap))
+                Spacer(Modifier.height(transportGap))
                 // A compact, centred capsule with 48dp touch targets.
                 // Its width adapts when the Lyrics action is unavailable,
                 // without squeezing the tap areas on small screens.
