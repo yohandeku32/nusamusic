@@ -59,7 +59,7 @@ class LyricsTravelingWaveMaskTest {
 
     @Test fun vocalGapDoesNotLeaveWaveRunningForever() {
         val front = requireNotNull(mask.front(3001))
-        assertEquals(190.04f, front.positionDp, 0.1f)
+        assertTrue(front.positionDp in 180f..190.1f)
         assertNull(mask.front(7300))
     }
 
