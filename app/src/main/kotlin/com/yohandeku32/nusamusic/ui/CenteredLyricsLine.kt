@@ -73,7 +73,9 @@ internal fun CenteredKaraokeLine(
             }
         }
     }
-    line.translation?.let { TimedTranslation(it, style, voices, visualTime, motion) }
+    // Show available translations as soon as their lyric row is on screen.
+    // Their visibility must not depend on a syllable becoming active.
+    line.translation?.takeIf { it.isNotBlank() }?.let { LyricsTranslation(it, style) }
 }
 
 @Composable
@@ -114,21 +116,22 @@ internal fun TimedVocalContent(
     }) { content() }
 }
 
+/** Static secondary text: translation is visible from first composition.
+ * Preserve the original type scale, padding and translucency, and leave
+ * timed vocal spacing exclusively to backing vocals.
+ */
 @Composable
-private fun TimedTranslation(
-    text: String, style: TextStyle, voices: LyricsVocalWindows,
-    time: () -> Int, motion: LyricsMotionState
-) {
-    val readable by remember(voices, time, motion) { derivedStateOf { voices.presence(time(), motion.resetAt) > 0f } }
-    TimedVocalContent(voices, time, motion) {
-    Text(text, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).graphicsLayer {
-        val presence = voices.presence(time(), motion.resetAt)
-        alpha = presence
-        translationY = (1f - presence) * 4.dp.toPx()
-    }.clearAndSetSemantics { if (readable) contentDescription = text },
-        style = style.copy(fontSize = style.fontSize * 0.65f, lineHeight = style.lineHeight * 0.65f),
-        color = Color.White.copy(alpha = 0.6f), textAlign = TextAlign.Start)
-    }
+private fun LyricsTranslation(text: String, style: TextStyle) {
+    Text(
+        text = text,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        style = style.copy(
+            fontSize = style.fontSize * 0.65f,
+            lineHeight = style.lineHeight * 0.65f
+        ),
+        color = Color.White.copy(alpha = 0.6f),
+        textAlign = TextAlign.Start
+    )
 }
 
 @Composable
