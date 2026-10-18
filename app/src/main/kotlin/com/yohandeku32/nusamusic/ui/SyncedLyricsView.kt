@@ -13,7 +13,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import android.os.Build
+import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -65,7 +69,23 @@ internal fun SyncedLyricsView(
     val normalStyle = remember(fontSize) { TextStyle(color = Color.White, fontSize = fontSize.sp, lineHeight = (fontSize * 1.25f).sp, fontWeight = FontWeight.Bold) }
     val backgroundStyle = remember(fontSize) { TextStyle(color = Color.White, fontSize = (fontSize * 0.625f).sp, lineHeight = (fontSize * 0.875f).sp, fontWeight = FontWeight.SemiBold) }
     BoxWithConstraints(modifier) {
+        val density = androidx.compose.ui.platform.LocalDensity.current.density
         val gapHeight = with(androidx.compose.ui.platform.LocalDensity.current) { lyricsGapRowHeight.toPx() }
+
+        // Prebuild all supported blur radii ONCE per display density. No new
+        // shader, RenderEffect or graphics layer allocation on playback ticks.
+        // Android 10–11 keep the same opacity gradient without hardware blur.
+        val blurEffects = remember(density) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                Array<BlurEffect?>(28) { step ->
+                    if (step == 0) null else BlurEffect(
+                        radiusX = step * 0.1f * density,
+                        radiusY = step * 0.1f * density,
+                        edgeTreatment = TileMode.Decal
+                    )
+                }
+            } else emptyArray()
+        }
         LaunchedEffect(visible, interaction.canFollow, fontSize, maxHeight, maxWidth, motionState.revision) {
             val motion = LyricsFollowMotion()
             val interactionGeneration = interaction.generation
@@ -177,17 +197,46 @@ internal fun SyncedLyricsView(
                 Column(Modifier.fillMaxWidth()) {
                     val gap = frame.gap?.takeIf { display.lineToRow[it.nextLine] == index }
                     if (gap != null) LyricsGapRow(gap, clock.read)
-                    val main = row.main
-                    if (main is KaraokeLine) CenteredKaraokeLine(main, clock.read, motionState,
-                        normalStyle, seekLine, onMainHeight = { mainHeights[index] = it })
-                    else if (main is SyncedLine) LineSyncedLyricsRow(main, clock.read, motionState,
-                        normalStyle, onMainHeight = { mainHeights[index] = it }) { seekLine(main) }
-                    row.backing.forEach { backing ->
-                        key(backing.index) {
-                            val voice = backing.value
-                            val voices = remember(voice) { LyricsVocalWindows(voice) }
-                            TimedVocalContent(voices, clock.read, motionState) {
-                                CenteredKaraokeLine(voice, clock.read, motionState, backgroundStyle, seekLine)
+
+                    // Focus follows the *actual visual y-position* of the
+                    // measured row, not a changing active-line index. During
+                    // manual browsing the centre remains a stable focus plane,
+                    // and during follow-scroll approaching rows sharpen
+                    // continuously without toggling at syllable boundaries.
+                    // Keep the countdown OUTSIDE this layer; its animation and
+                    // temporary gap height must remain unchanged.
+                    Column(
+                        Modifier.fillMaxWidth().graphicsLayer {
+                            val info = listState.layoutInfo
+                            val visible = info.visibleItemsInfo.firstOrNull { it.index == index }
+                            val centre = (info.viewportStartOffset + info.viewportEndOffset) / 2f
+                            val distanceDp = if (visible != null) {
+                                (visible.offset + visible.size / 2f - centre) / density
+                            } else 0f
+                            val focus = lyricsFocusDepth(distanceDp)
+                            alpha = focus.opacity
+                            renderEffect = if (blurEffects.isNotEmpty()) {
+                                val step = (focus.blurDp * 10f).roundToInt()
+                                    .coerceIn(0, blurEffects.lastIndex)
+                                blurEffects[step]
+                            } else null
+                            // Glow/text have internal padding greater than the
+                            // 2.7dp blur radius; never clip the lyric strokes.
+                            clip = false
+                        }
+                    ) {
+                        val main = row.main
+                        if (main is KaraokeLine) CenteredKaraokeLine(main, clock.read, motionState,
+                            normalStyle, seekLine, onMainHeight = { mainHeights[index] = it })
+                        else if (main is SyncedLine) LineSyncedLyricsRow(main, clock.read, motionState,
+                            normalStyle, onMainHeight = { mainHeights[index] = it }) { seekLine(main) }
+                        row.backing.forEach { backing ->
+                            key(backing.index) {
+                                val voice = backing.value
+                                val voices = remember(voice) { LyricsVocalWindows(voice) }
+                                TimedVocalContent(voices, clock.read, motionState) {
+                                    CenteredKaraokeLine(voice, clock.read, motionState, backgroundStyle, seekLine)
+                                }
                             }
                         }
                     }
