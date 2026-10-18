@@ -4,7 +4,7 @@ import kotlin.math.roundToInt
 
 /**
  * Combine two blurred samples of the SAME album art (not a palette fill).
- * The broad sample provides soft diffusion; the finer sample preserves a faint
+ * The broad sample provides soft diffusion; the finer sample preserves faint
  * composition and colour transitions instead of washing everything flat.
  *
  * Pure pixel processing happens once per cover on a background dispatcher.
@@ -20,8 +20,8 @@ internal fun blendAmbientArtwork(
         val a = broad[i]
         val b = detailed[i]
         fun channel(shift: Int): Float {
-            val smooth = ((a ushr shift) and 255) * 0.76f
-            val structure = ((b ushr shift) and 255) * 0.24f
+            val smooth = ((a ushr shift) and 255) * 0.58f
+            val structure = ((b ushr shift) and 255) * 0.42f
             return smooth + structure
         }
         val red = channel(16)
@@ -32,8 +32,8 @@ internal fun blendAmbientArtwork(
         val luma = red * 0.2126f + green * 0.7152f + blue * 0.0722f
         fun vivid(value: Float): Int =
             (luma + (value - luma) * 1.075f).roundToInt().coerceIn(0, 255)
-        val alpha = ((((a ushr 24) and 255) * 0.76f) +
-            (((b ushr 24) and 255) * 0.24f)).roundToInt().coerceIn(0, 255)
+        val alpha = ((((a ushr 24) and 255) * 0.58f) +
+            (((b ushr 24) and 255) * 0.42f)).roundToInt().coerceIn(0, 255)
         out[i] = (alpha shl 24) or
             (vivid(red) shl 16) or
             (vivid(green) shl 8) or
