@@ -1580,6 +1580,7 @@ private fun NusaMusicApp(
         mutableStateOf(uiPrefs.getBoolean("rounded_carousel_corners", true))
     }
     var lyricsRequested by remember(playerPresentationMode) { mutableStateOf(false) }
+    var lyricsCloseRequestId by remember(playerPresentationMode) { mutableIntStateOf(0) }
     var immersiveArtworkBottomPx by remember { mutableFloatStateOf(Float.NaN) }
     var immersiveHasQualityBadge by remember { mutableStateOf(true) }
     val immersiveFrameCoordinates = remember { mutableStateOf<LayoutCoordinates?>(null) }
@@ -2143,11 +2144,14 @@ private fun NusaMusicApp(
 
                 if (LYRICS_ENABLED && artistPageEnabled) {
                     IconButton(
-                        onClick = { lyricsRequested = !lyricsRequested },
+                        onClick = {
+                            if (lyricsRequested) lyricsCloseRequestId++
+                            else lyricsRequested = true
+                        },
                         enabled = currentSong != null,
                         modifier = Modifier.size(42.dp)
                     ) {
-                        Icon(if (lyricsRequested) Icons.Default.Close else Icons.Default.Lyrics,
+                        Icon(if (lyricsRequested) Icons.Default.KeyboardArrowDown else Icons.Default.Lyrics,
                             if (lyricsRequested) nusaText("Tutup lirik", "Close lyrics") else nusaText("Buka lirik", "Open lyrics"),
                             tint = Color.White, modifier = Modifier.size(22.dp))
                     }
@@ -2201,6 +2205,7 @@ private fun NusaMusicApp(
             readPlaybackPosition = readPlaybackPosition, readPlaybackEpoch = readPlaybackEpoch,
             isPlaying = isPlaying, playbackEpoch = lyricsPlaybackEpoch,
             durationMs = durationMs, state = lyricsState,
+            dismissRequestId = lyricsCloseRequestId,
             onDismiss = { lyricsRequested = false }, onSeek = onSeek, fontSize = lyricsFontSize
         )
     }
