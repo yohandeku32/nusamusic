@@ -64,7 +64,7 @@ class LyricsLongVocalMotionTest {
         })
     }
 
-    @Test fun 60_90_120HzPlaybackSamplingStaysWithinSubtleFrameDeltas() {
+    @Test fun samplingAt60_90_120HzStaysWithinSubtleFrameDeltas() {
         for (hz in listOf(60, 90, 120)) {
             val bubble = LyricsLongVocalMotion(1000, 9500, 135f)
             val wave = LyricsFloatingMotion(135f)
