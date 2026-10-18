@@ -1,0 +1,90 @@
+package com.yohandeku32.nusamusic.ui
+
+import kotlin.math.PI
+import kotlin.math.sin
+
+/**
+ * Extra expression only for sustained syllables. This is deliberately separate
+ * from LyricsFloatingMotion: its 4.2s traveling carrier and vocal mask remain
+ * unchanged. The entire shaped syllable receives ONE transform, not clipped
+ * per-letter strips (which previously produced torn glyphs).
+ *
+ * Pure playback-time sampling freezes on pause and reproduces the same pose
+ * after a seek. Horizontal placement adds a gentle phase offset to adjacent
+ * syllables without shifting their layout or creating an individual clock.
+ */
+internal class LyricsLongVocalMotion(
+    private val startMs: Int,
+    private val endMs: Int,
+    private val horizontalDp: Float
+) {
+    var scaleX = 1f
+        private set
+    var scaleY = 1f
+        private set
+    var offsetXDp = 0f
+        private set
+    var offsetYDp = 0f
+        private set
+    var glowBoost = 0f
+        private set
+
+    fun update(playbackMs: Int, localInfluence: Float) {
+        val duration = endMs.toLong() - startMs.toLong()
+        if (duration <= 700L || playbackMs <= startMs || playbackMs >= endMs ||
+            localInfluence <= 0f
+        ) {
+            reset()
+            return
+        }
+
+        // Blend in the feature by authored vocal duration. Short rapid notes
+        // keep the original V6 motion; no artificial vibrato metadata assumed.
+        val eligible = lyricEase(((duration - 700L) / 400f).coerceIn(0f, 1f))
+        val elapsed = (playbackMs.toLong() - startMs).toFloat()
+        val remaining = (endMs.toLong() - playbackMs).toFloat()
+        val attackMs = minOf(320f, duration.toFloat() * 0.35f).coerceAtLeast(1f)
+        val releaseMs = minOf(340f, duration.toFloat() * 0.35f).coerceAtLeast(1f)
+        val envelope = lyricEase(elapsed / attackMs) * lyricEase(remaining / releaseMs)
+        val energy = (eligible * envelope * localInfluence.coerceIn(0f, 1f))
+            .coerceIn(0f, 1f)
+
+        if (energy <= 0f) {
+            reset()
+            return
+        }
+
+        // One global slow ~2.85s bubble clock; glyph x-position only offsets
+        // its phase slightly, so neighbouring words respond organically.
+        val phase = playbackMs.toDouble() * 2.0 * PI / 2850.0 -
+            horizontalDp.toDouble() * 0.0045
+        val breathX = 0.5 + 0.5 * sin(phase - 0.65)
+        val breathY = 0.5 + 0.5 * sin(phase - 0.4)
+        scaleX = (1.0 + 0.024 * energy * breathX).toFloat()
+        scaleY = (1.0 + 0.026 * energy * breathY).toFloat()
+
+        // Continuous 1.0–1.4Hz resonances, under 0.32dp combined.
+        // They move the complete glyph run as a unit, never its sub-pixels
+        // independently. No random values, oscillator jobs or springs.
+        val t = playbackMs.toDouble()
+        val x = horizontalDp.toDouble()
+        offsetXDp = (0.19 * energy *
+            sin(t * 2.0 * PI / 1030.0 + x * 0.009)).toFloat()
+        offsetYDp = (energy * (
+            0.22 * sin(t * 2.0 * PI / 940.0 + x * 0.008) +
+                0.09 * sin(t * 2.0 * PI / 710.0 + x * 0.003 - 0.8)
+        )).toFloat()
+
+        // The original progressive highlight controls which letters glow.
+        // This small breathing factor only nudges its existing halo strength.
+        glowBoost = (energy * breathY.toFloat()).coerceIn(0f, 1f)
+    }
+
+    private fun reset() {
+        scaleX = 1f
+        scaleY = 1f
+        offsetXDp = 0f
+        offsetYDp = 0f
+        glowBoost = 0f
+    }
+}
