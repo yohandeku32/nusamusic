@@ -203,6 +203,7 @@ class MainActivity : ComponentActivity() {
     private var songs by mutableStateOf<List<Song>>(emptyList())
     private var currentSong by mutableStateOf<Song?>(null)
     private var isPlaying by mutableStateOf(false)
+    private var lyricsPlaybackEpoch by mutableIntStateOf(0)
     private val playbackPositionState = mutableLongStateOf(0L)
     private var positionMs by playbackPositionState
     private var durationMs by mutableLongStateOf(0L)
@@ -490,6 +491,7 @@ class MainActivity : ComponentActivity() {
                 }
 
                 override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
+                    lyricsPlaybackEpoch++
                     positionMs = c.currentPosition.coerceAtLeast(0L)
                 }
 
@@ -556,6 +558,7 @@ class MainActivity : ComponentActivity() {
                     currentSong = currentSong,
                     isPlaying = isPlaying,
                     positionMsState = playbackPositionState,
+                    lyricsPlaybackEpoch = lyricsPlaybackEpoch,
                     readPlaybackPosition = { controller?.currentPosition?.coerceAtLeast(0L) ?: positionMs },
                     durationMs = durationMs,
                     permissionGranted = permissionGranted,
@@ -1412,6 +1415,7 @@ private fun NusaMusicApp(
     isPlaying: Boolean,
     positionMsState: State<Long>,
     readPlaybackPosition: () -> Long,
+    lyricsPlaybackEpoch: Int,
     durationMs: Long,
     permissionGranted: Boolean,
     onPlay: (Song, List<Song>) -> Unit,
@@ -2107,7 +2111,7 @@ private fun NusaMusicApp(
     if (LYRICS_ENABLED && artistPageEnabled && lyricsRequested && pagerState.settledPage == playerPage) {
         ImmersiveLyricsPanel(
             song = currentSong, positionMs = positionMsState,
-            readPlaybackPosition = readPlaybackPosition, isPlaying = isPlaying,
+            readPlaybackPosition = readPlaybackPosition, isPlaying = isPlaying, playbackEpoch = lyricsPlaybackEpoch,
             durationMs = durationMs, state = lyricsState,
             onDismiss = { lyricsRequested = false }, onSeek = onSeek, fontSize = lyricsFontSize
         )

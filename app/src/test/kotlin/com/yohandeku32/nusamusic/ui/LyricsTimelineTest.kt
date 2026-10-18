@@ -76,4 +76,12 @@ class LyricsTimelineTest {
         assertEquals(LyricsGap(7_000, 12_000, 1), timeline.frame(10_000).gap)
         assertEquals(LyricsGap(0, 5_000, 0), timeline.frame(1_000).gap)
     }
+    @Test fun authoredSilenceInsideOneLineUsesUnitTimingRatherThanContainerDuration() {
+        val main = KaraokeLine(listOf(KaraokeSyllable("Before", 1000, 2000), KaraokeSyllable("After", 7000, 8000)),
+            null, false, KaraokeAlignment.Start, 1000, 8000)
+        assertEquals(LyricsGap(2000, 7000, 0), LyricsTimeline(listOf(main)).frame(4000).gap)
+        assertNull(LyricsTimeline(listOf(main)).frame(7000).gap)
+        // An overlapping backing voice means this is not an instrumental break.
+        assertNull(LyricsTimeline(listOf(main, karaoke(3000, 6000, true))).frame(4000).gap)
+    }
 }
