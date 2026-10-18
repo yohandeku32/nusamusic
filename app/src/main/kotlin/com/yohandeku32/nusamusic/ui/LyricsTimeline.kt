@@ -61,7 +61,15 @@ internal class LyricsTimeline(private val lines: List<ISyncedLine>) {
                 val middle = (low + high) / 2
                 if (starts[candidates[middle]] <= position) low = middle + 1 else high = middle
             }
-            candidates[(low - 1).coerceAtLeast(0)]
+            val latest = starts[candidates[(low - 1).coerceAtLeast(0)]]
+            // Keep the same first authored identity after a simultaneous duet finishes.
+            var first = 0
+            var last = low.coerceAtLeast(1)
+            while (first < last) {
+                val middle = (first + last) / 2
+                if (starts[candidates[middle]] < latest) first = middle + 1 else last = middle
+            }
+            candidates[first]
         }
         var low = 0
         var high = gaps.size

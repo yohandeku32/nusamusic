@@ -84,4 +84,12 @@ class LyricsTimelineTest {
         // An overlapping backing voice means this is not an instrumental break.
         assertNull(LyricsTimeline(listOf(main, karaoke(3000, 6000, true))).frame(4000).gap)
     }
+
+    @Test fun duplicateTimestampKeepsItsFirstAnchorAfterBothVoicesFinish() {
+        val timeline = LyricsTimeline(listOf(line(1000, 2000), line(1000, 2000), line(8000, 9000)))
+        assertEquals(0, timeline.frame(1999).anchor)
+        assertEquals(0, timeline.frame(2000).anchor)
+        assertEquals(0, timeline.frame(2500).anchor)
+        assertEquals(2, timeline.frame(8000).anchor)
+    }
 }

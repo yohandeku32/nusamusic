@@ -16,7 +16,7 @@ class LyricsDisplayRowsTest {
         val back = backing()
         val rows = LyricsDisplayRows(listOf(main(0), back, main(2000), backing(2500, 4000)))
         assertEquals(2, rows.rows.size)
-        assertEquals(listOf(back), rows.rows[0].backing)
+        assertEquals(listOf(back), rows.rows[0].backing.map { it.value })
         assertArrayEquals(intArrayOf(0, 0, 1, 1), rows.lineToRow)
     }
     @Test fun simultaneousAndLeadingBackingDoNotLoseTheirMapping() {
@@ -57,5 +57,12 @@ class LyricsDisplayRowsTest {
             }
             assertEquals(0, previous)
         }
+    }
+
+    @Test fun identicalBackingMetadataStillHasDistinctStableSourceKeys() {
+        val back = backing()
+        val rows = LyricsDisplayRows(listOf(main(0), back, back))
+        assertEquals(listOf(1, 2), rows.rows.single().backing.map { it.index })
+        assertEquals(listOf(back, back), rows.rows.single().backing.map { it.value })
     }
 }

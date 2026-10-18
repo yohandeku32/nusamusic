@@ -15,12 +15,7 @@ internal class LyricsMotionState(initial: Int) {
         private set
     var revision by mutableIntStateOf(0)
         private set
-    private var previous = initial
-    fun reset(position: Int) { previous = position; resetAt = position; revision++ }
-    fun update(position: Int) {
-        if (position < previous || position.toLong() - previous > 350) reset(position)
-        previous = position
-    }
+    fun reset(position: Int) { resetAt = position; revision++ }
 }
 
 internal fun lyricEase(value: Float): Float {

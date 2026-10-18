@@ -54,6 +54,7 @@ internal fun CenteredKaraokeLine(
             val layouts = remember(wrapped, width, lineHeight, rtl) {
                 calculateStaticLineLayout(wrapped, false, width, lineHeight, rtl)
             }
+            val painter = remember(layouts, density.density) { SyllableLyricsPainter(layouts, density.density) }
             val height = with(density) { (lineHeight * wrapped.size).toDp() } + 8.dp
             val readable by remember(line, voices, visualTime, motion) { derivedStateOf {
                 !line.isAccompaniment || voices.presence(visualTime(), motion.resetAt) > 0f
@@ -63,7 +64,7 @@ internal fun CenteredKaraokeLine(
             }) {
                 val now = visualTime()
                 val focus = lyricPresence(line.start, line.end, now, motion.resetAt)
-                drawSyllableLyrics(layouts, now, focus, motion.resetAt)
+                painter.draw(this, now, focus)
             }
         }
     }
@@ -97,10 +98,13 @@ private fun MotionRow(
 internal fun TimedVocalContent(
     voices: LyricsVocalWindows, time: () -> Int, motion: LyricsMotionState, content: @Composable () -> Unit
 ) {
-    val present by remember(voices, time, motion) { derivedStateOf { voices.presence(time(), motion.resetAt) > 0f } }
+    val extent = remember(voices, time, motion) {
+        derivedStateOf(structuralEqualityPolicy()) { voices.presence(time(), motion.resetAt) }
+    }
+    val present by remember(extent) { derivedStateOf { extent.value > 0f } }
     if (present) Column(Modifier.fillMaxWidth().layout { measurable, constraints ->
         val child = measurable.measure(constraints.copy(minHeight = 0))
-        val height = vocalLayoutHeight(child.height, voices.presence(time(), motion.resetAt))
+        val height = vocalLayoutHeight(child.height, extent.value)
         layout(child.width, height) { child.placeRelative(0, 0) }
     }) { content() }
 }

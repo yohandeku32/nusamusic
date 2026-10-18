@@ -3,7 +3,7 @@ package com.yohandeku32.nusamusic.ui
 import kotlin.math.abs
 import kotlin.math.ceil
 
-/** High-damping spring integrated from AUDIO deltas, so pause also holds scrolling. */
+/** High-damping scroll spring; its frame deltas are separate from the audio-time glyph effects. */
 internal class LyricsFollowMotion {
     private var velocity = 0f
     fun reset() { velocity = 0f }

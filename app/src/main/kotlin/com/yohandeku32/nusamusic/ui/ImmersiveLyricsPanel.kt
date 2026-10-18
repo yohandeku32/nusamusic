@@ -28,6 +28,7 @@ import com.yohandeku32.nusamusic.data.ImmersiveArtworkCache
 import com.yohandeku32.nusamusic.model.Song
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.withContext
 
 /** Fixed half-window modal; Expanded is its sole half-height anchor, never fullscreen. */
@@ -37,6 +38,7 @@ fun ImmersiveLyricsPanel(
     song: Song?,
     positionMs: State<Long>,
     readPlaybackPosition: () -> Long,
+    readPlaybackEpoch: () -> Int,
     isPlaying: Boolean,
     playbackEpoch: Int,
     durationMs: Long,
@@ -63,31 +65,27 @@ fun ImmersiveLyricsPanel(
     }
     // MediaController computes the actual position using the current speed. Reading it on
     // the display clock needs no network, metadata IO, or whole-list recomposition.
-    val framePosition = remember(song?.uri) { mutableLongStateOf(positionMs.value) }
-    val motion = remember(song?.uri) { LyricsMotionState(positionMs.value.coerceIn(0, Int.MAX_VALUE.toLong()).toInt()) }
-    fun publishPosition(value: Long) {
-        val safe = value.coerceIn(0, Int.MAX_VALUE.toLong())
-        motion.update(safe.toInt())
-        framePosition.longValue = safe
-    }
+    val playback = remember(song?.uri) { LyricsPlaybackState(readPlaybackPosition(), readPlaybackEpoch()) }
+    val framePosition = playback.position
+    val motion = playback.motion
     val readPosition by rememberUpdatedState(readPlaybackPosition)
+    val readEpoch by rememberUpdatedState(readPlaybackEpoch)
     val playing by rememberUpdatedState(isPlaying)
+    val epoch by rememberUpdatedState(playbackEpoch)
+    val positionSource by rememberUpdatedState(positionMs)
     val owner = LocalLifecycleOwner.current
-    LaunchedEffect(song?.uri, playbackEpoch) {
-        val now = readPosition().coerceIn(0, Int.MAX_VALUE.toLong())
-        motion.reset(now.toInt())
-        framePosition.longValue = now
-    }
-    LaunchedEffect(song?.uri, isPlaying, owner) {
+    LaunchedEffect(song?.uri, owner) {
         owner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            publishPosition(readPosition())
-            if (isPlaying) while (isActive) withFrameNanos {
-                publishPosition(readPosition())
+            // collectLatest cancels the old pump before a pause/play or discontinuity starts the next.
+            snapshotFlow { playing to epoch }.collectLatest { (running, _) ->
+                playback.publish(readPosition(), readEpoch())
+                if (running) while (isActive) withFrameNanos {
+                    playback.publish(readPosition(), readEpoch())
+                } else snapshotFlow { positionSource.value }.collect {
+                    playback.publish(readPosition(), readEpoch())
+                }
             }
         }
-    }
-    LaunchedEffect(song?.uri, positionMs) {
-        snapshotFlow { positionMs.value }.collect { if (!playing) publishPosition(it) }
     }
     val height = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.height.toDp() / 2 }
     ModalBottomSheet(
@@ -120,8 +118,6 @@ fun ImmersiveLyricsPanel(
                         SyncedLyricsView(data.synced, framePosition, true, requireNotNull(entry).list, motion,
                             onSeek = {
                                 val target = it.start.toLong().coerceIn(0, maxOf(durationMs, song?.durationMs ?: 0))
-                                motion.reset(target.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
-                                framePosition.longValue = target
                                 onSeek(target)
                             }, fontSize = fontSize, credits = data.stored.credits, modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp))
                     }
