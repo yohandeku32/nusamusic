@@ -108,9 +108,25 @@ LRC/TTML line timing never becomes invented word or syllable timing.
 Enhanced LRC and TTML authored units drive the progressive syllable fill.
 
 Each active syllable has separate broad and tight glow passes behind sharp
-text. A critically damped, subtle lift/scale settles once, while long notes
-gradually broaden the halo and move a soft highlight. All effects use actual
-playback position, freeze on pause, and reset immediately on seeks.
+text. A critically damped onset blends with a slow, staggered floating wave.
+Long notes breathe between 1.00–1.025 visual scale with less than 1.8 dp of lift;
+they ease back to their baseline before the authored end. The glow and internal
+highlight move with the same transform. Measured glyphs retain their gradient
+objects, matrices and shadow palette across frames. Audio-time effects freeze
+on pause and evaluate the new phase directly on seeks.
+
+One lifecycle-bound publisher reads actual player position and discontinuity
+epoch together on the UI thread. Only a real player event resets motion;
+a slow frame is never treated as a seek. Tap-to-seek issues one player request,
+without an optimistic second lyrics clock. Each song gets its own motion state.
+
+Touch-down immediately stops auto-follow through the scroll mutator's UserInput
+priority, before drag slop. One effect owns initial placement, distant rejoin
+and spring corrections. Seeks cancel its previous work; visible targets and
+manual resumption use smooth corrections instead of repeating an initial snap.
+Following yields to the full gesture/fling and then the browsing grace period.
+Duplicate timestamps keep the first authored anchor, and duplicate backing
+content has distinct source-index keys.
 
 Timed backing voices appear beneath the related main line. Their complete
 measured height, including padding, expands and collapses from audio time.

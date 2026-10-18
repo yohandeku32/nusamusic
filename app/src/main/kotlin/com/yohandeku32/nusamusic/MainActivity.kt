@@ -560,6 +560,7 @@ class MainActivity : ComponentActivity() {
                     positionMsState = playbackPositionState,
                     lyricsPlaybackEpoch = lyricsPlaybackEpoch,
                     readPlaybackPosition = { controller?.currentPosition?.coerceAtLeast(0L) ?: positionMs },
+                    readPlaybackEpoch = { lyricsPlaybackEpoch },
                     durationMs = durationMs,
                     permissionGranted = permissionGranted,
                     onPlay = ::playSong,
@@ -1415,6 +1416,7 @@ private fun NusaMusicApp(
     isPlaying: Boolean,
     positionMsState: State<Long>,
     readPlaybackPosition: () -> Long,
+    readPlaybackEpoch: () -> Int,
     lyricsPlaybackEpoch: Int,
     durationMs: Long,
     permissionGranted: Boolean,
@@ -2111,7 +2113,8 @@ private fun NusaMusicApp(
     if (LYRICS_ENABLED && artistPageEnabled && lyricsRequested && pagerState.settledPage == playerPage) {
         ImmersiveLyricsPanel(
             song = currentSong, positionMs = positionMsState,
-            readPlaybackPosition = readPlaybackPosition, isPlaying = isPlaying, playbackEpoch = lyricsPlaybackEpoch,
+            readPlaybackPosition = readPlaybackPosition, readPlaybackEpoch = readPlaybackEpoch,
+            isPlaying = isPlaying, playbackEpoch = lyricsPlaybackEpoch,
             durationMs = durationMs, state = lyricsState,
             onDismiss = { lyricsRequested = false }, onSeek = onSeek, fontSize = lyricsFontSize
         )

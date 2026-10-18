@@ -57,18 +57,17 @@ class LyricsAnimationTimingTest {
         assertEquals(0f, voices.presence(6000, 0), 0f)
     }
     @Test fun explicitSeekAndTrackClockResetInvalidateOldTransitions() {
-        val motion = LyricsMotionState(0)
-        motion.update(16)
-        assertEquals(0, motion.revision)
-        motion.reset(2000)
-        assertEquals(2000, motion.resetAt)
-        assertEquals(1f, syllableExpression(1900, 3000, 2000, motion.resetAt), 0f)
-        motion.update(100)
-        assertEquals(100, motion.resetAt)
-        assertEquals(2, motion.revision)
+        val playback = LyricsPlaybackState(0, 0)
+        playback.publish(16, 0)
+        assertEquals(0, playback.motion.revision)
+        playback.publish(2000, 1)
+        assertEquals(2000, playback.motion.resetAt)
+        assertEquals(1f, syllableExpression(1900, 3000, 2000, playback.motion.resetAt), 0f)
+        playback.publish(100, 2)
+        assertEquals(100, playback.motion.resetAt)
+        assertEquals(2, playback.motion.revision)
         assertEquals(0, LyricsMotionState(0).revision)
     }
-
     @Test fun criticallyDampedSyllableMotionSettlesWithoutRepeatedJumps() {
         var last = 0f
         for (now in 1000..1180) {
