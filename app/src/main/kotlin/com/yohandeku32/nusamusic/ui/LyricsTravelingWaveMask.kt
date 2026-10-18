@@ -105,4 +105,31 @@ internal class LyricsTravelingWaveMask(spans: List<LyricsVocalSpan>) {
         }
         return (front.intensity * spatial).coerceIn(0f, 1f)
     }
+    /**
+     * One smooth influence value per intact rendered syllable.
+     *
+     * The V7 playhead still travels with the sung text, but individual
+     * characters inside the same shaped text run never get conflicting
+     * translations or clipping edges. The wave appears gently at the
+     * syllable's start, stays alive through a held vowel, then recedes
+     * after the vocal front passes its end. Future syllables stay still.
+     *
+     * Only this mask changes; the global V6 sine carrier is untouched.
+     */
+    fun glyphInfluence(
+        front: LyricsVocalFront?,
+        glyphStartDp: Float,
+        glyphEndDp: Float
+    ): Float {
+        if (front == null || front.intensity <= 0f ||
+            glyphEndDp <= glyphStartDp ||
+            front.positionDp <= glyphStartDp
+        ) return 0f
+
+        val position = front.positionDp
+        val attack = lyricEase((position - glyphStartDp) / 18f)
+        val release = 1f - lyricEase((position - glyphEndDp) / 100f)
+        return (front.intensity * attack * release).coerceIn(0f, 1f)
+    }
+
 }
