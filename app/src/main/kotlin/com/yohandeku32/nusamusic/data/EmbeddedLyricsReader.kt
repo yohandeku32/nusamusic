@@ -10,15 +10,19 @@ internal class EmbeddedLyricsReader(
     private val readAt: (Long, Int) -> ByteArray
 ) {
     private val candidates = ArrayList<String>()
+    private val composers = LinkedHashSet<String>()
+    private val lyricists = LinkedHashSet<String>()
     private var bytesRead = 0
     private var atomsRead = 0
     private val lyricKeys = setOf("LYRICS", "UNSYNCEDLYRICS", "UNSYNCED LYRICS", "SYNCEDLYRICS",
         "SYNCED LYRICS", "SYNCHRONIZEDLYRICS", "SYLT", "USLT", "LRC", "ENHANCED LRC", "TTML")
 
-    fun read(): List<String> {
+    fun read(): List<String> = readMetadata().lyrics
+
+    fun readMetadata(): EmbeddedLyricsMetadata {
         var start = 0L
         val header = bytes(0, 12)
-        if (header.size < 10) return emptyList()
+        if (header.size < 10) return EmbeddedLyricsMetadata(emptyList())
         if (header.text(0, 3) == "ID3") {
             val size = syncSafe(header, 6)
             if (size in 0..MAX_TAG) {
@@ -33,7 +37,7 @@ internal class EmbeddedLyricsReader(
             magic.text(4, 4) == "ftyp" -> isolate { atoms(start, length, 0, false) }
             magic.text(0, 4) in setOf("RIFF", "FORM") -> isolate { riff(start, magic.text(0, 4) == "RIFF") }
         }
-        return candidates.toList()
+        return EmbeddedLyricsMetadata(candidates.toList(), SongCredits(composers.toList(), lyricists.toList()))
     }
 
     private inline fun isolate(block: () -> Unit) {
@@ -53,6 +57,21 @@ internal class EmbeddedLyricsReader(
         val clean = text.trim('\uFEFF', '\u0000', ' ', '\r', '\n')
         if (clean.isNotBlank() && clean.toByteArray(Charsets.UTF_8).size <= LyricsDecoder.MAX_BYTES &&
             candidates.size < 32 && clean !in candidates) candidates += clean
+    }
+
+    private fun field(key: String, text: String) {
+        val role = key.uppercase(Locale.ROOT)
+        if (role in lyricKeys) { add(text); return }
+        val names = when (role) {
+            "COMPOSER", "TCOM", "TCM" -> composers
+            "LYRICIST", "TEXT", "TXT" -> lyricists
+            else -> return
+        }
+        if (text.length > 8192) return
+        text.split('\u0000', '\n', '\r').forEach { value ->
+            val clean = value.trim().filter { !it.isISOControl() }
+            if (clean.isNotBlank() && clean.length <= 2048 && names.size < 32) names += clean
+        }
     }
 
     private fun id3(tag: ByteArray) {
@@ -79,7 +98,7 @@ internal class EmbeddedLyricsReader(
             val format = if (version == 2) 0 else body.u(p + 9)
             val payloadStart = p + headerSize
             p += headerSize + size
-            if (name !in setOf("USLT", "ULT", "SYLT", "SLT", "TXXX", "TXX")) continue
+            if (name !in setOf("USLT", "ULT", "SYLT", "SLT", "TXXX", "TXX", "TCOM", "TCM", "TEXT", "TXT")) continue
             var payload = body.copyOfRange(payloadStart, p)
             if ((version == 3 && format and 0xC0 != 0) || (version == 4 && format and 0x0C != 0)) continue
             isolate {
@@ -94,10 +113,11 @@ internal class EmbeddedLyricsReader(
                         add(decode(payload.copyOfRange(afterDescription, payload.size), encoding))
                     }
                     "SYLT", "SLT" -> sylt(payload)
+                    "TCOM", "TCM", "TEXT", "TXT" -> field(name, decode(payload.copyOfRange(1, payload.size), payload.u(0)))
                     else -> {
                         val encoding = payload.u(0)
                         val (key, valueStart) = terminated(payload, 1, encoding)
-                        if (key.uppercase(Locale.ROOT) in lyricKeys) add(decode(payload.copyOfRange(valueStart, payload.size), encoding))
+                        field(key, decode(payload.copyOfRange(valueStart, payload.size), encoding))
                     }
                 }
             }
@@ -167,7 +187,7 @@ internal class EmbeddedLyricsReader(
         require(count <= 20_000)
         repeat(count.toInt()) {
             val field = sized().toString(Charsets.UTF_8)
-            if (field.substringBefore('=').uppercase(Locale.ROOT) in lyricKeys) add(field.substringAfter('=', ""))
+            field(field.substringBefore('='), field.substringAfter('=', ""))
         }
     }
 
@@ -232,17 +252,18 @@ internal class EmbeddedLyricsReader(
                     val index = (0..minOf(16, data.size - 3)).firstOrNull { data.text(it, 3) == "ID3" }
                     if (index != null) id3(data.copyOfRange(index, data.size))
                 }
-                inIlst && atom.name in setOf("©lyr", "----") -> {
+                inIlst && atom.name in setOf("©lyr", "©wrt", "----") -> {
                     val children = atomList(atom.start, atom.end)
                     val name = children.firstOrNull { it.name == "name" }?.let {
                         if (it.end - it.start in 4..256) bytes(it.start + 4, (it.end - it.start - 4).toInt()).toString(Charsets.UTF_8) else ""
                     }
-                    if (atom.name == "©lyr" || name?.uppercase(Locale.ROOT) in lyricKeys) {
+                    val key = when (atom.name) { "©lyr" -> "LYRICS"; "©wrt" -> "COMPOSER"; else -> name.orEmpty() }
+                    if (key.uppercase(Locale.ROOT) in lyricKeys + setOf("COMPOSER", "LYRICIST")) {
                         children.filter { it.name == "data" }.forEach {
                             if (it.end - it.start in 8..LyricsDecoder.MAX_BYTES + 8L) {
                                 val data = bytes(it.start, (it.end - it.start).toInt())
                                 val type = data.be(0, 4).toInt() and 0xFFFFFF
-                                if (type in 0..2) add(decode(data.copyOfRange(8, data.size), if (type == 2) 2 else 3))
+                                if (type in 0..2) field(key, decode(data.copyOfRange(8, data.size), if (type == 2) 2 else 3))
                             }
                         }
                     }

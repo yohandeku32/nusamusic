@@ -12,7 +12,8 @@ data class StoredLyrics(
     val source: String,
     val plain: Boolean = false,
     val instrumental: Boolean = false,
-    val checkedAt: Long = System.currentTimeMillis()
+    val checkedAt: Long = System.currentTimeMillis(),
+    val credits: SongCredits = SongCredits()
 )
 
 class LyricsDiskStore(private val directory: File, private val maxEntries: Int? = null) {
@@ -21,6 +22,8 @@ class LyricsDiskStore(private val directory: File, private val maxEntries: Int? 
         fun digest(key: String): String = MessageDigest.getInstance("SHA-256")
             .digest(key.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
     }
+    private fun creditNames(value: String?): List<String> = value.orEmpty().split('\u0000')
+        .filter { it.isNotBlank() && it.length <= 2048 }.take(32)
     private fun file(key: String) = File(directory, "${digest(key)}.properties")
 
     @Synchronized fun read(key: String, now: Long = System.currentTimeMillis()): StoredLyrics? = runCatching {
@@ -30,7 +33,8 @@ class LyricsDiskStore(private val directory: File, private val maxEntries: Int? 
         if (props.getProperty("version") != "1") return null
         val entry = StoredLyrics(props.getProperty("content") ?: return null,
             props.getProperty("source") ?: return null, props.getProperty("plain").toBoolean(),
-            props.getProperty("instrumental").toBoolean(), props.getProperty("checkedAt").toLong())
+            props.getProperty("instrumental").toBoolean(), props.getProperty("checkedAt").toLong(),
+            SongCredits(creditNames(props.getProperty("composers")), creditNames(props.getProperty("lyricists"))))
         if (entry.content.isEmpty() && !entry.instrumental && (now < entry.checkedAt || now - entry.checkedAt >= MISSING_TTL_MS)) return null
         entry
     }.getOrNull()
@@ -42,6 +46,8 @@ class LyricsDiskStore(private val directory: File, private val maxEntries: Int? 
         val temporary = File.createTempFile(target.name, ".tmp", directory)
         try {
             Properties().apply {
+                setProperty("composers", entry.credits.composers.joinToString("\u0000"))
+                setProperty("lyricists", entry.credits.lyricists.joinToString("\u0000"))
                 setProperty("version", "1"); setProperty("content", entry.content)
                 setProperty("source", entry.source); setProperty("plain", entry.plain.toString())
                 setProperty("instrumental", entry.instrumental.toString()); setProperty("checkedAt", entry.checkedAt.toString())

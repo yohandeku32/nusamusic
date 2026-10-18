@@ -36,15 +36,6 @@ internal fun lyricPresence(start: Int, end: Int, now: Int, resetAt: Int): Float 
     return if (resetAt >= start) 1f else lyricEase(elapsed / minOf(120f, (end.toLong() - start) / 2f).coerceAtLeast(1f))
 }
 
-/** One damped lobe at the authored onset; a held note never retriggers the bounce. */
-internal fun lyricOnset(start: Int, end: Int, now: Int, resetAt: Int): Float {
-    if (start <= resetAt || now < start || now >= end) return 0f
-    val duration = minOf(300f, (end.toLong() - start).toFloat()).coerceAtLeast(1f)
-    val t = (now.toLong() - start) / duration
-    if (t >= 1f) return 0f
-    return (sin(PI * t) * exp(-2.2 * t) * 2.1).toFloat().coerceIn(0f, 1f)
-}
-
 /** Breathing is slow and bounded; its period is derived from the authored/next-boundary interval. */
 internal fun lyricBreathing(start: Int, end: Int, now: Int): Float {
     val duration = (end.toLong() - start).coerceAtLeast(1)
@@ -92,4 +83,24 @@ internal class LyricsVocalWindows(line: ISyncedLine) {
         val interval = windows.getOrNull(low - 1) ?: return 0f
         return lyricPresence(interval.first, interval.second, now, resetAt)
     }
+}
+
+/** Critically damped spring response evaluated from audio time: no wall-clock animator or repeated bounce. */
+internal fun syllableExpression(start: Int, end: Int, now: Int, resetAt: Int): Float {
+    if (end <= start || now < start || (resetAt >= end && now >= end)) return 0f
+    val duration = end.toLong() - start
+    fun response(t: Float): Float {
+        val x = t.coerceIn(0f, 1f) * 7f
+        return ((1f - (1f + x) * exp(-x)) / (1f - 8f * exp(-7f))).coerceIn(0f, 1f)
+    }
+    val attack = if (resetAt >= start) 1f else response((now.toLong() - start) / minOf(180f, duration * 0.4f).coerceAtLeast(1f))
+    val release = if (now < end) 1f else 1f - response((now.toLong() - end) / 160f)
+    return attack * release
+}
+
+/** A long held note gradually broadens the halo instead of restarting an onset effect. */
+internal fun syllableBloom(start: Int, end: Int, now: Int): Float {
+    val duration = end.toLong() - start
+    if (duration <= 0) return 0f
+    return lyricEase(((now.toLong() - start).toFloat() / duration).coerceIn(0f, 1f))
 }

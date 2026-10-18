@@ -148,4 +148,47 @@ class EmbeddedLyricsReaderTest {
         val unsynced = text("ID3") + byteArrayOf(3, 0, 0x80.toByte()) + safe(expanded.size) + expanded
         assertEquals("ÿà", select(unsynced).stored.content)
     }
+
+    private fun metadata(data: ByteArray) = EmbeddedLyricsReader(data.size.toLong()) { offset, count ->
+        data.copyOfRange(offset.toInt(), minOf(data.size, offset.toInt() + count))
+    }.readMetadata()
+
+    @Test fun id3CreditsKeepComposerAndLyricistRolesSeparate() {
+        val data = tag(uslt("Lyrics"),
+            frame("TCOM", byteArrayOf(3) + text("First\u0000Second")),
+            frame("TEXT", byteArrayOf(1) + "Penulis 世界".toByteArray(Charsets.UTF_16)),
+            frame("TPE1", byteArrayOf(3) + text("Not a composer")))
+        val result = metadata(data)
+        assertEquals(listOf("First", "Second"), result.credits.composers)
+        assertEquals(listOf("Penulis 世界"), result.credits.lyricists)
+        assertEquals(listOf("Lyrics"), result.lyrics)
+        assertEquals(result.credits, EmbeddedLyricsSelector.select(result.lyrics, 10000, result.credits).stored.credits)
+    }
+    @Test fun vorbisCreditsDeduplicateWithoutSplittingNamesOnSlashes() {
+        val data = oggPage(text("OpusTags") + comments("COMPOSER=AC/DC", "COMPOSER=AC/DC",
+            "COMPOSER=Other", "LYRICIST=Writer", "ARTIST=Performer"))
+        assertEquals(SongCredits(listOf("AC/DC", "Other"), listOf("Writer")), metadata(data).credits)
+    }
+    @Test fun mp4ComposerAndFreeformLyricistAreReadAfterMediaData() {
+        fun value(text: String) = atom("data", be(1) + be(0) + text(text))
+        val freeform = atom("----", atom("name", be(0) + text("LYRICIST")) + value("Words"))
+        val data = atom("ftyp", text("M4A ") + be(0)) + atom("mdat", ByteArray(1000)) +
+            atom("moov", atom("meta", be(0) + atom("ilst", atom("©wrt", value("Music")) + freeform)))
+        assertEquals(SongCredits(listOf("Music"), listOf("Words")), metadata(data).credits)
+    }
+    @Test fun absentBlankAndOversizedCreditsNeverInventNames() {
+        assertTrue(metadata(tag(uslt("Lyrics"))).credits.isEmpty)
+        val data = tag(frame("TCOM", byteArrayOf(3) + text("  ")),
+            frame("TEXT", byteArrayOf(3) + text("x".repeat(9000))))
+        assertTrue(metadata(data).credits.isEmpty)
+    }
+    @Test fun legacyId3v22ComposerAndTextWriterRemainSupported() {
+        fun oldFrame(key: String, name: String): ByteArray {
+            val payload = byteArrayOf(3) + text(name)
+            return text(key) + byteArrayOf(0, 0, payload.size.toByte()) + payload
+        }
+        val body = oldFrame("TCM", "Music") + oldFrame("TXT", "Words")
+        val data = text("ID3") + byteArrayOf(2, 0, 0) + safe(body.size) + body
+        assertEquals(SongCredits(listOf("Music"), listOf("Words")), metadata(data).credits)
+    }
 }

@@ -123,13 +123,14 @@ fun ImmersiveLyricsPanel(
                                 motion.reset(target.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
                                 framePosition.longValue = target
                                 onSeek(target)
-                            }, fontSize = fontSize, modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp))
+                            }, fontSize = fontSize, credits = data.stored.credits, modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp))
                     }
                     data?.stored?.plain == true -> {
                         val lines = remember(data) { data.stored.content.lines() }
                         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 28.dp, vertical = 20.dp)) {
                             items(lines) { line -> Text(line, color = Color.White.copy(alpha = 0.85f),
                                 fontSize = fontSize.sp, lineHeight = (fontSize * 1.25f).sp, fontWeight = FontWeight.Bold) }
+                            if (!data.stored.credits.isEmpty) item { LyricsCredits(data.stored.credits) }
                         }
                     }
                     else -> Text("No embedded lyrics available", Modifier.align(Alignment.Center).padding(28.dp),

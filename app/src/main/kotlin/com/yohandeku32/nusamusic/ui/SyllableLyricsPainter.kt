@@ -5,71 +5,75 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.style.ResolvedTextDirection
 import androidx.compose.ui.unit.dp
 import com.mocharealm.accompanist.lyrics.ui.composable.lyrics.SyllableLayout
 
-/** Feather the glyph fill itself: a hard clip also cuts the glow into visible rectangles. */
+/** Separate halo and crisp glyph passes; no clipping rectangles at the sung boundary. */
 internal fun DrawScope.drawSyllableLyrics(
     layouts: List<List<SyllableLayout>>, now: Int, focus: Float, resetAt: Int
 ) {
     val strength = focus.coerceIn(0f, 1f)
-    layouts.forEach { row -> row.forEach syllable@ { layout ->
-        if (layout.syllable.content.isBlank()) return@syllable
+    // All halos are behind all glyphs, including neighbouring syllables.
+    for (pass in 0..1) layouts.forEach { row -> row.forEach syllable@ { layout ->
+        val halo = pass == 0
+        val unit = layout.syllable
+        if (halo && (strength <= 0f || now <= unit.start || now >= unit.end)) return@syllable
+        if (unit.content.isBlank()) return@syllable
         val result = layout.textLayoutResult
-        val onset = lyricOnset(layout.syllable.start, layout.syllable.end, now, resetAt)
-        val position = layout.position - Offset(0f, onset * 1.2.dp.toPx())
-        // Keep the same base luminance when focus changes; fading a second parent alpha
-        // used to darken unsung text abruptly on entry and flash it bright on exit.
-        drawText(result, color = Color.White.copy(alpha = 0.4f), topLeft = position, shadow = Shadow.None)
-        if (strength <= 0f) return@syllable
-        val progress = syllableProgress(layout.syllable, now)
-        if (progress <= 0f) return@syllable
-        val glow = syllableGlowEnvelope(layout.syllable.start, layout.syllable.end, now) *
-            lyricBreathing(layout.syllable.start, layout.syllable.end, now)
-        val shadow = if (glow > 0f) Shadow(
-            Color.White.copy(alpha = 0.14f * glow), Offset.Zero, 4.dp.toPx()
-        ) else Shadow.None
-        if (progress >= 1f) {
-            drawText(result, color = Color.White, topLeft = position, alpha = strength, shadow = shadow)
-        } else {
-            val width = result.size.width.toFloat().coerceAtLeast(1f)
-            val feather = minOf(5.dp.toPx(), width * 0.2f).coerceAtLeast(0.5f)
-            val distance = (width + 2f * feather) * progress - feather
-            val rtl = result.getParagraphDirection(0) == ResolvedTextDirection.Rtl
-            val edge = if (rtl) width - distance else distance
-            val direction = if (rtl) -1f else 1f
-            val fill = Brush.linearGradient(
-                colors = listOf(Color.White, Color.Transparent),
-                start = Offset(edge - direction * feather, 0f),
-                end = Offset(edge + direction * feather, 0f)
-            )
-            // No clipRect: the soft halo can extend naturally beyond the glyph bounds.
-            drawText(result, brush = fill, topLeft = position, alpha = strength, shadow = shadow)
-        }
-        val shimmer = lyricShimmer(layout.syllable.start, layout.syllable.end, now)
-        if (shimmer > 0f) {
-            val width = result.size.width.toFloat().coerceAtLeast(1f)
-            val rtl = result.getParagraphDirection(0) == ResolvedTextDirection.Rtl
-            val center = width * (if (rtl) 1f - shimmer else shimmer)
-            val band = width * 0.35f + 4.dp.toPx()
-            val sheen = Brush.linearGradient(
-                colors = listOf(Color.Transparent, Color.White, Color.Transparent),
-                start = Offset(center - band, 0f), end = Offset(center + band, 0f))
-            drawText(result, brush = sheen, topLeft = position, alpha = 0.07f * glow * strength, shadow = Shadow.None)
+        val expression = syllableExpression(unit.start, unit.end, now, resetAt)
+        val position = layout.position - Offset(0f, expression * 0.9.dp.toPx())
+        val width = result.size.width.toFloat().coerceAtLeast(1f)
+        val progress = syllableProgress(unit, now)
+        val rtl = result.getParagraphDirection(0) == ResolvedTextDirection.Rtl
+        val feather = minOf(5.dp.toPx(), width * 0.2f).coerceAtLeast(0.5f)
+        val distance = (width + 2f * feather) * progress - feather
+        val edge = if (rtl) width - distance else distance
+        val direction = if (rtl) -1f else 1f
+        val glow = syllableGlowEnvelope(unit.start, unit.end, now) *
+            lyricBreathing(unit.start, unit.end, now) * strength
+        withTransform({
+            val scale = 1f + 0.012f * expression
+            scale(scale, scale, position + Offset(width / 2f, result.size.height * 0.8f))
+        }) {
+            if (!halo) drawText(result, color = Color.White.copy(alpha = 0.4f), topLeft = position, shadow = Shadow.None)
+            if (strength <= 0f || progress <= 0f) return@withTransform
+            val fill = Brush.linearGradient(listOf(Color.White, Color.Transparent),
+                Offset(edge - direction * feather, 0f), Offset(edge + direction * feather, 0f))
+            if (halo) {
+                if (glow <= 0f) return@withTransform
+                val bloom = syllableBloom(unit.start, unit.end, now)
+                // Visible broad atmosphere plus a tighter luminous core, followed by a sharp text pass.
+                drawText(result, brush = fill, topLeft = position, alpha = 0.22f * glow,
+                    shadow = Shadow(Color.White.copy(alpha = 0.55f * glow), Offset.Zero, (8f + 4f * bloom).dp.toPx()))
+                drawText(result, brush = fill, topLeft = position, alpha = 0.18f * glow,
+                    shadow = Shadow(Color.White.copy(alpha = 0.65f * glow), Offset.Zero, 3.dp.toPx()))
+            } else {
+                if (progress >= 1f) drawText(result, color = Color.White, topLeft = position, alpha = strength * 0.85f, shadow = Shadow.None)
+                else drawText(result, brush = fill, topLeft = position, alpha = strength * 0.85f, shadow = Shadow.None)
+                val shimmer = lyricShimmer(unit.start, unit.end, now)
+                if (shimmer > 0f) {
+                    val sungWidth = (width * progress - feather).coerceAtLeast(0f)
+                    if (sungWidth < 1f) return@withTransform
+                    val band = minOf(width * 0.3f + 4.dp.toPx(), sungWidth / 2f)
+                    val swept = band + (sungWidth - 2f * band) * shimmer
+                    val center = if (rtl) width - swept else swept
+                    val sheen = Brush.linearGradient(listOf(Color.Transparent, Color.White, Color.Transparent),
+                        Offset(center - band, 0f), Offset(center + band, 0f))
+                    drawText(result, brush = sheen, topLeft = position, alpha = 0.45f * glow, shadow = Shadow.None)
+                }
+            }
         }
     } }
 }
 
-/** Audio-time envelope stays frozen on pause and reaches zero at both authored bounds. */
+/** Authored attack/release; audio timestamps freeze all effects on pause. */
 internal fun syllableGlowEnvelope(start: Int, end: Int, now: Int): Float {
     val duration = end.toLong() - start
     if (duration <= 0 || now <= start || now >= end) return 0f
     val ramp = minOf(120.0, duration / 2.0).coerceAtLeast(0.5)
-    fun smooth(value: Double): Float {
-        val x = value.coerceIn(0.0, 1.0).toFloat()
-        return x * x * (3f - 2f * x)
-    }
-    return smooth((now.toLong() - start) / ramp) * smooth((end.toLong() - now) / ramp)
+    return lyricEase(((now.toLong() - start) / ramp).toFloat()) *
+        lyricEase(((end.toLong() - now) / ramp).toFloat())
 }

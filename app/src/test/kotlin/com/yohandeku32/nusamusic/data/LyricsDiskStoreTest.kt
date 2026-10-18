@@ -44,4 +44,16 @@ class LyricsDiskStoreTest {
         assertEquals(replacement, store.read("song"))
         assertEquals(1, temp.root.listFiles()!!.size)
     }
+
+    @Test fun embeddedCreditsSurviveRestartWithUnicodeAndMultipleNames() {
+        val entry = StoredLyrics("Lyrics", "embedded", credits =
+            SongCredits(listOf("Composer 世界", "Second"), listOf("Writer")))
+        LyricsDiskStore(temp.root).write("song", entry)
+        assertEquals(entry, LyricsDiskStore(temp.root).read("song"))
+    }
+    @Test fun oldCacheEntriesHaveNoFabricatedCredits() {
+        File(temp.root, LyricsDiskStore.digest("song") + ".properties")
+            .writeText("version=1\ncontent=Lyrics\nsource=embedded\ncheckedAt=100")
+        assertTrue(LyricsDiskStore(temp.root).read("song")!!.credits.isEmpty)
+    }
 }

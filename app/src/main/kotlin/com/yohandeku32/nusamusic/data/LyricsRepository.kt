@@ -19,7 +19,7 @@ data class SongLyrics(val stored: StoredLyrics, val synced: SyncedLyrics?)
 /** The only source is the current audio URI. Old imported/remote caches are never read. */
 class LyricsRepository(context: Context) {
     private val resolver = context.applicationContext.contentResolver
-    private val cache = LyricsDiskStore(File(context.applicationContext.cacheDir, "lyrics/embedded-v1"), maxEntries = 120)
+    private val cache = LyricsDiskStore(File(context.applicationContext.cacheDir, "lyrics/embedded-v2"), maxEntries = 120)
 
     companion object {
         fun cacheKey(song: Song) = listOf(song.uri, song.durationMs.toString(), song.dateAddedMs.toString()).joinToString("\u0000")
@@ -30,10 +30,10 @@ class LyricsRepository(context: Context) {
         if (uri.scheme !in setOf("content", "file")) return@withContext EmbeddedLyricsSelector.select(emptyList(), song.durationMs)
         val key = cacheKey(song) + "\u0000" + fingerprint(uri)
         if (!retry) cache.read(key)?.let { entry ->
-            return@withContext EmbeddedLyricsSelector.select(listOf(entry.content), song.durationMs)
+            return@withContext EmbeddedLyricsSelector.select(listOf(entry.content), song.durationMs, entry.credits)
         }
         val loadContext = coroutineContext
-        val texts = resolver.openAssetFileDescriptor(uri, "r")?.use { asset ->
+        val metadata = resolver.openAssetFileDescriptor(uri, "r")?.use { asset ->
             asset.createInputStream().use { input ->
                 val channel = input.channel
                 val size = if (asset.declaredLength >= 0) asset.declaredLength else channel.size() - asset.startOffset
@@ -44,10 +44,10 @@ class LyricsRepository(context: Context) {
                         if (channel.read(buffer, asset.startOffset + offset + buffer.position()) <= 0) break
                     }
                     buffer.array().copyOf(buffer.position())
-                }.read()
+                }.readMetadata()
             }
-        }.orEmpty()
-        val result = EmbeddedLyricsSelector.select(texts, song.durationMs)
+        } ?: EmbeddedLyricsMetadata(emptyList())
+        val result = EmbeddedLyricsSelector.select(metadata.lyrics, song.durationMs, metadata.credits)
         coroutineContext.ensureActive()
         runCatching { cache.write(key, result.stored) }
         result
@@ -70,8 +70,8 @@ class LyricsRepository(context: Context) {
 internal object EmbeddedLyricsSelector {
     private val timed = Regex("(?m)^\\s*\\[\\d+:|^\\s*<(?:\\w+:)?tt(?:\\s|>)")
 
-    fun select(candidates: List<String>, durationMs: Long): SongLyrics {
-        var best = SongLyrics(StoredLyrics("", "embedded"), null)
+    fun select(candidates: List<String>, durationMs: Long, credits: SongCredits = SongCredits()): SongLyrics {
+        var best = SongLyrics(StoredLyrics("", "embedded", credits = credits), null)
         var score = 0L
         for (raw in candidates) {
             if (raw.isBlank() || raw.toByteArray(Charsets.UTF_8).size > LyricsDecoder.MAX_BYTES) continue
@@ -81,7 +81,7 @@ internal object EmbeddedLyricsSelector {
             val units = decoded?.lines?.filterIsInstance<KaraokeLine>()?.sumOf { it.syllables.size } ?: 0
             val candidateScore = when { units > 0 -> 3_000_000L + units; decoded != null -> 2_000_000L + decoded.lines.size; else -> 1L }
             if (candidateScore > score) {
-                best = SongLyrics(StoredLyrics(raw, "embedded", plain = decoded == null), decoded)
+                best = SongLyrics(StoredLyrics(raw, "embedded", plain = decoded == null, credits = credits), decoded)
                 score = candidateScore
             }
         }
