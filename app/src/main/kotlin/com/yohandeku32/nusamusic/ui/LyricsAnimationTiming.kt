@@ -31,12 +31,11 @@ internal fun lyricPresence(start: Int, end: Int, now: Int, resetAt: Int): Float 
     return if (resetAt >= start) 1f else lyricEase(elapsed / minOf(120f, (end.toLong() - start) / 2f).coerceAtLeast(1f))
 }
 
-/** Breathing is slow and bounded; its period is derived from the authored/next-boundary interval. */
+/** A continuous 3.4-second glow breath; short units never cram in a full fast cycle. */
 internal fun lyricBreathing(start: Int, end: Int, now: Int): Float {
-    val duration = (end.toLong() - start).coerceAtLeast(1)
-    val elapsed = (now.toLong() - start).coerceIn(0, duration)
-    val cycles = (duration / 2600.0).coerceIn(1.0, 4.0)
-    return (0.88 + 0.12 * sin(2.0 * PI * elapsed / duration * cycles)).toFloat()
+    if (end <= start) return 1f
+    val sample = now.coerceIn(start, end)
+    return (0.94 + 0.06 * sin(sample.toDouble() * 2.0 * PI / 3400.0)).toFloat()
 }
 
 internal fun lyricShimmer(start: Int, end: Int, now: Int): Float {
