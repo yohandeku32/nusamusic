@@ -75,9 +75,15 @@ class MusicRepository(private val context: Context) {
         extraFolderUris: Set<String> = emptySet(),
         cachedSongs: List<Song> = emptyList(),
         previousCheckpoint: MediaStoreCheckpoint? = null,
-        scanSelectedFolders: Boolean = true
+        scanSelectedFolders: Boolean = true,
+        includeMediaStore: Boolean = true
     ): MusicScanResult {
-        val media = loadMediaStoreSnapshot(cachedSongs, previousCheckpoint)
+        // SAF folders remain available even when READ_MEDIA_AUDIO is denied.
+        val media = if (includeMediaStore) {
+            loadMediaStoreSnapshot(cachedSongs, previousCheckpoint)
+        } else {
+            MediaScan(emptyList(), null)
+        }
         val songs = media.songs.toMutableList()
         val existingUris = songs.mapTo(HashSet()) { it.uri }
         val existingKeys = songs.mapTo(HashSet()) {
