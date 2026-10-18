@@ -8,6 +8,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.style.ResolvedTextDirection
@@ -36,8 +37,20 @@ private class LyricsGlowPalette(density: Float) {
     private val tight = Array(65) { energy ->
         Shadow(Color.White.copy(alpha = 0.65f * energy / 64f), Offset.Zero, 3f * density)
     }
+    // Third, wide-radius halo reserved for held syllables. Prepared once,
+    // not allocated for every draw frame or shimmer sample.
+    private val outer = Array(65) { energy ->
+        Shadow(Color.White.copy(alpha = 0.42f * energy / 64f), Offset.Zero, 14f * density)
+    }
+    // A thin bright contour is a safe alternative to shader-displacing
+    // portions of a shaped glyph (previously caused visible broken strokes).
+    private val edgeStrokes = Array(33) { step ->
+        Stroke(width = (0.30f + 0.03f * step) * density)
+    }
     fun broad(energy: Float, bloom: Float) = broad[(energy * 64f).roundToInt().coerceIn(0, 64)][(bloom * 8f).roundToInt().coerceIn(0, 8)]
     fun tight(energy: Float) = tight[(energy * 64f).roundToInt().coerceIn(0, 64)]
+    fun outer(energy: Float) = outer[(energy * 64f).roundToInt().coerceIn(0, 64)]
+    fun edgeStroke(energy: Float) = edgeStrokes[(energy * 32f).roundToInt().coerceIn(0, 32)]
 }
 
 internal class SyllableLyricsPainter(
@@ -177,19 +190,52 @@ internal class SyllableLyricsPainter(
             glyph.fill.move(edge - direction * glyph.feather, edge + direction * glyph.feather)
             if (halo) {
                 if (glow <= 0f) return@withTransform
-                // Preserve the existing halo and timing, adding at most a
-                // small breath-synced lift for sustained vocal syllables.
+                // The approved bright tight/mid halos still use the
+                // original progressive gradient. A visual-only crescendo
+                // lifts them up to ~1.5x, with the existing bubble breath.
+                val crescendo = glyph.bubble.luminousCrescendo
                 val bloom = (
                     syllableBloom(glyph.layout.syllable.start, glyph.layout.syllable.end, now) +
-                        0.12f * glyph.bubble.glowBoost
+                        0.12f * glyph.bubble.glowBoost +
+                        0.12f * crescendo
                 ).coerceIn(0f, 1f)
-                val breathingGlow = glow * (1f + 0.12f * glyph.bubble.glowBoost)
+                val breathingGlow = glow * (
+                    1f + 0.12f * glyph.bubble.glowBoost + 0.38f * crescendo
+                )
+                if (crescendo > 0.005f) {
+                    // Light spreads outward first; near letter contours
+                    // remain precise because the original fill is still
+                    // painted independently in the foreground pass.
+                    drawText(result, brush = glyph.fill.brush, topLeft = position,
+                        alpha = 0.10f * glow * crescendo,
+                        shadow = glowPalette.outer(glow * crescendo))
+                }
                 drawText(result, brush = glyph.fill.brush, topLeft = position,
                     alpha = 0.22f * breathingGlow,
                     shadow = glowPalette.broad(breathingGlow, bloom))
                 drawText(result, brush = glyph.fill.brush, topLeft = position,
                     alpha = 0.18f * breathingGlow,
                     shadow = glowPalette.tight(breathingGlow))
+
+                val edge = glyph.bubble.edgeExpansion
+                if (edge > 0.005f) {
+                    // Soft, slightly enlarged outline BEHIND the sharp main
+                    // text. No per-character clipping, path displacement,
+                    // layout changes or duplicate opaque glyph interiors.
+                    // Slow phase/position variation is supplied by the
+                    // already-sampled audio-time envelope.
+                    withTransform({
+                        scale(
+                            1f + 0.012f * edge, 1f + 0.016f * edge,
+                            position + Offset(width / 2f, result.size.height * 0.8f)
+                        )
+                    }) {
+                        drawText(result, brush = glyph.fill.brush,
+                            topLeft = position, alpha = 0.18f * edge,
+                            shadow = Shadow.None,
+                            drawStyle = glowPalette.edgeStroke(edge))
+                    }
+                }
             } else {
                 if (progress >= 1f) {
                     drawText(result, color = Color.White, topLeft = position,
