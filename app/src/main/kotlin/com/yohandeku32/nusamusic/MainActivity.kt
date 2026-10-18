@@ -1579,7 +1579,6 @@ private fun NusaMusicApp(
         mutableStateOf(uiPrefs.getBoolean("rounded_carousel_corners", true))
     }
     var lyricsRequested by remember(playerPresentationMode) { mutableStateOf(false) }
-    var lyricsCloseRequestId by remember(playerPresentationMode) { mutableIntStateOf(0) }
     var customTitleTypeface by remember {
         mutableStateOf<Typeface?>(null)
     }
@@ -1942,15 +1941,13 @@ private fun NusaMusicApp(
         PlayerPresentationMode.IMMERSIVE_ARTWORK -> Color.Black
         else -> MaterialTheme.colorScheme.background
     }
-    if (LYRICS_ENABLED && artistPageEnabled && lyricsRequested && pagerState.settledPage == playerPage) {
-        ImmersiveLyricsPanel(
-            song = currentSong, positionMs = positionMsState,
-            readPlaybackPosition = readPlaybackPosition, readPlaybackEpoch = readPlaybackEpoch,
-            isPlaying = isPlaying, playbackEpoch = lyricsPlaybackEpoch,
-            durationMs = durationMs, state = lyricsState,
-            dismissRequestId = lyricsCloseRequestId,
-            onDismiss = { lyricsRequested = false }, onSeek = onSeek, fontSize = lyricsFontSize
-        )
+    // Lyrics is an in-page focus mode, no modal dialog or slide-up sheet.
+    // Back closes the focus mode first and keeps the Now Playing page intact.
+    androidx.activity.compose.BackHandler(
+        enabled = lyricsRequested && pagerState.settledPage == playerPage && !showSettings
+    ) { lyricsRequested = false }
+    LaunchedEffect(pagerState.settledPage) {
+        if (pagerState.settledPage != playerPage) lyricsRequested = false
     }
 
     Scaffold(
@@ -2005,19 +2002,37 @@ private fun NusaMusicApp(
                                 onPrevious = onPrevious, onNext = onNext,
                                 onShuffle = onToggleShuffle, onRepeat = onToggleRepeat,
                                 onFavorite = { isFavorite = !isFavorite },
-                                onLyrics = { if (lyricsRequested) lyricsCloseRequestId++ else lyricsRequested = true },
+                                onLyrics = { lyricsRequested = !lyricsRequested },
                                 onArtist = { scope.launch { pagerState.animateMiuixScrollToPage(0); lyricsRequested = false } },
                                 onLibrary = { scope.launch { pagerState.animateMiuixScrollToPage(libraryPage) } },
                                 onShare = { onShare(currentSong) },
                                 onSettings = { showSettings = true },
                                 artwork = { artworkModifier, heroHeight, heroWidth ->
-                                    ImmersiveArtwork(currentSong, animatedArtworkEnabled, heroHeight, heroWidth, artworkModifier)
+                                    ImmersiveArtwork(
+                                        currentSong, animatedArtworkEnabled, heroHeight, heroWidth,
+                                        artworkModifier, lyricsMode = lyricsRequested
+                                    )
                                 },
                                 progress = { progressModifier ->
                                     PlaybackProgress(positionMsState, durationMs, currentSong != null && durationMs > 0,
                                         onSeek, immersive = true, modifier = progressModifier)
                                 },
                                 quality = { AudioQualityPill(song = currentSong, immersive = true) },
+                                lyrics = { lyricsModifier ->
+                                    ImmersiveLyricsPanel(
+                                        song = currentSong,
+                                        positionMs = positionMsState,
+                                        readPlaybackPosition = readPlaybackPosition,
+                                        readPlaybackEpoch = readPlaybackEpoch,
+                                        isPlaying = isPlaying,
+                                        playbackEpoch = lyricsPlaybackEpoch,
+                                        durationMs = durationMs,
+                                        state = lyricsState,
+                                        onSeek = onSeek,
+                                        fontSize = lyricsFontSize,
+                                        modifier = lyricsModifier
+                                    )
+                                },
                                 modifier = Modifier.fillMaxSize()
                             )
                             return@BoxWithConstraints
@@ -4005,7 +4020,8 @@ private fun ImmersiveArtwork(
     animatedArtworkEnabled: Boolean = true,
     heroHeight: androidx.compose.ui.unit.Dp,
     heroWidthFraction: Float = 1f,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    lyricsMode: Boolean = false
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     // Retain the current frame while the next song's artwork is decoded. Resetting
@@ -4138,12 +4154,19 @@ private fun ImmersiveArtwork(
         label = "immersiveBackdrop"
     )
 
+    val heroOpacity by animateFloatAsState(
+        targetValue = if (lyricsMode) 0f else 1f,
+        animationSpec = tween(430),
+        label = "immersiveLyricsHeroFade"
+    )
+
     ImmersiveArtworkScene(
         artwork = artwork,
         blur = activeBlur,
         backdrop = animatedBackdrop,
         heroHeight = heroHeight,
         heroWidthFraction = heroWidthFraction,
+        heroOpacity = heroOpacity,
         scrimOpacity = scrimOpacity,
         animateChanges = hasPresentedArtwork,
         description = song?.title,

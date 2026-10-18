@@ -1,5 +1,12 @@
 package com.yohandeku32.nusamusic.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -18,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -63,6 +71,7 @@ internal fun ImmersiveArtworkPlayer(
     artwork: @Composable (Modifier, Dp, Float) -> Unit,
     progress: @Composable (Modifier) -> Unit,
     quality: @Composable () -> Unit,
+    lyrics: @Composable (Modifier) -> Unit = {},
     modifier: Modifier = Modifier,
     contentInsets: WindowInsets = WindowInsets.safeDrawing
 ) {
@@ -88,6 +97,26 @@ internal fun ImmersiveArtworkPlayer(
         }
         var controlsHeightPx by remember { mutableIntStateOf(0) }
         val controlsHeight = with(density) { controlsHeightPx.toDp() }
+        var lyricHeaderHeightPx by remember { mutableIntStateOf(0) }
+        var transportHeightPx by remember { mutableIntStateOf(0) }
+        val headerHeight = with(density) { lyricHeaderHeightPx.toDp() }
+        val transportHeight = with(density) { transportHeightPx.toDp() }
+        val topInset = with(density) { contentInsets.getTop(density).toDp() }
+        val bottomInset = with(density) { contentInsets.getBottom(density).toDp() }
+        val targetHeaderTop = topInset + if (compact) 56.dp else 70.dp
+        // Move the existing metadata (title, artist, Hi-Res) into the former
+        // artwork area. This is paint-only translation: its original height
+        // still reserves room for progress and transport at the bottom.
+        val headerLift = if (wide || controlsHeightPx == 0) 0.dp else
+            (viewportHeight - controlsHeight - targetHeaderTop).coerceAtLeast(0.dp)
+        val lyricsTransition by animateFloatAsState(
+            targetValue = if (lyricsOpen) 1f else 0f,
+            animationSpec = tween(460, easing = FastOutSlowInEasing),
+            label = "immersiveLyricsReflow"
+        )
+        val lyricsTop = (if (wide) topInset + 156.dp else
+            targetHeaderTop + headerHeight + 14.dp)
+        val lyricsBottom = transportHeight + bottomInset + 22.dp
         // The extra air beneath transport should not steal vertical space
         // from the artwork: compensate only the newly introduced gap.
         val addedTransportGap = (transportPillGap -
@@ -109,6 +138,13 @@ internal fun ImmersiveArtworkPlayer(
                     .windowInsetsPadding(contentInsets.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal))
                     .padding(bottom = 12.dp)
             ) {
+                Column(
+                    Modifier.fillMaxWidth()
+                        .onSizeChanged { lyricHeaderHeightPx = it.height }
+                        .graphicsLayer {
+                            translationY = -headerLift.toPx() * lyricsTransition
+                        }
+                ) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(title, fontFamily = titleFontFamily, fontWeight = FontWeight.Bold,
@@ -134,6 +170,9 @@ internal fun ImmersiveArtworkPlayer(
                     )
                 }
                 if (!wide) Box(Modifier.padding(top = 6.dp)) { quality() }
+                }
+                Column(Modifier.fillMaxWidth()
+                    .onSizeChanged { transportHeightPx = it.height }) {
                 progress(Modifier.fillMaxWidth().padding(top = if (wide) 4.dp else if (compact) 10.dp else 14.dp))
                 Spacer(Modifier.height(if (wide) 6.dp else if (compact) 10.dp else 16.dp))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
@@ -179,6 +218,7 @@ internal fun ImmersiveArtworkPlayer(
                     ImmersiveAction(NusaPlayerIcons.Library, immersiveText("Perpustakaan", "Library"), onLibrary)
                     ImmersiveAction(NusaPlayerIcons.Share, immersiveText("Bagikan lagu", "Share song"), onShare, hasSong)
                 }
+                }
             }
         }
 
@@ -194,6 +234,31 @@ internal fun ImmersiveArtworkPlayer(
             }
         } else {
             Box(Modifier.align(Alignment.BottomCenter)) { foreground() }
+        }
+
+        // Inline Lyrics lives in the artwork area, between lifted metadata
+        // and the original seek/transport controls. It is not a modal sheet,
+        // so opening/closing never drags content from the screen bottom.
+        // Animate only alpha/paint translation: no glyph-size changes and no
+        // interference with manual scrolling or synchronized highlighting.
+        if (lyricHeaderHeightPx > 0 && transportHeightPx > 0 &&
+            viewportHeight > lyricsTop + lyricsBottom + 72.dp
+        ) {
+            AnimatedVisibility(
+                visible = lyricsOpen,
+                modifier = Modifier.fillMaxSize()
+                    .padding(
+                        start = if (wide) maxWidth - controlsWidth else 0.dp,
+                        top = lyricsTop,
+                        bottom = lyricsBottom
+                    ),
+                enter = fadeIn(tween(420, delayMillis = 100)) +
+                    slideInVertically(tween(460, easing = FastOutSlowInEasing)) { it / 9 },
+                exit = fadeOut(tween(280)) +
+                    slideOutVertically(tween(380, easing = FastOutSlowInEasing)) { it / 12 }
+            ) {
+                lyrics(Modifier.fillMaxSize())
+            }
         }
 
         Row(Modifier.align(Alignment.TopCenter).fillMaxWidth()
