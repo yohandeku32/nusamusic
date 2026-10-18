@@ -5,8 +5,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.shrinkHorizontally
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateDpAsState
@@ -41,6 +39,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import java.util.Locale
 
 private fun immersiveText(id: String, en: String) =
@@ -121,6 +120,19 @@ internal fun ImmersiveArtworkPlayer(
             animationSpec = tween(460, easing = FastOutSlowInEasing),
             label = "immersiveLyricsReflow"
         )
+        // Lyrics rows are expensive to initialize (text measurement, glow
+        // effects, follow-scroll). Do not mount them during the header/cover
+        // transition. Opening first moves metadata, then fades in the lyrics.
+        // Cancellation on rapid taps prevents a stale delayed reveal.
+        var showLyricsContent by remember { mutableStateOf(false) }
+        LaunchedEffect(lyricsOpen) {
+            if (lyricsOpen) {
+                delay(460L)
+                showLyricsContent = true
+            } else {
+                showLyricsContent = false
+            }
+        }
         // Lyrics occupies only the old artwork space: below the animated
         // metadata and above progress / playback / bottom action pill.
         // Use measured heights instead of fixed percentages so short screens
@@ -147,24 +159,19 @@ internal fun ImmersiveArtworkPlayer(
         // start its smooth trip upward before lines come into focus.
         if (lyricsEnabled && lyricsViewportHeight > 0.dp) {
             androidx.compose.animation.AnimatedVisibility(
-                visible = lyricsOpen,
+                visible = showLyricsContent && lyricsViewportHeight > 0.dp,
                 modifier = Modifier.align(if (wide) Alignment.TopStart else Alignment.TopCenter)
                     .fillMaxWidth(if (wide) (1f - controlsFraction).coerceIn(0.42f, 0.75f) else 1f)
-                    // Lyrics are intentionally closer to the left edge.
-                    // The row renderer keeps its own 16dp safe glow padding.
-                    .padding(start = if (wide) 10.dp else 8.dp, end = if (wide) 12.dp else 8.dp)
+                    // Slightly more breathing room than the previous
+                    // revision: 20dp outer + 16dp safe glyph inset = 36dp.
+                    // The glyph padding itself remains untouched for glow.
+                    .padding(start = 20.dp, end = 16.dp)
                     .padding(top = lyricsViewportTop)
                     .height(lyricsViewportHeight),
-                enter = fadeIn(animationSpec = tween(300, delayMillis = 150)) +
-                    slideInVertically(
-                        animationSpec = tween(460, easing = FastOutSlowInEasing),
-                        initialOffsetY = { it / 14 }
-                    ),
-                exit = fadeOut(animationSpec = tween(190)) +
-                    slideOutVertically(
-                        animationSpec = tween(290, easing = FastOutSlowInEasing),
-                        targetOffsetY = { it / 18 }
-                    )
+                // Alpha-only animation avoids translating and relaying out
+                // the full, shader-heavy lyrics list during entrance/exit.
+                enter = fadeIn(animationSpec = tween(210)),
+                exit = fadeOut(animationSpec = tween(100))
             ) {
                 Box(Modifier.fillMaxSize()) {
                     // Reuse the existing synced lyrics, timing and follow-scroll.
@@ -236,18 +243,13 @@ internal fun ImmersiveArtworkPlayer(
                                 .padding(top = (5f - 3f * lyricsTransition).dp)
                                 .clickable(enabled = hasSong, onClick = onArtist)
                         )
-                        // One left-aligned quality label below title/artist,
-                        // also for wide displays. GPU scaling avoids layout
-                        // churn while the small Hi-Res text shrinks.
-                        Box(
-                            Modifier.align(Alignment.Start)
-                                .padding(top = (4f - 2f * lyricsTransition).dp)
-                                .graphicsLayer {
-                                    scaleX = 1f - 0.23f * lyricsTransition
-                                    scaleY = 1f - 0.23f * lyricsTransition
-                                    transformOrigin = TransformOrigin(0f, 0f)
-                                }
-                        ) { quality() }
+                        // Keep Hi-Res/Lossless in normal player only. The
+                        // Lyrics header contains exactly title and artist.
+                        if (!lyricsOpen) {
+                            Box(Modifier.align(Alignment.Start).padding(top = 4.dp)) {
+                                quality()
+                            }
+                        }
                     }
                     AnimatedVisibility(
                         visible = !lyricsOpen,
