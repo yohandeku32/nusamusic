@@ -22,9 +22,9 @@ internal fun blendAmbientArtwork(
         fun channel(shift: Int): Float {
             val smooth = ((a ushr shift) and 255) * 0.70f
             val structure = ((b ushr shift) and 255) * 0.30f
-            // Reduce brightness in the real blurred artwork pixels,
-            // not with a black gradient or solid-colour overlay.
-            return (smooth + structure) * 0.82f
+            // Blend preserves original neutral colours exactly.
+            // Brightness is adjusted only on the generated blur bitmap.
+            return smooth + structure
         }
         val red = channel(16)
         val green = channel(8)
