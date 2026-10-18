@@ -20,9 +20,11 @@ internal fun blendAmbientArtwork(
         val a = broad[i]
         val b = detailed[i]
         fun channel(shift: Int): Float {
-            val smooth = ((a ushr shift) and 255) * 0.58f
-            val structure = ((b ushr shift) and 255) * 0.42f
-            return smooth + structure
+            val smooth = ((a ushr shift) and 255) * 0.70f
+            val structure = ((b ushr shift) and 255) * 0.30f
+            // Reduce brightness in the real blurred artwork pixels,
+            // not with a black gradient or solid-colour overlay.
+            return (smooth + structure) * 0.82f
         }
         val red = channel(16)
         val green = channel(8)
@@ -32,8 +34,8 @@ internal fun blendAmbientArtwork(
         val luma = red * 0.2126f + green * 0.7152f + blue * 0.0722f
         fun vivid(value: Float): Int =
             (luma + (value - luma) * 1.075f).roundToInt().coerceIn(0, 255)
-        val alpha = ((((a ushr 24) and 255) * 0.58f) +
-            (((b ushr 24) and 255) * 0.42f)).roundToInt().coerceIn(0, 255)
+        val alpha = ((((a ushr 24) and 255) * 0.70f) +
+            (((b ushr 24) and 255) * 0.30f)).roundToInt().coerceIn(0, 255)
         out[i] = (alpha shl 24) or
             (vivid(red) shl 16) or
             (vivid(green) shl 8) or
