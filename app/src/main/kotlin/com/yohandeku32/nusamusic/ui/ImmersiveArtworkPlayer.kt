@@ -264,6 +264,7 @@ internal fun ImmersiveArtworkPlayer(
                         }
                     }
                 }
+                }
                 Column(Modifier.fillMaxWidth()
                     .onSizeChanged { transportHeightPx = it.height }) {
                 progress(Modifier.fillMaxWidth().padding(top = if (wide) 4.dp else if (compact) 10.dp else 14.dp))
