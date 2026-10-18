@@ -17,7 +17,8 @@ import kotlin.coroutines.coroutineContext
 data class SongLyrics(
     val stored: StoredLyrics,
     val synced: SyncedLyrics?,
-    val inferredEnds: Set<LyricsUnitKey> = emptySet()
+    val inferredEnds: Set<LyricsUnitKey> = emptySet(),
+    val duetRightLines: Set<Int> = emptySet()
 )
 
 /** The only source is the current audio URI. Old imported/remote caches are never read. */
@@ -87,7 +88,7 @@ internal object EmbeddedLyricsSelector {
             val candidateScore = when { units > 0 -> 3_000_000L + units; decoded != null -> 2_000_000L + decoded.lines.size; else -> 1L }
             if (candidateScore > score) {
                 best = SongLyrics(StoredLyrics(raw, "embedded", plain = decoded == null, credits = credits), decoded,
-                    timing?.inferredEnds.orEmpty())
+                    timing?.inferredEnds.orEmpty(), timing?.duetRightLines.orEmpty())
                 score = candidateScore
             }
         }
