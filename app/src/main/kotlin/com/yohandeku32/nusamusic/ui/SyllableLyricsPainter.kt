@@ -8,7 +8,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.style.ResolvedTextDirection
@@ -47,14 +46,6 @@ internal class SyllableLyricsPainter(
     private val lineStart: Int,
     private val lineEnd: Int
 ) {
-    private class Slice(
-        val startPx: Float,
-        val endPx: Float,
-        val startDp: Float,
-        val endDp: Float,
-        val motion: LyricsFloatingMotion
-    )
-
     private class Glyph(
         val layout: SyllableLayout,
         density: Float,
@@ -68,24 +59,11 @@ internal class SyllableLyricsPainter(
         val sheen = MovingLyricsGradient(true)
         val pathEndDp = pathStartDp + widthDp
 
-        // Prebuild text slices with the ALREADY measured layout. Repainting
-        // narrow clipped strips localizes movement inside a long syllable,
-        // without any runtime text measurement or a new Compose layout.
-        val slices = List(kotlin.math.ceil(widthDp / 22f).toInt().coerceIn(1, 7)) { index ->
-            val total = kotlin.math.ceil(widthDp / 22f).toInt().coerceIn(1, 7)
-            val startPx = width * index / total
-            val endPx = width * (index + 1) / total
-            val horizontalDp = (layout.position.x + (startPx + endPx) / 2f) / density
-            Slice(
-                startPx = startPx,
-                endPx = endPx,
-                startDp = pathStartDp + startPx / density,
-                endDp = pathStartDp + endPx / density,
-                motion = LyricsFloatingMotion(horizontalDp)
-            )
-        }
-        var moving = false
-        var dominant: Slice? = null
+        // Transform the complete measured syllable as ONE intact text run.
+        // Per-22dp clipRect strips cut through letter strokes when neighbouring
+        // slices have slightly different lift/scale, especially on slow vocals.
+        // Keep the approved V6 horizontal phase at this run's visual centre.
+        val motion = LyricsFloatingMotion((layout.position.x + width / 2f) / density)
     }
 
     private val glyphs = buildList {
@@ -121,33 +99,26 @@ internal class SyllableLyricsPainter(
     private val glowPalette = LyricsGlowPalette(density)
 
     /**
-     * Two passes retain the existing halo-before-text drawing order. Only
-     * glyphs touching the traveling vocal front are split into narrow strips.
-     * Everything un-sung or beyond the trailing falloff is painted once at
-     * the original baseline. The V6 carrier function itself is untouched.
+     * Keep the V6 global phase and V7 traveling vocal front, but apply their
+     * combined intensity uniformly to an entire syllable text run. Drawing one
+     * intact glyph layout prevents seams, broken strokes, and doubled edges
+     * at slice boundaries on long or slowly sung notes.
+     *
+     * Halo and foreground always use the SAME transform; highlighting,
+     * shimmer, lyric timings, and scrolling are unchanged.
      */
     fun draw(scope: DrawScope, now: Int, focus: Float, waveTime: Int) = with(scope) {
         val strength = focus.coerceIn(0f, 1f)
         val lineStrength = lyricsLineWaveIntensity(lineStart, lineEnd, waveTime)
         val front = if (lineStrength > 0f) vocalMask.front(waveTime) else null
 
-        // Calculate each slice's transform once per draw frame, then reuse it
-        // for the glow and foreground passes. The source is the same audio clock
-        // used by progressive highlighting, never a per-syllable timer.
+        // Playback time alone drives the transform. No animation restarting,
+        // no clipping through characters and no text measurement per frame.
         for (glyph in glyphs) {
-            var strongest = 0f
-            glyph.moving = false
-            glyph.dominant = null
-            for (slice in glyph.slices) {
-                val influence = vocalMask.influence(front, slice.startDp, slice.endDp)
-                val maskedStrength = lineStrength * influence
-                slice.motion.update(waveTime, maskedStrength)
-                if (maskedStrength > 0.0001f) glyph.moving = true
-                if (maskedStrength > strongest) {
-                    strongest = maskedStrength
-                    glyph.dominant = slice
-                }
-            }
+            val influence = vocalMask.glyphInfluence(
+                front, glyph.pathStartDp, glyph.pathEndDp
+            )
+            glyph.motion.update(waveTime, lineStrength * influence)
         }
 
         for (pass in 0..1) for (glyph in glyphs) {
@@ -158,30 +129,12 @@ internal class SyllableLyricsPainter(
             val glow = syllableGlowEnvelope(unit.start, unit.end, now) *
                 lyricBreathing(unit.start, unit.end, now) * strength
 
-            if (halo) {
-                // One retained blurred halo per syllable avoids multiple blur
-                // passes and visible seams between clipped text strips.
-                drawGlyph(glyph, glyph.dominant, true, progress, glow, strength, now)
-            } else if (glyph.moving && glyph.slices.size > 1) {
-                for (slice in glyph.slices) {
-                    clipRect(
-                        left = glyph.layout.position.x + slice.startPx,
-                        top = -12f * density,
-                        right = glyph.layout.position.x + slice.endPx,
-                        bottom = size.height + 12f * density
-                    ) {
-                        drawGlyph(glyph, slice, false, progress, glow, strength, now)
-                    }
-                }
-            } else {
-                drawGlyph(glyph, glyph.dominant, false, progress, glow, strength, now)
-            }
+            drawGlyph(glyph, halo, progress, glow, strength, now)
         }
     }
 
     private fun DrawScope.drawGlyph(
         glyph: Glyph,
-        slice: Slice?,
         halo: Boolean,
         progress: Float,
         glow: Float,
@@ -189,17 +142,14 @@ internal class SyllableLyricsPainter(
         now: Int
     ) {
         val result = glyph.layout.textLayoutResult
-        val shift = slice?.motion?.liftDp ?: 0f
-        val scaleFactor = slice?.motion?.scale ?: 1f
+        val shift = glyph.motion.liftDp
+        val scaleFactor = glyph.motion.scale
         val position = glyph.layout.position - Offset(0f, shift * density)
         val width = glyph.width
         withTransform({
             scale(
                 scaleFactor, scaleFactor,
-                position + Offset(
-                    if (slice == null) width / 2f else (slice.startPx + slice.endPx) / 2f,
-                    result.size.height * 0.8f
-                )
+                position + Offset(width / 2f, result.size.height * 0.8f)
             )
         }) {
             if (!halo) {
