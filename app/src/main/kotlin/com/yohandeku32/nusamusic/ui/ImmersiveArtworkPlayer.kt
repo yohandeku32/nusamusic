@@ -88,8 +88,13 @@ internal fun ImmersiveArtworkPlayer(
         }
         var controlsHeightPx by remember { mutableIntStateOf(0) }
         val controlsHeight = with(density) { controlsHeightPx.toDp() }
+        // The extra air beneath transport should not steal vertical space
+        // from the artwork: compensate only the newly introduced gap.
+        val addedTransportGap = (transportPillGap -
+            (if (wide) 10.dp else if (compact) 14.dp else 16.dp)).coerceAtLeast(0.dp)
         val requestedHero = if (wide) maxHeight else
-            (maxHeight - (if (controlsHeightPx > 0) controlsHeight else 320.dp) + 64.dp)
+            (maxHeight - (if (controlsHeightPx > 0) controlsHeight else 320.dp) +
+                64.dp + addedTransportGap)
                 .coerceIn(maxHeight * 0.45f, maxHeight * 0.80f)
         val heroHeight by animateDpAsState(requestedHero, tween(220), label = "immersiveHeroHeight")
         artwork(Modifier.matchParentSize(), heroHeight, if (wide) (1f - controlsFraction + 0.06f) else 1f)
