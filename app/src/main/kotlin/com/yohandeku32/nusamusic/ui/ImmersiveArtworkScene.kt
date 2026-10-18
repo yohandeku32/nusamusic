@@ -59,17 +59,18 @@ internal fun ImmersiveArtworkScene(
                 }
             })
         }
-        // Neutral dark falloff over real image blur. Album colours are brightest
-        // around the artwork and fade smoothly to black behind playback controls.
-        // No dominant-colour overlay, so shapes remain subtly perceptible.
+        // One gentle darkening pass over the REAL artwork. The separate
+        // readability floor below already shades the control area, so these
+        // alphas must stay low: stacking opaque gradients erased the album
+        // colours and made the background appear solid black.
         Box(Modifier.matchParentSize().drawWithCache {
             val falloff = Brush.verticalGradient(
-                0f to Color.Black.copy(alpha = 0.18f),
-                0.20f to Color.Black.copy(alpha = 0.10f),
-                0.43f to Color.Black.copy(alpha = 0.20f),
-                0.64f to Color.Black.copy(alpha = 0.48f),
-                0.82f to Color.Black.copy(alpha = 0.78f),
-                1f to Color.Black.copy(alpha = 0.96f)
+                0f to Color.Transparent,
+                0.20f to Color.Transparent,
+                0.43f to Color.Black.copy(alpha = 0.035f),
+                0.64f to Color.Black.copy(alpha = 0.12f),
+                0.82f to Color.Black.copy(alpha = 0.24f),
+                1f to Color.Black.copy(alpha = 0.36f)
             )
             onDrawBehind { drawRect(falloff) }
         })
