@@ -230,8 +230,8 @@ internal fun ImmersiveArtworkPlayer(
                             )
                             Text(
                                 text = composerNames.ifBlank { "Unknown composer" },
-                                fontSize = if (compact) 13.sp else 14.sp,
-                                lineHeight = 18.sp,
+                                fontSize = if (compact) 11.sp else 12.sp,
+                                lineHeight = 16.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color.White.copy(alpha = 0.90f),
                                 maxLines = 2,
