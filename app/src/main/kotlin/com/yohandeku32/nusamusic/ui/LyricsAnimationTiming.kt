@@ -62,7 +62,8 @@ internal fun lyricShimmer(start: Int, end: Int, now: Int): Float {
 
 internal fun countdownOpacity(gap: LyricsGap, now: Int): Float {
     if (now < gap.start || now >= gap.end) return 0f
-    return lyricEase((now.toLong() - gap.start) / 120f) * lyricEase((gap.end.toLong() - now) / 160f)
+    return lyricEase((now.toLong() - gap.start) / 120f) *
+        lyricEase((gap.end.toLong() - now) / 160f) * countdownFollowOffset(gap, now)
 }
 
 /** Pre-position the already measured next line while the countdown fades, with no spacer row. */

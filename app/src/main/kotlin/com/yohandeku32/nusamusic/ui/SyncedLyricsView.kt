@@ -49,7 +49,7 @@ internal fun SyncedLyricsView(
     val normalStyle = remember(fontSize) { TextStyle(color = Color.White, fontSize = fontSize.sp, lineHeight = (fontSize * 1.25f).sp, fontWeight = FontWeight.Bold) }
     val backgroundStyle = remember(fontSize) { TextStyle(color = Color.White, fontSize = (fontSize * 0.625f).sp, lineHeight = (fontSize * 0.875f).sp, fontWeight = FontWeight.SemiBold) }
     BoxWithConstraints(modifier) {
-        val leadDistance = with(androidx.compose.ui.platform.LocalDensity.current) { 48.dp.toPx() }
+        val leadPadding = with(androidx.compose.ui.platform.LocalDensity.current) { 28.dp.toPx() }
         LaunchedEffect(visible, browsing, dragging, fontSize, maxHeight, maxWidth, motionState.revision) {
             if (!visible || browsing || dragging) {
                 motion.reset()
@@ -69,6 +69,13 @@ internal fun SyncedLyricsView(
                 }
                 return actualCenter - center() - offset
             }
+            fun leadFor(target: Int, gap: LyricsGap?, now: Int): Float {
+                if (gap == null) return 0f
+                val items = listState.layoutInfo.visibleItemsInfo
+                val height = items.firstOrNull { it.index == target }?.size?.toFloat()
+                    ?: items.map { it.size }.average().toFloat().takeIf { it.isFinite() } ?: leadPadding * 2f
+                return (height / 2f + leadPadding) * countdownFollowOffset(gap, now)
+            }
             var previousTime = clock.read()
             var lastFollowIndex = timeline.frame(previousTime).anchor
             snapshotFlow { clock.read() }.collect { now ->
@@ -79,12 +86,12 @@ internal fun SyncedLyricsView(
                     ?: if (positioned) lastFollowIndex else current.anchor
                 lastFollowIndex = target
                 if (target !in lyrics.lines.indices) return@collect
-                val lead = current.gap?.let { countdownFollowOffset(it, now) * leadDistance } ?: 0f
+                val lead = leadFor(target, current.gap, now)
                 if (!positioned) {
                     motion.reset()
                     listState.scrollToItem(target, -(center() + lead).roundToInt())
                     withFrameNanos { }
-                    listState.scrollBy(distance(target, lead))
+                    listState.scrollBy(distance(target, leadFor(target, current.gap, now)))
                     positioned = true
                 } else {
                     val elapsed = now.toLong() - previousTime
@@ -111,7 +118,7 @@ internal fun SyncedLyricsView(
             }
         }
         frame.gap?.let { gap ->
-            LyricsGapDots(gap, clock.read, Modifier.align(Alignment.CenterStart).padding(start = 16.dp))
+            LyricsGapDots(gap, clock.read, Modifier.align(Alignment.CenterStart).offset(y = (-28).dp).padding(start = 16.dp))
         }
     }
 }

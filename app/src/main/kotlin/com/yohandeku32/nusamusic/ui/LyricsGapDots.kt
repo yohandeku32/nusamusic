@@ -11,6 +11,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import kotlin.math.sqrt
+import java.util.Locale
 
 /** A temporary overlay, never a persistent list spacer. Every phase follows audio time. */
 @Composable
@@ -18,9 +19,13 @@ internal fun LyricsGapDots(gap: LyricsGap, time: () -> Int, modifier: Modifier =
     val seconds by remember(gap, time) { derivedStateOf {
         ((gap.end.toLong() - time()).coerceAtLeast(0) + 999) / 1000
     } }
+    val description = if (Locale.getDefault().language == "id") "Lirik dalam " + seconds + " detik"
+        else "Lyrics in " + seconds + " seconds"
     Canvas(modifier.size(96.dp, 32.dp).graphicsLayer {
-        alpha = countdownOpacity(gap, time())
-    }.semantics { contentDescription = "Lyrics in " + seconds + " seconds" }) {
+        val now = time()
+        alpha = countdownOpacity(gap, now)
+        translationY = -(1f - countdownFollowOffset(gap, now)) * 32.dp.toPx()
+    }.semantics { contentDescription = description }) {
         val now = time()
         if (countdownOpacity(gap, now) <= 0f) return@Canvas
         val remaining = (gap.end.toLong() - now).coerceAtLeast(0)

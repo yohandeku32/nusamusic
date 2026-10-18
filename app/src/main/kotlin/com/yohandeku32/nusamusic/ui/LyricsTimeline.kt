@@ -15,10 +15,15 @@ internal class LyricsTimeline(private val lines: List<ISyncedLine>) {
     private val anchors = if (main.isNotEmpty()) main else IntArray(lines.size) { it }
     // Union all voices so an overlapping/background singer never produces a false break.
     val gaps: List<LyricsGap> = buildList {
+        val intervals = lines.flatMapIndexed { index, line ->
+            if (line is KaraokeLine) line.syllables.filter { it.content.isNotBlank() }
+                .map { Triple(it.start, it.end, index) }
+            else listOf(Triple(line.start, line.end, index))
+        }.sortedBy { it.first }
         var coveredUntil = 0
-        lines.forEachIndexed { index, line ->
-            if (line.start.toLong() - coveredUntil >= 3_000) add(LyricsGap(coveredUntil, line.start, index))
-            coveredUntil = maxOf(coveredUntil, line.end)
+        for ((start, end, index) in intervals) {
+            if (start.toLong() - coveredUntil >= 3000) add(LyricsGap(coveredUntil, start, index))
+            coveredUntil = maxOf(coveredUntil, end)
         }
     }
 
@@ -64,7 +69,7 @@ internal class LyricsTimeline(private val lines: List<ISyncedLine>) {
             val middle = (low + high) / 2
             if (gaps[middle].start <= position) low = middle + 1 else high = middle
         }
-        val gap = gaps.getOrNull(low - 1)?.takeIf { position < it.end && active.isEmpty() }
+        val gap = gaps.getOrNull(low - 1)?.takeIf { position < it.end }
         return LyricsFrame(anchor, active, gap)
     }
 }
