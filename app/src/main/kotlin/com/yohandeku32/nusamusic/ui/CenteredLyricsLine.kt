@@ -1,8 +1,5 @@
 package com.yohandeku32.nusamusic.ui
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -13,8 +10,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
@@ -22,33 +19,31 @@ import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
 import com.mocharealm.accompanist.lyrics.core.model.ISyncedLine
 import com.mocharealm.accompanist.lyrics.core.model.karaoke.KaraokeLine
+import com.mocharealm.accompanist.lyrics.core.model.synced.SyncedLine
 import com.mocharealm.accompanist.lyrics.ui.composable.lyrics.*
 import com.mocharealm.accompanist.lyrics.ui.utils.isRtl
 
-/** Reuse Accompanist's wrapping, then paint each syllable from its own timestamps. */
+/** Measurements are retained; playback-time effects invalidate drawing/layers only. */
 @Composable
 internal fun CenteredKaraokeLine(
-    line: KaraokeLine,
-    focused: Boolean,
-    time: () -> Int,
-    style: TextStyle,
-    onSeek: (ISyncedLine) -> Unit
+    line: KaraokeLine, time: () -> Int, motion: LyricsMotionState,
+    style: TextStyle, onSeek: (ISyncedLine) -> Unit
 ) {
     val textMeasurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val textStyle = remember(style) { style.copy(textDirection = TextDirection.Content) }
     val rtl = remember(line) { line.syllables.any { it.content.isRtl() } }
-    val focus = animateFloatAsState(if (focused) 1f else 0f,
-        tween(220, easing = FastOutSlowInEasing), label = "karaokeFocus")
-    val heldTime = remember(line) { intArrayOf(0) }
-    val rowOpacity = if (line.isAccompaniment) 0.6f else 1f
-    LyricsLineContainer(focused, { onSeek(line) }, rowOpacity, rowOpacity) {
+    val voices = remember(line) { LyricsVocalWindows(line) }
+    val live by remember(line, time, motion) { derivedStateOf {
+        val now = time()
+        now >= line.start && now.toLong() < line.end.toLong() + 160 && motion.resetAt < line.end
+    } }
+    val visualTime = remember(live, time) { { if (live) time() else Int.MIN_VALUE } }
+    MotionRow(line, visualTime, motion, voices, line.isAccompaniment, { onSeek(line) }) {
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             val width = constraints.maxWidth.toFloat()
-            // Every measurement depends on text size, available width, and system font scale.
             val wrapped = remember(line, textStyle, textMeasurer, density, width) {
                 val space = textMeasurer.measure(" ", textStyle).size.width.toFloat()
-                // Our painter owns animation; skip upstream whole-word character measurements.
                 val syllables = measureSyllablesAndDetermineAnimation(line.syllables, textMeasurer, textStyle, true, space)
                 calculateBalancedLines(syllables, width, textMeasurer, textStyle)
             }
@@ -57,50 +52,73 @@ internal fun CenteredKaraokeLine(
                 calculateStaticLineLayout(wrapped, false, width, lineHeight, rtl)
             }
             val height = with(density) { (lineHeight * wrapped.size).toDp() } + 8.dp
-            Canvas(Modifier.fillMaxWidth().height(height).semantics {
-                contentDescription = line.syllables.joinToString("") { it.content }
+            val readable by remember(line, voices, visualTime, motion) { derivedStateOf {
+                !line.isAccompaniment || voices.presence(visualTime(), motion.resetAt) > 0f
+            } }
+            Canvas(Modifier.fillMaxWidth().height(height).clearAndSetSemantics {
+                if (readable) contentDescription = line.syllables.joinToString("") { it.content }
             }) {
-                val now = if (focused) time().also { heldTime[0] = it } else heldTime[0]
-                drawSyllableLyrics(layouts, now, focus.value)
+                val now = visualTime()
+                val focus = lyricPresence(line.start, line.end, now, motion.resetAt)
+                drawSyllableLyrics(layouts, now, focus, motion.resetAt)
             }
         }
-        line.translation?.let { Translation(it, style) }
+        line.translation?.let { TimedTranslation(it, style, voices, visualTime, motion) }
     }
 }
 
 @Composable
-private fun LyricsLineContainer(
-    focused: Boolean,
-    onClick: () -> Unit,
-    activeOpacity: Float = 1f,
-    inactiveOpacity: Float = 0.4f,
+private fun MotionRow(
+    line: ISyncedLine, time: () -> Int, motion: LyricsMotionState,
+    voices: LyricsVocalWindows, mini: Boolean, onSeek: () -> Unit,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val opacity = animateFloatAsState(if (focused) activeOpacity else inactiveOpacity,
-        tween(420, easing = FastOutSlowInEasing), label = "lyricOpacity")
-    val scale = animateFloatAsState(if (focused) 1f else 0.97f,
-        tween(420, easing = FastOutSlowInEasing), label = "lyricScale")
-    Column(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 8.dp).graphicsLayer {
-        alpha = opacity.value
-        transformOrigin = TransformOrigin(0f, 0.5f)
-        scaleX = scale.value
-        scaleY = scale.value
-    }, content = content)
+    val enabled by remember(line, time, motion, mini) { derivedStateOf { !mini || voices.presence(time(), motion.resetAt) > 0f } }
+    Column(Modifier.fillMaxWidth().clickable(enabled = enabled, onClick = onSeek)
+        .padding(horizontal = 16.dp, vertical = 8.dp).graphicsLayer {
+            val now = time()
+            val presence = lyricPresence(line.start, line.end, now, motion.resetAt)
+            val vocal = if (mini) voices.presence(now, motion.resetAt) else presence
+            val onset = lyricOnset(line.start, line.end, now, motion.resetAt)
+            alpha = if (mini) vocal * 0.75f else 1f
+            transformOrigin = TransformOrigin(0f, 0.5f)
+            scaleX = 0.98f + 0.02f * presence + 0.004f * onset
+            scaleY = scaleX
+            translationY = (1f - vocal) * (if (mini) 4.dp else 2.dp).toPx() - 1.2.dp.toPx() * onset
+        }, content = content)
 }
 
+/** Translation/backing text retains its measured slot but is invisible outside timed voice windows. */
 @Composable
-private fun Translation(text: String, style: TextStyle) {
-    Text(text, Modifier.fillMaxWidth(), style = style.copy(fontSize = style.fontSize * 0.65f, lineHeight = style.lineHeight * 0.65f),
+private fun TimedTranslation(
+    text: String, style: TextStyle, voices: LyricsVocalWindows,
+    time: () -> Int, motion: LyricsMotionState
+) {
+    val readable by remember(voices, time, motion) { derivedStateOf { voices.presence(time(), motion.resetAt) > 0f } }
+    Text(text, Modifier.fillMaxWidth().graphicsLayer {
+        val presence = voices.presence(time(), motion.resetAt)
+        alpha = presence
+        translationY = (1f - presence) * 4.dp.toPx()
+    }.clearAndSetSemantics { if (readable) contentDescription = text },
+        style = style.copy(fontSize = style.fontSize * 0.65f, lineHeight = style.lineHeight * 0.65f),
         color = Color.White.copy(alpha = 0.6f), textAlign = TextAlign.Start)
 }
 
 @Composable
 internal fun LineSyncedLyricsRow(
-    line: com.mocharealm.accompanist.lyrics.core.model.synced.SyncedLine,
-    focused: Boolean, style: TextStyle, onSeek: () -> Unit
+    line: SyncedLine, time: () -> Int, motion: LyricsMotionState, style: TextStyle, onSeek: () -> Unit
 ) {
-    LyricsLineContainer(focused, onSeek) {
-        Text(line.content, Modifier.fillMaxWidth(), style = style, color = Color.White, textAlign = TextAlign.Start)
-        line.translation?.let { Translation(it, style) }
+    val voices = remember(line) { LyricsVocalWindows(line) }
+    val live by remember(line, time, motion) { derivedStateOf {
+        val now = time()
+        now >= line.start && now.toLong() < line.end.toLong() + 160 && motion.resetAt < line.end
+    } }
+    val visualTime = remember(live, time) { { if (live) time() else Int.MIN_VALUE } }
+    MotionRow(line, visualTime, motion, voices, false, onSeek) {
+        Text(line.content, Modifier.fillMaxWidth().graphicsLayer {
+            alpha = 0.4f + 0.6f * lyricPresence(line.start, line.end, visualTime(), motion.resetAt)
+        }, style = style, color = Color.White, textAlign = TextAlign.Start)
+        // A start-only line/translation cannot establish a separate vocal interval.
+
     }
 }

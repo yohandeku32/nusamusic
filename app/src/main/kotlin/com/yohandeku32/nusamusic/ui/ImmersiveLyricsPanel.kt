@@ -38,6 +38,7 @@ fun ImmersiveLyricsPanel(
     positionMs: State<Long>,
     readPlaybackPosition: () -> Long,
     isPlaying: Boolean,
+    playbackEpoch: Int,
     durationMs: Long,
     state: ImmersiveLyricsState,
     onDismiss: () -> Unit,
@@ -63,19 +64,30 @@ fun ImmersiveLyricsPanel(
     // MediaController computes the actual position using the current speed. Reading it on
     // the display clock needs no network, metadata IO, or whole-list recomposition.
     val framePosition = remember(song?.uri) { mutableLongStateOf(positionMs.value) }
+    val motion = remember(song?.uri) { LyricsMotionState(positionMs.value.coerceIn(0, Int.MAX_VALUE.toLong()).toInt()) }
+    fun publishPosition(value: Long) {
+        val safe = value.coerceIn(0, Int.MAX_VALUE.toLong())
+        motion.update(safe.toInt())
+        framePosition.longValue = safe
+    }
     val readPosition by rememberUpdatedState(readPlaybackPosition)
     val playing by rememberUpdatedState(isPlaying)
     val owner = LocalLifecycleOwner.current
+    LaunchedEffect(song?.uri, playbackEpoch) {
+        val now = readPosition().coerceIn(0, Int.MAX_VALUE.toLong())
+        motion.reset(now.toInt())
+        framePosition.longValue = now
+    }
     LaunchedEffect(song?.uri, isPlaying, owner) {
         owner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            framePosition.longValue = readPosition().coerceAtLeast(0)
+            publishPosition(readPosition())
             if (isPlaying) while (isActive) withFrameNanos {
-                framePosition.longValue = readPosition().coerceAtLeast(0)
+                publishPosition(readPosition())
             }
         }
     }
     LaunchedEffect(song?.uri, positionMs) {
-        snapshotFlow { positionMs.value }.collect { if (!playing) framePosition.longValue = it }
+        snapshotFlow { positionMs.value }.collect { if (!playing) publishPosition(it) }
     }
     val height = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.height.toDp() / 2 }
     ModalBottomSheet(
@@ -105,9 +117,10 @@ fun ImmersiveLyricsPanel(
                     entry != null && (entry.loading || !entry.attempted) && data == null -> CircularProgressIndicator(
                         Modifier.align(Alignment.Center).size(24.dp), color = Color.White, strokeWidth = 2.dp)
                     data?.synced != null -> key(song?.uri, data.synced) {
-                        SyncedLyricsView(data.synced, framePosition, true, requireNotNull(entry).list,
+                        SyncedLyricsView(data.synced, framePosition, true, requireNotNull(entry).list, motion,
                             onSeek = {
                                 val target = it.start.toLong().coerceIn(0, maxOf(durationMs, song?.durationMs ?: 0))
+                                motion.reset(target.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
                                 framePosition.longValue = target
                                 onSeek(target)
                             }, fontSize = fontSize, modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp))

@@ -38,10 +38,24 @@ wall-clock timing. Pausing holds position, seek discontinuities update immediate
 changing songs replaces the keyed lyric view and cancels the previous metadata read.
 The frame loop runs only while playing and the lifecycle is STARTED.
 
-Only active canvas text and active gap indicators observe frame positions. A derived
+Active/fading text layers and active gap indicators observe frame positions. A derived
 focus state changes list composition only at lyric boundaries. Text measurements are
 retained; the list is lazy. Manual drag/fling suspends following until 2.5 seconds after
 scrolling stops. Tapping a timed row seeks to its actual start.
+
+Long-note glow breathes and sweeps slowly within the embedded unit interval.
+Onset movement has one damped pulse; it settles independently of the held-note glow.
+Row fades, mini-voice visibility, countdown phases and following all use audio time.
+The high-damping follow spring integrates audio deltas, so pause holds its position.
+Explicit player discontinuities reset following and suppress historical onset/fade replay.
+
+Countdowns are temporary overlays rather than list spacer rows. During the final 440 ms
+of an authored break, the already measured next row begins moving into place while the
+dots fade. Mini backing vocals use authored accompaniment flags and unioned unit windows;
+translations with unit timing follow those same windows, including explicit internal
+silence. Line-only translations stay hidden because their separate vocal activity cannot
+be established. Measured mini text slots remain stable while their layers fade/slide.
+Start-only unit intervals remain visual boundary conventions, never vocal detection.
 
 Parsed lyrics are retained for up to 8 songs. A separate embedded-only disk cache retains
 up to 120 records, keyed by audio identity, duration, size and modification time where
