@@ -30,7 +30,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.zIndex
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.selected
@@ -68,7 +67,6 @@ internal fun ImmersiveArtworkPlayer(
     onRepeat: () -> Unit,
     onFavorite: () -> Unit,
     onLyrics: () -> Unit,
-    onDismissLyrics: () -> Unit,
     onArtist: () -> Unit,
     onLibrary: () -> Unit,
     onShare: () -> Unit,
@@ -111,10 +109,12 @@ internal fun ImmersiveArtworkPlayer(
         val transportHeight = with(density) { transportHeightPx.toDp() }
         val topInset = with(density) { contentInsets.getTop(density).toDp() }
         val bottomInset = with(density) { contentInsets.getBottom(density).toDp() }
-        val targetHeaderTop = topInset + if (compact) 56.dp else 70.dp
-        // Move the existing metadata (title, artist, Hi-Res) into the former
-        // artwork area. This is paint-only translation: its original height
-        // still reserves room for progress and transport at the bottom.
+        // Lyrics focus moves the song metadata to the artwork's safe top,
+        // with enough room below it for the synchronized lyrics viewport.
+        val targetHeaderTop = topInset + if (compact) 16.dp else 20.dp
+        // Translate the SAME metadata composable upward rather than rendering
+        // a second copy. Its original layout slot keeps progress and playback
+        // anchored exactly where the user positioned them.
         val headerLift = if (wide || controlsHeightPx == 0) 0.dp else
             (viewportHeight - controlsHeight - targetHeaderTop).coerceAtLeast(0.dp)
         val lyricsTransition by animateFloatAsState(
@@ -122,18 +122,16 @@ internal fun ImmersiveArtworkPlayer(
             animationSpec = tween(460, easing = FastOutSlowInEasing),
             label = "immersiveLyricsReflow"
         )
-        // Settings now lives in the bottom action pill, so Lyrics no longer
-        // needs to stop beneath a top-right button. Rise to a small clearance
-        // below the safe status-bar inset, responsively on every device.
-        val viewportHeightPx = with(density) { viewportHeight.roundToPx() }
-        val sheetTopPx = immersiveLyricsSheetTopPx(
-            with(density) { topInset.roundToPx() },
-            viewportHeightPx,
-            with(density) { 12.dp.roundToPx() }
-        )
-        val sheetHeight = with(density) {
-            (viewportHeightPx - sheetTopPx).coerceAtLeast(0).toDp()
-        }
+        // Lyrics occupies only the old artwork space: below the animated
+        // metadata and above progress / playback / bottom action pill.
+        // Use measured heights instead of fixed percentages so short screens
+        // and larger font choices never cover the playback controls.
+        val lyricsViewportTop = if (wide) topInset + 20.dp
+            else targetHeaderTop + headerHeight + 12.dp
+        val lyricsBottomReserve = if (wide) bottomInset + 20.dp
+            else transportHeight + bottomInset + 24.dp
+        val lyricsViewportHeight = (viewportHeight - lyricsViewportTop - lyricsBottomReserve)
+            .coerceAtLeast(0.dp)
         // Keep the artwork balanced as the foreground adapts to the
         // compact, evenly spaced transport controls.
         val addedTransportGap = (transportGap -
@@ -144,6 +142,35 @@ internal fun ImmersiveArtworkPlayer(
                 .coerceIn(maxHeight * 0.45f, maxHeight * 0.80f)
         val heroHeight by animateDpAsState(requestedHero, tween(220), label = "immersiveHeroHeight")
         artwork(Modifier.matchParentSize(), heroHeight, if (wide) (1f - controlsFraction + 0.06f) else 1f)
+
+        // Render lyrics above the artwork-derived ambient but BELOW the
+        // foreground controls. A delayed, gentle fade lets the album metadata
+        // start its smooth trip upward before lines come into focus.
+        if (lyricsEnabled && lyricsViewportHeight > 0.dp) {
+            androidx.compose.animation.AnimatedVisibility(
+                visible = lyricsOpen,
+                modifier = Modifier.align(if (wide) Alignment.TopStart else Alignment.TopCenter)
+                    .fillMaxWidth(if (wide) (1f - controlsFraction).coerceIn(0.42f, 0.75f) else 1f)
+                    .padding(horizontal = horizontal)
+                    .padding(top = lyricsViewportTop)
+                    .height(lyricsViewportHeight),
+                enter = fadeIn(animationSpec = tween(300, delayMillis = 150)) +
+                    slideInVertically(
+                        animationSpec = tween(460, easing = FastOutSlowInEasing),
+                        initialOffsetY = { it / 14 }
+                    ),
+                exit = fadeOut(animationSpec = tween(190)) +
+                    slideOutVertically(
+                        animationSpec = tween(290, easing = FastOutSlowInEasing),
+                        targetOffsetY = { it / 18 }
+                    )
+            ) {
+                Box(Modifier.fillMaxSize()) {
+                    // Reuse the existing synced lyrics, timing and follow-scroll.
+                    lyrics(Modifier.fillMaxSize())
+                }
+            }
+        }
 
         // On compact/large-text screens the foreground can scroll rather than
         // clipping transport buttons. The artwork remains a full-screen canvas.
@@ -159,11 +186,9 @@ internal fun ImmersiveArtworkPlayer(
                     Modifier.fillMaxWidth()
                         .onSizeChanged { lyricHeaderHeightPx = it.height }
                         .graphicsLayer {
+                            // The actual title / artist / Hi-Res stay visible at
+                            // the top throughout Lyrics focus, not crossfaded away.
                             translationY = -headerLift.toPx() * lyricsTransition
-                            // The rising translucent sheet covers this header.
-                            // Fade the underlying text out with it to prevent
-                            // duplicated song metadata showing through lyrics.
-                            alpha = 1f - lyricsTransition
                         }
                 ) {
                 // Existing normal header stays unchanged at progress 0.
@@ -332,17 +357,6 @@ internal fun ImmersiveArtworkPlayer(
             Box(Modifier.align(Alignment.BottomCenter)) { foreground() }
         }
 
-        // Edge-to-edge Lyrics rises over ALL playback controls, including
-        // the relocated Settings action in the bottom pill. The panel's own
-        // close button and swipe-down gesture dismiss it.
-        ImmersiveExpandingLyricsSheet(
-            visible = lyricsOpen,
-            song = ambientSong,
-            sheetHeight = sheetHeight,
-            onDismiss = onDismissLyrics,
-            lyrics = lyrics,
-            modifier = Modifier.align(Alignment.BottomCenter).zIndex(2f)
-        )
     }
 }
 
