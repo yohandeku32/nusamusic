@@ -107,13 +107,18 @@ lyrics atoms, and ID3 chunks in WAV/AIFF. Plain text stays unsynchronised;
 LRC/TTML line timing never becomes invented word or syllable timing.
 Enhanced LRC and TTML authored units drive the progressive syllable fill.
 
-Each active syllable has separate broad and tight glow passes behind sharp
-text. A critically damped onset blends with a slow, staggered floating wave.
-Long notes breathe between 1.00–1.025 visual scale with less than 1.8 dp of lift;
-they ease back to their baseline before the authored end. The glow and internal
-highlight move with the same transform. Measured glyphs retain their gradient
-objects, matrices and shadow palette across frames. Audio-time effects freeze
-on pause and evaluate the new phase directly on seeks.
+Syllable duration continuously controls the existing glow and motion. Notes
+under 250 ms use only progressive highlighting; 250–600 ms notes have minimal
+glow and subtle motion. Soft glow and breathing develop on longer notes, with
+elastic contours and micro-vibration reserved for sustained vocals. Runs of
+short syllables reduce decoration across a phrase, recovering gradually into
+a held note. Inferred LRC tails and inherited TTML container ends cannot trigger
+full sustained-vocal expression; their original highlight timestamps stay intact.
+Attack, sustain and release use playback time, while the traveling wave and
+slow breathing keep their global phase across syllable boundaries. Glow and
+sharp text share one intact glyph transform. Measured glyphs retain their
+gradients, matrices, expression profiles and shadow palette across frames.
+Audio-time effects freeze on pause and evaluate the new phase directly on seeks.
 
 One lifecycle-bound publisher reads actual player position and discontinuity
 epoch together on the UI thread. Only a real player event resets motion;
@@ -124,6 +129,8 @@ Touch-down immediately stops auto-follow through the scroll mutator's UserInput
 priority, before drag slop. One effect owns initial placement, distant rejoin
 and spring corrections. Seeks cancel its previous work; visible targets and
 manual resumption use smooth corrections instead of repeating an initial snap.
+The first vocal row sits 12.5% of the lyric viewport above the usual centre,
+including after seeking back; subsequent rows retain the existing follow anchor.
 Following yields to the full gesture/fling and then the browsing grace period.
 Duplicate timestamps keep the first authored anchor, and duplicate backing
 content has distinct source-index keys.

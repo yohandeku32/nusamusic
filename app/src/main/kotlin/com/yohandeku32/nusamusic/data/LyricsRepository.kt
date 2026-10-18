@@ -14,7 +14,11 @@ import java.io.File
 import java.nio.ByteBuffer
 import kotlin.coroutines.coroutineContext
 
-data class SongLyrics(val stored: StoredLyrics, val synced: SyncedLyrics?)
+data class SongLyrics(
+    val stored: StoredLyrics,
+    val synced: SyncedLyrics?,
+    val inferredEnds: Set<LyricsUnitKey> = emptySet()
+)
 
 /** The only source is the current audio URI. Old imported/remote caches are never read. */
 class LyricsRepository(context: Context) {
@@ -75,13 +79,15 @@ internal object EmbeddedLyricsSelector {
         var score = 0L
         for (raw in candidates) {
             if (raw.isBlank() || raw.toByteArray(Charsets.UTF_8).size > LyricsDecoder.MAX_BYTES) continue
-            val decoded = runCatching { LyricsDecoder.decode(raw, durationMs) }.getOrNull()
+            val timing = runCatching { LyricsDecoder.decodeWithTiming(raw, durationMs) }.getOrNull()
+            val decoded = timing?.lyrics
             // Corrupt timed metadata must not become unsynchronised timestamp gibberish.
             if (decoded == null && timed.containsMatchIn(raw)) continue
             val units = decoded?.lines?.filterIsInstance<KaraokeLine>()?.sumOf { it.syllables.size } ?: 0
             val candidateScore = when { units > 0 -> 3_000_000L + units; decoded != null -> 2_000_000L + decoded.lines.size; else -> 1L }
             if (candidateScore > score) {
-                best = SongLyrics(StoredLyrics(raw, "embedded", plain = decoded == null, credits = credits), decoded)
+                best = SongLyrics(StoredLyrics(raw, "embedded", plain = decoded == null, credits = credits), decoded,
+                    timing?.inferredEnds.orEmpty())
                 score = candidateScore
             }
         }

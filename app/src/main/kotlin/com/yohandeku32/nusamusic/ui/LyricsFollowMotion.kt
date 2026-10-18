@@ -3,6 +3,17 @@ package com.yohandeku32.nusamusic.ui
 import kotlin.math.abs
 import kotlin.math.ceil
 
+/** Lift only the first vocal anchor by 12.5% of the viewport, including after seeking back. */
+internal fun lyricsFollowAnchor(
+    viewportStart: Int, viewportEnd: Int, firstVocal: Boolean,
+    mainHeight: Float = 0f, minimumPadding: Float = 0f
+): Float {
+    val height = (viewportEnd.toLong() - viewportStart).coerceAtLeast(0).toFloat()
+    val offset = if (firstVocal) maxOf(height * 0.375f, mainHeight / 2f + minimumPadding)
+        else height * 0.5f
+    return viewportStart + offset
+}
+
 /** High-damping scroll spring; its frame deltas are separate from the audio-time glyph effects. */
 internal class LyricsFollowMotion {
     private var velocity = 0f
