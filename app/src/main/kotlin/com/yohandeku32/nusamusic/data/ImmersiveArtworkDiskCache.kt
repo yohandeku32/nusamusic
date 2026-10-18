@@ -81,8 +81,8 @@ internal class ImmersiveArtworkDiskCache(private val file: File) {
     }
 
     private companion object {
-        // Version 6 refreshes previews with calmer luminance and a stronger real-artwork blur.
-        const val VERSION = "6"
+        // Version 7 refreshes previews for the slightly softer, less textured real-artwork blur.
+        const val VERSION = "7"
         const val MAX_BYTES = 4 * 1024 * 1024
     }
 }
