@@ -119,6 +119,11 @@ slow breathing keep their global phase across syllable boundaries. Glow and
 sharp text share one intact glyph transform. Measured glyphs retain their
 gradients, matrices, expression profiles and shadow palette across frames.
 Audio-time effects freeze on pause and evaluate the new phase directly on seeks.
+During an evidenced long closing vowel, the entire lyric phrase (including
+earlier syllables and wrapped rows) blends into one shared floating/breathing
+transform. This keeps the complete last word and sentence moving together;
+the individual progressive fills and glow timing remain unchanged. Short
+endings and inferred metadata tails retain their adaptive treatment.
 
 One lifecycle-bound publisher reads actual player position and discontinuity
 epoch together on the UI thread. Only a real player event resets motion;

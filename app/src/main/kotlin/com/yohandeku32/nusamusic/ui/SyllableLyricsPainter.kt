@@ -113,6 +113,19 @@ internal class SyllableLyricsPainter(
         }
     }
 
+    // One pivot spans every rendered syllable and wrapped row. A final held
+    // vowel can then carry its entire word/phrase instead of just its letters.
+    private val closingPivot = if (glyphs.isEmpty()) Offset.Zero else Offset(
+        (glyphs.minOf { it.layout.position.x } +
+            glyphs.maxOf { it.layout.position.x + it.width }) / 2f,
+        (glyphs.minOf { it.layout.position.y } +
+            glyphs.maxOf { it.layout.position.y + it.layout.textLayoutResult.size.height }) / 2f
+    )
+    private val closingMotion = LyricsClosingVocalMotion(
+        glyphs.map { LyricsExpressionTiming(it.layout.syllable.start, it.layout.syllable.end) },
+        glyphs.map { it.expression }, closingPivot.x / density
+    )
+
     private val vocalMask = LyricsTravelingWaveMask(glyphs.map { glyph ->
         LyricsVocalSpan(
             glyph.layout.syllable.start,
@@ -136,6 +149,7 @@ internal class SyllableLyricsPainter(
         val strength = focus.coerceIn(0f, 1f)
         val lineStrength = lyricsLineWaveIntensity(lineStart, lineEnd, waveTime)
         val front = if (lineStrength > 0f) vocalMask.front(waveTime) else null
+        closingMotion.update(waveTime)
 
         // Playback time alone drives the transform. No animation restarting,
         // no clipping through characters and no text measurement per frame.
@@ -152,16 +166,22 @@ internal class SyllableLyricsPainter(
             glyph.bubble.update(waveTime, localIntensity)
         }
 
-        for (pass in 0..1) for (glyph in glyphs) {
-            val halo = pass == 0
-            val unit = glyph.layout.syllable
-            if (halo && (strength <= 0f || glyph.expression.glow <= 0f || now <= unit.start || now >= unit.end)) continue
-            val progress = syllableProgress(unit, now)
-            val glow = glyph.expression.glow * glyph.expression.envelope(unit.start, unit.end, now) *
-                glyph.expression.phraseAt(unit.start, now) *
-                lyricBreathing(unit.start, unit.end, now) * strength
+        withTransform({
+            translate(closingMotion.offsetXDp * this@SyllableLyricsPainter.density,
+                closingMotion.offsetYDp * this@SyllableLyricsPainter.density)
+            scale(closingMotion.scaleX, closingMotion.scaleY, closingPivot)
+        }) {
+            for (pass in 0..1) for (glyph in glyphs) {
+                val halo = pass == 0
+                val unit = glyph.layout.syllable
+                if (halo && (strength <= 0f || glyph.expression.glow <= 0f || now <= unit.start || now >= unit.end)) continue
+                val progress = syllableProgress(unit, now)
+                val glow = glyph.expression.glow * glyph.expression.envelope(unit.start, unit.end, now) *
+                    glyph.expression.phraseAt(unit.start, now) *
+                    lyricBreathing(unit.start, unit.end, now) * strength
 
-            drawGlyph(glyph, halo, progress, glow, strength, now)
+                drawGlyph(glyph, halo, progress, glow, strength, now)
+            }
         }
     }
 
@@ -174,15 +194,16 @@ internal class SyllableLyricsPainter(
         now: Int
     ) {
         val result = glyph.layout.textLayoutResult
+        val localWeight = closingMotion.localWeight
         val shift = glyph.motion.liftDp
         val position = glyph.layout.position + Offset(
-            glyph.bubble.offsetXDp * density,
-            (glyph.bubble.offsetYDp - shift) * density
+            glyph.bubble.offsetXDp * density * localWeight,
+            (glyph.bubble.offsetYDp - shift) * density * localWeight
         )
         // The carrier stays continuous. The bubble adds only a small non-uniform
         // scale around the same baseline pivot; never relayout text.
-        val scaleX = glyph.motion.scale * glyph.bubble.scaleX
-        val scaleY = glyph.motion.scale * glyph.bubble.scaleY
+        val scaleX = 1f + (glyph.motion.scale * glyph.bubble.scaleX - 1f) * localWeight
+        val scaleY = 1f + (glyph.motion.scale * glyph.bubble.scaleY - 1f) * localWeight
         val width = glyph.width
         withTransform({
             scale(
