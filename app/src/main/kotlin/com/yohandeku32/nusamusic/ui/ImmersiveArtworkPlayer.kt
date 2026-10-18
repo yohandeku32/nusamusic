@@ -307,20 +307,34 @@ internal fun ImmersiveArtworkPlayer(
                         }, onRepeat, hasSong, active = repeatMode != 0, iconSize = 26.dp)
                 }
                 Spacer(Modifier.height(transportToPillGap))
-                // Five equal 48dp targets: Artist, Lyrics (if enabled),
-                // Library, Share and Settings. Preserve compact spacing.
-                val actionPillWidth = if (lyricsEnabled) 280.dp else 232.dp
-                Row(Modifier.align(Alignment.CenterHorizontally)
-                    .widthIn(max = actionPillWidth).fillMaxWidth()
-                    .height(56.dp)
-                    .clip(RoundedCornerShape(100.dp))
-                    .background(Color.White.copy(alpha = 0.09f))
-                    .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(100.dp)),
+                // Keep Artist in its own circular glass target. The remaining
+                // actions share a compact pill, with 48dp minimum tap targets.
+                val actionPillWidth = if (lyricsEnabled) 224.dp else 176.dp
+                Row(
+                    Modifier.align(Alignment.CenterHorizontally),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceEvenly) {
-                    ImmersiveAction(NusaPlayerIcons.Artist,
-                        immersiveText("Buka halaman artis", "Open artist page"),
-                        onArtist, hasSong, iconSize = 23.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        Modifier.size(56.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(Color.White.copy(alpha = 0.09f))
+                            .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(50)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        ImmersiveAction(NusaPlayerIcons.Artist,
+                            immersiveText("Buka halaman artis", "Open artist page"),
+                            onArtist, hasSong, iconSize = 23.dp)
+                    }
+                    Row(
+                        Modifier.width(actionPillWidth)
+                            .height(56.dp)
+                            .clip(RoundedCornerShape(100.dp))
+                            .background(Color.White.copy(alpha = 0.09f))
+                            .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(100.dp)),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
                     if (lyricsEnabled) ImmersiveAction(NusaPlayerIcons.Lyrics,
                         if (lyricsOpen) immersiveText("Tutup lirik", "Close lyrics") else immersiveText("Buka lirik", "Open lyrics"),
                         onLyrics, hasSong, active = lyricsOpen, iconSize = 23.dp)
@@ -333,6 +347,7 @@ internal fun ImmersiveArtworkPlayer(
                     ImmersiveAction(NusaPlayerIcons.More,
                         immersiveText("Pengaturan", "Settings"),
                         onSettings, iconSize = 23.dp)
+                    }
                 }
                 }
             }
