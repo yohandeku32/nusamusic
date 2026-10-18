@@ -286,20 +286,30 @@ internal fun ImmersiveArtworkPlayer(
                         }, onRepeat, hasSong, active = repeatMode != 0, iconSize = 21.dp)
                 }
                 Spacer(Modifier.height(transportPillGap))
+                // A compact, centred capsule with 48dp touch targets.
+                // Its width adapts when the Lyrics action is unavailable,
+                // without squeezing the tap areas on small screens.
+                val actionPillWidth = if (lyricsEnabled) 236.dp else 188.dp
                 Row(Modifier.align(Alignment.CenterHorizontally)
-                    .widthIn(max = 300.dp).fillMaxWidth(0.94f)
-                    .height(if (viewportHeight < 640.dp) 56.dp else 60.dp)
+                    .widthIn(max = actionPillWidth).fillMaxWidth()
+                    .height(52.dp)
                     .clip(RoundedCornerShape(100.dp))
                     .background(Color.White.copy(alpha = 0.09f))
                     .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(100.dp)),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceEvenly) {
-                    ImmersiveAction(NusaPlayerIcons.Artist, immersiveText("Buka halaman artis", "Open artist page"), onArtist, hasSong)
+                    ImmersiveAction(NusaPlayerIcons.Artist,
+                        immersiveText("Buka halaman artis", "Open artist page"),
+                        onArtist, hasSong, iconSize = 21.dp)
                     if (lyricsEnabled) ImmersiveAction(NusaPlayerIcons.Lyrics,
                         if (lyricsOpen) immersiveText("Tutup lirik", "Close lyrics") else immersiveText("Buka lirik", "Open lyrics"),
-                        onLyrics, hasSong, active = lyricsOpen)
-                    ImmersiveAction(NusaPlayerIcons.Library, immersiveText("Perpustakaan", "Library"), onLibrary)
-                    ImmersiveAction(NusaPlayerIcons.Share, immersiveText("Bagikan lagu", "Share song"), onShare, hasSong)
+                        onLyrics, hasSong, active = lyricsOpen, iconSize = 21.dp)
+                    ImmersiveAction(NusaPlayerIcons.Library,
+                        immersiveText("Perpustakaan", "Library"),
+                        onLibrary, iconSize = 21.dp)
+                    ImmersiveAction(NusaPlayerIcons.Share,
+                        immersiveText("Bagikan lagu", "Share song"),
+                        onShare, hasSong, iconSize = 21.dp)
                 }
                 }
             }
