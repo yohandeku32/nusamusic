@@ -269,7 +269,11 @@ internal fun ImmersiveArtworkPlayer(
                     }
                     IconButton(onClick = onPlayPause,
                         modifier = Modifier.size(if (compact) 64.dp else 68.dp)
-                            .clip(CircleShape).background(Color.White.copy(alpha = 0.08f))) {
+                            .clip(CircleShape)
+                            // Soft translucent surface with a restrained highlight,
+                            // preserving the touch area and full album-art ambience.
+                            .background(Color.White.copy(alpha = 0.11f))
+                            .border(1.dp, Color.White.copy(alpha = 0.13f), CircleShape)) {
                         Icon(if (isPlaying) NusaPlayerIcons.Pause else NusaPlayerIcons.Play,
                             if (isPlaying) immersiveText("Jeda", "Pause") else immersiveText("Putar", "Play"),
                             tint = Color.White, modifier = Modifier.size(if (compact) 35.dp else 38.dp))
