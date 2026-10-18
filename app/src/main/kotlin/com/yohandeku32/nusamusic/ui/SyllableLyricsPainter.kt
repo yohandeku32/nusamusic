@@ -150,11 +150,11 @@ internal class SyllableLyricsPainter(
         val strength = focus.coerceIn(0f, 1f)
         val lineStrength = lyricsLineWaveIntensity(lineStart, lineEnd, waveTime)
         val front = if (lineStrength > 0f) vocalMask.front(waveTime) else null
-        closingMotion.update(waveTime)
+        // No phrase-wide expansion: keep earlier words anchored during a held final syllable.
 
         // Playback time alone drives the transform. No animation restarting,
         // no clipping through characters and no text measurement per frame.
-        for (glyph in glyphs) {
+        for ((index, glyph) in glyphs.withIndex()) {
             val influence = vocalMask.glyphInfluence(
                 front, glyph.pathStartDp, glyph.pathEndDp
             )
@@ -163,7 +163,7 @@ internal class SyllableLyricsPainter(
             // Keep the original traveling mask and 4.2s carrier. Duration only
             // attenuates their amplitude; its playback phase never restarts.
             glyph.motion.update(waveTime, localIntensity * glyph.controller.wave)
-            glyph.bubble.update(waveTime, localIntensity)
+            glyph.bubble.update(waveTime, if (index == glyphs.lastIndex) localIntensity else 0f)
         }
 
         withTransform({
