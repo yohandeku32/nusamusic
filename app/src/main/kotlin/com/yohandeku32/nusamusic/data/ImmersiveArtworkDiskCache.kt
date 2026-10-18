@@ -81,8 +81,8 @@ internal class ImmersiveArtworkDiskCache(private val file: File) {
     }
 
     private companion object {
-        // Version 3 contains the richer, dual-scale artwork blur. Invalidate old flat previews.
-        const val VERSION = "3"
+        // Version 4 stores artwork blur with softer diffusion and neutral black falloff.
+        const val VERSION = "4"
         const val MAX_BYTES = 4 * 1024 * 1024
     }
 }
