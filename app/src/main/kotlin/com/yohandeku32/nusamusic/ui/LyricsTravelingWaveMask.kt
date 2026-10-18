@@ -93,12 +93,15 @@ internal class LyricsTravelingWaveMask(spans: List<LyricsVocalSpan>) {
             front.positionDp <= sliceStartDp
         ) return 0f
 
-        val centre = (sliceStartDp + sliceEndDp) / 2f
+        // Ease the influence over a short physical distance. Ramping across
+        // half a narrow strip would compress an entire attack into one frame
+        // when a syllable is fast, causing a visible twitch at 60 Hz.
+        val peak = sliceStartDp + 18f
         val position = front.positionDp
-        val spatial = if (position < centre) {
-            lyricEase((position - sliceStartDp) / (centre - sliceStartDp).coerceAtLeast(0.001f))
+        val spatial = if (position < peak) {
+            lyricEase((position - sliceStartDp) / 18f)
         } else {
-            1f - lyricEase((position - centre) / 100f)
+            1f - lyricEase((position - peak) / 100f)
         }
         return (front.intensity * spatial).coerceIn(0f, 1f)
     }
