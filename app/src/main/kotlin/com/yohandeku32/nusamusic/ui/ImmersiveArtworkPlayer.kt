@@ -161,7 +161,7 @@ internal fun ImmersiveArtworkPlayer(
                 Spacer(Modifier.height(transportPillGap))
                 Row(Modifier.align(Alignment.CenterHorizontally)
                     .widthIn(max = 300.dp).fillMaxWidth(0.94f)
-                    .height(if (maxHeight < 640.dp) 56.dp else 60.dp)
+                    .height(if (viewportHeight < 640.dp) 56.dp else 60.dp)
                     .clip(RoundedCornerShape(100.dp))
                     .background(Color.White.copy(alpha = 0.09f))
                     .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(100.dp)),
