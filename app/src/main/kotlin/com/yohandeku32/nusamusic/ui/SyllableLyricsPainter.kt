@@ -63,7 +63,13 @@ internal class SyllableLyricsPainter(
         // Per-22dp clipRect strips cut through letter strokes when neighbouring
         // slices have slightly different lift/scale, especially on slow vocals.
         // Keep the approved V6 horizontal phase at this run's visual centre.
-        val motion = LyricsFloatingMotion((layout.position.x + width / 2f) / density)
+        val horizontalDp = (layout.position.x + width / 2f) / density
+        val motion = LyricsFloatingMotion(horizontalDp)
+        // Separate sustained-vocal accent. Reuses the intact syllable's
+        // measured text run so no individual character can break apart.
+        val bubble = LyricsLongVocalMotion(
+            layout.syllable.start, layout.syllable.end, horizontalDp
+        )
     }
 
     private val glyphs = buildList {
@@ -118,7 +124,9 @@ internal class SyllableLyricsPainter(
             val influence = vocalMask.glyphInfluence(
                 front, glyph.pathStartDp, glyph.pathEndDp
             )
-            glyph.motion.update(waveTime, lineStrength * influence)
+            val localIntensity = lineStrength * influence
+            glyph.motion.update(waveTime, localIntensity)
+            glyph.bubble.update(waveTime, localIntensity)
         }
 
         for (pass in 0..1) for (glyph in glyphs) {
@@ -143,12 +151,18 @@ internal class SyllableLyricsPainter(
     ) {
         val result = glyph.layout.textLayoutResult
         val shift = glyph.motion.liftDp
-        val scaleFactor = glyph.motion.scale
-        val position = glyph.layout.position - Offset(0f, shift * density)
+        val position = glyph.layout.position + Offset(
+            glyph.bubble.offsetXDp * density,
+            (glyph.bubble.offsetYDp - shift) * density
+        )
+        // V6 motion is unchanged. The bubble adds only a small non-uniform
+        // scale around the same baseline pivot; never relayout text.
+        val scaleX = glyph.motion.scale * glyph.bubble.scaleX
+        val scaleY = glyph.motion.scale * glyph.bubble.scaleY
         val width = glyph.width
         withTransform({
             scale(
-                scaleFactor, scaleFactor,
+                scaleX, scaleY,
                 position + Offset(width / 2f, result.size.height * 0.8f)
             )
         }) {
@@ -163,13 +177,19 @@ internal class SyllableLyricsPainter(
             glyph.fill.move(edge - direction * glyph.feather, edge + direction * glyph.feather)
             if (halo) {
                 if (glow <= 0f) return@withTransform
-                val bloom = syllableBloom(
-                    glyph.layout.syllable.start, glyph.layout.syllable.end, now
-                )
+                // Preserve the existing halo and timing, adding at most a
+                // small breath-synced lift for sustained vocal syllables.
+                val bloom = (
+                    syllableBloom(glyph.layout.syllable.start, glyph.layout.syllable.end, now) +
+                        0.12f * glyph.bubble.glowBoost
+                ).coerceIn(0f, 1f)
+                val breathingGlow = glow * (1f + 0.12f * glyph.bubble.glowBoost)
                 drawText(result, brush = glyph.fill.brush, topLeft = position,
-                    alpha = 0.22f * glow, shadow = glowPalette.broad(glow, bloom))
+                    alpha = 0.22f * breathingGlow,
+                    shadow = glowPalette.broad(breathingGlow, bloom))
                 drawText(result, brush = glyph.fill.brush, topLeft = position,
-                    alpha = 0.18f * glow, shadow = glowPalette.tight(glow))
+                    alpha = 0.18f * breathingGlow,
+                    shadow = glowPalette.tight(breathingGlow))
             } else {
                 if (progress >= 1f) {
                     drawText(result, color = Color.White, topLeft = position,
