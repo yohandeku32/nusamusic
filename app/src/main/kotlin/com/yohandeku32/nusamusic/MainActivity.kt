@@ -153,6 +153,7 @@ import com.yohandeku32.nusamusic.data.ArtistImageLoader
 import com.yohandeku32.nusamusic.data.ArtistBiographyLoader
 import com.yohandeku32.nusamusic.data.ArtistNameUtils
 import com.yohandeku32.nusamusic.data.MusicRepository
+import com.yohandeku32.nusamusic.data.MediaStoreCheckpoint
 import com.yohandeku32.nusamusic.data.LyricsRepository
 import com.yohandeku32.nusamusic.model.PlayerPresentationMode
 import com.yohandeku32.nusamusic.model.LibraryContentState
@@ -225,6 +226,8 @@ class MainActivity : ComponentActivity() {
     private var selectedMusicFolders by mutableStateOf<List<String>>(emptyList())
     private var isScanningMusic by mutableStateOf(false)
     private var automaticMusicScanJob: Job? = null
+    private var mediaStoreRefreshPending = false
+    private var manualRefreshPending = false
     private var libraryCacheLoaded by mutableStateOf(false)
     private var libraryScanFailed by mutableStateOf(false)
     private var scanAfterCacheLoad = false
@@ -236,15 +239,13 @@ class MainActivity : ComponentActivity() {
             super.onChange(selfChange, uri)
 
             if (!permissionGranted) return
-            if (isScanningMusic) return
-
-            automaticMusicScanJob?.cancel()
-            automaticMusicScanJob = lifecycleScope.launch {
-                // Android may emit several MediaStore changes while a new
-                // file is being indexed. Debounce them into one refresh.
-                delay(900L)
-                refreshSongs()
+            if (isScanningMusic) {
+                // Never lose a change event received during a running scan.
+                mediaStoreRefreshPending = true
+                return
             }
+
+            scheduleMediaStoreRefresh()
         }
     }
 
@@ -398,6 +399,8 @@ class MainActivity : ComponentActivity() {
                 if (libraryCacheLoaded) {
                     if (!libraryPrefs.contains("songs_cache_json")) {
                         scanMusic()
+                    } else {
+                        startMusicScan(scanSelectedFolders = false, showToast = false)
                     }
                 } else {
                     scanAfterCacheLoad = true
@@ -854,7 +857,13 @@ class MainActivity : ComponentActivity() {
             libraryCacheLoaded = true
             // Start the initial scan before playback restoration can suspend.
             // Compose must not draw a ready-but-empty library in that gap.
-            if (shouldScan) scanMusic()
+            if (shouldScan) {
+                scanMusic()
+            } else if (permissionGranted) {
+                // Check for new tracks while retaining the cached list on
+                // screen. Opening the player does not traverse SAF folders.
+                startMusicScan(scanSelectedFolders = false, showToast = false)
+            }
 
             controller?.let { c ->
                 syncCurrentSong(c)
@@ -886,12 +895,31 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }.getOrElse {
-            libraryPrefs.edit().remove("songs_cache_json").apply()
+            libraryPrefs.edit()
+                .remove("songs_cache_json")
+                .remove("mediastore_checkpoint_version")
+                .remove("mediastore_checkpoint_generation")
+                .apply()
             null
         }
     }
 
-    private fun persistCachedSongs(songsToCache: List<Song>) {
+    private fun readMediaStoreCheckpoint(): MediaStoreCheckpoint? {
+        if (!libraryPrefs.contains("songs_cache_json") ||
+            !libraryPrefs.contains("mediastore_checkpoint_generation")
+        ) return null
+        val version = libraryPrefs.getString("mediastore_checkpoint_version", null)
+            ?: return null
+        return MediaStoreCheckpoint(
+            version = version,
+            generation = libraryPrefs.getLong("mediastore_checkpoint_generation", 0L)
+        )
+    }
+
+    private fun persistCachedSongs(
+        songsToCache: List<Song>,
+        checkpoint: MediaStoreCheckpoint?
+    ) {
         val array = JSONArray()
 
         songsToCache.forEach { song ->
@@ -911,44 +939,71 @@ class MainActivity : ComponentActivity() {
 
         libraryPrefs.edit()
             .putString("songs_cache_json", array.toString())
+            .apply {
+                if (checkpoint == null) {
+                    remove("mediastore_checkpoint_version")
+                    remove("mediastore_checkpoint_generation")
+                } else {
+                    putString("mediastore_checkpoint_version", checkpoint.version)
+                    putLong("mediastore_checkpoint_generation", checkpoint.generation)
+                }
+            }
             .apply()
     }
 
-    private suspend fun refreshSongs(): Int {
-        // Snapshot Compose state on the main thread, then do indexing, cache
-        // serialization, ID comparison and MediaItem preparation off-thread.
+    private suspend fun refreshSongs(scanSelectedFolders: Boolean): Int {
+        // Snapshot on main; index and serialize the cache off the UI thread.
         val cachedSongs = songs
         val previousIds = withContext(Dispatchers.Default) {
             cachedSongs.mapTo(HashSet()) { it.id }
         }
         val folderUris = selectedMusicFolders.toSet()
+        val checkpoint = readMediaStoreCheckpoint()
+        val repository = MusicRepository(this@MainActivity)
 
-        val refreshedSongs = withContext(Dispatchers.IO) {
-            MusicRepository(this@MainActivity)
-                .loadSongs(
+        val fastScan = withContext(Dispatchers.IO) {
+            repository.loadSongs(
+                extraFolderUris = folderUris,
+                cachedSongs = cachedSongs,
+                previousCheckpoint = checkpoint,
+                scanSelectedFolders = false
+            )
+        }
+
+        // With manually selected folders, publish the OS-indexed changes now,
+        // not after a slow DocumentsProvider traversal. Keep existing SAF songs
+        // visible until that traversal finishes.
+        if (scanSelectedFolders && folderUris.isNotEmpty()) {
+            songs = fastScan.songs
+        }
+
+        val completedScan = withContext(Dispatchers.IO) {
+            val result = if (scanSelectedFolders && folderUris.isNotEmpty()) {
+                repository.loadSongs(
                     extraFolderUris = folderUris,
-                    cachedSongs = cachedSongs
+                    cachedSongs = fastScan.songs,
+                    previousCheckpoint = fastScan.checkpoint,
+                    scanSelectedFolders = true
                 )
-                .also(::persistCachedSongs)
-        }
-
-        val newSongs = withContext(Dispatchers.Default) {
-            if (previousIds.isEmpty()) {
-                emptyList()
             } else {
-                refreshedSongs.filter { it.id !in previousIds }
+                fastScan
             }
+            persistCachedSongs(result.songs, result.checkpoint)
+            result
         }
 
-        // Publish the new library only after its cache has been persisted.
-        songs = refreshedSongs
+        val refreshedSongs = completedScan.songs
+        val newSongs = withContext(Dispatchers.Default) {
+            if (previousIds.isEmpty()) emptyList()
+            else refreshedSongs.filter { it.id !in previousIds }
+        }
 
+        songs = refreshedSongs
         controller?.let { c ->
             syncCurrentSong(c)
             restorePlaybackStateIfNeeded(c)
 
-            // Keep the current queue intact, but append genuinely new tracks in
-            // small batches so one large refresh cannot monopolize the UI thread.
+            // Preserve playback order and append just the newly indexed songs.
             if (newSongs.isNotEmpty() && c.mediaItemCount > 0) {
                 val queuedIds = HashSet<Long>(c.mediaItemCount)
                 for (index in 0 until c.mediaItemCount) {
@@ -1000,47 +1055,75 @@ class MainActivity : ComponentActivity() {
         scanMusic()
     }
 
+    private fun scheduleMediaStoreRefresh() {
+        automaticMusicScanJob?.cancel()
+        automaticMusicScanJob = lifecycleScope.launch {
+            // Indexers often emit multiple notifications for one new file.
+            delay(900L)
+            startMusicScan(scanSelectedFolders = false, showToast = false)
+        }
+    }
+
     private fun scanMusic() {
+        // Pull-to-refresh reconciles the user-selected folders as well.
+        automaticMusicScanJob?.cancel()
+        startMusicScan(scanSelectedFolders = true, showToast = true)
+    }
+
+    private fun startMusicScan(scanSelectedFolders: Boolean, showToast: Boolean) {
         if (!libraryCacheLoaded) {
             scanAfterCacheLoad = true
             return
         }
-        if (isScanningMusic) return
-        if (!permissionGranted && selectedMusicFolders.isEmpty()) {
+        if (isScanningMusic) {
+            if (scanSelectedFolders) manualRefreshPending = true
+            else mediaStoreRefreshPending = true
             return
         }
+        if (!permissionGranted && selectedMusicFolders.isEmpty()) return
 
-        automaticMusicScanJob?.cancel()
         libraryScanFailed = false
         isScanningMusic = true
 
         lifecycleScope.launch {
-            val result = runCatching { refreshSongs() }
+            val result = runCatching { refreshSongs(scanSelectedFolders) }
             libraryScanFailed = result.isFailure
             isScanningMusic = false
 
-            val message = result.fold(
-                onSuccess = { addedCount ->
-                    if (addedCount > 0) {
-                        if (addedCount == 1) {
-                            nusaText("1 lagu baru ditemukan", "1 new song found")
+            if (showToast) {
+                val message = result.fold(
+                    onSuccess = { addedCount ->
+                        if (addedCount > 0) {
+                            if (addedCount == 1) {
+                                nusaText("1 lagu baru ditemukan", "1 new song found")
+                            } else {
+                                nusaText("$addedCount lagu baru ditemukan", "$addedCount new songs found")
+                            }
                         } else {
-                            nusaText("$addedCount lagu baru ditemukan", "$addedCount new songs found")
+                            nusaText("Perpustakaan musik sudah diperbarui", "Music library updated")
                         }
-                    } else {
-                        nusaText("Perpustakaan musik sudah diperbarui", "Music library updated")
+                    },
+                    onFailure = {
+                        nusaText("Pemindaian musik gagal", "Music scan failed")
                     }
-                },
-                onFailure = {
-                    nusaText("Pemindaian musik gagal", "Music scan failed")
-                }
-            )
+                )
 
-            android.widget.Toast.makeText(
-                this@MainActivity,
-                message,
-                android.widget.Toast.LENGTH_SHORT
-            ).show()
+                android.widget.Toast.makeText(
+                    this@MainActivity,
+                    message,
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+            }
+
+            // A device update or another swipe arriving mid-scan is not lost.
+            val manual = manualRefreshPending
+            val media = mediaStoreRefreshPending
+            manualRefreshPending = false
+            mediaStoreRefreshPending = false
+            when {
+                manual -> scanMusic()
+                media -> scheduleMediaStoreRefresh()
+            }
         }
     }
 
