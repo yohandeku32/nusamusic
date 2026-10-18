@@ -2,11 +2,11 @@ package com.yohandeku32.nusamusic.ui
 
 import kotlin.math.abs
 
-/** Depth of field for the VISIBLE position of a lyric row, in dp. */
+/** Blur and opacity applied together by a lyric graphics layer. */
 internal data class LyricsFocusDepth(val blurDp: Float, val opacity: Float)
 
 /**
- * The centre of the lyrics viewport is the visual focus plane.
+ * Retained backing-vocal profile: the viewport centre is the focus plane.
  * This continuous, two-stage curve has no per-line index switches:
  * - in focus (within 24dp): sharp / opaque
  * - next visual row (~105dp): 1.2dp blur / 76% opacity
@@ -14,7 +14,7 @@ internal data class LyricsFocusDepth(val blurDp: Float, val opacity: Float)
  *
  * Evaluated in a graphics layer from measured LazyList offsets, so manual
  * scrolling, active-line tracking and seek scrolling share one focus plane.
- * Only the row layer changes; the underlying syllable wave stays untouched.
+ * Kept independent from the stronger main-text profile below.
  */
 internal fun lyricsFocusDepth(distanceDp: Float): LyricsFocusDepth {
     val distance = abs(distanceDp)
@@ -32,4 +32,30 @@ internal fun lyricsFocusDepth(distanceDp: Float): LyricsFocusDepth {
         blurDp = 1.2f + 1.5f * fraction,
         opacity = 0.76f - 0.28f * fraction
     )
+}
+
+/** Main text only: stronger depth, with the existing backing-vocal curve above retained. */
+internal fun lyricsMainFocusDepth(distanceDp: Float, start: Int, end: Int, now: Int): LyricsFocusDepth {
+    // Finish the incoming focus pull BEFORE the first active syllable. All
+    // overlapping active lines stay completely sharp, even during browsing.
+    // Sample the existing playback clock: pause holds focus, and seek never
+    // restarts a stale animator or replays a focus transition from another row.
+    val focus = lyricsMainFocusAmount(start, end, now)
+    if (focus >= 1f) return LyricsFocusDepth(0f, 1f)
+    val distance = abs(distanceDp).takeIf { it.isFinite() } ?: 0f
+    val nearToFar = lyricEase((distance - 105f) / 105f)
+    val farToFarthest = lyricEase((distance - 210f) / 105f)
+    val blur = 2.5f + 2f * nearToFar + farToFarthest
+    val opacity = 0.70f - 0.22f * nearToFar - 0.13f * farToFarthest
+    return LyricsFocusDepth(blur * (1f - focus), opacity + (1f - opacity) * focus)
+}
+
+/** One 420ms smoothstep for blur AND opacity; no per-row wall-clock animation. */
+internal fun lyricsMainFocusAmount(start: Int, end: Int, now: Int): Float {
+    if (end <= start) return 0f
+    return when {
+        now < start -> 1f - lyricEase((start.toLong() - now) / 420f)
+        now < end -> 1f
+        else -> 1f - lyricEase((now.toLong() - end) / 420f)
+    }
 }
