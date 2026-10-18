@@ -42,10 +42,23 @@ internal class LyricsTravelingWaveMask(spans: List<LyricsVocalSpan>) {
         }
 
         active?.let { span ->
-            val progress = ((playbackMs.toLong() - span.startMs).toFloat() /
+            val elapsed = playbackMs.toLong() - span.startMs
+            val progress = (elapsed.toFloat() /
                 (span.endMs.toLong() - span.startMs).toFloat()).coerceIn(0f, 1f)
+            // At a contiguous syllable boundary the font contains actual
+            // inter-word whitespace. Ease the playhead through that measured
+            // gap instead of jumping from one word's end to the next start.
+            // The phase itself remains entirely independent of this offset.
+            val contiguous = previous?.takeIf {
+                span.startMs.toLong() - it.endMs.toLong() in 0L..120L &&
+                    it.endDp <= span.startDp
+            }
+            val startPosition = contiguous?.let {
+                val bridge = lyricEase(elapsed.toFloat() / 100f)
+                it.endDp + (span.startDp - it.endDp) * bridge
+            } ?: span.startDp
             return LyricsVocalFront(
-                positionDp = span.startDp + (span.endDp - span.startDp) * progress,
+                positionDp = startPosition + (span.endDp - span.startDp) * progress,
                 intensity = 1f
             )
         }
