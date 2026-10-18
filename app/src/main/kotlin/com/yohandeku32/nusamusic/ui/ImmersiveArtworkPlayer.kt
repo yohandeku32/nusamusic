@@ -85,7 +85,7 @@ internal fun ImmersiveArtworkPlayer(
         val controlsWidth = (288.dp + insetWidth).coerceIn(maxWidth * 0.46f, maxWidth * 0.58f)
         val controlsFraction = controlsWidth / maxWidth
         val compact = maxHeight < 720.dp || maxWidth < 370.dp
-        val horizontal = if (wide) 16.dp else if (compact) 24.dp else 28.dp
+        val horizontal = if (wide) 16.dp else if (compact) 20.dp else 24.dp
         // Shift the transport row upward toward the progress bar while
         // keeping the overall vertical spacing and bottom pill position.
         val transportGap = when {
@@ -202,9 +202,9 @@ internal fun ImmersiveArtworkPlayer(
                 // every frame, while the whole header already moves smoothly
                 // on the compositor via graphicsLayer above.
                 val expandedTitleSize = (titleFontSize *
-                    if (compact) 0.72f else 0.78f).coerceIn(22f, 34f)
+                    if (compact) 0.78f else 0.84f).coerceIn(24f, 36f)
                 val expandedLineHeight = (titleFontSize *
-                    if (compact) 0.84f else 0.90f).coerceIn(27f, 40f)
+                    if (compact) 0.90f else 0.97f).coerceIn(29f, 43f)
                 val compactTitleSize = if (compact) 14.5f else 15.5f
                 val compactLineHeight = if (compact) 18f else 19f
                 val titleSize = if (lyricsOpen) compactTitleSize else expandedTitleSize
@@ -231,7 +231,7 @@ internal fun ImmersiveArtworkPlayer(
                         )
                         Text(
                             text = artist,
-                            fontSize = (if (lyricsOpen) 11.5f else 15f).sp,
+                            fontSize = (if (lyricsOpen) 11.5f else 16.25f).sp,
                             color = Color.White.copy(alpha = 0.72f),
                             textAlign = TextAlign.Start,
                             maxLines = 1,
@@ -260,7 +260,7 @@ internal fun ImmersiveArtworkPlayer(
                             ImmersiveAction(
                                 if (isFavorite) NusaPlayerIcons.HeartFilled else NusaPlayerIcons.Heart,
                                 immersiveText("Favorit", "Favorite"), onFavorite, hasSong,
-                                active = isFavorite, iconSize = 23.dp
+                                active = isFavorite, iconSize = 25.dp
                             )
                         }
                     }
@@ -274,45 +274,45 @@ internal fun ImmersiveArtworkPlayer(
                     horizontalArrangement = Arrangement.SpaceBetween) {
                     ImmersiveAction(NusaPlayerIcons.Shuffle,
                         if (shuffleEnabled) immersiveText("Acak aktif", "Shuffle on") else immersiveText("Acak nonaktif", "Shuffle off"),
-                        onShuffle, hasSong, active = shuffleEnabled, iconSize = 24.dp)
-                    IconButton(onClick = onPrevious, enabled = hasSong, modifier = Modifier.size(52.dp)) {
+                        onShuffle, hasSong, active = shuffleEnabled, iconSize = 26.dp)
+                    IconButton(onClick = onPrevious, enabled = hasSong, modifier = Modifier.size(56.dp)) {
                         Icon(NusaPlayerIcons.Previous, immersiveText("Sebelumnya", "Previous"),
                             tint = Color.White.copy(alpha = if (hasSong) 0.94f else 0.3f),
-                            modifier = Modifier.size(35.dp))
+                            modifier = Modifier.size(38.dp))
                     }
                     // Clean, background-free Play/Pause control.
                     // The larger white glyph stays centred without glass,
                     // a filled circle, border or drop shadow.
                     IconButton(
                         onClick = onPlayPause,
-                        modifier = Modifier.size(if (compact) 68.dp else 72.dp)
+                        modifier = Modifier.size(if (compact) 72.dp else 76.dp)
                     ) {
                         Icon(
                             if (isPlaying) NusaPlayerIcons.Pause else NusaPlayerIcons.Play,
                             if (isPlaying) immersiveText("Jeda", "Pause") else immersiveText("Putar", "Play"),
                             tint = Color.White,
-                            modifier = Modifier.size(if (compact) 41.dp else 44.dp)
+                            modifier = Modifier.size(if (compact) 44.dp else 47.dp)
                         )
                     }
-                    IconButton(onClick = onNext, enabled = hasSong, modifier = Modifier.size(52.dp)) {
+                    IconButton(onClick = onNext, enabled = hasSong, modifier = Modifier.size(56.dp)) {
                         Icon(NusaPlayerIcons.Next, immersiveText("Berikutnya", "Next"),
                             tint = Color.White.copy(alpha = if (hasSong) 0.94f else 0.3f),
-                            modifier = Modifier.size(35.dp))
+                            modifier = Modifier.size(38.dp))
                     }
                     ImmersiveAction(if (repeatMode == 1) NusaPlayerIcons.RepeatOne else NusaPlayerIcons.Repeat,
                         when (repeatMode) {
                             1 -> immersiveText("Ulangi satu lagu", "Repeat one")
                             2 -> immersiveText("Ulangi semua", "Repeat all")
                             else -> immersiveText("Ulangi nonaktif", "Repeat off")
-                        }, onRepeat, hasSong, active = repeatMode != 0, iconSize = 24.dp)
+                        }, onRepeat, hasSong, active = repeatMode != 0, iconSize = 26.dp)
                 }
                 Spacer(Modifier.height(transportToPillGap))
                 // Five equal 48dp targets: Artist, Lyrics (if enabled),
                 // Library, Share and Settings. Preserve compact spacing.
-                val actionPillWidth = if (lyricsEnabled) 284.dp else 236.dp
+                val actionPillWidth = if (lyricsEnabled) 300.dp else 252.dp
                 Row(Modifier.align(Alignment.CenterHorizontally)
                     .widthIn(max = actionPillWidth).fillMaxWidth()
-                    .height(52.dp)
+                    .height(56.dp)
                     .clip(RoundedCornerShape(100.dp))
                     .background(Color.White.copy(alpha = 0.09f))
                     .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(100.dp)),
@@ -320,19 +320,19 @@ internal fun ImmersiveArtworkPlayer(
                     horizontalArrangement = Arrangement.SpaceEvenly) {
                     ImmersiveAction(NusaPlayerIcons.Artist,
                         immersiveText("Buka halaman artis", "Open artist page"),
-                        onArtist, hasSong, iconSize = 21.dp)
+                        onArtist, hasSong, iconSize = 23.dp)
                     if (lyricsEnabled) ImmersiveAction(NusaPlayerIcons.Lyrics,
                         if (lyricsOpen) immersiveText("Tutup lirik", "Close lyrics") else immersiveText("Buka lirik", "Open lyrics"),
-                        onLyrics, hasSong, active = lyricsOpen, iconSize = 21.dp)
+                        onLyrics, hasSong, active = lyricsOpen, iconSize = 23.dp)
                     ImmersiveAction(NusaPlayerIcons.Library,
                         immersiveText("Perpustakaan", "Library"),
-                        onLibrary, iconSize = 21.dp)
+                        onLibrary, iconSize = 23.dp)
                     ImmersiveAction(NusaPlayerIcons.Share,
                         immersiveText("Bagikan lagu", "Share song"),
-                        onShare, hasSong, iconSize = 21.dp)
+                        onShare, hasSong, iconSize = 23.dp)
                     ImmersiveAction(NusaPlayerIcons.More,
                         immersiveText("Pengaturan", "Settings"),
-                        onSettings, iconSize = 21.dp)
+                        onSettings, iconSize = 23.dp)
                 }
                 }
             }
@@ -361,7 +361,7 @@ private fun ImmersiveAction(
     active: Boolean = false, iconSize: Dp = 22.dp
 ) {
     IconButton(onClick = onClick, enabled = enabled,
-        modifier = Modifier.size(48.dp).semantics { selected = active }) {
+        modifier = Modifier.size(50.dp).semantics { selected = active }) {
         Icon(icon, label, tint = Color.White.copy(alpha = if (!enabled) 0.26f else if (active) 1f else 0.62f),
             modifier = Modifier.size(iconSize))
     }
