@@ -37,13 +37,12 @@ internal object ArtworkBlur {
         try {
             val pixels = IntArray(width * height)
             small.getPixels(pixels, 0, width, 0, 0, width, height)
-            // A single heavy blur used to flatten many covers into one muddy
-            // colour. Prepare two Gaussian-like radii from the real pixels:
-            // broad diffusion for atmosphere + fine diffusion to keep the
-            // cover's colour blocks and silhouettes faintly recognizable.
-            // This runs off the UI thread, once per artwork.
-            val broad = blurArgb(pixels, width, height, radius = 9, passes = 2)
-            val detailed = blurArgb(pixels, width, height, radius = 3, passes = 2)
+            // Two real artwork-derived blur scales, computed off the UI thread.
+            // The broad layer creates a calm diffused glow; the finer one keeps
+            // only a trace of the cover's colour areas and silhouette.
+            // Avoid collapsing the artwork into a single extracted palette colour.
+            val broad = blurArgb(pixels, width, height, radius = 14, passes = 3)
+            val detailed = blurArgb(pixels, width, height, radius = 5, passes = 2)
             val ambient = blendAmbientArtwork(broad, detailed)
             return Bitmap.createBitmap(ambient, width, height, Bitmap.Config.ARGB_8888)
         } finally {
