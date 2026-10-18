@@ -10,22 +10,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Repeat
-import androidx.compose.material.icons.filled.RepeatOne
-import androidx.compose.material.icons.filled.Shuffle
-import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.SkipPrevious
-import androidx.compose.material.icons.outlined.FavoriteBorder
-import androidx.compose.material.icons.outlined.IosShare
-import androidx.compose.material.icons.outlined.KeyboardArrowDown
-import androidx.compose.material.icons.outlined.LibraryMusic
-import androidx.compose.material.icons.outlined.Lyrics
-import androidx.compose.material.icons.outlined.MoreHoriz
-import androidx.compose.material.icons.outlined.PersonOutline
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -94,6 +78,14 @@ internal fun ImmersiveArtworkPlayer(
         val controlsFraction = controlsWidth / maxWidth
         val compact = maxHeight < 720.dp || maxWidth < 370.dp
         val horizontal = if (wide) 16.dp else if (compact) 24.dp else 28.dp
+        // Preserve current vertical hierarchy, but give transport and pill
+        // independent breathing room. Short screens compress only the gap.
+        val transportPillGap = when {
+            maxHeight < 640.dp -> 14.dp
+            wide -> 18.dp
+            compact -> 20.dp
+            else -> 26.dp
+        }
         var controlsHeightPx by remember { mutableIntStateOf(0) }
         val controlsHeight = with(density) { controlsHeightPx.toDp() }
         val requestedHero = if (wide) maxHeight else
@@ -131,9 +123,9 @@ internal fun ImmersiveArtworkPlayer(
                     }
                     Spacer(Modifier.width(12.dp))
                     ImmersiveAction(
-                        if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                        if (isFavorite) NusaPlayerIcons.HeartFilled else NusaPlayerIcons.Heart,
                         immersiveText("Favorit", "Favorite"), onFavorite, hasSong,
-                        active = isFavorite, iconSize = 24.dp
+                        active = isFavorite, iconSize = 23.dp
                     )
                 }
                 if (!wide) Box(Modifier.padding(top = 6.dp)) { quality() }
@@ -141,45 +133,46 @@ internal fun ImmersiveArtworkPlayer(
                 Spacer(Modifier.height(if (wide) 6.dp else if (compact) 10.dp else 16.dp))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween) {
-                    ImmersiveAction(Icons.Filled.Shuffle,
+                    ImmersiveAction(NusaPlayerIcons.Shuffle,
                         if (shuffleEnabled) immersiveText("Acak aktif", "Shuffle on") else immersiveText("Acak nonaktif", "Shuffle off"),
-                        onShuffle, hasSong, active = shuffleEnabled, iconSize = 20.dp)
+                        onShuffle, hasSong, active = shuffleEnabled, iconSize = 21.dp)
                     IconButton(onClick = onPrevious, enabled = hasSong, modifier = Modifier.size(48.dp)) {
-                        Icon(Icons.Filled.SkipPrevious, immersiveText("Sebelumnya", "Previous"),
-                            tint = Color.White.copy(alpha = if (hasSong) 0.94f else 0.3f), modifier = Modifier.size(34.dp))
+                        Icon(NusaPlayerIcons.Previous, immersiveText("Sebelumnya", "Previous"),
+                            tint = Color.White.copy(alpha = if (hasSong) 0.94f else 0.3f), modifier = Modifier.size(29.dp))
                     }
                     IconButton(onClick = onPlayPause,
-                        modifier = Modifier.size(if (compact) 64.dp else 72.dp)
+                        modifier = Modifier.size(if (compact) 64.dp else 68.dp)
                             .clip(CircleShape).background(Color.White.copy(alpha = 0.08f))) {
-                        Icon(if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                        Icon(if (isPlaying) NusaPlayerIcons.Pause else NusaPlayerIcons.Play,
                             if (isPlaying) immersiveText("Jeda", "Pause") else immersiveText("Putar", "Play"),
-                            tint = Color.White, modifier = Modifier.size(if (compact) 46.dp else 50.dp))
+                            tint = Color.White, modifier = Modifier.size(if (compact) 35.dp else 38.dp))
                     }
                     IconButton(onClick = onNext, enabled = hasSong, modifier = Modifier.size(48.dp)) {
-                        Icon(Icons.Filled.SkipNext, immersiveText("Berikutnya", "Next"),
-                            tint = Color.White.copy(alpha = if (hasSong) 0.94f else 0.3f), modifier = Modifier.size(34.dp))
+                        Icon(NusaPlayerIcons.Next, immersiveText("Berikutnya", "Next"),
+                            tint = Color.White.copy(alpha = if (hasSong) 0.94f else 0.3f), modifier = Modifier.size(29.dp))
                     }
-                    ImmersiveAction(if (repeatMode == 1) Icons.Filled.RepeatOne else Icons.Filled.Repeat,
+                    ImmersiveAction(if (repeatMode == 1) NusaPlayerIcons.RepeatOne else NusaPlayerIcons.Repeat,
                         when (repeatMode) {
                             1 -> immersiveText("Ulangi satu lagu", "Repeat one")
                             2 -> immersiveText("Ulangi semua", "Repeat all")
                             else -> immersiveText("Ulangi nonaktif", "Repeat off")
-                        }, onRepeat, hasSong, active = repeatMode != 0, iconSize = 20.dp)
+                        }, onRepeat, hasSong, active = repeatMode != 0, iconSize = 21.dp)
                 }
-                Spacer(Modifier.height(if (wide) 10.dp else if (compact) 14.dp else 16.dp))
+                Spacer(Modifier.height(transportPillGap))
                 Row(Modifier.align(Alignment.CenterHorizontally)
-                    .widthIn(max = 300.dp).fillMaxWidth(0.94f).height(60.dp)
+                    .widthIn(max = 300.dp).fillMaxWidth(0.94f)
+                    .height(if (maxHeight < 640.dp) 56.dp else 60.dp)
                     .clip(RoundedCornerShape(100.dp))
                     .background(Color.White.copy(alpha = 0.09f))
                     .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(100.dp)),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceEvenly) {
-                    ImmersiveAction(Icons.Outlined.PersonOutline, immersiveText("Buka halaman artis", "Open artist page"), onArtist, hasSong)
-                    if (lyricsEnabled) ImmersiveAction(Icons.Outlined.Lyrics,
+                    ImmersiveAction(NusaPlayerIcons.Artist, immersiveText("Buka halaman artis", "Open artist page"), onArtist, hasSong)
+                    if (lyricsEnabled) ImmersiveAction(NusaPlayerIcons.Lyrics,
                         if (lyricsOpen) immersiveText("Tutup lirik", "Close lyrics") else immersiveText("Buka lirik", "Open lyrics"),
                         onLyrics, hasSong, active = lyricsOpen)
-                    ImmersiveAction(Icons.Outlined.LibraryMusic, immersiveText("Perpustakaan", "Library"), onLibrary)
-                    ImmersiveAction(Icons.Outlined.IosShare, immersiveText("Bagikan lagu", "Share song"), onShare, hasSong)
+                    ImmersiveAction(NusaPlayerIcons.Library, immersiveText("Perpustakaan", "Library"), onLibrary)
+                    ImmersiveAction(NusaPlayerIcons.Share, immersiveText("Bagikan lagu", "Share song"), onShare, hasSong)
                 }
             }
         }
@@ -204,11 +197,11 @@ internal fun ImmersiveArtworkPlayer(
             verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onLibrary, modifier = Modifier.size(48.dp)
                 .clip(CircleShape).background(Color.Black.copy(alpha = 0.28f))) {
-                Icon(Icons.Outlined.KeyboardArrowDown, immersiveText("Kembali ke perpustakaan", "Back to library"),
+                Icon(NusaPlayerIcons.Back, immersiveText("Kembali ke perpustakaan", "Back to library"),
                     tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(28.dp))
             }
             Spacer(Modifier.weight(1f))
-            ImmersiveAction(Icons.Outlined.MoreHoriz, immersiveText("Pengaturan", "Settings"),
+            ImmersiveAction(NusaPlayerIcons.More, immersiveText("Pengaturan", "Settings"),
                 onSettings, enabled = !lyricsOpen, iconSize = 25.dp, glass = true)
         }
     }
