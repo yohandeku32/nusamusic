@@ -50,6 +50,7 @@ fun ImmersiveLyricsPanel(
     playbackEpoch: Int,
     durationMs: Long,
     state: ImmersiveLyricsState,
+    dismissRequestId: Int,
     onDismiss: () -> Unit,
     onSeek: (Long) -> Unit,
     fontSize: Float
@@ -58,6 +59,7 @@ fun ImmersiveLyricsPanel(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var closing by remember { mutableStateOf(false) }
     val latestDismiss by rememberUpdatedState(onDismiss)
+    var observedDismissRequest by remember { mutableIntStateOf(dismissRequestId) }
 
     fun requestDismiss() {
         if (closing) return
@@ -72,6 +74,13 @@ fun ImmersiveLyricsPanel(
                 if (!sheetState.isVisible) latestDismiss()
                 else closing = false
             }
+        }
+    }
+
+    LaunchedEffect(dismissRequestId) {
+        if (dismissRequestId != observedDismissRequest) {
+            observedDismissRequest = dismissRequestId
+            requestDismiss()
         }
     }
 
@@ -150,7 +159,12 @@ fun ImmersiveLyricsPanel(
                 // flags are scoped to that window, not the Now Playing UI.
             }
         }
-        SideEffect { hideDialogStatusBar() }
+        LaunchedEffect(dialogWindow) {
+            // Reassert after the first dialog frame without polling or
+            // mutating the system-window layout on every lyric draw.
+            withFrameNanos { }
+            hideDialogStatusBar()
+        }
 
         Column(Modifier.fillMaxWidth().height(height).background(
             Brush.verticalGradient(listOf(backdrop, Color(0xFF101014))))
