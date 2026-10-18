@@ -26,6 +26,7 @@ internal fun ImmersiveArtworkScene(
     artwork: Bitmap?, blur: Bitmap?, backdrop: Color, heroHeight: Dp,
     modifier: Modifier = Modifier,
     heroWidthFraction: Float = 1f, scrimOpacity: Float = 0.2f,
+    heroOpacity: Float = 1f,
     animateChanges: Boolean = true, description: String? = null,
     animatedArtwork: @Composable BoxScope.() -> Unit = {}
 ) {
@@ -62,7 +63,13 @@ internal fun ImmersiveArtworkScene(
         })
 
         Box(Modifier.fillMaxWidth(heroWidthFraction).height(height).align(Alignment.TopStart)
-            .graphicsLayer { clip = true; compositingStrategy = CompositingStrategy.Offscreen }
+            .graphicsLayer {
+                // Only the sharp artwork fades in lyric focus mode. The
+                // full-screen artwork-derived ambient stays visible beneath.
+                alpha = heroOpacity
+                clip = true
+                compositingStrategy = CompositingStrategy.Offscreen
+            }
             .drawWithCache {
                 val painter = ImmersiveArtworkPainter(size, size.height, size.height * 0.27f)
                 val sideFade = if (heroWidthFraction < 1f) Brush.horizontalGradient(
