@@ -101,15 +101,16 @@ internal fun ImmersiveArtworkPlayer(
         val controlsFraction = controlsWidth / maxWidth
         val compact = maxHeight < 720.dp || maxWidth < 370.dp
         val horizontal = if (wide) 16.dp else if (compact) 24.dp else 28.dp
-        // Equal gaps above and below transport keep its icons centred
-        // between the progress bar and the bottom action pill.
-        // Shorter viewports preserve the same balance with smaller gaps.
+        // Shift the transport row upward toward the progress bar while
+        // keeping the overall vertical spacing and bottom pill position.
         val transportGap = when {
             maxHeight < 640.dp -> 14.dp
             wide -> 16.dp
             compact -> 18.dp
             else -> 20.dp
         }
+        val progressToTransportGap = (transportGap - 8.dp).coerceAtLeast(8.dp)
+        val transportToPillGap = transportGap * 2 - progressToTransportGap
         var controlsHeightPx by remember { mutableIntStateOf(0) }
         val controlsHeight = with(density) { controlsHeightPx.toDp() }
         var lyricHeaderHeightPx by remember { mutableIntStateOf(0) }
@@ -258,16 +259,16 @@ internal fun ImmersiveArtworkPlayer(
                 Column(Modifier.fillMaxWidth()
                     .onSizeChanged { transportHeightPx = it.height }) {
                 progress(Modifier.fillMaxWidth().padding(top = if (wide) 4.dp else if (compact) 10.dp else 14.dp))
-                Spacer(Modifier.height(transportGap))
+                Spacer(Modifier.height(progressToTransportGap))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween) {
                     ImmersiveAction(NusaPlayerIcons.Shuffle,
                         if (shuffleEnabled) immersiveText("Acak aktif", "Shuffle on") else immersiveText("Acak nonaktif", "Shuffle off"),
-                        onShuffle, hasSong, active = shuffleEnabled, iconSize = 21.dp)
+                        onShuffle, hasSong, active = shuffleEnabled, iconSize = 24.dp)
                     IconButton(onClick = onPrevious, enabled = hasSong, modifier = Modifier.size(52.dp)) {
                         Icon(NusaPlayerIcons.Previous, immersiveText("Sebelumnya", "Previous"),
                             tint = Color.White.copy(alpha = if (hasSong) 0.94f else 0.3f),
-                            modifier = Modifier.size(32.dp))
+                            modifier = Modifier.size(35.dp))
                     }
                     // Clean, background-free Play/Pause control.
                     // The larger white glyph stays centred without glass,
@@ -280,22 +281,22 @@ internal fun ImmersiveArtworkPlayer(
                             if (isPlaying) NusaPlayerIcons.Pause else NusaPlayerIcons.Play,
                             if (isPlaying) immersiveText("Jeda", "Pause") else immersiveText("Putar", "Play"),
                             tint = Color.White,
-                            modifier = Modifier.size(if (compact) 38.dp else 41.dp)
+                            modifier = Modifier.size(if (compact) 41.dp else 44.dp)
                         )
                     }
                     IconButton(onClick = onNext, enabled = hasSong, modifier = Modifier.size(52.dp)) {
                         Icon(NusaPlayerIcons.Next, immersiveText("Berikutnya", "Next"),
                             tint = Color.White.copy(alpha = if (hasSong) 0.94f else 0.3f),
-                            modifier = Modifier.size(32.dp))
+                            modifier = Modifier.size(35.dp))
                     }
                     ImmersiveAction(if (repeatMode == 1) NusaPlayerIcons.RepeatOne else NusaPlayerIcons.Repeat,
                         when (repeatMode) {
                             1 -> immersiveText("Ulangi satu lagu", "Repeat one")
                             2 -> immersiveText("Ulangi semua", "Repeat all")
                             else -> immersiveText("Ulangi nonaktif", "Repeat off")
-                        }, onRepeat, hasSong, active = repeatMode != 0, iconSize = 21.dp)
+                        }, onRepeat, hasSong, active = repeatMode != 0, iconSize = 24.dp)
                 }
-                Spacer(Modifier.height(transportGap))
+                Spacer(Modifier.height(transportToPillGap))
                 // A compact, centred capsule with 48dp touch targets.
                 // Its width adapts when the Lyrics action is unavailable,
                 // without squeezing the tap areas on small screens.
