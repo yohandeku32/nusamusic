@@ -61,9 +61,10 @@ internal class SyllableLyricsPainter(layouts: List<List<SyllableLayout>>, privat
             val halo = pass == 0
             val layout = glyph.layout
             val unit = layout.syllable
+            // Compute the audio-time transform once for both halo and fill passes.
+            if (pass == 0) glyph.motion.update(now)
             if (halo && (strength <= 0f || now <= unit.start || now >= unit.end)) continue
             val result = layout.textLayoutResult
-            glyph.motion.update(now)
             val position = layout.position - Offset(0f, glyph.motion.liftDp * density)
             val width = glyph.width
             val progress = syllableProgress(unit, now)
