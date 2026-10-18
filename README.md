@@ -97,91 +97,46 @@ Most-played tracks use listening history stored on the device from this version 
 
 ## Immersive lyrics
 
-Horizontal immersive pages are ordered **Artist → Player → Songs**. Tap the
-lyrics icon, or swipe up on the cover, to flip the artwork into lyrics. The
-lyrics occupy the area from the top of the cover through the Hi-Res pill
-boundary. They do not open a separate page below the player. The close action
-below the lyrics or Android Back flips to artwork again.
+Lyrics are available only in Immersive mode. The Lyrics button opens a rounded
+bottom sheet at 50% of the window height, with an artwork-derived background.
+Close, swipe down, or tap outside to dismiss. Settings → Lyrics controls font size.
 
-The main progress bar and all playback/action controls stay in place below
-the flip. The lyrics back face is transparent over the **same prepared blur
-and palette as the main player**, including its frozen animated-artwork tone.
-Animated cover video pauses during the flip/lyrics view. The cover, metadata
-and Hi-Res pill turn away while the lyrics turn in; the background and controls
-do not rotate. Measured control bounds keep the lyrics clear of the seek bar.
+Lyrics and credits come only from the current local audio file. The bounded
+reader supports ID3 USLT/SYLT/TXXX, FLAC and Ogg Vorbis/Opus comments, MP4/M4A
+lyrics atoms, and ID3 chunks in WAV/AIFF. Plain text stays unsynchronised;
+LRC/TTML line timing never becomes invented word or syllable timing.
+Enhanced LRC and TTML authored units drive the progressive syllable fill.
 
-The lyrics panel has no header icons. Lyrics and translations are centered,
-including each wrapped karaoke row. **Settings → Lyrics** provides a live size
-preview and a persistent **18–48 sp** slider (32 sp by default), independently
-of the song-title font. Close lyrics to access the player's settings button.
-Imports, retry and LRCLIB attribution are also available in that settings section.
-Lyrics, empty states and actions explicitly use light colors, including when
-the device is using the light theme.
+Each active syllable has separate broad and tight glow passes behind sharp
+text. A critically damped, subtle lift/scale settles once, while long notes
+gradually broaden the halo and move a soft highlight. All effects use actual
+playback position, freeze on pause, and reset immediately on seeks.
 
-The active timed row follows the vertical center of the lyrics viewport,
-including the first and last rows. Following uses a damped spring that retains
-velocity when the target changes; offscreen seek targets animate into view.
-Focus opacity and scale ease between rows, and transparent top/bottom edge
-masks fade preceding and upcoming lyrics over the same player background.
-Intros and vocal breaks of at least three seconds have a centered three-dot
-indicator. The dots breathe from playback time and fill one by one during the
-last three seconds before singing resumes; pausing and seeking keep them in
-sync. No lyric is highlighted during detected breaks, and no countdown is invented
-after the final line. All overlapping voices must finish before a break starts.
-TTML uses actual nonblank word timing, excluding padded containers. Start-only
-LRC holds of at least 12 seconds use a conservative text-length estimate when
-there is no explicit ending; this is a timing heuristic, not audio analysis.
-Lyrics follow playback, and tapping a timed line seeks to it. Accompanist's
-layout functions and Nusa's syllable painter are used lazily for visible rows instead
-of premeasuring the whole song. Measurements refresh on size, width and system
-font-scale changes. A retained observable clock resumes after hidden
-loads, reopening, and seeks. An interval index handles overlapping TTML voices;
-new scroll targets replace old animations. Manual browsing pauses following
-until scrolling stops and 2.5 seconds pass. Zero-duration words are normalized
-to avoid non-finite karaoke progress.
+Timed backing voices appear beneath the related main line. Their complete
+measured height, including padding, expands and collapses from audio time.
+Once the exit finishes, the backing is removed from composition and measurement.
+Authored silence between backing units also collapses the space. Following
+uses the main text height as its anchor so backing expansion does not shift
+the target. Three-dot countdowns exist only during authored gaps of at least
+three seconds and leave no list spacer after singing resumes.
 
-Karaoke highlights sweep through each timed syllable independently, with a
-subtle lift/glow while it is sung. Authored TTML spans and Enhanced LRC segments
-keep their exact boundaries, including overlaps and silence between syllables.
-The drawing clock interpolates playback samples; pauses freeze it and seeks
-reset it immediately. Centering, font size, fades and break countdowns remain.
-For line-only LRC or a single line-timed TTML span, Nusa estimates word timing
-inside the existing line interval, preserving spaces, Unicode clusters and
-CJK syllabic characters. These visual estimates do not recover real syllable
-timing from audio. Import a syllable-timed file for accurate vocal alignment.
-For example, Enhanced LRC can spell one word as separately timed syllables:
+Composed by and Lyrics by sections appear after the final lyric when the file
+contains those roles: ID3 TCOM/TEXT (including v2.2 aliases), Vorbis
+COMPOSER/LYRICIST, MP4 ©wrt composer, or compatible freeform fields. Roles stay
+separate, absent names remain hidden, and credits survive the embedded cache.
+Credits scroll with the list and never become an automatic follow target.
+Following stops after the final vocal exit so users can browse the ending.
 
-```text
-[00:01.000]<00:01.000>ber<00:01.400>sa<00:01.800>ma<00:02.300>
-```
+Visible rows retain their text measurements; frame updates affect drawing,
+layers, and the active backing container's measurement. Manual scrolling
+suspends following until scrolling stops and 2.5 seconds pass. Up to eight
+parsed songs are retained in memory; the embedded disk cache has 120 entries.
 
-Use **Settings → Lyrics → Import lyrics** to import a `.ttml` or `.lrc` file
-for the current song, or the import button when lyrics are unavailable.
-Nusa copies validated imports into its own storage, so the file picker does
-not need to reopen on later visits or after restarting. Standard LRC supports
-repeated timestamps, translations and offset tags; Enhanced LRC and Apple
-TTML retain word/syllable timing. Line-timed TTML also works.
-
-In music folders already granted through **Select music folder**, Nusa can
-automatically read a sidecar with the same filename (`Song.flac` with
-`Song.ttml` or `Song.lrc`). Android audio permission alone does not grant
-access to non-audio sidecars: import the lyrics or grant their music folder.
-TTML is preferred when both sidecar formats exist.
-
-When local lyrics are unavailable, Nusa looks up LRCLIB using the local
-title, artist, album and duration. Results, including unsynced text, are
-cached for offline use; the remote cache retains up to 120 entries. Missing
-results expire after six hours, and **Search again** retries immediately.
-Network failures remain retryable. Explicit imports take priority. Up to
-eight visited songs keep their parsed lyrics and scroll position in memory,
-and swiping away does not cancel an in-progress lookup.
-
-Accompanist Core 0.4.2 and UI 1.0.15 are pinned to stay on Compose 1.9.
-The decoder, disk-cache, retained-clock and timeline tests cover timing,
-import validation, Unicode, cache expiration/replacement, hidden loads,
-reopening, seeks, overlapping voices and zero-duration syllables. Real-device
-flip animation, touch/scroll feel, SAF providers and online matching still
-require phone testing.
+Accompanist Core 0.4.2 and UI 1.0.15 remain pinned for Compose 1.9.
+Unit tests cover metadata formats/credits, cache persistence, authored vocal
+windows, pause/seek behavior, backing height reclamation and simulated
+60/90/120 Hz timing. Rendering appearance, actual FPS, touch feel, and provider
+compatibility still require physical-device testing.
 
 ## Development notes
 

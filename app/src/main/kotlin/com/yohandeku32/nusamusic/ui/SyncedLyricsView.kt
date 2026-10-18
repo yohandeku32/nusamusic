@@ -14,6 +14,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.yohandeku32.nusamusic.data.SongCredits
 import com.mocharealm.accompanist.lyrics.core.model.ISyncedLine
 import com.mocharealm.accompanist.lyrics.core.model.SyncedLyrics
 import com.mocharealm.accompanist.lyrics.core.model.karaoke.KaraokeLine
@@ -27,10 +28,13 @@ import kotlin.math.roundToInt
 internal fun SyncedLyricsView(
     lyrics: SyncedLyrics, position: State<Long>, visible: Boolean,
     listState: LazyListState, motionState: LyricsMotionState,
-    onSeek: (ISyncedLine) -> Unit, fontSize: Float, modifier: Modifier = Modifier
+    onSeek: (ISyncedLine) -> Unit, fontSize: Float, credits: SongCredits = SongCredits(), modifier: Modifier = Modifier
 ) {
     val clock = remember { LyricsPlaybackClock(position, visible) }
     SideEffect { clock.update(position, visible) }
+    val display = remember(lyrics) { LyricsDisplayRows(lyrics.lines) }
+    val mainHeights = remember(lyrics) { HashMap<Int, Int>() }
+    val followEnd = remember(lyrics) { lyrics.lines.maxOfOrNull { it.end }?.toLong()?.plus(160) ?: 0L }
     val timeline = remember(lyrics) { LyricsTimeline(lyrics.lines) }
     val frame by remember(timeline, clock) { derivedStateOf(structuralEqualityPolicy()) { timeline.frame(clock.read()) } }
     val dragging by listState.interactionSource.collectIsDraggedAsState()
@@ -57,12 +61,12 @@ internal fun SyncedLyricsView(
                 return@LaunchedEffect
             }
             if (previousRevision != motionState.revision) { positioned = false; previousRevision = motionState.revision }
-            snapshotFlow { listState.layoutInfo.totalItemsCount }.first { it == lyrics.lines.size }
+            snapshotFlow { listState.layoutInfo.totalItemsCount }.first { it == display.rows.size + if (credits.isEmpty) 0 else 1 }
             fun center() = with(listState.layoutInfo) { (viewportStartOffset + viewportEndOffset) / 2f }
             fun distance(target: Int, offset: Float): Float {
                 val items = listState.layoutInfo.visibleItemsInfo
                 val item = items.firstOrNull { it.index == target }
-                val actualCenter = if (item != null) item.offset + item.size / 2f else {
+                val actualCenter = if (item != null) item.offset + (mainHeights[target] ?: item.size) / 2f else {
                     val first = items.firstOrNull() ?: return 0f
                     val average = items.map { it.size }.average().toFloat().coerceAtLeast(1f)
                     first.offset + (target - first.index) * average + average / 2f
@@ -72,7 +76,7 @@ internal fun SyncedLyricsView(
             fun leadFor(target: Int, gap: LyricsGap?, now: Int): Float {
                 if (gap == null) return 0f
                 val items = listState.layoutInfo.visibleItemsInfo
-                val height = items.firstOrNull { it.index == target }?.size?.toFloat()
+                val height = mainHeights[target]?.toFloat() ?: items.firstOrNull { it.index == target }?.size?.toFloat()
                     ?: items.map { it.size }.average().toFloat().takeIf { it.isFinite() } ?: leadPadding * 2f
                 return (height / 2f + leadPadding) * countdownFollowOffset(gap, now)
             }
@@ -80,12 +84,14 @@ internal fun SyncedLyricsView(
             var lastFollowIndex = timeline.frame(previousTime).anchor
             snapshotFlow { clock.read() }.collect { now ->
                 val current = timeline.frame(now)
-                val target = current.gap?.nextLine
+                val sourceTarget = current.gap?.nextLine
                     ?: current.anchor.takeIf { it in current.active }
                     ?: current.active.firstOrNull()
                     ?: if (positioned) lastFollowIndex else current.anchor
-                lastFollowIndex = target
-                if (target !in lyrics.lines.indices) return@collect
+                lastFollowIndex = sourceTarget
+                if (sourceTarget !in lyrics.lines.indices) return@collect
+                if (positioned && now.toLong() >= followEnd) return@collect
+                val target = display.lineToRow[sourceTarget]
                 val lead = leadFor(target, current.gap, now)
                 if (!positioned) {
                     motion.reset()
@@ -108,13 +114,27 @@ internal fun SyncedLyricsView(
         }
         LazyColumn(
             state = listState, modifier = Modifier.fillMaxSize().lyricsEdgeFade(),
-            contentPadding = PaddingValues(vertical = maxHeight / 2)
+            contentPadding = PaddingValues(top = maxHeight / 2, bottom = if (credits.isEmpty) maxHeight / 2 else 24.dp)
         ) {
-            // Only lyric rows are measured: completed countdowns leave no blank list slots.
-            itemsIndexed(lyrics.lines, key = { index, _ -> index }, contentType = { _, line -> if (line is KaraokeLine) "karaoke" else "line" }) { _, line ->
-                if (line is KaraokeLine) CenteredKaraokeLine(line, clock.read, motionState,
-                    if (line.isAccompaniment) backgroundStyle else normalStyle, onSeek)
-                else LineSyncedLyricsRow(line as SyncedLine, clock.read, motionState, normalStyle) { onSeek(line) }
+            itemsIndexed(display.rows, key = { _, row -> row.sourceIndex }, contentType = { _, _ -> "lyric-group" }) { index, row ->
+                Column(Modifier.fillMaxWidth()) {
+                    val main = row.main
+                    if (main is KaraokeLine) CenteredKaraokeLine(main, clock.read, motionState,
+                        normalStyle, onSeek, onMainHeight = { mainHeights[index] = it })
+                    else if (main is SyncedLine) LineSyncedLyricsRow(main, clock.read, motionState,
+                        normalStyle, onMainHeight = { mainHeights[index] = it }) { onSeek(main) }
+                    row.backing.forEach { backing ->
+                        key(backing) {
+                            val voices = remember(backing) { LyricsVocalWindows(backing) }
+                            TimedVocalContent(voices, clock.read, motionState) {
+                                CenteredKaraokeLine(backing, clock.read, motionState, backgroundStyle, onSeek)
+                            }
+                        }
+                    }
+                }
+            }
+            if (!credits.isEmpty) item(key = "credits", contentType = "credits") {
+                LyricsCredits(credits, Modifier.padding(horizontal = 16.dp))
             }
         }
         frame.gap?.let { gap ->

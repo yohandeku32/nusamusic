@@ -6,9 +6,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -27,7 +30,7 @@ import com.mocharealm.accompanist.lyrics.ui.utils.isRtl
 @Composable
 internal fun CenteredKaraokeLine(
     line: KaraokeLine, time: () -> Int, motion: LyricsMotionState,
-    style: TextStyle, onSeek: (ISyncedLine) -> Unit
+    style: TextStyle, onSeek: (ISyncedLine) -> Unit, onMainHeight: (Int) -> Unit = {}
 ) {
     val textMeasurer = rememberTextMeasurer()
     val density = LocalDensity.current
@@ -39,7 +42,7 @@ internal fun CenteredKaraokeLine(
         now >= line.start && now.toLong() < line.end.toLong() + 160 && motion.resetAt < line.end
     } }
     val visualTime = remember(live, time) { { if (live) time() else Int.MIN_VALUE } }
-    MotionRow(line, visualTime, motion, voices, line.isAccompaniment, { onSeek(line) }) {
+    MotionRow(line, visualTime, motion, voices, line.isAccompaniment, { onSeek(line) }, onMainHeight) {
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             val width = constraints.maxWidth.toFloat()
             val wrapped = remember(line, textStyle, textMeasurer, density, width) {
@@ -63,50 +66,65 @@ internal fun CenteredKaraokeLine(
                 drawSyllableLyrics(layouts, now, focus, motion.resetAt)
             }
         }
-        line.translation?.let { TimedTranslation(it, style, voices, visualTime, motion) }
     }
+    line.translation?.let { TimedTranslation(it, style, voices, visualTime, motion) }
 }
 
 @Composable
 private fun MotionRow(
     line: ISyncedLine, time: () -> Int, motion: LyricsMotionState,
-    voices: LyricsVocalWindows, mini: Boolean, onSeek: () -> Unit,
+    voices: LyricsVocalWindows, mini: Boolean, onSeek: () -> Unit, onMainHeight: (Int) -> Unit = {},
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val rowPaddingPx = with(LocalDensity.current) { 16.dp.roundToPx() }
     val enabled by remember(line, time, motion, mini) { derivedStateOf { !mini || voices.presence(time(), motion.resetAt) > 0f } }
     Column(Modifier.fillMaxWidth().clickable(enabled = enabled, onClick = onSeek)
-        .padding(horizontal = 16.dp, vertical = 8.dp).graphicsLayer {
+        .padding(horizontal = 16.dp, vertical = 8.dp).onSizeChanged { onMainHeight(it.height + rowPaddingPx) }.graphicsLayer {
             val now = time()
             val presence = lyricPresence(line.start, line.end, now, motion.resetAt)
             val vocal = if (mini) voices.presence(now, motion.resetAt) else presence
-            val onset = lyricOnset(line.start, line.end, now, motion.resetAt)
+            compositingStrategy = CompositingStrategy.ModulateAlpha
+            clip = false
             alpha = if (mini) vocal * 0.75f else 1f
             transformOrigin = TransformOrigin(0f, 0.5f)
-            scaleX = 0.98f + 0.02f * presence + 0.004f * onset
-            scaleY = scaleX
-            translationY = (1f - vocal) * (if (mini) 4.dp else 2.dp).toPx() - 1.2.dp.toPx() * onset
+            // Syllables carry the expression; the line baseline stays anchored.
+            translationY = if (mini) (1f - vocal) * 4.dp.toPx() else 0f
         }, content = content)
 }
 
-/** Translation/backing text retains its measured slot but is invisible outside timed voice windows. */
+/** Remove inactive content entirely; only the timed expansion/collapse is measured. */
+@Composable
+internal fun TimedVocalContent(
+    voices: LyricsVocalWindows, time: () -> Int, motion: LyricsMotionState, content: @Composable () -> Unit
+) {
+    val present by remember(voices, time, motion) { derivedStateOf { voices.presence(time(), motion.resetAt) > 0f } }
+    if (present) Column(Modifier.fillMaxWidth().layout { measurable, constraints ->
+        val child = measurable.measure(constraints.copy(minHeight = 0))
+        val height = vocalLayoutHeight(child.height, voices.presence(time(), motion.resetAt))
+        layout(child.width, height) { child.placeRelative(0, 0) }
+    }) { content() }
+}
+
 @Composable
 private fun TimedTranslation(
     text: String, style: TextStyle, voices: LyricsVocalWindows,
     time: () -> Int, motion: LyricsMotionState
 ) {
     val readable by remember(voices, time, motion) { derivedStateOf { voices.presence(time(), motion.resetAt) > 0f } }
-    Text(text, Modifier.fillMaxWidth().graphicsLayer {
+    TimedVocalContent(voices, time, motion) {
+    Text(text, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).graphicsLayer {
         val presence = voices.presence(time(), motion.resetAt)
         alpha = presence
         translationY = (1f - presence) * 4.dp.toPx()
     }.clearAndSetSemantics { if (readable) contentDescription = text },
         style = style.copy(fontSize = style.fontSize * 0.65f, lineHeight = style.lineHeight * 0.65f),
         color = Color.White.copy(alpha = 0.6f), textAlign = TextAlign.Start)
+    }
 }
 
 @Composable
 internal fun LineSyncedLyricsRow(
-    line: SyncedLine, time: () -> Int, motion: LyricsMotionState, style: TextStyle, onSeek: () -> Unit
+    line: SyncedLine, time: () -> Int, motion: LyricsMotionState, style: TextStyle, onMainHeight: (Int) -> Unit = {}, onSeek: () -> Unit
 ) {
     val voices = remember(line) { LyricsVocalWindows(line) }
     val live by remember(line, time, motion) { derivedStateOf {
@@ -114,11 +132,10 @@ internal fun LineSyncedLyricsRow(
         now >= line.start && now.toLong() < line.end.toLong() + 160 && motion.resetAt < line.end
     } }
     val visualTime = remember(live, time) { { if (live) time() else Int.MIN_VALUE } }
-    MotionRow(line, visualTime, motion, voices, false, onSeek) {
+    MotionRow(line, visualTime, motion, voices, false, onSeek, onMainHeight) {
         Text(line.content, Modifier.fillMaxWidth().graphicsLayer {
             alpha = 0.4f + 0.6f * lyricPresence(line.start, line.end, visualTime(), motion.resetAt)
         }, style = style, color = Color.White, textAlign = TextAlign.Start)
         // A start-only line/translation cannot establish a separate vocal interval.
-
     }
 }
