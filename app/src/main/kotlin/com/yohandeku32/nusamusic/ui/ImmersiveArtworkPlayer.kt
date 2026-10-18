@@ -327,7 +327,10 @@ internal fun ImmersiveArtworkPlayer(
                             else -> immersiveText("Ulangi nonaktif", "Repeat off")
                         }, onRepeat, hasSong, active = repeatMode != 0, iconSize = 26.dp)
                 }
-                Spacer(Modifier.height(transportToPillGap))
+                // Raise title, seek bar and transport together by 12dp while
+                // keeping the bottom artist button and action pill anchored.
+                // Extra spacing is inserted ABOVE the pill, not below it.
+                Spacer(Modifier.height(transportToPillGap + if (wide) 0.dp else 12.dp))
                 // Keep Artist in its own circular glass target. The remaining
                 // actions share a compact pill, with 48dp minimum tap targets.
                 val actionPillWidth = if (lyricsEnabled) 224.dp else 176.dp
