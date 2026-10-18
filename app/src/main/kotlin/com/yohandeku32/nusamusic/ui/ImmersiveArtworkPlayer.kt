@@ -309,7 +309,7 @@ internal fun ImmersiveArtworkPlayer(
                 Spacer(Modifier.height(transportToPillGap))
                 // Five equal 48dp targets: Artist, Lyrics (if enabled),
                 // Library, Share and Settings. Preserve compact spacing.
-                val actionPillWidth = if (lyricsEnabled) 300.dp else 252.dp
+                val actionPillWidth = if (lyricsEnabled) 280.dp else 232.dp
                 Row(Modifier.align(Alignment.CenterHorizontally)
                     .widthIn(max = actionPillWidth).fillMaxWidth()
                     .height(56.dp)
