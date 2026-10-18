@@ -31,7 +31,8 @@ import com.mocharealm.accompanist.lyrics.ui.utils.isRtl
 internal fun CenteredKaraokeLine(
     line: KaraokeLine, time: () -> Int, motion: LyricsMotionState,
     style: TextStyle, onSeek: (ISyncedLine) -> Unit, onMainHeight: (Int) -> Unit = {},
-    expressions: List<LyricsAdaptiveExpression>? = null
+    expressions: List<LyricsAdaptiveExpression>? = null,
+    alignEnd: Boolean = false
 ) {
     val textMeasurer = rememberTextMeasurer()
     val density = LocalDensity.current
@@ -55,8 +56,9 @@ internal fun CenteredKaraokeLine(
             val layouts = remember(wrapped, width, lineHeight, rtl) {
                 calculateStaticLineLayout(wrapped, false, width, lineHeight, rtl)
             }
-            val painter = remember(layouts, density.density, line.start, line.end, expressions) {
-                SyllableLyricsPainter(layouts, density.density, line.start, line.end, expressions)
+            val painter = remember(layouts, density.density, line.start, line.end, expressions, alignEnd, width) {
+                SyllableLyricsPainter(layouts, density.density, line.start, line.end, expressions,
+                    alignEnd = alignEnd, viewportWidthPx = width)
             }
             val height = with(density) { (lineHeight * wrapped.size).toDp() } + 8.dp
             val readable by remember(line, voices, visualTime, motion) { derivedStateOf {
@@ -76,7 +78,7 @@ internal fun CenteredKaraokeLine(
     }
     // Show available translations as soon as their lyric row is on screen.
     // Their visibility must not depend on a syllable becoming active.
-    line.translation?.takeIf { it.isNotBlank() }?.let { LyricsTranslation(it, style) }
+    line.translation?.takeIf { it.isNotBlank() }?.let { LyricsTranslation(it, style, alignEnd) }
 }
 
 @Composable
@@ -122,7 +124,7 @@ internal fun TimedVocalContent(
  * timed vocal spacing exclusively to backing vocals.
  */
 @Composable
-private fun LyricsTranslation(text: String, style: TextStyle) {
+private fun LyricsTranslation(text: String, style: TextStyle, alignEnd: Boolean = false) {
     Text(
         text = text,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
@@ -131,13 +133,14 @@ private fun LyricsTranslation(text: String, style: TextStyle) {
             lineHeight = style.lineHeight * 0.65f
         ),
         color = Color.White.copy(alpha = 0.6f),
-        textAlign = TextAlign.Start
+        textAlign = if (alignEnd) TextAlign.End else TextAlign.Start
     )
 }
 
 @Composable
 internal fun LineSyncedLyricsRow(
-    line: SyncedLine, time: () -> Int, motion: LyricsMotionState, style: TextStyle, onMainHeight: (Int) -> Unit = {}, onSeek: () -> Unit
+    line: SyncedLine, time: () -> Int, motion: LyricsMotionState, style: TextStyle, onMainHeight: (Int) -> Unit = {},
+    alignEnd: Boolean = false, onSeek: () -> Unit
 ) {
     val voices = remember(line) { LyricsVocalWindows(line) }
     val live by remember(line, time, motion) { derivedStateOf {
@@ -148,7 +151,7 @@ internal fun LineSyncedLyricsRow(
     MotionRow(line, visualTime, motion, voices, false, onSeek, onMainHeight) {
         Text(line.content, Modifier.fillMaxWidth().graphicsLayer {
             alpha = 0.4f + 0.6f * lyricPresence(line.start, line.end, visualTime(), motion.resetAt)
-        }, style = style, color = Color.White, textAlign = TextAlign.Start)
+        }, style = style, color = Color.White, textAlign = if (alignEnd) TextAlign.End else TextAlign.Start)
         // A start-only line/translation cannot establish a separate vocal interval.
     }
 }
