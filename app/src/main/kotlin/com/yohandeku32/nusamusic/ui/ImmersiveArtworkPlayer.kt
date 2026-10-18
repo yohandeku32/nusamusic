@@ -16,7 +16,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
@@ -31,10 +30,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.zIndex
-import kotlin.math.roundToInt
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.selected
@@ -85,11 +81,7 @@ internal fun ImmersiveArtworkPlayer(
     modifier: Modifier = Modifier,
     contentInsets: WindowInsets = WindowInsets.safeDrawing
 ) {
-    var playerRootTopPx by remember { mutableIntStateOf(0) }
-    BoxWithConstraints(modifier.onGloballyPositioned {
-        val top = it.positionInRoot().y.roundToInt()
-        if (playerRootTopPx != top) playerRootTopPx = top
-    }) {
+    BoxWithConstraints(modifier) {
         val density = LocalDensity.current
         val viewportHeight = maxHeight
         val layoutDirection = LocalLayoutDirection.current
@@ -130,16 +122,14 @@ internal fun ImmersiveArtworkPlayer(
             animationSpec = tween(460, easing = FastOutSlowInEasing),
             label = "immersiveLyricsReflow"
         )
-        var settingsRowBottomPx by remember { mutableIntStateOf(0) }
-        // The anchor comes from the actual on-screen Settings row, including
-        // its system-bar insets. It is not a hard-coded screen percentage.
+        // Settings now lives in the bottom action pill, so Lyrics no longer
+        // needs to stop beneath a top-right button. Rise to a small clearance
+        // below the safe status-bar inset, responsively on every device.
         val viewportHeightPx = with(density) { viewportHeight.roundToPx() }
-        val actualSettingsBottomPx = if (settingsRowBottomPx > 0) settingsRowBottomPx
-            else with(density) { (topInset + 58.dp).roundToPx() }
         val sheetTopPx = immersiveLyricsSheetTopPx(
-            actualSettingsBottomPx,
+            with(density) { topInset.roundToPx() },
             viewportHeightPx,
-            with(density) { 8.dp.roundToPx() }
+            with(density) { 12.dp.roundToPx() }
         )
         val sheetHeight = with(density) {
             (viewportHeightPx - sheetTopPx).coerceAtLeast(0).toDp()
@@ -297,10 +287,9 @@ internal fun ImmersiveArtworkPlayer(
                         }, onRepeat, hasSong, active = repeatMode != 0, iconSize = 24.dp)
                 }
                 Spacer(Modifier.height(transportToPillGap))
-                // A compact, centred capsule with 48dp touch targets.
-                // Its width adapts when the Lyrics action is unavailable,
-                // without squeezing the tap areas on small screens.
-                val actionPillWidth = if (lyricsEnabled) 236.dp else 188.dp
+                // Five equal 48dp targets: Artist, Lyrics (if enabled),
+                // Library, Share and Settings. Preserve compact spacing.
+                val actionPillWidth = if (lyricsEnabled) 284.dp else 236.dp
                 Row(Modifier.align(Alignment.CenterHorizontally)
                     .widthIn(max = actionPillWidth).fillMaxWidth()
                     .height(52.dp)
@@ -321,6 +310,9 @@ internal fun ImmersiveArtworkPlayer(
                     ImmersiveAction(NusaPlayerIcons.Share,
                         immersiveText("Bagikan lagu", "Share song"),
                         onShare, hasSong, iconSize = 21.dp)
+                    ImmersiveAction(NusaPlayerIcons.More,
+                        immersiveText("Pengaturan", "Settings"),
+                        onSettings, iconSize = 21.dp)
                 }
                 }
             }
@@ -340,47 +332,27 @@ internal fun ImmersiveArtworkPlayer(
             Box(Modifier.align(Alignment.BottomCenter)) { foreground() }
         }
 
-        // A large rounded sheet rises from the physical bottom edge. Its
-        // top is measured from the actual Settings row, with that top control
-        // left OUTSIDE the sheet so it remains touchable at full expansion.
+        // Edge-to-edge Lyrics rises over ALL playback controls, including
+        // the relocated Settings action in the bottom pill. The panel's own
+        // close button and swipe-down gesture dismiss it.
         ImmersiveExpandingLyricsSheet(
             visible = lyricsOpen,
             song = ambientSong,
             sheetHeight = sheetHeight,
             onDismiss = onDismissLyrics,
             lyrics = lyrics,
-            // Explicitly ABOVE every transport/progress/pill button, even
-            // while its spring is moving. Settings stays one layer higher.
             modifier = Modifier.align(Alignment.BottomCenter).zIndex(2f)
         )
-
-        Row(Modifier.align(Alignment.TopCenter).fillMaxWidth().zIndex(3f)
-            .windowInsetsPadding(contentInsets.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
-            .padding(horizontal = 16.dp, vertical = 10.dp).height(48.dp)
-            .onGloballyPositioned {
-                val bottom = (it.positionInRoot().y + it.size.height -
-                    playerRootTopPx).roundToInt()
-                if (settingsRowBottomPx != bottom) settingsRowBottomPx = bottom
-            },
-            verticalAlignment = Alignment.CenterVertically) {
-            // No upper-left back button in either Immersive presentation.
-            // The Library pill and Android Back navigation remain available.
-            Spacer(Modifier.weight(1f))
-            ImmersiveAction(NusaPlayerIcons.More, immersiveText("Pengaturan", "Settings"),
-                onSettings, enabled = true, iconSize = 25.dp, glass = true)
-        }
     }
 }
 
 @Composable
 private fun ImmersiveAction(
     icon: ImageVector, label: String, onClick: () -> Unit, enabled: Boolean = true,
-    active: Boolean = false, iconSize: Dp = 22.dp, glass: Boolean = false
+    active: Boolean = false, iconSize: Dp = 22.dp
 ) {
     IconButton(onClick = onClick, enabled = enabled,
-        modifier = Modifier.size(48.dp)
-            .then(if (glass) Modifier.clip(CircleShape).background(Color.Black.copy(alpha = 0.28f)) else Modifier)
-            .semantics { selected = active }) {
+        modifier = Modifier.size(48.dp).semantics { selected = active }) {
         Icon(icon, label, tint = Color.White.copy(alpha = if (!enabled) 0.26f else if (active) 1f else 0.62f),
             modifier = Modifier.size(iconSize))
     }
