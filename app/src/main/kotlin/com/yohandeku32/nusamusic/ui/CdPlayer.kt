@@ -248,7 +248,7 @@ fun CdPlayer(
                 ) {
                     Spacer(Modifier.weight(1f))
                     IconButton(onClick = onSettings) {
-                        Icon(Icons.Default.MoreHoriz, cdText("Pengaturan", "Settings"))
+                        Icon(NusaPlayerIcons.More, cdText("Pengaturan", "Settings"))
                     }
                 }
                 key(displaySong?.id) {
@@ -353,15 +353,20 @@ fun CdPlayer(
                         }
                     }
                     Row(
-                        Modifier.padding(top = 12.dp, bottom = 14.dp),
+                        Modifier.padding(
+                            top = 12.dp,
+                            bottom = if (viewportHeight < 680.dp) 16.dp else 20.dp
+                        ),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        horizontalArrangement = Arrangement.spacedBy(
+                            if (viewportHeight < 680.dp) 8.dp else 12.dp
+                        )
                     ) {
                         IconToggleButton(checked = shuffleEnabled, onCheckedChange = { onShuffle() }, enabled = song != null) {
-                            Icon(Icons.Default.Shuffle, cdText("Acak", "Shuffle"), Modifier.size(19.dp), tint = if (shuffleEnabled) CdAccent else Color.Gray)
+                            Icon(NusaPlayerIcons.Shuffle, cdText("Acak", "Shuffle"), Modifier.size(20.dp), tint = if (shuffleEnabled) CdAccent else Color.Gray)
                         }
                         IconButton(onClick = onPrevious, enabled = song != null) {
-                            Icon(Icons.Default.SkipPrevious, cdText("Sebelumnya", "Previous"), Modifier.size(27.dp))
+                            Icon(NusaPlayerIcons.Previous, cdText("Sebelumnya", "Previous"), Modifier.size(26.dp))
                         }
                         FilledIconButton(
                             onClick = {
@@ -375,14 +380,14 @@ fun CdPlayer(
                             }, enabled = !loadingDisc, modifier = Modifier.size(54.dp),
                             colors = IconButtonDefaults.filledIconButtonColors(containerColor = Color(0xFFEDEDE7), contentColor = CdBackground)
                         ) {
-                            Icon(if (isPlaying && !loadingDisc) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                if (isPlaying && !loadingDisc) cdText("Jeda", "Pause") else cdText("Putar", "Play"), Modifier.size(29.dp))
+                            Icon(if (isPlaying && !loadingDisc) NusaPlayerIcons.Pause else NusaPlayerIcons.Play,
+                                if (isPlaying && !loadingDisc) cdText("Jeda", "Pause") else cdText("Putar", "Play"), Modifier.size(30.dp))
                         }
                         IconButton(onClick = onNext, enabled = song != null) {
-                            Icon(Icons.Default.SkipNext, cdText("Berikutnya", "Next"), Modifier.size(27.dp))
+                            Icon(NusaPlayerIcons.Next, cdText("Berikutnya", "Next"), Modifier.size(26.dp))
                         }
                         IconButton(onClick = onRepeat, enabled = song != null) {
-                            Icon(if (repeatMode == 1) Icons.Default.RepeatOne else Icons.Default.Repeat,
+                            Icon(if (repeatMode == 1) NusaPlayerIcons.RepeatOne else NusaPlayerIcons.Repeat,
                                 when (repeatMode) {
                                     1 -> cdText("Ulangi satu lagu", "Repeat one")
                                     2 -> cdText("Ulangi semua", "Repeat all")
