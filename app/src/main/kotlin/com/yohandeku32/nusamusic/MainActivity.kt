@@ -126,7 +126,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
@@ -169,8 +168,8 @@ import com.yohandeku32.nusamusic.ui.CdPlayer
 import com.yohandeku32.nusamusic.ui.TurntablePlayer
 import com.yohandeku32.nusamusic.ui.TurntableLabels
 import com.yohandeku32.nusamusic.ui.VinylSongList
-import com.yohandeku32.nusamusic.ui.resolveArtworkBottom
-import com.yohandeku32.nusamusic.ui.ImmersiveArtworkPainter
+import com.yohandeku32.nusamusic.ui.ImmersiveArtworkPlayer
+import com.yohandeku32.nusamusic.ui.ImmersiveArtworkScene
 import com.yohandeku32.nusamusic.ui.ImmersiveArtistPage
 import com.yohandeku32.nusamusic.ui.ImmersiveArtistPageState
 import com.yohandeku32.nusamusic.ui.ImmersiveLyricsPanel
@@ -1581,23 +1580,6 @@ private fun NusaMusicApp(
     }
     var lyricsRequested by remember(playerPresentationMode) { mutableStateOf(false) }
     var lyricsCloseRequestId by remember(playerPresentationMode) { mutableIntStateOf(0) }
-    var immersiveArtworkBottomPx by remember { mutableFloatStateOf(Float.NaN) }
-    var immersiveHasQualityBadge by remember { mutableStateOf(true) }
-    val immersiveFrameCoordinates = remember { mutableStateOf<LayoutCoordinates?>(null) }
-    val immersiveArtistCoordinates = remember { mutableStateOf<LayoutCoordinates?>(null) }
-
-    fun updateImmersiveArtworkBottom() {
-        val frame = immersiveFrameCoordinates.value ?: return
-        val artist = immersiveArtistCoordinates.value ?: return
-        if (!frame.isAttached || !artist.isAttached) return
-        val bottom = frame.localPositionOf(
-            artist,
-            androidx.compose.ui.geometry.Offset(0f, artist.size.height.toFloat())
-        ).y
-        if (bottom.isFinite() && bottom > 0f &&
-            (!immersiveArtworkBottomPx.isFinite() || abs(bottom - immersiveArtworkBottomPx) > 0.5f)
-        ) immersiveArtworkBottomPx = bottom
-    }
     var customTitleTypeface by remember {
         mutableStateOf<Typeface?>(null)
     }
@@ -1955,245 +1937,6 @@ private fun NusaMusicApp(
         }
     }
 
-    // Shared player controls.
-    val playerControls: @Composable () -> Unit = {
-        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-            val immersiveArtworkMode = artistPageEnabled
-            PlaybackProgress(
-                positionMsState = positionMsState,
-                durationMs = durationMs,
-                enabled = currentSong != null && durationMs > 0L,
-                onSeek = onSeek,
-                immersive = playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp)
-            )
-
-            Spacer(Modifier.height(5.dp))
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                if (immersiveArtworkMode) {
-                    IconButton(
-                        onClick = onPrevious,
-                        enabled = currentSong != null,
-                        modifier = Modifier.size(76.dp)
-                    ) {
-                        Icon(
-                            Icons.Rounded.FastRewind,
-                            contentDescription = nusaText("Sebelumnya", "Previous"),
-                            tint = Color.White,
-                            modifier = Modifier.size(54.dp)
-                        )
-                    }
-                } else {
-                    TransportPillButton(
-                        icon = Icons.Rounded.FastRewind,
-                        contentDescription = nusaText("Sebelumnya", "Previous"),
-                        onClick = onPrevious,
-                        enabled = currentSong != null,
-                        realistic = realisticControls
-                    )
-                }
-
-                Spacer(Modifier.width(if (immersiveArtworkMode) 8.dp else 12.dp))
-
-                if (immersiveArtworkMode) {
-                    IconButton(
-                        onClick = if (currentSong == null) onRequestPermission else onTogglePlay,
-                        enabled = true,
-                        modifier = Modifier.size(104.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (isPlaying) {
-                                Icons.Rounded.Pause
-                            } else {
-                                Icons.Rounded.PlayArrow
-                            },
-                            contentDescription = if (isPlaying) {
-                                nusaText("Jeda", "Pause")
-                            } else {
-                                nusaText("Putar", "Play")
-                            },
-                            tint = Color.White,
-                            modifier = Modifier.size(80.dp)
-                        )
-                    }
-                } else {
-                    PlayerControlButton(
-                        realistic = realisticControls,
-                        icon = if (isPlaying) {
-                            Icons.Rounded.Pause
-                        } else {
-                            Icons.Rounded.PlayArrow
-                        },
-                        contentDescription = if (isPlaying) {
-                            nusaText("Jeda", "Pause")
-                        } else {
-                            nusaText("Putar", "Play")
-                        },
-                        onClick = if (currentSong == null) {
-                            onRequestPermission
-                        } else {
-                            onTogglePlay
-                        },
-                        enabled = true,
-                        modifier = Modifier.size(84.dp),
-                        iconSize = 40.dp
-                    )
-                }
-
-                Spacer(Modifier.width(if (immersiveArtworkMode) 8.dp else 12.dp))
-
-                if (immersiveArtworkMode) {
-                    IconButton(
-                        onClick = onNext,
-                        enabled = currentSong != null,
-                        modifier = Modifier.size(76.dp)
-                    ) {
-                        Icon(
-                            Icons.Rounded.FastForward,
-                            contentDescription = nusaText("Berikutnya", "Next"),
-                            tint = Color.White,
-                            modifier = Modifier.size(54.dp)
-                        )
-                    }
-                } else {
-                    TransportPillButton(
-                        icon = Icons.Rounded.FastForward,
-                        contentDescription = nusaText("Berikutnya", "Next"),
-                        onClick = onNext,
-                        enabled = currentSong != null,
-                        realistic = realisticControls
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(10.dp))
-            Spacer(Modifier.height(12.dp))
-            Spacer(Modifier.height(18.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                val biographyArrowRotation by animateFloatAsState(
-                    targetValue = if (biographyExpanded) 180f else 0f,
-                    animationSpec = tween(
-                        durationMillis = 380,
-                        easing = androidx.compose.animation.core.FastOutSlowInEasing
-                    ),
-                    label = "biographyArrowRotation"
-                )
-
-                IconButton(
-                    onClick = {
-                        if (artistPageEnabled) {
-                            scope.launch { pagerState.animateMiuixScrollToPage(0); lyricsRequested = false }
-                            return@IconButton
-                        }
-                        biographyExpanded = !biographyExpanded
-                        scope.launch {
-                            if (biographyExpanded) {
-                                val viewportHeight =
-                                    playerScrollState.layoutInfo.viewportEndOffset -
-                                        playerScrollState.layoutInfo.viewportStartOffset
-
-                                playerScrollState.animateScrollBy(
-                                    value = viewportHeight.toFloat(),
-                                    animationSpec = androidx.compose.animation.core.tween(
-                                        durationMillis = 520,
-                                        easing = androidx.compose.animation.core.FastOutSlowInEasing
-                                    )
-                                )
-                            } else {
-                                playerScrollState.animateScrollToItem(
-                                    index = 0,
-                                    scrollOffset = 0
-                                )
-                            }
-                        }
-                    },
-                    modifier = Modifier.size(42.dp)
-                ) {
-                    if (artistPageEnabled) {
-                        Icon(
-                            Icons.Default.ArrowBack,
-                            contentDescription = nusaText("Buka halaman artis • geser ke kanan", "Open artist page • swipe right"),
-                            tint = Color.White,
-                            modifier = Modifier.size(25.dp)
-                        )
-                    } else BiographyArrowIcon(
-                        modifier = Modifier
-                            .size(25.dp)
-                            .graphicsLayer {
-                                rotationZ = biographyArrowRotation
-                            },
-                        color = if (
-                            playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
-                        ) Color.White else MaterialTheme.colorScheme.onSurface
-                    )
-                }
-
-                Spacer(Modifier.weight(1f))
-
-                if (LYRICS_ENABLED && artistPageEnabled) {
-                    IconButton(
-                        onClick = {
-                            if (lyricsRequested) lyricsCloseRequestId++
-                            else lyricsRequested = true
-                        },
-                        enabled = currentSong != null,
-                        modifier = Modifier.size(42.dp)
-                    ) {
-                        Icon(if (lyricsRequested) Icons.Default.KeyboardArrowDown else Icons.Default.Lyrics,
-                            if (lyricsRequested) nusaText("Tutup lirik", "Close lyrics") else nusaText("Buka lirik", "Open lyrics"),
-                            tint = Color.White, modifier = Modifier.size(22.dp))
-                    }
-                }
-
-                IconButton(
-                    onClick = { onShare(currentSong) },
-                    enabled = currentSong != null,
-                    modifier = Modifier.size(42.dp)
-                ) {
-                    ChatGptStyleShareIcon(
-                        modifier = Modifier.size(22.dp),
-                        color = if (
-                            playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
-                        ) Color.White else Color.Unspecified
-                    )
-                }
-
-                IconButton(
-                    onClick = { isFavorite = !isFavorite },
-                    enabled = currentSong != null,
-                    modifier = Modifier.size(42.dp)
-                ) {
-                    NusaFavoriteIcon(
-                        selected = isFavorite,
-                        color = if (
-                            playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
-                        ) Color.White else Color.Unspecified,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
-            }
-
-            if (playerPresentationMode == PlayerPresentationMode.VINYL) {
-                Spacer(Modifier.height(8.dp))
-                AudioQualityPill(song = currentSong)
-            } else {
-                Spacer(Modifier.height(36.dp))
-            }
-        }
-    }
-
     val pageBackdrop = when (playerPresentationMode) {
         PlayerPresentationMode.CD -> Color(0xFF111111)
         PlayerPresentationMode.IMMERSIVE_ARTWORK -> Color.Black
@@ -2245,6 +1988,40 @@ private fun NusaMusicApp(
                     page == playerPage -> {
                         BoxWithConstraints(Modifier.fillMaxSize()) {
                         val playerViewportHeight = maxHeight
+                        if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
+                            ImmersiveArtworkPlayer(
+                                title = currentSong?.title ?: nusaText("Pilih lagu", "Choose a song"),
+                                artist = currentSong?.artist ?: nusaText("Perpustakaan musik lokal Anda", "Your local music library"),
+                                titleFontFamily = if (uiPrefs.contains("title_font_family")) titleFontFamily else FontFamily.SansSerif,
+                                titleFontSize = titleFontSize,
+                                hasSong = currentSong != null,
+                                isPlaying = isPlaying,
+                                isFavorite = isFavorite,
+                                shuffleEnabled = shuffleEnabled,
+                                repeatMode = repeatMode,
+                                lyricsOpen = lyricsRequested,
+                                lyricsEnabled = LYRICS_ENABLED,
+                                onPlayPause = if (currentSong == null) onRequestPermission else onTogglePlay,
+                                onPrevious = onPrevious, onNext = onNext,
+                                onShuffle = onToggleShuffle, onRepeat = onToggleRepeat,
+                                onFavorite = { isFavorite = !isFavorite },
+                                onLyrics = { if (lyricsRequested) lyricsCloseRequestId++ else lyricsRequested = true },
+                                onArtist = { scope.launch { pagerState.animateMiuixScrollToPage(0); lyricsRequested = false } },
+                                onLibrary = { scope.launch { pagerState.animateMiuixScrollToPage(libraryPage) } },
+                                onShare = { onShare(currentSong) },
+                                onSettings = { showSettings = true },
+                                artwork = { artworkModifier, heroHeight, heroWidth ->
+                                    ImmersiveArtwork(currentSong, animatedArtworkEnabled, heroHeight, heroWidth, artworkModifier)
+                                },
+                                progress = { progressModifier ->
+                                    PlaybackProgress(positionMsState, durationMs, currentSong != null && durationMs > 0,
+                                        onSeek, immersive = true, modifier = progressModifier)
+                                },
+                                quality = { AudioQualityPill(song = currentSong, immersive = true) },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                            return@BoxWithConstraints
+                        }
                         if (playerPresentationMode == PlayerPresentationMode.CD) {
                             // The CD page scrolls only its own content, without
                             // the shared biography container or its black backdrop.
@@ -2330,49 +2107,10 @@ private fun NusaMusicApp(
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .then(
-                                            if (playerPresentationMode != PlayerPresentationMode.IMMERSIVE_ARTWORK) {
-                                                Modifier.heightIn(min = playerViewportHeight)
-                                            } else Modifier.fillParentMaxHeight()
-                                        )
-                                        .then(
-                                            if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
-                                                Modifier.onGloballyPositioned { coordinates ->
-                                                    immersiveFrameCoordinates.value = coordinates
-                                                    updateImmersiveArtworkBottom()
-                                                }
-                                            } else Modifier
-                                        )
-                                        .then(
-                                            if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
-                                                // Keep the immersive player edge square and fully black so
-                                                // rounded-corner antialiasing cannot reveal a light-colored seam
-                                                // between the player and the biography section.
-                                                Modifier.background(Color.Black)
-                                            } else {
-                                                Modifier
-                                                    .clip(
-                                                        RoundedCornerShape(
-                                                            bottomStart = 34.dp,
-                                                            bottomEnd = 34.dp
-                                                        )
-                                                    )
-                                                    .background(MaterialTheme.colorScheme.background)
-                                            }
-                                        )
+                                        .heightIn(min = playerViewportHeight)
+                                        .clip(RoundedCornerShape(bottomStart = 34.dp, bottomEnd = 34.dp))
+                                        .background(MaterialTheme.colorScheme.background)
                                 ) {
-                                    if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
-                                        ImmersiveArtwork(
-                                            song = currentSong,
-                                            // Keep the retained player page's video alive while swiping
-                                            // to the library or artist page and back.
-                                            animatedArtworkEnabled = animatedArtworkEnabled,
-                                            artistBottomPx = immersiveArtworkBottomPx,
-                                            modifier = Modifier.matchParentSize()
-                                        )
-
-                                    }
-
                                     if (playerPresentationMode == PlayerPresentationMode.VINYL) {
                                         TurntablePlayer(
                                             title = currentSong?.title ?: nusaText("Pilih lagu", "Choose a song"),
@@ -2458,246 +2196,8 @@ private fun NusaMusicApp(
                                             },
                                             modifier = Modifier.fillMaxWidth()
                                         )
-                                    } else {
-                                    Column(
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .then(
-                                                if (playerPresentationMode == PlayerPresentationMode.VINYL) {
-                                                    Modifier.background(MaterialTheme.colorScheme.background)
-                                                } else {
-                                                    Modifier
-                                                }
-                                            ),
-                                        horizontalAlignment = Alignment.CenterHorizontally
-                                    ) {
-                                    Spacer(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(24.dp)
-                                    )
-
-                                    TopAppBar(
-                                        modifier = Modifier,
-                                        title = { },
-                                        colors = TopAppBarDefaults.topAppBarColors(
-                                            containerColor = if (
-                                                playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
-                                            ) Color.Transparent else MaterialTheme.colorScheme.background,
-                                            scrolledContainerColor = if (
-                                                playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
-                                            ) Color.Transparent else MaterialTheme.colorScheme.background,
-                                            actionIconContentColor = if (
-                                                playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
-                                            ) Color.White else MaterialTheme.colorScheme.onSurface,
-                                            navigationIconContentColor = if (
-                                                playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
-                                            ) Color.White else MaterialTheme.colorScheme.onSurface
-                                        ),
-                                        windowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
-                                        navigationIcon = {
-                                            // Keep the top-left corner clear in Immersive mode.
-                                            // Other presentation modes retain the artist avatar.
-                                            if (playerPresentationMode != PlayerPresentationMode.IMMERSIVE_ARTWORK) {
-                                                ArtistAvatar(
-                                                    song = currentSong,
-                                                    modifier = Modifier
-                                                        .padding(start = 18.dp)
-                                                        .size(40.dp)
-                                                        .clip(CircleShape)
-                                                )
-                                            }
-                                        },
-                                        actions = {
-                                            IconButton(onClick = { showSettings = true }, enabled = !artistPageEnabled || !lyricsRequested) {
-                                                Icon(
-                                                    Icons.Default.MoreHoriz,
-                                                    contentDescription = nusaText("Pengaturan", "Settings"),
-                                                    tint = if (
-                                                        playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
-                                                    ) Color.White else MaterialTheme.colorScheme.onSurface
-                                                )
-                                            }
-                                        }
-                                    )
-
-                                    BoxWithConstraints(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .then(
-                                                if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
-                                                    Modifier.weight(1f)
-                                                } else {
-                                                    Modifier
-                                                }
-                                            )
-                                            .padding(horizontal = 22.dp)
-                                    ) {
-                                        val playerContentHeight = maxHeight
-                                        Column(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .then(
-                                                    if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
-                                                        Modifier.fillMaxHeight()
-                                                    } else Modifier
-                                                ),
-                                            horizontalAlignment = Alignment.CenterHorizontally
-                                        ) {
-                                        val immersiveArtworkMode =
-                                            playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
-                                        val titleText =
-                                            currentSong?.title ?: nusaText("Pilih lagu", "Choose a song")
-                                        val titleWordCount = remember(titleText) {
-                                            titleText.trim()
-                                                .split(Regex("\\s+"))
-                                                .count { it.isNotBlank() }
-                                        }
-                                        val titleSize = remember(titleWordCount, titleFontSize) {
-                                            val scale = titleFontSize / 34f
-                                            when {
-                                                titleWordCount <= 2 -> titleFontSize.sp
-                                                titleWordCount == 3 -> (31f * scale).sp
-                                                else -> (28f * scale).sp
-                                            }
-                                        }
-                                        val titleLineHeight = remember(titleWordCount, titleFontSize) {
-                                            val scale = titleFontSize / 34f
-                                            when {
-                                                titleWordCount <= 2 -> (37f * scale).sp
-                                                titleWordCount == 3 -> (34f * scale).sp
-                                                else -> (31f * scale).sp
-                                            }
-                                        }
-                                        val threeLineTitleHeight = with(
-                                            androidx.compose.ui.platform.LocalDensity.current
-                                        ) {
-                                            ((titleFontSize * 37f / 34f).sp).toDp() * 3f + 6.dp
-                                        }
-                                        val titleBoxHeight = if (immersiveArtworkMode) {
-                                            maxOf(104.dp, threeLineTitleHeight)
-                                        } else {
-                                            82.dp
-                                        }
-
-                                        if (playerPresentationMode == PlayerPresentationMode.VINYL) {
-                                            Spacer(Modifier.height(2.dp))
-                                        } else {
-                                            // Reserve the lower controls first; this space only fills
-                                            // what is left and cannot push them down for a long title.
-                                            val heroSpace = (playerContentHeight - titleBoxHeight - 322.dp)
-                                                .coerceIn(0.dp, playerContentHeight * 0.33f)
-                                            val metadataOffset = if (immersiveArtworkMode) {
-                                                // Move metadata into the unused pill area for lossy tracks.
-                                                24.dp + if (immersiveHasQualityBadge) 0.dp else 32.dp
-                                            } else 0.dp
-                                            Spacer(
-                                                Modifier.height(heroSpace + metadataOffset)
-                                            )
-                                        }
-
-                                        if (playerPresentationMode == PlayerPresentationMode.VINYL) {
-                                            VinylRecord(
-                                                song = currentSong,
-                                                isPlaying = isPlaying,
-                                                modifier = Modifier
-                                                    .fillMaxWidth(0.84f)
-                                                    .aspectRatio(1f)
-                                            )
-                                        }
-
-                                        if (playerPresentationMode == PlayerPresentationMode.VINYL) {
-                                            Spacer(Modifier.height(24.dp))
-                                        }
-
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .height(titleBoxHeight),
-                                            contentAlignment = Alignment.BottomCenter
-                                        ) {
-                                            Text(
-                                                titleText,
-                                                fontFamily = titleFontFamily,
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = titleSize,
-                                                lineHeight = titleLineHeight,
-                                                maxLines = 3,
-                                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                                modifier = Modifier.padding(horizontal = 4.dp),
-                                                color = if (
-                                                    playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
-                                                ) Color.White else MaterialTheme.colorScheme.onBackground,
-                                                textAlign = TextAlign.Center
-                                            )
-                                        }
-
-                                        Text(
-                                            currentSong?.artist ?: nusaText("Perpustakaan musik lokal Anda", "Your local music library"),
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .then(
-                                                    if (immersiveArtworkMode) {
-                                                        Modifier.onGloballyPositioned { coordinates ->
-                                                            immersiveArtistCoordinates.value = coordinates
-                                                            updateImmersiveArtworkBottom()
-                                                        }
-                                                    } else Modifier
-                                                ),
-                                            fontSize = 14.sp,
-                                            maxLines = 1,
-                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                            textAlign = TextAlign.Center,
-                                            color = if (
-                                                playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
-                                            ) {
-                                                Color.White.copy(alpha = 0.82f)
-                                            } else {
-                                                MaterialTheme.colorScheme.onSurfaceVariant
-                                            }
-                                        )
-
-                                        if (immersiveArtworkMode) {
-                                            if (immersiveHasQualityBadge) Spacer(Modifier.height(10.dp))
-                                            Box {
-                                                AudioQualityPill(
-                                                    song = currentSong,
-                                                    immersive = true,
-                                                    onBadgeVisibilityChanged = { immersiveHasQualityBadge = it }
-                                                )
-                                            }
-                                            Spacer(Modifier.weight(1f))
-                                        } else {
-                                            Spacer(Modifier.height(16.dp))
-                                        }
-
-                                        playerControls()
-
-                                        if (!hasMusicAccess) {
-                                            Text(
-                                                nusaText("Izinkan Nusa mengakses file audio Anda.", "Give Nusa access to your audio files."),
-                                                color = Color(0xFF9D9D9D),
-                                                fontSize = 14.sp
-                                            )
-                                            Spacer(Modifier.height(12.dp))
-                                            FilledIconButton(onClick = onRequestPermission) {
-                                                Icon(
-                                                    Icons.Default.FolderOpen,
-                                                    contentDescription = nusaText("Izinkan akses musik", "Allow music access")
-                                                )
-                                            }
-                                        } else if (playerPresentationMode != PlayerPresentationMode.IMMERSIVE_ARTWORK && filtered.isEmpty()) {
-                                            Text(
-                                                emptyLibraryMessage,
-                                                color = Color(0xFF9D9D9D),
-                                                fontSize = 14.sp
-                                            )
-                                        }
-                                        }
                                     }
                                 }
-                                }
-                            }
                             }
 
                             if (showArtistBiography && !artistPageEnabled) {
@@ -3884,7 +3384,7 @@ private fun SimpleProgressBar(
 
     androidx.compose.foundation.Canvas(
         modifier = modifier
-            .height(28.dp)
+            .height(if (immersive) 36.dp else 28.dp)
             .pointerInput(durationMs, enabled) {
                 if (enabled && durationMs > 0L) {
                     detectTapGestures { offset ->
@@ -3915,13 +3415,13 @@ private fun SimpleProgressBar(
             }
     ) {
         val y = size.height / 2f
-        val stroke = 5.dp.toPx()
+        val stroke = (if (immersive) 3.dp else 5.dp).toPx()
         val startX = stroke / 2f
         val endX = (size.width - startX).coerceAtLeast(startX)
 
         drawLine(
             color = if (immersive) {
-                Color.White.copy(alpha = 0.48f)
+                Color.White.copy(alpha = 0.22f)
             } else {
                 Color(0xFFD0CDC6)
             },
@@ -3967,9 +3467,9 @@ private fun PlaybackProgress(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            val textColor = if (immersive) Color.White else MaterialTheme.colorScheme.onBackground
-            Text(formatTime(positionMs), fontSize = 12.sp, color = textColor)
-            Text(formatTime(durationMs), fontSize = 12.sp, color = textColor)
+            val textColor = if (immersive) Color.White.copy(alpha = 0.75f) else MaterialTheme.colorScheme.onBackground
+            Text(formatTime(positionMs), fontSize = if (immersive) 11.sp else 12.sp, color = textColor)
+            Text(formatTime(durationMs), fontSize = if (immersive) 11.sp else 12.sp, color = textColor)
         }
     }
 }
@@ -4503,7 +4003,8 @@ private fun immersiveScrimOpacity(bitmap: Bitmap?): Float {
 private fun ImmersiveArtwork(
     song: Song?,
     animatedArtworkEnabled: Boolean = true,
-    artistBottomPx: Float = Float.NaN,
+    heroHeight: androidx.compose.ui.unit.Dp,
+    heroWidthFraction: Float = 1f,
     modifier: Modifier = Modifier
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -4637,110 +4138,16 @@ private fun ImmersiveArtwork(
         label = "immersiveBackdrop"
     )
 
-    BoxWithConstraints(modifier.background(animatedBackdrop)) {
-        val sharpBottom = resolveArtworkBottom(artistBottomPx, constraints.maxHeight.toFloat())
-        val sharpHeight = with(LocalDensity.current) { sharpBottom.toDp() }
-        val fadeSpan = sharpBottom * 0.72f
-
-        // Fill the entire viewport with artwork detail. Scaling to sharpBottom
-        // clamps the last image row across the controls, making the blur look solid.
-        Crossfade(
-            targetState = activeBlur,
-            animationSpec = tween(durationMillis = if (hasPresentedArtwork) 360 else 0),
-            label = "immersiveBlur",
-            modifier = Modifier.matchParentSize()
-        ) { blurBitmap ->
-            Box(
-                Modifier
-                    .matchParentSize()
-                    .drawWithCache {
-                        val paint = if (
-                            blurBitmap != null && size.width > 0f && size.height > 0f
-                        ) {
-                            val scale = maxOf(
-                                size.width / blurBitmap.width,
-                                size.height / blurBitmap.height
-                            )
-                            val matrix = android.graphics.Matrix().apply {
-                                setScale(scale, scale)
-                                postTranslate((size.width - blurBitmap.width * scale) / 2f, 0f)
-                            }
-                            val shader = android.graphics.BitmapShader(
-                                blurBitmap,
-                                android.graphics.Shader.TileMode.CLAMP,
-                                android.graphics.Shader.TileMode.CLAMP
-                            ).apply { setLocalMatrix(matrix) }
-                            android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG).apply {
-                                this.shader = shader
-                            }
-                        } else null
-                        onDrawBehind {
-                            if (paint != null) drawIntoCanvas { canvas ->
-                                canvas.nativeCanvas.drawRect(0f, 0f, size.width, size.height, paint)
-                            }
-                        }
-                    }
-            )
-        }
-
-        // A light tonal glaze keeps the artwork visible through the controls.
-        Box(
-            Modifier
-                .matchParentSize()
-                .background(
-                    Brush.verticalGradient(
-                        0.00f to Color.Transparent,
-                        0.28f to Color.Transparent,
-                        0.48f to animatedBackdrop.copy(alpha = 0.04f),
-                        0.68f to animatedBackdrop.copy(alpha = 0.08f),
-                        0.84f to animatedBackdrop.copy(alpha = 0.12f),
-                        1.00f to animatedBackdrop.copy(alpha = 0.18f)
-                    )
-                )
-        )
-
-        // Static and animated artwork share the same boundary and feathered mask.
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .height(sharpHeight)
-                .align(Alignment.TopCenter)
-                .graphicsLayer {
-                    clip = true
-                    compositingStrategy = CompositingStrategy.Offscreen
-                }
-                .drawWithCache {
-                    val painter = ImmersiveArtworkPainter(size, size.height, fadeSpan)
-                    onDrawWithContent {
-                        drawContent()
-                        with(painter) { fadeArtwork() }
-                    }
-                }
-        ) {
-            Crossfade(
-                targetState = artwork,
-                animationSpec = tween(durationMillis = if (hasPresentedArtwork) 360 else 0),
-                label = "immersiveCover",
-                modifier = Modifier.fillMaxSize()
-            ) { cover ->
-                if (cover != null) {
-                    Image(
-                        bitmap = cover.asImageBitmap(),
-                        contentDescription = song?.title,
-                        contentScale = ContentScale.Crop,
-                        alignment = Alignment.TopCenter,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else if (song == null) {
-                    Icon(
-                        Icons.Default.MusicNote,
-                        contentDescription = null,
-                        tint = Color.White.copy(alpha = 0.18f),
-                        modifier = Modifier.size(42.dp).align(Alignment.Center)
-                    )
-                }
-            }
-
+    ImmersiveArtworkScene(
+        artwork = artwork,
+        blur = activeBlur,
+        backdrop = animatedBackdrop,
+        heroHeight = heroHeight,
+        heroWidthFraction = heroWidthFraction,
+        scrimOpacity = scrimOpacity,
+        animateChanges = hasPresentedArtwork,
+        description = song?.title,
+        animatedArtwork = {
             val activeUrl = animatedArtworkUrl
             if (animatedArtworkEnabled && activeUrl != null) {
                 AnimatedArtworkVideoBackground(
@@ -4762,20 +4169,10 @@ private fun ImmersiveArtwork(
                     }
                 )
             }
-        }
-
-        Box(
-            Modifier
-                .matchParentSize()
-                .graphicsLayer { alpha = scrimOpacity }
-                .drawWithCache {
-                    val painter = ImmersiveArtworkPainter(size, sharpBottom, fadeSpan)
-                    onDrawBehind { with(painter) { drawScrim() } }
-                }
-        )
-    }
+        },
+        modifier = modifier
+    )
 }
-
 @Composable
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 private fun AnimatedArtworkVideoBackground(

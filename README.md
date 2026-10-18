@@ -8,7 +8,7 @@ The current version is **3.13.4** (`versionCode 46`). It runs on Android 10 and 
 
 - A vinyl-style player with rotating artwork and reflections, a moving tonearm, and playback controls.
 - A dark CD player with rotating album artwork inside a clear jewel case, a tick-mark seek bar, and a swipeable row of discs. The case, reflections, and centre clip stay still while the disc rotates. Choose **CD** under **Player presentation** in settings, then swipe the bottom row and tap a disc to play that song. It uses the library's current sort order and the existing playback queue; the selected mode is saved between launches.
-- Immersive artwork with a full-width cover and a gradual fade into the controls. Animated covers are optional, with local artwork as the fallback.
+- Immersive artwork with a dominant edge-to-edge cover, a softly blurred colour backdrop, left-aligned song details, and compact playback controls. Artist, lyrics, library, and share actions sit together in one large centred glass pill. The layout adapts to short screens, landscape, and larger text. Animated covers are optional, with local artwork as the fallback.
 - Background playback, notification controls, shuffle, and repeat through AndroidX Media3.
 - Crossfade from 1 to 12 seconds, with a default of 5 seconds when enabled.
 - A local library with album artwork, A–Z navigation, and sorting by title, artist, album, date added, or duration.
