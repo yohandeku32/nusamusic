@@ -53,4 +53,52 @@ class LyricsFloatingMotionTest {
             }
         }
     }
+    @Test fun slowCarrierDoesNotOscillateRapidlyDuringALongVocal() {
+        val motion = LyricsFloatingMotion(0, 12_000, 0)
+        var previousLift = 0f
+        var directionChanges = 0
+        var previousSign = 0
+        for (now in 1500..10_000 step 10) {
+            motion.update(now)
+            assertTrue(motion.scale in 1f..1.015f)
+            assertTrue(abs(motion.liftDp) <= 1.5f)
+            val delta = motion.liftDp - previousLift
+            if (now > 1510) assertTrue("Wave jumped at $now", abs(delta) < 0.05f)
+            val sign = when {
+                delta > 0.00001f -> 1
+                delta < -0.00001f -> -1
+                else -> 0
+            }
+            if (previousSign != 0 && sign != 0 && sign != previousSign) directionChanges++
+            if (sign != 0) previousSign = sign
+            previousLift = motion.liftDp
+        }
+        // ~3.4s carrier: only a few direction reversals across 8.5s.
+        assertTrue("Wave oscillates too quickly", directionChanges in 3..7)
+    }
+
+    @Test fun onsetPulseHappensOnlyNearTheSyllableBoundary() {
+        val motion = LyricsFloatingMotion(1000, 9000, 0)
+        motion.update(1120)
+        val early = motion.liftDp
+        motion.update(4900)
+        val middle = motion.liftDp
+        motion.update(8000)
+        val late = motion.liftDp
+        assertTrue(early.isFinite() && middle.isFinite() && late.isFinite())
+        motion.update(8999)
+        assertTrue(abs(motion.liftDp) < 0.001f)
+        assertTrue(abs(motion.scale - 1f) < 0.0001f)
+    }
+
+    @Test fun shortUnitsDoNotCompressGlowIntoAFastRepeatedCycle() {
+        var previous = lyricBreathing(1000, 1350, 1000)
+        for (time in 1010..1350 step 10) {
+            val next = lyricBreathing(1000, 1350, time)
+            assertTrue(next in 0.88f..1.001f)
+            assertTrue(abs(next - previous) < 0.003f)
+            previous = next
+        }
+    }
+
 }
