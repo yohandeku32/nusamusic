@@ -31,6 +31,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import kotlin.math.roundToInt
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.selected
@@ -67,6 +70,7 @@ internal fun ImmersiveArtworkPlayer(
     onRepeat: () -> Unit,
     onFavorite: () -> Unit,
     onLyrics: () -> Unit,
+    onDismissLyrics: () -> Unit,
     onArtist: () -> Unit,
     onLibrary: () -> Unit,
     onShare: () -> Unit,
@@ -79,7 +83,11 @@ internal fun ImmersiveArtworkPlayer(
     modifier: Modifier = Modifier,
     contentInsets: WindowInsets = WindowInsets.safeDrawing
 ) {
-    BoxWithConstraints(modifier) {
+    var playerRootTopPx by remember { mutableIntStateOf(0) }
+    BoxWithConstraints(modifier.onGloballyPositioned {
+        val top = it.positionInRoot().y.roundToInt()
+        if (playerRootTopPx != top) playerRootTopPx = top
+    }) {
         val density = LocalDensity.current
         val viewportHeight = maxHeight
         val layoutDirection = LocalLayoutDirection.current
@@ -118,9 +126,20 @@ internal fun ImmersiveArtworkPlayer(
             animationSpec = tween(460, easing = FastOutSlowInEasing),
             label = "immersiveLyricsReflow"
         )
-        val lyricsTop = (if (wide) topInset + 156.dp else
-            targetHeaderTop + headerHeight + 14.dp)
-        val lyricsBottom = transportHeight + bottomInset + 22.dp
+        var settingsRowBottomPx by remember { mutableIntStateOf(0) }
+        // The anchor comes from the actual on-screen Settings row, including
+        // its system-bar insets. It is not a hard-coded screen percentage.
+        val viewportHeightPx = with(density) { viewportHeight.roundToPx() }
+        val actualSettingsBottomPx = if (settingsRowBottomPx > 0) settingsRowBottomPx
+            else with(density) { (topInset + 58.dp).roundToPx() }
+        val sheetTopPx = immersiveLyricsSheetTopPx(
+            actualSettingsBottomPx,
+            viewportHeightPx,
+            with(density) { 8.dp.roundToPx() }
+        )
+        val sheetHeight = with(density) {
+            (viewportHeightPx - sheetTopPx).coerceAtLeast(0).toDp()
+        }
         // The extra air beneath transport should not steal vertical space
         // from the artwork: compensate only the newly introduced gap.
         val addedTransportGap = (transportPillGap -
@@ -294,40 +313,31 @@ internal fun ImmersiveArtworkPlayer(
             Box(Modifier.align(Alignment.BottomCenter)) { foreground() }
         }
 
-        // Inline Lyrics lives in the artwork area, between lifted metadata
-        // and the original seek/transport controls. It is not a modal sheet,
-        // so opening/closing never drags content from the screen bottom.
-        // Animate only alpha/paint translation: no glyph-size changes and no
-        // interference with manual scrolling or synchronized highlighting.
-        if (lyricHeaderHeightPx > 0 && transportHeightPx > 0 &&
-            viewportHeight > lyricsTop + lyricsBottom + 72.dp
-        ) {
-            AnimatedVisibility(
-                visible = lyricsOpen,
-                modifier = Modifier.fillMaxSize()
-                    .padding(
-                        start = if (wide) maxWidth - controlsWidth else 0.dp,
-                        top = lyricsTop,
-                        bottom = lyricsBottom
-                    ),
-                enter = fadeIn(tween(420, delayMillis = 100)) +
-                    slideInVertically(tween(460, easing = FastOutSlowInEasing)) { it / 9 },
-                exit = fadeOut(tween(280)) +
-                    slideOutVertically(tween(380, easing = FastOutSlowInEasing)) { it / 12 }
-            ) {
-                lyrics(Modifier.fillMaxSize())
-            }
-        }
+        // A large rounded sheet rises from the physical bottom edge. Its
+        // top is measured from the actual Settings row, with that top control
+        // left OUTSIDE the sheet so it remains touchable at full expansion.
+        ImmersiveExpandingLyricsSheet(
+            visible = lyricsOpen,
+            sheetHeight = sheetHeight,
+            onDismiss = onDismissLyrics,
+            lyrics = lyrics,
+            modifier = Modifier.align(Alignment.BottomCenter)
+        )
 
         Row(Modifier.align(Alignment.TopCenter).fillMaxWidth()
             .windowInsetsPadding(contentInsets.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
-            .padding(horizontal = 16.dp, vertical = 10.dp).height(48.dp),
+            .padding(horizontal = 16.dp, vertical = 10.dp).height(48.dp)
+            .onGloballyPositioned {
+                val bottom = (it.positionInRoot().y + it.size.height -
+                    playerRootTopPx).roundToInt()
+                if (settingsRowBottomPx != bottom) settingsRowBottomPx = bottom
+            },
             verticalAlignment = Alignment.CenterVertically) {
             // No upper-left back button in either Immersive presentation.
             // The Library pill and Android Back navigation remain available.
             Spacer(Modifier.weight(1f))
             ImmersiveAction(NusaPlayerIcons.More, immersiveText("Pengaturan", "Settings"),
-                onSettings, enabled = !lyricsOpen, iconSize = 25.dp, glass = true)
+                onSettings, enabled = true, iconSize = 25.dp, glass = true)
         }
     }
 }
