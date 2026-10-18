@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.zIndex
 import kotlin.math.roundToInt
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -61,6 +62,7 @@ internal fun ImmersiveArtworkPlayer(
     isFavorite: Boolean,
     shuffleEnabled: Boolean,
     repeatMode: Int,
+    ambientSong: com.yohandeku32.nusamusic.model.Song?,
     lyricsOpen: Boolean,
     lyricsEnabled: Boolean,
     onPlayPause: () -> Unit,
@@ -322,13 +324,16 @@ internal fun ImmersiveArtworkPlayer(
         // left OUTSIDE the sheet so it remains touchable at full expansion.
         ImmersiveExpandingLyricsSheet(
             visible = lyricsOpen,
+            song = ambientSong,
             sheetHeight = sheetHeight,
             onDismiss = onDismissLyrics,
             lyrics = lyrics,
-            modifier = Modifier.align(Alignment.BottomCenter)
+            // Explicitly ABOVE every transport/progress/pill button, even
+            // while its spring is moving. Settings stays one layer higher.
+            modifier = Modifier.align(Alignment.BottomCenter).zIndex(2f)
         )
 
-        Row(Modifier.align(Alignment.TopCenter).fillMaxWidth()
+        Row(Modifier.align(Alignment.TopCenter).fillMaxWidth().zIndex(3f)
             .windowInsetsPadding(contentInsets.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
             .padding(horizontal = 16.dp, vertical = 10.dp).height(48.dp)
             .onGloballyPositioned {
