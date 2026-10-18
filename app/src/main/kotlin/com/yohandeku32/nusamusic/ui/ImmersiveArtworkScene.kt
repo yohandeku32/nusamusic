@@ -18,7 +18,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-/** Full-screen real artwork blur with a feathered sharp hero and protected control contrast. */
+/** Full-screen artwork-derived blur, without any black wash or palette fill. */
 @Suppress("UNUSED_PARAMETER")
 @Composable
 internal fun ImmersiveArtworkScene(
@@ -29,8 +29,8 @@ internal fun ImmersiveArtworkScene(
     animateChanges: Boolean = true, description: String? = null,
     animatedArtwork: @Composable BoxScope.() -> Unit = {}
 ) {
-    // Never fill the screen with a sampled palette colour. In the absence of
-    // artwork, black stays black; real album pixels alone create the ambience.
+    // Only real blurred cover pixels create the ambience; black is used only
+    // if the device has not loaded album artwork at all.
     BoxWithConstraints(modifier.background(Color.Black)) {
         val height = heroHeight.coerceAtMost(maxHeight)
         // Draw the actual blurred cover through Compose's Image renderer,
@@ -55,21 +55,9 @@ internal fun ImmersiveArtworkScene(
                 )
             }
         }
-        // One gentle darkening pass over the REAL artwork. The separate
-        // readability floor below already shades the control area, so these
-        // alphas must stay low: stacking opaque gradients erased the album
-        // colours and made the background appear solid black.
-        Box(Modifier.matchParentSize().drawWithCache {
-            val falloff = Brush.verticalGradient(
-                0f to Color.Transparent,
-                0.20f to Color.Transparent,
-                0.43f to Color.Black.copy(alpha = 0.035f),
-                0.64f to Color.Black.copy(alpha = 0.12f),
-                0.82f to Color.Black.copy(alpha = 0.24f),
-                1f to Color.Black.copy(alpha = 0.36f)
-            )
-            onDrawBehind { drawRect(falloff) }
-        })
+        // Intentionally no colour or black-gradient overlay: the ambient IS
+        // the blurred album-art bitmap, retaining its real colours and shapes.
+        // Adding scrims here makes vibrant covers look like a flat dark fill.
 
         Box(Modifier.fillMaxWidth(heroWidthFraction).height(height).align(Alignment.TopStart)
             .graphicsLayer {
@@ -100,27 +88,6 @@ internal fun ImmersiveArtworkScene(
             animatedArtwork()
         }
 
-        // Neutral readability floor, not a sampled-colour wash. The
-        // structured album blur must remain visible behind the playback area
-        // while white labels keep readable contrast on bright covers.
-        Box(Modifier.matchParentSize().drawWithCache {
-            val metadata = ((height.toPx() - 64.dp.toPx()) / size.height).coerceIn(0.28f, 0.82f)
-            val fadeStart = (metadata - 0.18f).coerceAtLeast(0.16f)
-            val floor = Brush.verticalGradient(
-                0f to Color.Black.copy(alpha = 0.20f),
-                0.12f to Color.Transparent,
-                fadeStart to Color.Transparent,
-                metadata to Color.Black.copy(alpha = 0.35f + scrimOpacity * 0.28f),
-                1f to Color.Black.copy(alpha = 0.50f + scrimOpacity * 0.18f))
-            val side = if (heroWidthFraction < 1f) Brush.horizontalGradient(
-                0f to Color.Transparent,
-                (heroWidthFraction * 0.62f) to Color.Transparent,
-                heroWidthFraction to Color.Black.copy(alpha = 0.43f + scrimOpacity * 0.22f),
-                1f to Color.Black.copy(alpha = 0.52f + scrimOpacity * 0.18f)) else null
-            onDrawBehind {
-                drawRect(floor)
-                if (side != null) drawRect(side)
-            }
-        })
+
     }
 }
