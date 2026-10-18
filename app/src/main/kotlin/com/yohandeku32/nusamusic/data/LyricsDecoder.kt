@@ -14,7 +14,19 @@ import javax.xml.parsers.DocumentBuilderFactory
 
 /** Sidecar evidence for decoration only; imported playback intervals stay intact. */
 data class LyricsUnitKey(val start: Int, val content: String)
-data class DecodedLyrics(val lyrics: SyncedLyrics, val inferredEnds: Set<LyricsUnitKey>)
+data class DecodedLyrics(
+    val lyrics: SyncedLyrics,
+    val inferredEnds: Set<LyricsUnitKey>,
+    /** Indices into lyrics.lines whose explicitly tagged duet singer belongs on the right. */
+    val duetRightLines: Set<Int> = emptySet()
+)
+
+private data class TtmlVoiceEntry(val start: Int, val content: String, val agentId: String)
+private data class NormalizedTtml(
+    val xml: String,
+    val lineOnly: Set<Pair<Int, String>>,
+    val voices: List<TtmlVoiceEntry>
+)
 
 /** Adapts common local-file dialects to Accompanist's timed model. */
 object LyricsDecoder {
@@ -30,11 +42,13 @@ object LyricsDecoder {
         val content = raw.trimStart('\uFEFF').trim()
         val duration = durationMs.coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
         val inferredEnds = mutableSetOf<LyricsUnitKey>()
+        var taggedVoices: List<TtmlVoiceEntry> = emptyList()
         val parsed = if (content.startsWith('<')) {
             val normalized = normalizeTtml(content, duration, inferredEnds)
-            val ttml = TTMLParser.parse(normalized.first)
+            taggedVoices = normalized.voices
+            val ttml = TTMLParser.parse(normalized.xml)
             ttml.copy(lines = ttml.lines.map { line ->
-                if (line is KaraokeLine && (line.start to line.syllables.joinToString("") { it.content }.trim()) in normalized.second)
+                if (line is KaraokeLine && (line.start to line.syllables.joinToString("") { it.content }.trim()) in normalized.lineOnly)
                     SyncedLine(line.syllables.joinToString("") { it.content }, line.translation, line.start, line.end)
                 else line
             })
@@ -65,7 +79,34 @@ object LyricsDecoder {
             }
         }.sortedBy { it.start }
         require(lines.isNotEmpty() && lines.size <= 8_000) { "No supported timed lyrics" }
-        return DecodedLyrics(parsed.copy(lines = lines), inferredEnds.toSet())
+
+        // TTML agent tags identify vocalists; don't guess duet sides from
+        // alternating lines or accompaniment timing. Match by actual sung
+        // onset and content after the parser normalizes timing and sorts rows.
+        val agentIds = taggedVoices.map { it.agentId }.distinct()
+        val duetRight = if (agentIds.size >= 2) {
+            val secondSinger = agentIds[1]
+            val used = BooleanArray(taggedVoices.size)
+            buildSet {
+                lines.forEachIndexed { index, line ->
+                    val contentText = when (line) {
+                        is KaraokeLine -> line.syllables.joinToString("") { it.content }
+                        is SyncedLine -> line.content
+                        else -> ""
+                    }.trim().replace(Regex("\\s+"), " ")
+                    val match = taggedVoices.indices.firstOrNull { candidate ->
+                        val entry = taggedVoices[candidate]
+                        !used[candidate] && entry.start == line.start &&
+                            entry.content.trim().replace(Regex("\\s+"), " ") == contentText
+                    }
+                    if (match != null) {
+                        used[match] = true
+                        if (taggedVoices[match].agentId == secondSinger) add(index)
+                    }
+                }
+            }
+        } else emptySet()
+        return DecodedLyrics(parsed.copy(lines = lines), inferredEnds.toSet(), duetRight)
     }
 
     private fun time(match: MatchResult): Int = (
@@ -154,7 +195,7 @@ object LyricsDecoder {
     }
 
     /** Handle seconds/duration notation and line-timed TTML, which older Core omits. */
-    private fun normalizeTtml(content: String, duration: Int, inferredEnds: MutableSet<LyricsUnitKey>): Pair<String, Set<Pair<Int, String>>> {
+    private fun normalizeTtml(content: String, duration: Int, inferredEnds: MutableSet<LyricsUnitKey>): NormalizedTtml {
         require(!content.contains("<!DOCTYPE", ignoreCase = true) && !content.contains("<!ENTITY", ignoreCase = true))
         val factory = DocumentBuilderFactory.newInstance().apply { isNamespaceAware = true }
         val builder = factory.newDocumentBuilder().apply {
@@ -168,6 +209,24 @@ object LyricsDecoder {
         require(root.localName == "tt" || root.nodeName == "tt")
         require(Regex("\\bbegin\\s*=").containsMatchIn(content)) { "TTML has no timed lyrics" }
         val lineOnly = mutableSetOf<Pair<Int, String>>()
+        val taggedVoices = ArrayList<TtmlVoiceEntry>()
+        // Resolve the nearest TTML metadata ttm:agent, plus commonly exported
+        // speaker/voice attributes. A one-singer TTML remains left aligned.
+        fun speaker(element: Element): String {
+            var cursor: Node? = element
+            while (cursor is Element) {
+                val attrs = cursor.attributes
+                for (i in 0 until attrs.length) {
+                    val attr = attrs.item(i)
+                    val name = (attr.localName ?: attr.nodeName.substringAfter(':')).lowercase()
+                    if (name in setOf("agent", "voice", "speaker") &&
+                        attr.nodeValue.isNotBlank()
+                    ) return attr.nodeValue.trim()
+                }
+                cursor = cursor.parentNode
+            }
+            return ""
+        }
         var nodes = 0
         fun escaped(text: String) = text.replace("&", "&amp;").replace("<", "&lt;")
             .replace(">", "&gt;").replace("\"", "&quot;")
@@ -195,6 +254,21 @@ object LyricsDecoder {
             }
             if (name == "p") {
                 val spans = node.getElementsByTagName("*")
+                val voiceId = speaker(node)
+                if (voiceId.isNotEmpty() && node.textContent.isNotBlank()) {
+                    // Normalized karaoke starts at the first audible span
+                    // rather than at a padded TTML container begin.
+                    val vocalStart = (0 until spans.length).mapNotNull { i ->
+                        val span = spans.item(i) as Element
+                        if ((span.localName ?: span.nodeName) == "span" &&
+                            span.textContent.isNotBlank()
+                        ) span.getAttribute("begin").takeIf { it.isNotBlank() }?.let(::ttmlTime)
+                        else null
+                    }.minOrNull() ?: start
+                    taggedVoices += TtmlVoiceEntry(
+                        vocalStart, node.textContent.trim(), voiceId
+                    )
+                }
                 val hasTimedUnit = (0 until spans.length).any { index ->
                     val element = spans.item(index) as Element
                     (element.localName ?: element.nodeName) == "span" && element.hasAttribute("begin")
@@ -207,6 +281,6 @@ object LyricsDecoder {
             return "<$name$attributes>$children</$name>"
         }
         val rendered = render(root, 0, duration, 0)
-        return rendered to lineOnly
+        return NormalizedTtml(rendered, lineOnly, taggedVoices)
     }
 }
