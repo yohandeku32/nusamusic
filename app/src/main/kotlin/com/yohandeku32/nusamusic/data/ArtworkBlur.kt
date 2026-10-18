@@ -42,6 +42,17 @@ internal object ArtworkBlur {
             val broad = blurArgb(pixels, width, height, radius = 14, passes = 2)
             val detailed = blurArgb(pixels, width, height, radius = 5, passes = 2)
             val ambient = blendAmbientArtwork(broad, detailed)
+            // Set ambient luminance on the *actual blurred cover pixels*,
+            // separately from the colour-preserving blend function. Avoid
+            // black gradients and flat extracted-palette backgrounds.
+            for (index in ambient.indices) {
+                val pixel = ambient[index]
+                val red = ((pixel ushr 16) and 0xFF) * 82 / 100
+                val green = ((pixel ushr 8) and 0xFF) * 82 / 100
+                val blue = (pixel and 0xFF) * 82 / 100
+                ambient[index] = (pixel and 0xFF000000.toInt()) or
+                    (red shl 16) or (green shl 8) or blue
+            }
             return Bitmap.createBitmap(ambient, width, height, Bitmap.Config.ARGB_8888)
         } finally {
             if (small !== source) small.recycle()
