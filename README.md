@@ -134,7 +134,10 @@ Once the exit finishes, the backing is removed from composition and measurement.
 Authored silence between backing units also collapses the space. Following
 uses the main text height as its anchor so backing expansion does not shift
 the target. Three-dot countdowns exist only during authored gaps of at least
-three seconds and leave no list spacer after singing resumes.
+three seconds. A temporary row above the associated lyric creates actual space,
+pushing that lyric and following rows down even in mid-song or intra-line gaps.
+Its height eases back to zero before singing resumes; completed countdowns
+leave no permanent space. The dots scroll with the lyrics during manual browsing.
 
 Composed by and Lyrics by sections appear after the final lyric when the file
 contains those roles: ID3 TCOM/TEXT (including v2.2 aliases), Vorbis

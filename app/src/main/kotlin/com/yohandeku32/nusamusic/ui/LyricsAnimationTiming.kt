@@ -52,7 +52,7 @@ internal fun countdownOpacity(gap: LyricsGap, now: Int): Float {
         lyricEase((gap.end.toLong() - now) / 160f) * countdownFollowOffset(gap, now)
 }
 
-/** Pre-position the already measured next line while the countdown fades, with no spacer row. */
+/** Collapse countdown space and return the following text to its normal anchor before vocals resume. */
 internal fun countdownFollowOffset(gap: LyricsGap, now: Int): Float =
     1f - lyricEase((now.toLong() - (gap.end.toLong() - 440)) / 440f)
 
