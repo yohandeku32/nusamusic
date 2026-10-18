@@ -59,14 +59,18 @@ internal class SyllableLyricsPainter(
     private val density: Float,
     private val lineStart: Int,
     private val lineEnd: Int,
-    expressions: List<LyricsAdaptiveExpression>? = null
+    expressions: List<LyricsAdaptiveExpression>? = null,
+    alignEnd: Boolean = false,
+    viewportWidthPx: Float = 0f
 ) {
     private class Glyph(
         val layout: SyllableLayout,
         density: Float,
         val pathStartDp: Float,
-        val expression: LyricsAdaptiveExpression
+        val expression: LyricsAdaptiveExpression,
+        val rowShiftPx: Float
     ) {
+        val position = layout.position + Offset(rowShiftPx, 0f)
         val width = layout.textLayoutResult.size.width.toFloat().coerceAtLeast(1f)
         val widthDp = width / density
         val rtl = layout.textLayoutResult.getParagraphDirection(0) == ResolvedTextDirection.Rtl
@@ -79,7 +83,7 @@ internal class SyllableLyricsPainter(
         // Per-22dp clipRect strips cut through letter strokes when neighbouring
         // slices have slightly different lift/scale, especially on slow vocals.
         // Keep the approved V6 horizontal phase at this run's visual centre.
-        val horizontalDp = (layout.position.x + width / 2f) / density
+        val horizontalDp = (position.x + width / 2f) / density
         val motion = LyricsFloatingMotion(horizontalDp)
         val controller = LyricsExpressionController(layout.syllable.start, layout.syllable.end, expression)
         // Separate sustained-vocal accent. Reuses the intact syllable's
@@ -95,32 +99,42 @@ internal class SyllableLyricsPainter(
             .map { LyricsExpressionTiming(it.syllable.start, it.syllable.end) })
         var endPathDp = 0f
         var previous: Glyph? = null
-        for (layout in layouts.flatten()) {
-            if (layout.syllable.content.isBlank()) continue
-            val gap = previous?.let { last ->
-                if (kotlin.math.abs(layout.position.y - last.layout.position.y) < 0.5f) {
-                    ((layout.position.x - last.layout.position.x - last.width) / density)
-                        .coerceAtLeast(0f)
-                } else {
-                    // Wrapped rows continue along the same vocal path rather
-                    // than jumping to x=0 and restarting the mask.
-                    12f
-                }
+        for (row in layouts) {
+            // Right-align each *wrapped* duet row, not just the whole phrase.
+            // Measure once while constructing the painter, never per frame.
+            val rowRight = row.maxOfOrNull {
+                it.position.x + it.textLayoutResult.size.width.toFloat()
             } ?: 0f
-            val glyph = Glyph(layout, density, endPathDp + gap, profiles[size])
-            add(glyph)
-            endPathDp = glyph.pathEndDp
-            previous = glyph
+            val rowShiftPx = if (alignEnd)
+                (viewportWidthPx - rowRight - 8f * density).coerceAtLeast(0f)
+            else 0f
+            for (layout in row) {
+                if (layout.syllable.content.isBlank()) continue
+                val gap = previous?.let { last ->
+                    if (kotlin.math.abs(layout.position.y - last.layout.position.y) < 0.5f) {
+                        ((layout.position.x - last.layout.position.x - last.width) / density)
+                            .coerceAtLeast(0f)
+                    } else {
+                        // Wrapped rows continue along the same vocal path
+                        // without restarting the wave on a new visual row.
+                        12f
+                    }
+                } ?: 0f
+                val glyph = Glyph(layout, density, endPathDp + gap, profiles[size], rowShiftPx)
+                add(glyph)
+                endPathDp = glyph.pathEndDp
+                previous = glyph
+            }
         }
     }
 
     // One pivot spans every rendered syllable and wrapped row. A final held
     // vowel can then carry its entire word/phrase instead of just its letters.
     private val closingPivot = if (glyphs.isEmpty()) Offset.Zero else Offset(
-        (glyphs.minOf { it.layout.position.x } +
-            glyphs.maxOf { it.layout.position.x + it.width }) / 2f,
-        (glyphs.minOf { it.layout.position.y } +
-            glyphs.maxOf { it.layout.position.y + it.layout.textLayoutResult.size.height }) / 2f
+        (glyphs.minOf { it.position.x } +
+            glyphs.maxOf { it.position.x + it.width }) / 2f,
+        (glyphs.minOf { it.position.y } +
+            glyphs.maxOf { it.position.y + it.layout.textLayoutResult.size.height }) / 2f
     )
     private val closingMotion = LyricsClosingVocalMotion(
         glyphs.map { LyricsExpressionTiming(it.layout.syllable.start, it.layout.syllable.end) },
@@ -213,7 +227,7 @@ internal class SyllableLyricsPainter(
         val result = glyph.layout.textLayoutResult
         val localWeight = closingMotion.localWeight
         val shift = glyph.motion.liftDp
-        val position = glyph.layout.position + Offset(
+        val position = glyph.position + Offset(
             glyph.bubble.offsetXDp * density * localWeight,
             (glyph.bubble.offsetYDp - shift) * density * localWeight
         )
