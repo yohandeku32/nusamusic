@@ -57,7 +57,6 @@ internal fun ImmersiveArtworkPlayer(
     isFavorite: Boolean,
     shuffleEnabled: Boolean,
     repeatMode: Int,
-    ambientSong: com.yohandeku32.nusamusic.model.Song?,
     lyricsOpen: Boolean,
     lyricsEnabled: Boolean,
     onPlayPause: () -> Unit,
