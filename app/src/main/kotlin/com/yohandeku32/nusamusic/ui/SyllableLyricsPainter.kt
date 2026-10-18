@@ -163,7 +163,13 @@ internal class SyllableLyricsPainter(
             // Keep the original traveling mask and 4.2s carrier. Duration only
             // attenuates their amplitude; its playback phase never restarts.
             glyph.motion.update(waveTime, localIntensity * glyph.controller.wave)
-            glyph.bubble.update(waveTime, if (index == glyphs.lastIndex) localIntensity else 0f)
+            // Let sustained TTML units throughout the phrase breathe in sequence.
+            // Earlier words get a restrained depth accent; the closing
+            // syllable retains the stronger, approved held-vowel pop.
+            // Short units are gated by LyricsLongVocalMotion's duration
+            // envelope, so rapid lyrics remain visually quiet.
+            val depth = if (index == glyphs.lastIndex) 1f else 0.58f
+            glyph.bubble.update(waveTime, localIntensity * depth)
         }
 
         withTransform({
