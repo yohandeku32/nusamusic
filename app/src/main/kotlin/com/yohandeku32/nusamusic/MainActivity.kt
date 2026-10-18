@@ -984,7 +984,8 @@ class MainActivity : ComponentActivity() {
                     extraFolderUris = folderUris,
                     cachedSongs = fastScan.songs,
                     previousCheckpoint = fastScan.checkpoint,
-                    scanSelectedFolders = true
+                    scanSelectedFolders = true,
+                    includeMediaStore = permissionGranted
                 )
             } else {
                 fastScan
