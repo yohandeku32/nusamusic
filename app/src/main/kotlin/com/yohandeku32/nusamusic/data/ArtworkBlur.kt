@@ -4,10 +4,11 @@ import android.graphics.Bitmap
 import android.view.TextureView
 import androidx.media3.ui.PlayerView
 import com.yohandeku32.nusamusic.ui.blurArgb
+import com.yohandeku32.nusamusic.ui.blendAmbientArtwork
 import kotlin.math.roundToInt
 
 internal object ArtworkBlur {
-    private const val THUMBNAIL_SIZE = 256
+    private const val THUMBNAIL_SIZE = 320
 
     /** Avoid freezing the player's black opening frame as the animated backdrop. */
     fun hasVisibleFrame(bitmap: Bitmap): Boolean {
@@ -36,9 +37,15 @@ internal object ArtworkBlur {
         try {
             val pixels = IntArray(width * height)
             small.getPixels(pixels, 0, width, 0, 0, width, height)
-            // Soften fine detail while retaining the artwork's larger shapes.
-            // Work on the thumbnail once per artwork, including frozen video frames.
-            return Bitmap.createBitmap(blurArgb(pixels, width, height, radius = 6, passes = 3), width, height, Bitmap.Config.ARGB_8888)
+            // A single heavy blur used to flatten many covers into one muddy
+            // colour. Prepare two Gaussian-like radii from the real pixels:
+            // broad diffusion for atmosphere + fine diffusion to keep the
+            // cover's colour blocks and silhouettes faintly recognizable.
+            // This runs off the UI thread, once per artwork.
+            val broad = blurArgb(pixels, width, height, radius = 9, passes = 2)
+            val detailed = blurArgb(pixels, width, height, radius = 3, passes = 2)
+            val ambient = blendAmbientArtwork(broad, detailed)
+            return Bitmap.createBitmap(ambient, width, height, Bitmap.Config.ARGB_8888)
         } finally {
             if (small !== source) small.recycle()
         }

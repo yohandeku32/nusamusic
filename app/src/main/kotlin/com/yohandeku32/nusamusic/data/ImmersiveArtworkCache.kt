@@ -30,7 +30,7 @@ internal object ImmersiveArtworkCache {
             cached(song)?.let { return@withLock it }
             val bytes = disk(context).read(key(song)) ?: return@withLock null
             val cover = decode(bytes.cover, 768)
-            val blur = decode(bytes.blur, 256)
+            val blur = decode(bytes.blur, 320)
             if (cover == null || blur == null) {
                 disk(context).clear()
                 return@withLock null
