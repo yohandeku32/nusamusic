@@ -8,7 +8,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.style.ResolvedTextDirection
@@ -42,15 +42,9 @@ private class LyricsGlowPalette(density: Float) {
     private val outer = Array(65) { energy ->
         Shadow(Color.White.copy(alpha = 0.42f * energy / 64f), Offset.Zero, 14f * density)
     }
-    // A thin bright contour is a safe alternative to shader-displacing
-    // portions of a shaped glyph (previously caused visible broken strokes).
-    private val edgeStrokes = Array(33) { step ->
-        Stroke(width = (0.30f + 0.03f * step) * density)
-    }
     fun broad(energy: Float, bloom: Float) = broad[(energy * 64f).roundToInt().coerceIn(0, 64)][(bloom * 8f).roundToInt().coerceIn(0, 8)]
     fun tight(energy: Float) = tight[(energy * 64f).roundToInt().coerceIn(0, 64)]
     fun outer(energy: Float) = outer[(energy * 64f).roundToInt().coerceIn(0, 64)]
-    fun edgeStroke(energy: Float) = edgeStrokes[(energy * 32f).roundToInt().coerceIn(0, 32)]
 }
 
 internal class SyllableLyricsPainter(
@@ -181,7 +175,7 @@ internal class SyllableLyricsPainter(
         }) {
             if (!halo) {
                 drawText(result, color = Color.White.copy(alpha = 0.4f),
-                    topLeft = position, shadow = Shadow.None)
+                    topLeft = position, shadow = Shadow.None, drawStyle = Fill)
             }
             if (strength <= 0f || progress <= 0f) return@withTransform
             val distance = (width + 2f * glyph.feather) * progress - glyph.feather
@@ -208,41 +202,24 @@ internal class SyllableLyricsPainter(
                     // painted independently in the foreground pass.
                     drawText(result, brush = glyph.fill.brush, topLeft = position,
                         alpha = 0.10f * glow * crescendo,
-                        shadow = glowPalette.outer(glow * crescendo))
+                        shadow = glowPalette.outer(glow * crescendo), drawStyle = Fill)
                 }
                 drawText(result, brush = glyph.fill.brush, topLeft = position,
                     alpha = 0.22f * breathingGlow,
-                    shadow = glowPalette.broad(breathingGlow, bloom))
+                    shadow = glowPalette.broad(breathingGlow, bloom), drawStyle = Fill)
                 drawText(result, brush = glyph.fill.brush, topLeft = position,
                     alpha = 0.18f * breathingGlow,
-                    shadow = glowPalette.tight(breathingGlow))
+                    shadow = glowPalette.tight(breathingGlow), drawStyle = Fill)
 
-                val edge = glyph.bubble.edgeExpansion
-                if (edge > 0.005f) {
-                    // Soft, slightly enlarged outline BEHIND the sharp main
-                    // text. No per-character clipping, path displacement,
-                    // layout changes or duplicate opaque glyph interiors.
-                    // Slow phase/position variation is supplied by the
-                    // already-sampled audio-time envelope.
-                    withTransform({
-                        scale(
-                            1f + 0.012f * edge, 1f + 0.016f * edge,
-                            position + Offset(width / 2f, result.size.height * 0.8f)
-                        )
-                    }) {
-                        drawText(result, brush = glyph.fill.brush,
-                            topLeft = position, alpha = 0.18f * edge,
-                            shadow = Shadow.None,
-                            drawStyle = glowPalette.edgeStroke(edge))
-                    }
-                }
+                // Keep the previous filled glyph appearance: never stroke
+                // TextLayoutResult, since outlines can bleed into later draws.
             } else {
                 if (progress >= 1f) {
                     drawText(result, color = Color.White, topLeft = position,
-                        alpha = strength * 0.85f, shadow = Shadow.None)
+                        alpha = strength * 0.85f, shadow = Shadow.None, drawStyle = Fill)
                 } else {
                     drawText(result, brush = glyph.fill.brush, topLeft = position,
-                        alpha = strength * 0.85f, shadow = Shadow.None)
+                        alpha = strength * 0.85f, shadow = Shadow.None, drawStyle = Fill)
                 }
                 val unit = glyph.layout.syllable
                 val shimmer = lyricShimmer(unit.start, unit.end, now)
@@ -253,7 +230,7 @@ internal class SyllableLyricsPainter(
                     val center = if (glyph.rtl) width - swept else swept
                     glyph.sheen.move(center - band, center + band)
                     drawText(result, brush = glyph.sheen.brush, topLeft = position,
-                        alpha = 0.45f * glow, shadow = Shadow.None)
+                        alpha = 0.45f * glow, shadow = Shadow.None, drawStyle = Fill)
                 }
             }
         }
