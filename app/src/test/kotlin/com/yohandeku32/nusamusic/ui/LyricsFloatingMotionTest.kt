@@ -5,100 +5,114 @@ import org.junit.Test
 import kotlin.math.abs
 
 class LyricsFloatingMotionTest {
-    @Test fun longNoteBreathesAndFloatsAfterTheInitialAttack() {
-        val motion = LyricsFloatingMotion(1000, 9000, 0)
-        motion.update(2400); val scale = motion.scale; val lift = motion.liftDp
-        motion.update(4200)
-        assertNotEquals(scale, motion.scale, 0.0001f)
-        assertNotEquals(lift, motion.liftDp, 0.01f)
-        assertTrue(motion.scale in 1f..1.025f)
-    }
-    @Test fun neighbouringUnitsHaveStaggeredWavePhase() {
-        val first = LyricsFloatingMotion(1000, 9000, 0)
-        val next = LyricsFloatingMotion(1000, 9000, 1)
-        first.update(4000); next.update(4000)
-        assertNotEquals(first.liftDp, next.liftDp, 0.001f)
-    }
-    @Test fun movementReturnsToBaselineBeforeAuthoredEndWithoutLayoutMotion() {
-        val motion = LyricsFloatingMotion(1000, 9000, 0)
-        motion.update(8999)
-        assertEquals(1f, motion.scale, 0.0001f)
-        assertEquals(0f, motion.liftDp, 0.001f)
-        for (now in listOf(0, 1000, 9000, 9200, Int.MAX_VALUE)) {
-            motion.update(now)
-            assertEquals(1f, motion.scale, 0f)
-            assertEquals(0f, motion.liftDp, 0f)
+    @Test fun sharedWaveNeverRestartsWhenActiveSyllableChanges() {
+        val motion = LyricsFloatingMotion(horizontalDp = 100f)
+        // An authored word boundary at 3000 does not appear in the carrier API.
+        val samples = (2900..3100 step 10).map { time ->
+            motion.update(time, lyricsLineWaveIntensity(1000, 8000, time))
+            motion.liftDp
         }
+        assertTrue(samples.zipWithNext().all { (a, b) -> abs(a - b) < 0.055f })
+        assertTrue(samples.any { abs(it) > 0.5f })
     }
-    @Test fun pauseAndSeekAreDeterministicWithNoTransitionReplay() {
-        val motion = LyricsFloatingMotion(1000, 9000, 2)
-        motion.update(4500); val scale = motion.scale; val lift = motion.liftDp
-        repeat(120) { motion.update(4500); assertEquals(scale, motion.scale, 0f); assertEquals(lift, motion.liftDp, 0f) }
-        motion.update(8000); motion.update(4500)
-        val fresh = LyricsFloatingMotion(1000, 9000, 2).apply { update(4500) }
-        assertEquals(fresh.scale, motion.scale, 0f)
-        assertEquals(fresh.liftDp, motion.liftDp, 0f)
+
+    @Test fun nearbyGlyphsSharePhaseButTheRowBendsRatherThanBouncingAsABlock() {
+        val left = LyricsFloatingMotion(horizontalDp = 20f)
+        val middle = LyricsFloatingMotion(horizontalDp = 145f)
+        val right = LyricsFloatingMotion(horizontalDp = 280f)
+        val intensity = lyricsLineWaveIntensity(1000, 8000, 4000)
+        left.update(4000, intensity)
+        middle.update(4000, intensity)
+        right.update(4000, intensity)
+        assertTrue(abs(left.liftDp - middle.liftDp) > 0.1f)
+        assertTrue(abs(right.liftDp - middle.liftDp) > 0.1f)
+        assertTrue(abs(left.liftDp) <= 2.5f)
+        assertTrue(abs(middle.liftDp) <= 2.5f)
+        assertTrue(abs(right.liftDp) <= 2.5f)
+        // Neighbouring letters are only a few degrees apart.
+        val neighbour = LyricsFloatingMotion(horizontalDp = 150f)
+        neighbour.update(4000, intensity)
+        assertTrue(abs(neighbour.liftDp - middle.liftDp) < 0.1f)
     }
-    @Test fun frameStepsStaySubtleAt60_90_120Hz() {
+
+    @Test fun longHeldNoteBreathesUsingOneUninterruptedGlobalTimeline() {
+        val motion = LyricsFloatingMotion(horizontalDp = 160f)
+        val intensity = lyricsLineWaveIntensity(1000, 14000, 7000)
+        assertEquals(1f, intensity, 0.0001f)
+        motion.update(7000, intensity)
+        val lift = motion.liftDp
+        val scale = motion.scale
+        motion.update(8500, intensity)
+        assertNotEquals(lift, motion.liftDp, 0.02f)
+        assertNotEquals(scale, motion.scale, 0.001f)
+        assertTrue(motion.scale in 1f..1.02f)
+        assertTrue(abs(motion.liftDp) <= 2.5f)
+    }
+
+    @Test fun adjacentLinesCrossfadeTheirIntensityWithoutChangingWavePhase() {
+        val previous = LyricsFloatingMotion(100f)
+        val next = LyricsFloatingMotion(100f)
+        val boundary = 5000
+        for (time in 4800..5200 step 10) {
+            val old = lyricsLineWaveIntensity(1000, boundary, time)
+            val fresh = lyricsLineWaveIntensity(boundary, 9000, time)
+            previous.update(time, old)
+            next.update(time, fresh)
+            assertEquals(1f, old + fresh, 0.001f)
+            assertTrue(abs(previous.liftDp + next.liftDp) <= 2.5f)
+        }
+        assertEquals(0.5f, lyricsLineWaveIntensity(1000, boundary, boundary), 0.0001f)
+        assertEquals(0.5f, lyricsLineWaveIntensity(boundary, 9000, boundary), 0.0001f)
+    }
+
+    @Test fun pauseHoldsPhaseAndSeekingRecomputesItWithoutReplay() {
+        val motion = LyricsFloatingMotion(horizontalDp = 190f)
+        motion.update(4500, 1f)
+        val firstLift = motion.liftDp
+        val firstScale = motion.scale
+        repeat(120) {
+            motion.update(4500, 1f)
+            assertEquals(firstLift, motion.liftDp, 0f)
+            assertEquals(firstScale, motion.scale, 0f)
+        }
+        motion.update(9500, 1f)
+        motion.update(4500, 1f)
+        assertEquals(firstLift, motion.liftDp, 0f)
+        assertEquals(firstScale, motion.scale, 0f)
+    }
+
+    @Test fun amplitudeAndPerFrameMovementStayBoundedAt60_90_120Hz() {
         for (hz in listOf(60, 90, 120)) {
-            val motion = LyricsFloatingMotion(1000, 9000, 1)
-            var lastScale = 1f; var lastLift = 0f
-            for (frame in 0..hz * 10) {
-                motion.update((frame * 1000.0 / hz).toInt())
-                assertTrue(motion.scale in 1f..1.025f)
-                assertTrue(abs(motion.liftDp) <= 1.71f)
-                assertTrue(abs(motion.scale - lastScale) < 0.004f)
-                assertTrue(abs(motion.liftDp - lastLift) < 0.24f)
-                lastScale = motion.scale; lastLift = motion.liftDp
+            val motion = LyricsFloatingMotion(horizontalDp = 85f)
+            var previousLift = 0f
+            var previousScale = 1f
+            for (frame in 0..hz * 12) {
+                val now = (frame * 1000.0 / hz).toInt()
+                val intensity = lyricsLineWaveIntensity(1000, 11000, now)
+                motion.update(now, intensity)
+                assertTrue(motion.scale in 1f..1.02f)
+                assertTrue(abs(motion.liftDp) <= 2.5f)
+                assertTrue("Jump at $hz Hz / $now ms", abs(motion.liftDp - previousLift) < 0.25f)
+                assertTrue(abs(motion.scale - previousScale) < 0.005f)
+                previousLift = motion.liftDp
+                previousScale = motion.scale
             }
         }
     }
-    @Test fun slowCarrierDoesNotOscillateRapidlyDuringALongVocal() {
-        val motion = LyricsFloatingMotion(0, 12_000, 0)
-        var previousLift = 0f
-        var directionChanges = 0
-        var previousSign = 0
-        for (now in 1500..10_000 step 10) {
-            motion.update(now)
-            assertTrue(motion.scale in 1f..1.015f)
-            assertTrue(abs(motion.liftDp) <= 1.5f)
-            val delta = motion.liftDp - previousLift
-            if (now > 1510) assertTrue("Wave jumped at $now", abs(delta) < 0.05f)
-            val sign = when {
-                delta > 0.00001f -> 1
-                delta < -0.00001f -> -1
-                else -> 0
-            }
-            if (previousSign != 0 && sign != 0 && sign != previousSign) directionChanges++
-            if (sign != 0) previousSign = sign
-            previousLift = motion.liftDp
+
+    @Test fun silenceAndDegenerateRowsHaveNoMotionOrInvalidValues() {
+        val motion = LyricsFloatingMotion(horizontalDp = 10f)
+        for (time in listOf(-200, 0, 500, 1000, 9000, 9100)) {
+            val intensity = lyricsLineWaveIntensity(1000, 9000, time)
+            motion.update(time, intensity)
+            assertTrue(motion.scale.isFinite() && motion.liftDp.isFinite())
+            assertTrue(motion.scale in 1f..1.02f)
         }
-        // ~3.4s carrier: only a few direction reversals across 8.5s.
-        assertTrue("Wave oscillates too quickly", directionChanges in 3..7)
+        motion.update(9500, lyricsLineWaveIntensity(1000, 9000, 9500))
+        assertEquals(1f, motion.scale, 0f)
+        assertEquals(0f, motion.liftDp, 0f)
+        assertEquals(0f, lyricsLineWaveIntensity(5000, 5000, 5000), 0f)
+        assertEquals(0f, lyricsLineWaveIntensity(5000, 1000, 3000), 0f)
+        assertTrue(lyricsLineWaveIntensity(Int.MIN_VALUE, Int.MAX_VALUE, 0).isFinite())
     }
-
-    @Test fun onsetPulseHappensOnlyNearTheSyllableBoundary() {
-        val motion = LyricsFloatingMotion(1000, 9000, 0)
-        motion.update(1120)
-        val early = motion.liftDp
-        motion.update(4900)
-        val middle = motion.liftDp
-        motion.update(8000)
-        val late = motion.liftDp
-        assertTrue(early.isFinite() && middle.isFinite() && late.isFinite())
-        motion.update(8999)
-        assertTrue(abs(motion.liftDp) < 0.001f)
-        assertTrue(abs(motion.scale - 1f) < 0.0001f)
-    }
-
-    @Test fun shortUnitsDoNotCompressGlowIntoAFastRepeatedCycle() {
-        var previous = lyricBreathing(1000, 1350, 1000)
-        for (time in 1010..1350 step 10) {
-            val next = lyricBreathing(1000, 1350, time)
-            assertTrue(next in 0.88f..1.001f)
-            assertTrue(abs(next - previous) < 0.003f)
-            previous = next
-        }
-    }
-
 }
