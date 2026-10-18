@@ -6,7 +6,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -16,6 +16,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import android.view.WindowManager
+import kotlinx.coroutines.launch
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -43,11 +50,40 @@ fun ImmersiveLyricsPanel(
     playbackEpoch: Int,
     durationMs: Long,
     state: ImmersiveLyricsState,
+    dismissRequestId: Int,
     onDismiss: () -> Unit,
     onSeek: (Long) -> Unit,
     fontSize: Float
 ) {
     val scope = rememberCoroutineScope()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var closing by remember { mutableStateOf(false) }
+    val latestDismiss by rememberUpdatedState(onDismiss)
+    var observedDismissRequest by remember { mutableIntStateOf(dismissRequestId) }
+
+    fun requestDismiss() {
+        if (closing) return
+        closing = true
+        scope.launch {
+            try {
+                // Drive the real anchored sheet (and Material3's scrim)
+                // to Hidden before removing its content from composition.
+                // Drag dismissals resume from the dragged offset/velocity.
+                if (sheetState.isVisible) sheetState.hide()
+            } finally {
+                if (!sheetState.isVisible) latestDismiss()
+                else closing = false
+            }
+        }
+    }
+
+    LaunchedEffect(dismissRequestId) {
+        if (dismissRequestId != observedDismissRequest) {
+            observedDismissRequest = dismissRequestId
+            requestDismiss()
+        }
+    }
+
     val entry = song?.let { state.forSong(it) }
     LaunchedEffect(song) { if (song != null) state.load(song, scope) }
     val context = LocalContext.current
@@ -89,8 +125,8 @@ fun ImmersiveLyricsPanel(
     }
     val height = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.height.toDp() / 2 }
     ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        onDismissRequest = ::requestDismiss,
+        sheetState = sheetState,
         sheetMaxWidth = Dp.Unspecified,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
         containerColor = backdrop,
@@ -99,6 +135,37 @@ fun ImmersiveLyricsPanel(
         dragHandle = null,
         contentWindowInsets = { WindowInsets(0, 0, 0, 0) }
     ) {
+        // Bottom sheets have a separate dialog window. The Activity already
+        // hides only the status bar, but the dialog can reveal its own bar.
+        // Keep that dialog fullscreen until the exit animation finishes.
+        // Do not show the Activity bar on dismissal: Nusa keeps it hidden.
+        val dialogView = LocalView.current
+        val dialogWindow = (dialogView.parent as? DialogWindowProvider)?.window
+        val hideDialogStatusBar: () -> Unit = {
+            dialogWindow?.let { window ->
+                window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
+                WindowCompat.setDecorFitsSystemWindows(window, false)
+                WindowInsetsControllerCompat(window, window.decorView).apply {
+                    systemBarsBehavior =
+                        WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                    hide(WindowInsetsCompat.Type.statusBars())
+                }
+            }
+        }
+        DisposableEffect(dialogWindow) {
+            hideDialogStatusBar()
+            onDispose {
+                // The dialog window is being destroyed after Hidden. Its
+                // flags are scoped to that window, not the Now Playing UI.
+            }
+        }
+        LaunchedEffect(dialogWindow) {
+            // Reassert after the first dialog frame without polling or
+            // mutating the system-window layout on every lyric draw.
+            withFrameNanos { }
+            hideDialogStatusBar()
+        }
+
         Column(Modifier.fillMaxWidth().height(height).background(
             Brush.verticalGradient(listOf(backdrop, Color(0xFF101014))))
             .windowInsetsPadding(WindowInsets.navigationBars)) {
@@ -107,7 +174,14 @@ fun ImmersiveLyricsPanel(
             }
             Row(Modifier.fillMaxWidth().padding(start = 28.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Lyrics", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, contentDescription = "Close lyrics", tint = Color.White) }
+                IconButton(onClick = ::requestDismiss, modifier = Modifier.size(48.dp)) {
+                    Icon(
+                        Icons.Default.KeyboardArrowDown,
+                        contentDescription = "Close lyrics",
+                        tint = Color.White,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
             }
             Box(Modifier.fillMaxWidth().weight(1f)) {
                 val data = entry?.data
