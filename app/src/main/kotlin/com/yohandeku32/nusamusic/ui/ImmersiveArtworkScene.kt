@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /** Full-screen real artwork blur with a feathered sharp hero and protected control contrast. */
+@Suppress("UNUSED_PARAMETER")
 @Composable
 internal fun ImmersiveArtworkScene(
     artwork: Bitmap?, blur: Bitmap?, backdrop: Color, heroHeight: Dp,
@@ -30,7 +31,9 @@ internal fun ImmersiveArtworkScene(
     animateChanges: Boolean = true, description: String? = null,
     animatedArtwork: @Composable BoxScope.() -> Unit = {}
 ) {
-    BoxWithConstraints(modifier.background(backdrop)) {
+    // Never fill the screen with a sampled palette colour. In the absence of
+    // artwork, black stays black; real album pixels alone create the ambience.
+    BoxWithConstraints(modifier.background(Color.Black)) {
         val height = heroHeight.coerceAtMost(maxHeight)
         // Crossfade the *actual album-derived bitmap*, not only the palette.
         // Keep the old ambient during the transition so song changes never
@@ -56,10 +59,19 @@ internal fun ImmersiveArtworkScene(
                 }
             })
         }
+        // Neutral dark falloff over real image blur. Album colours are brightest
+        // around the artwork and fade smoothly to black behind playback controls.
+        // No dominant-colour overlay, so shapes remain subtly perceptible.
         Box(Modifier.matchParentSize().drawWithCache {
-            val aura = Brush.radialGradient(listOf(backdrop.copy(alpha = 0.09f), Color.Transparent),
-                center = Offset(size.width * 0.35f, size.height * 0.52f), radius = size.width * 1.2f)
-            onDrawBehind { drawRect(aura) }
+            val falloff = Brush.verticalGradient(
+                0f to Color.Black.copy(alpha = 0.18f),
+                0.20f to Color.Black.copy(alpha = 0.10f),
+                0.43f to Color.Black.copy(alpha = 0.20f),
+                0.64f to Color.Black.copy(alpha = 0.48f),
+                0.82f to Color.Black.copy(alpha = 0.78f),
+                1f to Color.Black.copy(alpha = 0.96f)
+            )
+            onDrawBehind { drawRect(falloff) }
         })
 
         Box(Modifier.fillMaxWidth(heroWidthFraction).height(height).align(Alignment.TopStart)
@@ -91,7 +103,7 @@ internal fun ImmersiveArtworkScene(
             animatedArtwork()
         }
 
-        // Translucent readability floor, not an opaque colour wash. The
+        // Neutral readability floor, not a sampled-colour wash. The
         // structured album blur must remain visible behind the playback area
         // while white labels keep readable contrast on bright covers.
         Box(Modifier.matchParentSize().drawWithCache {
