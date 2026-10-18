@@ -146,10 +146,23 @@ internal class SyllableLyricsPainter(
      * Halo and foreground always use the SAME transform; highlighting,
      * shimmer, lyric timings, and scrolling are unchanged.
      */
+    // Reject sub-frame backwards clock jitter, but permit deliberate seeks.
+    // A true seek reanchors both animation and highlighting immediately.
+    private var lastFrameMs = Int.MIN_VALUE
+    private fun stableFrameTime(sampleMs: Int): Int {
+        val stable = if (lastFrameMs != Int.MIN_VALUE &&
+            sampleMs < lastFrameMs && lastFrameMs - sampleMs <= 100) {
+            lastFrameMs
+        } else sampleMs
+        lastFrameMs = stable
+        return stable
+    }
+
     fun draw(scope: DrawScope, now: Int, focus: Float, waveTime: Int) = with(scope) {
+        val frameTime = stableFrameTime(waveTime)
         val strength = focus.coerceIn(0f, 1f)
-        val lineStrength = lyricsLineWaveIntensity(lineStart, lineEnd, waveTime)
-        val front = if (lineStrength > 0f) vocalMask.front(waveTime) else null
+        val lineStrength = lyricsLineWaveIntensity(lineStart, lineEnd, frameTime)
+        val front = if (lineStrength > 0f) vocalMask.front(frameTime) else null
         // No phrase-wide expansion: keep earlier words anchored during a held final syllable.
 
         // Playback time alone drives the transform. No animation restarting,
@@ -159,17 +172,17 @@ internal class SyllableLyricsPainter(
                 front, glyph.pathStartDp, glyph.pathEndDp
             )
             val localIntensity = lineStrength * influence
-            glyph.controller.update(waveTime)
+            glyph.controller.update(frameTime)
             // Keep the original traveling mask and 4.2s carrier. Duration only
             // attenuates their amplitude; its playback phase never restarts.
-            glyph.motion.update(waveTime, localIntensity * glyph.controller.wave)
+            glyph.motion.update(frameTime, localIntensity * glyph.controller.wave)
             // Let sustained TTML units throughout the phrase breathe in sequence.
             // Earlier words get a restrained depth accent; the closing
             // syllable retains the stronger, approved held-vowel pop.
             // Short units are gated by LyricsLongVocalMotion's duration
             // envelope, so rapid lyrics remain visually quiet.
             val depth = if (index == glyphs.lastIndex) 1f else 0.58f
-            glyph.bubble.update(waveTime, localIntensity * depth)
+            glyph.bubble.update(frameTime, localIntensity * depth)
         }
 
         withTransform({
@@ -181,10 +194,10 @@ internal class SyllableLyricsPainter(
                 val halo = pass == 0
                 val unit = glyph.layout.syllable
                 if (halo && (strength <= 0f || glyph.controller.glow <= 0f)) continue
-                val progress = syllableProgress(unit, now)
+                val progress = syllableProgress(unit, frameTime)
                 val glow = glyph.controller.glow * strength
 
-                drawGlyph(glyph, halo, progress, glow, strength, now)
+                drawGlyph(glyph, halo, progress, glow, strength, frameTime)
             }
         }
     }
