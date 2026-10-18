@@ -79,8 +79,8 @@ internal fun ImmersiveArtworkPlayer(
     artwork: @Composable (Modifier, Dp, Float) -> Unit,
     progress: @Composable (Modifier) -> Unit,
     quality: @Composable () -> Unit,
-    contentInsets: WindowInsets = WindowInsets.safeDrawing,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    contentInsets: WindowInsets = WindowInsets.safeDrawing
 ) {
     BoxWithConstraints(modifier) {
         val density = LocalDensity.current

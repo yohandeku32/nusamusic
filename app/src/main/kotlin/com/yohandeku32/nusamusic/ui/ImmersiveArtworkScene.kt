@@ -24,9 +24,10 @@ import androidx.compose.ui.unit.dp
 @Composable
 internal fun ImmersiveArtworkScene(
     artwork: Bitmap?, blur: Bitmap?, backdrop: Color, heroHeight: Dp,
+    modifier: Modifier = Modifier,
     heroWidthFraction: Float = 1f, scrimOpacity: Float = 0.2f,
     animateChanges: Boolean = true, description: String? = null,
-    animatedArtwork: @Composable BoxScope.() -> Unit = {}, modifier: Modifier = Modifier
+    animatedArtwork: @Composable BoxScope.() -> Unit = {}
 ) {
     BoxWithConstraints(modifier.background(backdrop)) {
         val height = heroHeight.coerceAtMost(maxHeight)
