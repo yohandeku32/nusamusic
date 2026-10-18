@@ -34,6 +34,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.first
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -49,11 +51,19 @@ internal fun SyncedLyricsView(
     SideEffect { clock.update(position, visible) }
     val display = remember(lyrics) { LyricsDisplayRows(lyrics.lines) }
     val firstVocalRow = remember(display) { display.rows.indexOfFirst { it.main != null }.coerceAtLeast(0) }
-    val expressions = remember(display, inferredEnds) {
-        buildMap {
-            putAll(lyricsAdaptiveLineExpressions(display.rows.mapNotNull { it.main as? KaraokeLine }, inferredEnds))
-            display.rows.flatMap { it.backing }.forEach {
-                putAll(lyricsAdaptiveLineExpressions(listOf(it.value), inferredEnds))
+    // Analyze all timed syllables on Default, not during the first Compose
+    // frame of the Lyrics panel. Pure CPU results are published once.
+    val expressions by produceState<Map<KaraokeLine, List<LyricsAdaptiveExpression>>>(
+        initialValue = emptyMap(), display, inferredEnds
+    ) {
+        value = withContext(Dispatchers.Default) {
+            buildMap {
+                putAll(lyricsAdaptiveLineExpressions(
+                    display.rows.mapNotNull { it.main as? KaraokeLine }, inferredEnds
+                ))
+                display.rows.flatMap { it.backing }.forEach {
+                    putAll(lyricsAdaptiveLineExpressions(listOf(it.value), inferredEnds))
+                }
             }
         }
     }
@@ -84,15 +94,14 @@ internal fun SyncedLyricsView(
         val density = androidx.compose.ui.platform.LocalDensity.current.density
         val gapHeight = with(androidx.compose.ui.platform.LocalDensity.current) { lyricsGapRowHeight.toPx() }
 
-        // Prebuild all supported blur radii ONCE per display density. No new
-        // shader, RenderEffect or graphics layer allocation on playback ticks.
-        // Android 10–11 keep the same opacity gradient without hardware blur.
+        // Half as many cached GPU blur effects (0.2dp steps across the
+        // same 0..5.4dp range). No shader allocation on playback ticks.
         val blurEffects = remember(density) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                Array<BlurEffect?>(56) { step ->
+                Array<BlurEffect?>(28) { step ->
                     if (step == 0) null else BlurEffect(
-                        radiusX = step * 0.1f * density,
-                        radiusY = step * 0.1f * density,
+                        radiusX = step * 0.2f * density,
+                        radiusY = step * 0.2f * density,
                         edgeTreatment = TileMode.Decal
                     )
                 }
@@ -245,7 +254,7 @@ internal fun SyncedLyricsView(
                             visualFocus.focusAmount(row.sourceIndex, now))
                         alpha = focus.opacity
                         renderEffect = if (blurEffects.isNotEmpty()) {
-                            blurEffects[(focus.blurDp * 10f).roundToInt().coerceIn(0, blurEffects.lastIndex)]
+                            blurEffects[(focus.blurDp * 5f).roundToInt().coerceIn(0, blurEffects.lastIndex)]
                         } else null
                         // Existing 16dp horizontal / 8dp vertical text padding
                         // exceeds the maximum 5.5dp blur; no clipping or resizing.
@@ -261,7 +270,7 @@ internal fun SyncedLyricsView(
                         val focus = lyricsFocusDepth(visualDistanceDp())
                         alpha = focus.opacity
                         renderEffect = if (blurEffects.isNotEmpty()) {
-                            blurEffects[(focus.blurDp * 10f).roundToInt().coerceIn(0, blurEffects.lastIndex)]
+                            blurEffects[(focus.blurDp * 5f).roundToInt().coerceIn(0, blurEffects.lastIndex)]
                         } else null
                         clip = false
                     }) {
