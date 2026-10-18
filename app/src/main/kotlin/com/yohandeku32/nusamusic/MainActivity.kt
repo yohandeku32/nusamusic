@@ -2003,6 +2003,7 @@ private fun NusaMusicApp(
                                 onShuffle = onToggleShuffle, onRepeat = onToggleRepeat,
                                 onFavorite = { isFavorite = !isFavorite },
                                 onLyrics = { lyricsRequested = !lyricsRequested },
+                                onDismissLyrics = { lyricsRequested = false },
                                 onArtist = { scope.launch { pagerState.animateMiuixScrollToPage(0); lyricsRequested = false } },
                                 onLibrary = { scope.launch { pagerState.animateMiuixScrollToPage(libraryPage) } },
                                 onShare = { onShare(currentSong) },
