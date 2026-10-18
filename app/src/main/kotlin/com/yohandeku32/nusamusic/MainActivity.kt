@@ -4129,7 +4129,7 @@ private fun ImmersiveArtwork(
 
     val heroOpacity by animateFloatAsState(
         targetValue = if (lyricsMode) 0f else 1f,
-        animationSpec = tween(430),
+        animationSpec = tween(190),
         label = "immersiveLyricsHeroFade"
     )
 
@@ -4148,6 +4148,7 @@ private fun ImmersiveArtwork(
             if (animatedArtworkEnabled && activeUrl != null) {
                 AnimatedArtworkVideoBackground(
                     url = activeUrl,
+                    playbackVisible = !lyricsMode,
                     modifier = Modifier.fillMaxSize(),
                     captureBackdrop = frozenAnimatedBlur == null,
                     onBackdropReady = { blurredFrame, frameColor ->
@@ -4173,6 +4174,7 @@ private fun ImmersiveArtwork(
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 private fun AnimatedArtworkVideoBackground(
     url: String,
+    playbackVisible: Boolean,
     modifier: Modifier = Modifier,
     captureBackdrop: Boolean,
     onBackdropReady: (Bitmap, Color) -> Unit,
@@ -4186,6 +4188,7 @@ private fun AnimatedArtworkVideoBackground(
     val onBackdropReadyCallback by rememberUpdatedState(onBackdropReady)
     val onUnavailableCallback by rememberUpdatedState(onUnavailable)
     val shouldCaptureBackdrop by rememberUpdatedState(captureBackdrop)
+    val shouldPlayVideo by rememberUpdatedState(playbackVisible)
 
     val player = remember(url) {
         val trackSelector = androidx.media3.exoplayer.trackselection.DefaultTrackSelector(context).apply {
@@ -4227,13 +4230,14 @@ private fun AnimatedArtworkVideoBackground(
         }
     }
 
-    LaunchedEffect(player, artworkPlayerView, videoVisible) {
+    LaunchedEffect(player, artworkPlayerView, videoVisible, playbackVisible) {
         val view = artworkPlayerView ?: return@LaunchedEffect
         // Start after the video has actually faded in: hidden TextureViews on
         // some devices return a black bitmap even when playback has started.
-        if (!videoVisible || !shouldCaptureBackdrop) return@LaunchedEffect
+        if (!videoVisible || !shouldCaptureBackdrop || !playbackVisible) return@LaunchedEffect
         delay(450L)
         repeat(40) {
+            if (!shouldPlayVideo) return@LaunchedEffect
             androidx.compose.runtime.withFrameNanos { }
             val frame = ArtworkBlur.captureViewport(view)
             if (frame != null) {
@@ -4255,6 +4259,7 @@ private fun AnimatedArtworkVideoBackground(
     LaunchedEffect(player, playbackRetryCount) {
         if (playbackRetryCount > 0) {
             delay(750L * playbackRetryCount)
+            if (!shouldPlayVideo) return@LaunchedEffect
             player.prepare()
             player.playWhenReady = true
         }
@@ -4277,11 +4282,18 @@ private fun AnimatedArtworkVideoBackground(
 
         player.addListener(listener)
         player.prepare()
-        player.playWhenReady = true
+        player.playWhenReady = shouldPlayVideo
         onDispose {
             player.removeListener(listener)
             player.release()
         }
+    }
+
+    // Hidden animated covers must stop decoding while Lyrics paints the
+    // TTML glyphs. Retain ExoPlayer/TextureView so closing Lyrics resumes
+    // without the expensive HLS player setup or re-buffering from scratch.
+    LaunchedEffect(player, playbackVisible) {
+        player.playWhenReady = playbackVisible
     }
 
     val videoAlpha by animateFloatAsState(
