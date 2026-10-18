@@ -125,6 +125,26 @@ transform. This keeps the complete last word and sentence moving together;
 the individual progressive fills and glow timing remain unchanged. Short
 endings and inferred metadata tails retain their adaptive treatment.
 
+The V13 dynamic engine keeps timing, phrase analysis, expression and visual
+focus separate. `LyricsTimeline` retains the authored active windows;
+`LyricsPhraseAnalysis` prepares continuous duration/gap-weighted context from
+nearby earlier and later units. Look-ahead gently prepares the current note
+for an upcoming hold without activating future text. Each measured glyph
+retains a `LyricsExpressionController`; soft outgoing halos bridge adjacent
+notes while strong bloom releases naturally. Existing continuous wave,
+bubble, elastic contour and micro-vibration carriers keep their playback phase.
+Inferred timing remains limited to simple expression.
+
+`LyricsVisualFocusController` prepares a continuous scroll target just before
+the next main-line onset. One retained spring uses calmer response on rapid
+rows and never returns to an older overlapping main line. Blur/opacity share
+smooth line-cue transitions, with all active voices staying sharp and the
+existing backing-vocal depth retained. Authored instrumental countdowns,
+manual-scroll priority, first-row alignment and tap-to-seek retain their layout
+and interaction paths. Tests include synthetic embedded timing fixtures for
+rap, pop, ballad, long holds, mixed cadence, backing vocals and instrumental gaps;
+they do not substitute for listening/rendering/FPS tests on a physical device.
+
 One lifecycle-bound publisher reads actual player position and discontinuity
 epoch together on the UI thread. Only a real player event resets motion;
 a slow frame is never treated as a seek. Tap-to-seek issues one player request,

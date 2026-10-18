@@ -35,12 +35,15 @@ internal fun lyricsFocusDepth(distanceDp: Float): LyricsFocusDepth {
 }
 
 /** Main text only: stronger depth, with the existing backing-vocal curve above retained. */
-internal fun lyricsMainFocusDepth(distanceDp: Float, start: Int, end: Int, now: Int): LyricsFocusDepth {
+internal fun lyricsMainFocusDepth(
+    distanceDp: Float, start: Int, end: Int, now: Int,
+    focusAmount: Float = lyricsMainFocusAmount(start, end, now)
+): LyricsFocusDepth {
     // Finish the incoming focus pull BEFORE the first active syllable. All
     // overlapping active lines stay completely sharp, even during browsing.
     // Sample the existing playback clock: pause holds focus, and seek never
     // restarts a stale animator or replays a focus transition from another row.
-    val focus = lyricsMainFocusAmount(start, end, now)
+    val focus = focusAmount.coerceIn(0f, 1f)
     if (focus >= 1f) return LyricsFocusDepth(0f, 1f)
     val distance = abs(distanceDp).takeIf { it.isFinite() } ?: 0f
     val nearToFar = lyricEase((distance - 105f) / 105f)
@@ -50,12 +53,14 @@ internal fun lyricsMainFocusDepth(distanceDp: Float, start: Int, end: Int, now: 
     return LyricsFocusDepth(blur * (1f - focus), opacity + (1f - opacity) * focus)
 }
 
-/** One 420ms smoothstep for blur AND opacity; no per-row wall-clock animation. */
-internal fun lyricsMainFocusAmount(start: Int, end: Int, now: Int): Float {
+/** One playback-time smoothstep for blur AND opacity; the default retains the 420ms profile. */
+internal fun lyricsMainFocusAmount(
+    start: Int, end: Int, now: Int, leadMs: Float = 420f, releaseMs: Float = 420f
+): Float {
     if (end <= start) return 0f
     return when {
-        now < start -> 1f - lyricEase((start.toLong() - now) / 420f)
+        now < start -> 1f - lyricEase((start.toLong() - now) / leadMs.coerceAtLeast(1f))
         now < end -> 1f
-        else -> 1f - lyricEase((now.toLong() - end) / 420f)
+        else -> 1f - lyricEase((now.toLong() - end) / releaseMs.coerceAtLeast(1f))
     }
 }
