@@ -38,7 +38,11 @@ internal fun CenteredKaraokeLine(
     val density = LocalDensity.current
     val textStyle = remember(style) { style.copy(textDirection = TextDirection.Content) }
     val rtl = remember(line) { line.syllables.any { it.content.isRtl() } }
-    LyricsLineContainer(focused, { onSeek(line) }, if (line.isAccompaniment) 0.6f else 1f, if (line.isAccompaniment) 0.2f else 0.4f) {
+    val focus = animateFloatAsState(if (focused) 1f else 0f,
+        tween(220, easing = FastOutSlowInEasing), label = "karaokeFocus")
+    val heldTime = remember(line) { intArrayOf(0) }
+    val rowOpacity = if (line.isAccompaniment) 0.6f else 1f
+    LyricsLineContainer(focused, { onSeek(line) }, rowOpacity, rowOpacity) {
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             val width = constraints.maxWidth.toFloat()
             // Every measurement depends on text size, available width, and system font scale.
@@ -56,7 +60,8 @@ internal fun CenteredKaraokeLine(
             Canvas(Modifier.fillMaxWidth().height(height).semantics {
                 contentDescription = line.syllables.joinToString("") { it.content }
             }) {
-                drawSyllableLyrics(layouts, if (focused) time() else 0, focused)
+                val now = if (focused) time().also { heldTime[0] = it } else heldTime[0]
+                drawSyllableLyrics(layouts, now, focus.value)
             }
         }
         line.translation?.let { Translation(it, style) }

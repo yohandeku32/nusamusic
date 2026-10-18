@@ -1,33 +1,62 @@
 package com.yohandeku32.nusamusic.ui
 
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.style.ResolvedTextDirection
 import androidx.compose.ui.unit.dp
 import com.mocharealm.accompanist.lyrics.ui.composable.lyrics.SyllableLayout
 
-/** Every authored unit has its own sweep; a row-wide gradient cannot honor syllable gaps. */
-internal fun DrawScope.drawSyllableLyrics(layouts: List<List<SyllableLayout>>, now: Int, focused: Boolean) {
+/** Feather the glyph fill itself: a hard clip also cuts the glow into visible rectangles. */
+internal fun DrawScope.drawSyllableLyrics(
+    layouts: List<List<SyllableLayout>>, now: Int, focus: Float
+) {
+    val strength = focus.coerceIn(0f, 1f)
     layouts.forEach { row -> row.forEach syllable@ { layout ->
         if (layout.syllable.content.isBlank()) return@syllable
-        val progress = syllableProgress(layout.syllable, now)
-        val singing = focused && now >= layout.syllable.start && now < layout.syllable.end
+        val result = layout.textLayoutResult
         val position = layout.position
-        drawText(layout.textLayoutResult, color = Color.White.copy(alpha = if (focused) 0.4f else 1f), topLeft = position)
-        if (focused && progress > 0f) {
-            val rtl = layout.textLayoutResult.getParagraphDirection(0) == ResolvedTextDirection.Rtl
-            val width = layout.textLayoutResult.size.width.toFloat()
-            val left = if (rtl) position.x + width * (1f - progress) else position.x
-            val right = if (rtl) position.x + width else position.x + width * progress
-            clipRect(left = left, right = right, top = position.y - 8.dp.toPx(),
-                bottom = position.y + layout.textLayoutResult.size.height + 8.dp.toPx()) {
-                drawText(layout.textLayoutResult, color = Color.White, topLeft = position,
-                    shadow = if (singing) Shadow(Color.White.copy(alpha = 0.25f), Offset.Zero, 5.dp.toPx()) else null)
-            }
+        // Keep the same base luminance when focus changes; fading a second parent alpha
+        // used to darken unsung text abruptly on entry and flash it bright on exit.
+        drawText(result, color = Color.White.copy(alpha = 0.4f), topLeft = position, shadow = Shadow.None)
+        if (strength <= 0f) return@syllable
+        val progress = syllableProgress(layout.syllable, now)
+        if (progress <= 0f) return@syllable
+        val glow = syllableGlowEnvelope(layout.syllable.start, layout.syllable.end, now)
+        val shadow = if (glow > 0f) Shadow(
+            Color.White.copy(alpha = 0.14f * glow), Offset.Zero, 4.dp.toPx()
+        ) else Shadow.None
+        if (progress >= 1f) {
+            drawText(result, color = Color.White, topLeft = position, alpha = strength, shadow = shadow)
+        } else {
+            val width = result.size.width.toFloat().coerceAtLeast(1f)
+            val feather = minOf(5.dp.toPx(), width * 0.2f).coerceAtLeast(0.5f)
+            val distance = (width + 2f * feather) * progress - feather
+            val rtl = result.getParagraphDirection(0) == ResolvedTextDirection.Rtl
+            val edge = if (rtl) width - distance else distance
+            val direction = if (rtl) -1f else 1f
+            val fill = Brush.linearGradient(
+                colors = listOf(Color.White, Color.Transparent),
+                start = Offset(edge - direction * feather, 0f),
+                end = Offset(edge + direction * feather, 0f)
+            )
+            // No clipRect: the soft halo can extend naturally beyond the glyph bounds.
+            drawText(result, brush = fill, topLeft = position, alpha = strength, shadow = shadow)
         }
     } }
+}
+
+/** Audio-time envelope stays frozen on pause and reaches zero at both authored bounds. */
+internal fun syllableGlowEnvelope(start: Int, end: Int, now: Int): Float {
+    val duration = end.toLong() - start
+    if (duration <= 0 || now <= start || now >= end) return 0f
+    val ramp = minOf(120.0, duration / 2.0).coerceAtLeast(0.5)
+    fun smooth(value: Double): Float {
+        val x = value.coerceIn(0.0, 1.0).toFloat()
+        return x * x * (3f - 2f * x)
+    }
+    return smooth((now.toLong() - start) / ramp) * smooth((end.toLong() - now) / ramp)
 }
