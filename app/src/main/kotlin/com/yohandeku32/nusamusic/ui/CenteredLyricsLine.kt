@@ -54,7 +54,9 @@ internal fun CenteredKaraokeLine(
             val layouts = remember(wrapped, width, lineHeight, rtl) {
                 calculateStaticLineLayout(wrapped, false, width, lineHeight, rtl)
             }
-            val painter = remember(layouts, density.density) { SyllableLyricsPainter(layouts, density.density) }
+            val painter = remember(layouts, density.density, line.start, line.end) {
+                SyllableLyricsPainter(layouts, density.density, line.start, line.end)
+            }
             val height = with(density) { (lineHeight * wrapped.size).toDp() } + 8.dp
             val readable by remember(line, voices, visualTime, motion) { derivedStateOf {
                 !line.isAccompaniment || voices.presence(visualTime(), motion.resetAt) > 0f
@@ -64,7 +66,10 @@ internal fun CenteredKaraokeLine(
             }) {
                 val now = visualTime()
                 val focus = lyricPresence(line.start, line.end, now, motion.resetAt)
-                painter.draw(this, now, focus)
+                // Raw playback time drives the whole-line wave even when a
+                // syllable is inactive. visualTime retains the old syllable
+                // highlight/seek logic, so the two animations stay separate.
+                painter.draw(this, now, focus, waveTime = time())
             }
         }
     }
