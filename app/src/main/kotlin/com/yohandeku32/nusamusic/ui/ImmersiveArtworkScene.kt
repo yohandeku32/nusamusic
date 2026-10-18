@@ -68,7 +68,9 @@ internal fun ImmersiveArtworkScene(
                 compositingStrategy = CompositingStrategy.Offscreen
             }
             .drawWithCache {
-                val painter = ImmersiveArtworkPainter(size, size.height, size.height * 0.27f)
+                // Feather the sharp cover into its own blurred artwork more gradually.
+                // This alpha mask introduces no black or palette gradient.
+                val painter = ImmersiveArtworkPainter(size, size.height, size.height * 0.44f)
                 val sideFade = if (heroWidthFraction < 1f) Brush.horizontalGradient(
                     0f to Color.White, 0.72f to Color.White, 1f to Color.Transparent) else null
                 onDrawWithContent {
