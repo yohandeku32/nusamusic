@@ -20,8 +20,8 @@ internal fun blendAmbientArtwork(
         val a = broad[i]
         val b = detailed[i]
         fun channel(shift: Int): Float {
-            val smooth = ((a ushr shift) and 255) * 0.70f
-            val structure = ((b ushr shift) and 255) * 0.30f
+            val smooth = ((a ushr shift) and 255) * 0.76f
+            val structure = ((b ushr shift) and 255) * 0.24f
             // Blend preserves original neutral colours exactly.
             // Brightness is adjusted only on the generated blur bitmap.
             return smooth + structure
@@ -34,8 +34,8 @@ internal fun blendAmbientArtwork(
         val luma = red * 0.2126f + green * 0.7152f + blue * 0.0722f
         fun vivid(value: Float): Int =
             (luma + (value - luma) * 1.075f).roundToInt().coerceIn(0, 255)
-        val alpha = ((((a ushr 24) and 255) * 0.70f) +
-            (((b ushr 24) and 255) * 0.30f)).roundToInt().coerceIn(0, 255)
+        val alpha = ((((a ushr 24) and 255) * 0.76f) +
+            (((b ushr 24) and 255) * 0.24f)).roundToInt().coerceIn(0, 255)
         out[i] = (alpha shl 24) or
             (vivid(red) shl 16) or
             (vivid(green) shl 8) or
