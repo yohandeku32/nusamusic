@@ -99,46 +99,38 @@ internal fun ImmersiveArtworkPlayer(
         val transportToPillGap = transportGap * 2 - progressToTransportGap
         var controlsHeightPx by remember { mutableIntStateOf(0) }
         val controlsHeight = with(density) { controlsHeightPx.toDp() }
-        var lyricHeaderHeightPx by remember { mutableIntStateOf(0) }
         var transportHeightPx by remember { mutableIntStateOf(0) }
-        val headerHeight = with(density) { lyricHeaderHeightPx.toDp() }
         val transportHeight = with(density) { transportHeightPx.toDp() }
         val topInset = with(density) { contentInsets.getTop(density).toDp() }
         val bottomInset = with(density) { contentInsets.getBottom(density).toDp() }
-        // Lyrics focus moves the song metadata to the artwork's safe top,
-        // with enough room below it for the synchronized lyrics viewport.
+        // Keep the entire player stack measured exactly once per song/font.
+        // Switching Lyrics changes only compositor-layer opacity/translation:
+        // no header height collapse, transport jump, hero relayout or feedback
+        // from onSizeChanged during the entrance animation.
         val targetHeaderTop = topInset + if (compact) 16.dp else 20.dp
-        // Translate the SAME metadata composable upward rather than rendering
-        // a second copy. Its original layout slot keeps progress and playback
-        // anchored exactly where the user positioned them.
-        val headerLift = if (wide || controlsHeightPx == 0) 0.dp else
-            (viewportHeight - controlsHeight - targetHeaderTop).coerceAtLeast(0.dp)
         val lyricsTransition by animateFloatAsState(
             targetValue = if (lyricsOpen) 1f else 0f,
-            animationSpec = tween(460, easing = FastOutSlowInEasing),
-            label = "immersiveLyricsReflow"
+            animationSpec = tween(250, easing = FastOutSlowInEasing),
+            label = "immersiveLyricsCrossfade"
         )
-        // Lyrics rows are expensive to initialize (text measurement, glow
-        // effects, follow-scroll). Do not mount them during the header/cover
-        // transition. Opening first moves metadata, then fades in the lyrics.
-        // Cancellation on rapid taps prevents a stale delayed reveal.
+        // Defer expensive lazy lyric measurement until after the artwork
+        // fade has largely settled, rather than stacking GPU composition,
+        // remeasure and the initial automatic lyric scroll on one frame.
+        // Cancelling the effect handles rapid repeated taps safely.
         var showLyricsContent by remember { mutableStateOf(false) }
         LaunchedEffect(lyricsOpen) {
             if (lyricsOpen) {
-                // Reveal before the header fully settles; avoid a half-second blank pause.
-                // Alpha remains isolated from layout and lyrics text geometry.
-                delay(260L)
+                delay(220L)
                 showLyricsContent = true
             } else {
                 showLyricsContent = false
             }
         }
-        // Lyrics occupies only the old artwork space: below the animated
-        // metadata and above progress / playback / bottom action pill.
-        // Use measured heights instead of fixed percentages so short screens
-        // and larger font choices never cover the playback controls.
-        val lyricsViewportTop = if (wide) topInset + 20.dp
-            else targetHeaderTop + headerHeight + 12.dp
+        // Composer has independent, compact top geometry. The normal title
+        // remains in its original layout slot (invisible in Lyrics mode), so
+        // the seek bar, five transport buttons and lower pill never shift.
+        val lyricsViewportTop = if (wide) targetHeaderTop + 48.dp
+            else targetHeaderTop + 48.dp
         val lyricsBottomReserve = if (wide) bottomInset + 20.dp
             else transportHeight + bottomInset + 24.dp
         val lyricsViewportHeight = (viewportHeight - lyricsViewportTop - lyricsBottomReserve)
@@ -154,6 +146,33 @@ internal fun ImmersiveArtworkPlayer(
         val heroHeight by animateDpAsState(requestedHero, tween(220), label = "immersiveHeroHeight")
         artwork(Modifier.matchParentSize(), heroHeight, if (wide) (1f - controlsFraction + 0.06f) else 1f)
 
+        // Dedicated top composer instead of reflowing the large Now Playing
+        // title into smaller credits. Both fades are graphics layers only.
+        Column(
+            Modifier.align(Alignment.TopStart)
+                .padding(start = horizontal, end = horizontal, top = targetHeaderTop)
+                .graphicsLayer {
+                    alpha = lyricsTransition
+                    translationY = (1f - lyricsTransition) * 8.dp.toPx()
+                }
+        ) {
+            Text(
+                text = "COMPOSER",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color.White.copy(alpha = 0.58f)
+            )
+            Text(
+                text = composerNames.ifBlank { "Unknown composer" },
+                fontSize = if (compact) 11.sp else 12.sp,
+                lineHeight = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color.White.copy(alpha = 0.90f),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+
         // Render lyrics above the artwork-derived ambient but BELOW the
         // foreground controls. A delayed, gentle fade lets the album metadata
         // start its smooth trip upward before lines come into focus.
@@ -168,10 +187,10 @@ internal fun ImmersiveArtworkPlayer(
                     .padding(start = 20.dp, end = 16.dp)
                     .padding(top = lyricsViewportTop)
                     .height(lyricsViewportHeight),
-                // Alpha-only animation avoids translating and relaying out
-                // the full, shader-heavy lyrics list during entrance/exit.
+                // Only composite the existing lyric canvas: do not animate
+                // its bounds or seek target while the viewport is created.
                 enter = fadeIn(animationSpec = tween(240)),
-                exit = fadeOut(animationSpec = tween(100))
+                exit = fadeOut(animationSpec = tween(160))
             ) {
                 Box(Modifier.fillMaxSize()) {
                     // Reuse the existing synced lyrics, timing and follow-scroll.
@@ -192,26 +211,17 @@ internal fun ImmersiveArtworkPlayer(
             ) {
                 Column(
                     Modifier.fillMaxWidth()
-                        .onSizeChanged { lyricHeaderHeightPx = it.height }
                         .graphicsLayer {
-                            // The actual title / artist / Hi-Res stay visible at
-                            // the top throughout Lyrics focus, not crossfaded away.
-                            translationY = -headerLift.toPx() * lyricsTransition
+                            alpha = 1f - lyricsTransition
+                            translationY = -8.dp.toPx() * lyricsTransition
                         }
                 ) {
-                // Keep a single left-aligned metadata stack, without a cover.
-                // Switch to the compact text metrics only ONCE when the mode
-                // changes: animating fontSize and lineHeight remeasured text
-                // every frame, while the whole header already moves smoothly
-                // on the compositor via graphicsLayer above.
+                // Stable typography and measured height in both modes.
+                // Only the parent graphics layer fades this stack.
                 val expandedTitleSize = (titleFontSize *
                     if (compact) 0.78f else 0.84f).coerceIn(24f, 36f)
                 val expandedLineHeight = (titleFontSize *
                     if (compact) 0.90f else 0.97f).coerceIn(29f, 43f)
-                val compactTitleSize = if (compact) 14.5f else 15.5f
-                val compactLineHeight = if (compact) 18f else 19f
-                val titleSize = if (lyricsOpen) compactTitleSize else expandedTitleSize
-                val lineHeight = if (lyricsOpen) compactLineHeight else expandedLineHeight
 
                 Row(
                     Modifier.fillMaxWidth(),
@@ -221,29 +231,12 @@ internal fun ImmersiveArtworkPlayer(
                         modifier = Modifier.weight(1f),
                         horizontalAlignment = Alignment.Start
                     ) {
-                        if (lyricsOpen) {
-                            Text(
-                                text = "COMPOSER",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color.White.copy(alpha = 0.58f)
-                            )
-                            Text(
-                                text = composerNames.ifBlank { "Unknown composer" },
-                                fontSize = if (compact) 11.sp else 12.sp,
-                                lineHeight = 16.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color.White.copy(alpha = 0.90f),
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        } else {
                         Text(
                             text = title,
                             fontFamily = titleFontFamily,
                             fontWeight = FontWeight.Bold,
-                            fontSize = titleSize.sp,
-                            lineHeight = lineHeight.sp,
+                            fontSize = expandedTitleSize.sp,
+                            lineHeight = expandedLineHeight.sp,
                             textAlign = TextAlign.Start,
                             color = Color.White,
                             maxLines = 2,
@@ -251,39 +244,30 @@ internal fun ImmersiveArtworkPlayer(
                         )
                         Text(
                             text = artist,
-                            fontSize = (if (lyricsOpen) 11.5f else 16.25f).sp,
+                            fontSize = 16.25f.sp,
                             color = Color.White.copy(alpha = 0.72f),
                             textAlign = TextAlign.Start,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.fillMaxWidth()
-                                .padding(top = if (lyricsOpen) 2.dp else 5.dp)
-                                .clickable(enabled = hasSong, onClick = onArtist)
+                                .padding(top = 5.dp)
+                                .clickable(enabled = hasSong && !lyricsOpen, onClick = onArtist)
                         )
-                        }
-                        // Keep Hi-Res/Lossless in normal player only. The
-                        // Lyrics header contains exactly title and artist.
-                        if (!lyricsOpen) {
-                            Box(Modifier.align(Alignment.Start).padding(top = 4.dp)) {
-                                quality()
-                            }
+                        // Still measured, but entirely faded out with the
+                        // player title when the composer header becomes active.
+                        Box(Modifier.align(Alignment.Start).padding(top = 4.dp)) {
+                            quality()
                         }
                     }
-                    AnimatedVisibility(
-                        visible = !lyricsOpen,
-                        // Fading the favorite is cheaper than expanding
-                        // the header width on every animation frame.
-                        enter = fadeIn(tween(180)),
-                        exit = fadeOut(tween(120))
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Spacer(Modifier.width(12.dp))
-                            ImmersiveAction(
-                                if (isFavorite) NusaPlayerIcons.HeartFilled else NusaPlayerIcons.Heart,
-                                immersiveText("Favorit", "Favorite"), onFavorite, hasSong,
-                                active = isFavorite, iconSize = 25.dp
-                            )
-                        }
+                    // Keep its width in the layout on both modes to prevent
+                    // changes to title wrapping on every Lyrics toggle.
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Spacer(Modifier.width(12.dp))
+                        ImmersiveAction(
+                            if (isFavorite) NusaPlayerIcons.HeartFilled else NusaPlayerIcons.Heart,
+                            immersiveText("Favorit", "Favorite"), onFavorite, hasSong && !lyricsOpen,
+                            active = isFavorite, iconSize = 25.dp
+                        )
                     }
                 }
                 }
