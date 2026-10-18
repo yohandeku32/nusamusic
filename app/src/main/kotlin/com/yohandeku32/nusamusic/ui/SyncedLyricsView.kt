@@ -253,6 +253,12 @@ internal fun SyncedLyricsView(
                         val focus = lyricsMainFocusDepth(visualDistanceDp(), main.start, main.end, now,
                             visualFocus.focusAmount(row.sourceIndex, now))
                         alpha = focus.opacity
+                        // Let upcoming lines rise gently into focus rather than appearing
+                        // as a rigid scrolling list. This is a GPU-only transform:
+                        // no text remeasurement, extra coroutine, or per-frame allocation.
+                        translationY = if (visualDistanceDp() > 0f) {
+                            (1f - focus.opacity).coerceIn(0f, 1f) * 14f * density
+                        } else 0f
                         renderEffect = if (blurEffects.isNotEmpty()) {
                             blurEffects[(focus.blurDp * 5f).roundToInt().coerceIn(0, blurEffects.lastIndex)]
                         } else null
