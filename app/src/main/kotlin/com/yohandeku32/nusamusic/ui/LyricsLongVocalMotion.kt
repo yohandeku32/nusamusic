@@ -16,7 +16,8 @@ import kotlin.math.sin
 internal class LyricsLongVocalMotion(
     private val startMs: Int,
     private val endMs: Int,
-    private val horizontalDp: Float
+    private val horizontalDp: Float,
+    private val expression: LyricsAdaptiveExpression = LyricsAdaptiveExpression(endMs.toLong() - startMs)
 ) {
     var scaleX = 1f
         private set
@@ -46,15 +47,12 @@ internal class LyricsLongVocalMotion(
             return
         }
 
-        // Blend in the feature by authored vocal duration. Short rapid notes
-        // keep the original V6 motion; no artificial vibrato metadata assumed.
-        val eligible = lyricEase(((duration - 700L) / 400f).coerceIn(0f, 1f))
+        // Blend expression by evidenced vocal duration. Short rapid notes
+        // retain clean highlighting; no artificial vibrato metadata assumed.
+        val eligible = expression.breathing
         val elapsed = (playbackMs.toLong() - startMs).toFloat()
-        val remaining = (endMs.toLong() - playbackMs).toFloat()
-        val attackMs = minOf(320f, duration.toFloat() * 0.35f).coerceAtLeast(1f)
-        val releaseMs = minOf(340f, duration.toFloat() * 0.35f).coerceAtLeast(1f)
-        val envelope = lyricEase(elapsed / attackMs) * lyricEase(remaining / releaseMs)
-        val energy = (eligible * envelope * localInfluence.coerceIn(0f, 1f))
+        val envelope = expression.envelope(startMs, endMs, playbackMs)
+        val energy = (eligible * envelope * expression.phraseAt(startMs, playbackMs) * localInfluence.coerceIn(0f, 1f))
             .coerceIn(0f, 1f)
 
         if (energy <= 0f) {
@@ -76,9 +74,10 @@ internal class LyricsLongVocalMotion(
         // independently. No random values, oscillator jobs or springs.
         val t = playbackMs.toDouble()
         val x = horizontalDp.toDouble()
-        offsetXDp = (0.19 * energy *
+        val vibrationEnergy = energy * expression.vibration
+        offsetXDp = (0.19 * vibrationEnergy *
             sin(t * 2.0 * PI / 1030.0 + x * 0.009)).toFloat()
-        offsetYDp = (energy * (
+        offsetYDp = (vibrationEnergy * (
             0.22 * sin(t * 2.0 * PI / 940.0 + x * 0.008) +
                 0.09 * sin(t * 2.0 * PI / 710.0 + x * 0.003 - 0.8)
         )).toFloat()
@@ -93,7 +92,7 @@ internal class LyricsLongVocalMotion(
         // attack/release envelope carries both contour and bloom to zero.
         val progress = (elapsed / duration.toFloat()).coerceIn(0f, 1f)
         val rising = 0.22f + 0.78f * lyricEase(progress / 0.73f)
-        val crescendo = (energy * rising).coerceIn(0f, 1f)
+        val crescendo = (energy * expression.elastic * rising).coerceIn(0f, 1f)
         val slowLight = 0.82 + 0.18 * breathY
         luminousCrescendo = (crescendo * slowLight.toFloat()).coerceIn(0f, 1f)
 

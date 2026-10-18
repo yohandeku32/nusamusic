@@ -58,12 +58,14 @@ internal class SyllableLyricsPainter(
     layouts: List<List<SyllableLayout>>,
     private val density: Float,
     private val lineStart: Int,
-    private val lineEnd: Int
+    private val lineEnd: Int,
+    expressions: List<LyricsAdaptiveExpression>? = null
 ) {
     private class Glyph(
         val layout: SyllableLayout,
         density: Float,
-        val pathStartDp: Float
+        val pathStartDp: Float,
+        val expression: LyricsAdaptiveExpression
     ) {
         val width = layout.textLayoutResult.size.width.toFloat().coerceAtLeast(1f)
         val widthDp = width / density
@@ -82,11 +84,14 @@ internal class SyllableLyricsPainter(
         // Separate sustained-vocal accent. Reuses the intact syllable's
         // measured text run so no individual character can break apart.
         val bubble = LyricsLongVocalMotion(
-            layout.syllable.start, layout.syllable.end, horizontalDp
+            layout.syllable.start, layout.syllable.end, horizontalDp, expression
         )
     }
 
     private val glyphs = buildList {
+        val profiles = expressions ?: lyricsAdaptiveExpressions(layouts.flatten()
+            .filter { it.syllable.content.isNotBlank() }
+            .map { LyricsExpressionTiming(it.syllable.start, it.syllable.end) })
         var endPathDp = 0f
         var previous: Glyph? = null
         for (layout in layouts.flatten()) {
@@ -101,7 +106,7 @@ internal class SyllableLyricsPainter(
                     12f
                 }
             } ?: 0f
-            val glyph = Glyph(layout, density, endPathDp + gap)
+            val glyph = Glyph(layout, density, endPathDp + gap, profiles[size])
             add(glyph)
             endPathDp = glyph.pathEndDp
             previous = glyph
@@ -139,16 +144,21 @@ internal class SyllableLyricsPainter(
                 front, glyph.pathStartDp, glyph.pathEndDp
             )
             val localIntensity = lineStrength * influence
-            glyph.motion.update(waveTime, localIntensity)
+            val unit = glyph.layout.syllable
+            // Keep the original traveling mask and 4.2s carrier. Duration only
+            // attenuates their amplitude; its playback phase never restarts.
+            glyph.motion.update(waveTime, localIntensity * glyph.expression.wave *
+                glyph.expression.phraseAt(unit.start, waveTime))
             glyph.bubble.update(waveTime, localIntensity)
         }
 
         for (pass in 0..1) for (glyph in glyphs) {
             val halo = pass == 0
             val unit = glyph.layout.syllable
-            if (halo && (strength <= 0f || now <= unit.start || now >= unit.end)) continue
+            if (halo && (strength <= 0f || glyph.expression.glow <= 0f || now <= unit.start || now >= unit.end)) continue
             val progress = syllableProgress(unit, now)
-            val glow = syllableGlowEnvelope(unit.start, unit.end, now) *
+            val glow = glyph.expression.glow * glyph.expression.envelope(unit.start, unit.end, now) *
+                glyph.expression.phraseAt(unit.start, now) *
                 lyricBreathing(unit.start, unit.end, now) * strength
 
             drawGlyph(glyph, halo, progress, glow, strength, now)
@@ -169,7 +179,7 @@ internal class SyllableLyricsPainter(
             glyph.bubble.offsetXDp * density,
             (glyph.bubble.offsetYDp - shift) * density
         )
-        // V6 motion is unchanged. The bubble adds only a small non-uniform
+        // The carrier stays continuous. The bubble adds only a small non-uniform
         // scale around the same baseline pivot; never relayout text.
         val scaleX = glyph.motion.scale * glyph.bubble.scaleX
         val scaleY = glyph.motion.scale * glyph.bubble.scaleY
@@ -263,11 +273,8 @@ internal class SyllableLyricsPainter(
     }
 }
 
-/** Authored attack/release; audio timestamps freeze all effects on pause. */
+/** Testable duration-weighted halo; painters cache the same profile with their layouts. */
 internal fun syllableGlowEnvelope(start: Int, end: Int, now: Int): Float {
-    val duration = end.toLong() - start
-    if (duration <= 0 || now <= start || now >= end) return 0f
-    val ramp = minOf(120.0, duration / 2.0).coerceAtLeast(0.5)
-    return lyricEase(((now.toLong() - start) / ramp).toFloat()) *
-        lyricEase(((end.toLong() - now) / ramp).toFloat())
+    val profile = LyricsAdaptiveExpression(end.toLong() - start)
+    return profile.glow * profile.envelope(start, end, now)
 }

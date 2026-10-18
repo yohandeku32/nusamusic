@@ -193,7 +193,8 @@ fun ImmersiveLyricsPanel(
                             onSeek = {
                                 val target = it.start.toLong().coerceIn(0, maxOf(durationMs, song?.durationMs ?: 0))
                                 onSeek(target)
-                            }, fontSize = fontSize, credits = data.stored.credits, modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp))
+                            }, fontSize = fontSize, credits = data.stored.credits, modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
+                            inferredEnds = data.inferredEnds)
                     }
                     data?.stored?.plain == true -> {
                         val lines = remember(data) { data.stored.content.lines() }

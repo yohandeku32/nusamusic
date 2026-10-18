@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yohandeku32.nusamusic.data.SongCredits
+import com.yohandeku32.nusamusic.data.LyricsUnitKey
 import com.mocharealm.accompanist.lyrics.core.model.ISyncedLine
 import com.mocharealm.accompanist.lyrics.core.model.SyncedLyrics
 import com.mocharealm.accompanist.lyrics.core.model.karaoke.KaraokeLine
@@ -41,11 +42,21 @@ import kotlin.math.roundToInt
 internal fun SyncedLyricsView(
     lyrics: SyncedLyrics, position: State<Long>, visible: Boolean,
     listState: LazyListState, motionState: LyricsMotionState,
-    onSeek: (ISyncedLine) -> Unit, fontSize: Float, credits: SongCredits = SongCredits(), modifier: Modifier = Modifier
+    onSeek: (ISyncedLine) -> Unit, fontSize: Float, credits: SongCredits = SongCredits(), modifier: Modifier = Modifier,
+    inferredEnds: Set<LyricsUnitKey> = emptySet()
 ) {
     val clock = remember { LyricsPlaybackClock(position, visible) }
     SideEffect { clock.update(position, visible) }
     val display = remember(lyrics) { LyricsDisplayRows(lyrics.lines) }
+    val firstVocalRow = remember(display) { display.rows.indexOfFirst { it.main != null }.coerceAtLeast(0) }
+    val expressions = remember(display, inferredEnds) {
+        buildMap {
+            putAll(lyricsAdaptiveLineExpressions(display.rows.mapNotNull { it.main as? KaraokeLine }, inferredEnds))
+            display.rows.flatMap { it.backing }.forEach {
+                putAll(lyricsAdaptiveLineExpressions(listOf(it.value), inferredEnds))
+            }
+        }
+    }
     val mainHeights = remember(lyrics) { HashMap<Int, Int>() }
     val followEnd = remember(lyrics) { lyrics.lines.maxOfOrNull { it.end }?.toLong()?.plus(160) ?: 0L }
     val timeline = remember(lyrics) { LyricsTimeline(lyrics.lines) }
@@ -91,7 +102,10 @@ internal fun SyncedLyricsView(
             val interactionGeneration = interaction.generation
             if (!visible || !interaction.canFollow) return@LaunchedEffect
             snapshotFlow { listState.layoutInfo.totalItemsCount }.first { it == display.rows.size + if (credits.isEmpty) 0 else 1 }
-            fun center() = with(listState.layoutInfo) { (viewportStartOffset + viewportEndOffset) / 2f }
+            fun center(target: Int) = with(listState.layoutInfo) {
+                lyricsFollowAnchor(viewportStartOffset, viewportEndOffset, target == firstVocalRow,
+                    mainHeight = mainHeights[target]?.toFloat() ?: 0f, minimumPadding = 24f * density)
+            }
             fun distance(target: Int, offset: Float): Float {
                 val items = listState.layoutInfo.visibleItemsInfo
                 val item = items.firstOrNull { it.index == target }
@@ -103,7 +117,7 @@ internal fun SyncedLyricsView(
                     val average = if (count > 0) (total.toFloat() / count).coerceAtLeast(1f) else gapHeight
                     first.offset + (target - first.index) * average + offset
                 }
-                return actualCenter - center()
+                return actualCenter - center(target)
             }
             fun anchorFor(target: Int, gap: LyricsGap?, now: Int): Float {
                 val fraction = gap?.let { countdownLayoutFraction(it, now) } ?: 0f
@@ -125,7 +139,7 @@ internal fun SyncedLyricsView(
                 targetAnchor = anchorFor(targetRow, current.gap, now)
                 return true
             }
-            fun requestedOffset() = (targetAnchor - center()).roundToInt()
+            fun requestedOffset() = (targetAnchor - center(targetRow)).roundToInt()
             try {
                 val now = clock.read()
                 if (!updateTarget(now)) return@LaunchedEffect
@@ -218,7 +232,7 @@ internal fun SyncedLyricsView(
                         clip = false
                     }) {
                         if (main is KaraokeLine) CenteredKaraokeLine(main, clock.read, motionState,
-                            normalStyle, seekLine, onMainHeight = { mainHeights[index] = it })
+                            normalStyle, seekLine, onMainHeight = { mainHeights[index] = it }, expressions = expressions[main])
                         else if (main is SyncedLine) LineSyncedLyricsRow(main, clock.read, motionState,
                             normalStyle, onMainHeight = { mainHeights[index] = it }) { seekLine(main) }
                     }
@@ -236,7 +250,8 @@ internal fun SyncedLyricsView(
                                 val voice = backing.value
                                 val voices = remember(voice) { LyricsVocalWindows(voice) }
                                 TimedVocalContent(voices, clock.read, motionState) {
-                                    CenteredKaraokeLine(voice, clock.read, motionState, backgroundStyle, seekLine)
+                                    CenteredKaraokeLine(voice, clock.read, motionState, backgroundStyle, seekLine,
+                                        expressions = expressions[voice])
                                 }
                             }
                         }

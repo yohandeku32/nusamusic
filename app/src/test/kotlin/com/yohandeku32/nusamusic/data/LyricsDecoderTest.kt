@@ -6,6 +6,34 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class LyricsDecoderTest {
+    @Test fun inferredEnhancedTailIsFlaggedWithoutChangingHighlightTimestamps() {
+        val decoded = LyricsDecoder.decodeWithTiming("[00:01]<00:01>Hello <00:02>world\n[00:30]Next", 35000)
+        val line = decoded.lyrics.lines.first() as KaraokeLine
+        assertEquals(30000, line.syllables.last().end)
+        assertTrue(LyricsUnitKey(2000, "world") in decoded.inferredEnds)
+        assertFalse(LyricsUnitKey(1000, "Hello") in decoded.inferredEnds)
+    }
+
+    @Test fun explicitEnhancedEndSuppliesEvidenceEvenForAVeryLongHold() {
+        val decoded = LyricsDecoder.decodeWithTiming("[00:01]<00:01>Hello<00:20>\n[00:30]Next", 35000)
+        assertTrue(decoded.inferredEnds.isEmpty())
+        assertEquals(20000, decoded.lyrics.lines.first().end)
+    }
+
+    @Test fun inheritedTtmlContainerEndIsNotEvidenceOfAHeldVocal() {
+        val decoded = LyricsDecoder.decodeWithTiming("""<tt><body><p begin="1s" end="30s"><span begin="1s">Hello</span></p></body></tt>""", 35000)
+        assertEquals(30000, decoded.lyrics.lines.single().end)
+        assertTrue(LyricsUnitKey(1000, "Hello") in decoded.inferredEnds)
+        val explicit = LyricsDecoder.decodeWithTiming("""<tt><body><p begin="1s" end="30s"><span begin="1s" dur="5s">Hello</span></p></body></tt>""", 35000)
+        assertTrue(explicit.inferredEnds.isEmpty())
+    }
+
+    @Test fun inferredTimingEvidenceFollowsTheSameLrcOffsetAsPlayback() {
+        val decoded = LyricsDecoder.decodeWithTiming("[offset:500]\n[00:01]<00:01>Hello", 5000)
+        assertEquals(500, decoded.lyrics.lines.single().start)
+        assertTrue(LyricsUnitKey(500, "Hello") in decoded.inferredEnds)
+    }
+
     @Test fun zeroDurationTtmlWordsProduceFiniteKaraokeProgress() {
         val content = """<tt><body><p begin="1s" end="1s"><span begin="1s" end="1s">Hello</span></p></body></tt>"""
         val line = LyricsDecoder.decode(content, 5_000).lines.single() as KaraokeLine
