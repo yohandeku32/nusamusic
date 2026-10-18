@@ -3027,14 +3027,17 @@ private fun AudioQualityPill(
                 Box(
                     modifier = Modifier
                         .padding(top = if (immersive) 0.dp else 4.dp)
-                        .clip(RoundedCornerShape(50))
-                        .background(
-                            color = if (immersive) {
-                                Color.White
-                            } else if (hiRes) {
-                                Color(0xFFB5A77C).copy(alpha = 0.42f)
+                        .then(
+                            if (immersive) {
+                                // Immersive: plain white icon and text, no pill surface.
+                                Modifier
                             } else {
-                                MaterialTheme.colorScheme.surfaceVariant
+                                Modifier
+                                    .clip(RoundedCornerShape(50))
+                                    .background(
+                                        if (hiRes) Color(0xFFB5A77C).copy(alpha = 0.42f)
+                                        else MaterialTheme.colorScheme.surfaceVariant
+                                    )
                             }
                         )
                         .clickable(enabled = metadataMatchesSong && info != null) {
@@ -3042,7 +3045,10 @@ private fun AudioQualityPill(
                         }
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                        modifier = Modifier.padding(
+                            horizontal = if (immersive) 0.dp else 7.dp,
+                            vertical = 3.dp
+                        ),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
                     ) {
@@ -3051,7 +3057,9 @@ private fun AudioQualityPill(
                             contentDescription = if (hiRes) "Hi-Res" else "Lossless",
                             contentScale = ContentScale.Fit,
                             colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(
-                                if (hiRes) Color(0xFF3D3728) else MaterialTheme.colorScheme.onSurface
+                                if (immersive) Color.White
+                                else if (hiRes) Color(0xFF3D3728)
+                                else MaterialTheme.colorScheme.onSurface
                             ),
                             modifier = Modifier.size(
                                 width = 16.dp,
@@ -3066,10 +3074,10 @@ private fun AudioQualityPill(
                             fontSize = 10.sp,
                             lineHeight = 11.sp,
                             fontWeight = FontWeight.Medium,
-                            color = if (hiRes) {
-                                Color(0xFF3D3728)
-                            } else {
-                                MaterialTheme.colorScheme.onSurface
+                            color = when {
+                                immersive -> Color.White
+                                hiRes -> Color(0xFF3D3728)
+                                else -> MaterialTheme.colorScheme.onSurface
                             }
                         )
                     }
@@ -3079,14 +3087,16 @@ private fun AudioQualityPill(
                 Box(
                     modifier = Modifier
                         .padding(top = if (immersive) 0.dp else 4.dp)
-                        .clip(RoundedCornerShape(50))
-                        .background(
-                            if (immersive) Color.White else MaterialTheme.colorScheme.surfaceVariant
+                        .then(
+                            if (immersive) Modifier
+                            else Modifier
+                                .clip(RoundedCornerShape(50))
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
                         )
                         .clickable(enabled = metadataMatchesSong && info != null) {
                             showMetadataDialog = true
                         }
-                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                        .padding(horizontal = if (immersive) 0.dp else 8.dp, vertical = 3.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -3111,11 +3121,8 @@ private fun AudioQualityPill(
                         lineHeight = 11.sp,
                         letterSpacing = (-0.35).sp,
                         maxLines = 1,
-                        color = if (immersive) {
-                            Color(0xFF1B1B1B)
-                        } else {
-                            MaterialTheme.colorScheme.onSurface
-                        }
+                        color = if (immersive) Color.White
+                            else MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
