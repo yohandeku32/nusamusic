@@ -3,6 +3,8 @@ package com.yohandeku32.nusamusic.ui
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -27,6 +29,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -71,6 +74,7 @@ internal fun ImmersiveArtworkPlayer(
     artwork: @Composable (Modifier, Dp, Float) -> Unit,
     progress: @Composable (Modifier) -> Unit,
     quality: @Composable () -> Unit,
+    miniArtwork: @Composable (Modifier) -> Unit = {},
     lyrics: @Composable (Modifier) -> Unit = {},
     modifier: Modifier = Modifier,
     contentInsets: WindowInsets = WindowInsets.safeDrawing
@@ -145,31 +149,85 @@ internal fun ImmersiveArtworkPlayer(
                             translationY = -headerLift.toPx() * lyricsTransition
                         }
                 ) {
+                // Existing normal header stays unchanged at progress 0.
+                // During Lyrics, a compact album tile joins the metadata as
+                // the title, artist and Hi-Res badge shrink together.
+                val expandedTitleSize = (titleFontSize *
+                    if (compact) 0.72f else 0.78f).coerceIn(22f, 34f)
+                val expandedLineHeight = (titleFontSize *
+                    if (compact) 0.84f else 0.90f).coerceIn(27f, 40f)
+                val compactTitleSize = if (compact) 16.5f else 18f
+                val compactLineHeight = if (compact) 20f else 22f
+                val titleSize = expandedTitleSize +
+                    (compactTitleSize - expandedTitleSize) * lyricsTransition
+                val lineHeight = expandedLineHeight +
+                    (compactLineHeight - expandedLineHeight) * lyricsTransition
+
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    AnimatedVisibility(
+                        visible = lyricsOpen,
+                        enter = expandHorizontally(tween(460, easing = FastOutSlowInEasing),
+                            expandFrom = Alignment.Start) + fadeIn(tween(340)),
+                        exit = shrinkHorizontally(tween(420, easing = FastOutSlowInEasing),
+                            shrinkTowards = Alignment.Start) + fadeOut(tween(260))
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            miniArtwork(
+                                Modifier.size(if (compact) 44.dp else 48.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                            )
+                            Spacer(Modifier.width(10.dp))
+                        }
+                    }
                     Column(Modifier.weight(1f)) {
                         Text(title, fontFamily = titleFontFamily, fontWeight = FontWeight.Bold,
-                            fontSize = (titleFontSize * if (compact) 0.72f else 0.78f).coerceIn(22f, 34f).sp,
-                            lineHeight = (titleFontSize * if (compact) 0.84f else 0.90f).coerceIn(27f, 40f).sp,
+                            fontSize = titleSize.sp, lineHeight = lineHeight.sp,
                             color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically) {
-                            Text(artist, fontSize = 15.sp, color = Color.White.copy(alpha = 0.72f),
+                        Row(Modifier.fillMaxWidth().padding(
+                            top = (6f - 3f * lyricsTransition).dp,
+                            bottom = (4f - 2f * lyricsTransition).dp
+                        ), verticalAlignment = Alignment.CenterVertically) {
+                            Text(artist,
+                                fontSize = (15f - 2.5f * lyricsTransition).sp,
+                                color = Color.White.copy(alpha = 0.72f),
                                 maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f).clickable(enabled = hasSong, onClick = onArtist))
+                                modifier = Modifier.weight(1f)
+                                    .clickable(enabled = hasSong, onClick = onArtist))
                             if (wide) {
                                 Spacer(Modifier.width(8.dp))
-                                quality()
+                                Box(Modifier.graphicsLayer {
+                                    scaleX = 1f - 0.19f * lyricsTransition
+                                    scaleY = 1f - 0.19f * lyricsTransition
+                                    transformOrigin = TransformOrigin(0f, 0f)
+                                }) { quality() }
                             }
                         }
                     }
-                    Spacer(Modifier.width(12.dp))
-                    ImmersiveAction(
-                        if (isFavorite) NusaPlayerIcons.HeartFilled else NusaPlayerIcons.Heart,
-                        immersiveText("Favorit", "Favorite"), onFavorite, hasSong,
-                        active = isFavorite, iconSize = 23.dp
-                    )
+                    AnimatedVisibility(
+                        visible = !lyricsOpen,
+                        enter = expandHorizontally(tween(400, easing = FastOutSlowInEasing),
+                            expandFrom = Alignment.End) + fadeIn(tween(280)),
+                        exit = shrinkHorizontally(tween(340, easing = FastOutSlowInEasing),
+                            shrinkTowards = Alignment.End) + fadeOut(tween(170))
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Spacer(Modifier.width(12.dp))
+                            ImmersiveAction(
+                                if (isFavorite) NusaPlayerIcons.HeartFilled else NusaPlayerIcons.Heart,
+                                immersiveText("Favorit", "Favorite"), onFavorite, hasSong,
+                                active = isFavorite, iconSize = 23.dp
+                            )
+                        }
+                    }
                 }
-                if (!wide) Box(Modifier.padding(top = 6.dp)) { quality() }
+                if (!wide) Box(
+                    Modifier.padding(top = (6f - 3f * lyricsTransition).dp)
+                        .graphicsLayer {
+                            scaleX = 1f - 0.19f * lyricsTransition
+                            scaleY = 1f - 0.19f * lyricsTransition
+                            transformOrigin = TransformOrigin(0f, 0f)
+                        }
+                ) { quality() }
                 }
                 Column(Modifier.fillMaxWidth()
                     .onSizeChanged { transportHeightPx = it.height }) {
@@ -265,11 +323,8 @@ internal fun ImmersiveArtworkPlayer(
             .windowInsetsPadding(contentInsets.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
             .padding(horizontal = 16.dp, vertical = 10.dp).height(48.dp),
             verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onLibrary, modifier = Modifier.size(48.dp)
-                .clip(CircleShape).background(Color.Black.copy(alpha = 0.28f))) {
-                Icon(NusaPlayerIcons.Back, immersiveText("Kembali ke perpustakaan", "Back to library"),
-                    tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(28.dp))
-            }
+            // No upper-left back button in either Immersive presentation.
+            // The Library pill and Android Back navigation remain available.
             Spacer(Modifier.weight(1f))
             ImmersiveAction(NusaPlayerIcons.More, immersiveText("Pengaturan", "Settings"),
                 onSettings, enabled = !lyricsOpen, iconSize = 25.dp, glass = true)
