@@ -3017,60 +3017,25 @@ private fun AudioQualityPill(
                 Box(
                     modifier = Modifier
                         .padding(top = if (immersive) 0.dp else 4.dp)
-                        .then(
-                            if (immersive) {
-                                // Immersive: plain white icon and text, no pill surface.
-                                Modifier
-                            } else {
-                                Modifier
-                                    .clip(RoundedCornerShape(50))
-                                    .background(
-                                        if (hiRes) Color(0xFFB5A77C).copy(alpha = 0.42f)
-                                        else MaterialTheme.colorScheme.surfaceVariant
-                                    )
-                            }
+                        .clip(RoundedCornerShape(7.dp))
+                        .background(
+                            if (immersive) Color.White.copy(alpha = 0.10f)
+                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
                         )
                         .clickable(enabled = metadataMatchesSong && info != null) {
                             showMetadataDialog = true
                         }
+                        .padding(horizontal = 9.dp, vertical = 4.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Row(
-                        modifier = Modifier.padding(
-                            horizontal = if (immersive) 0.dp else 7.dp,
-                            vertical = 3.dp
-                        ),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        androidx.compose.foundation.Image(
-                            painter = painterResource(id = R.drawable.apple_lossless_logo),
-                            contentDescription = if (hiRes) "Hi-Res" else "Lossless",
-                            contentScale = ContentScale.Fit,
-                            colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(
-                                if (immersive) Color.White
-                                else if (hiRes) Color(0xFF3D3728)
-                                else MaterialTheme.colorScheme.onSurface
-                            ),
-                            modifier = Modifier.size(
-                                width = if (immersive) 18.dp else 16.dp,
-                                height = if (immersive) 10.dp else 9.dp
-                            )
-                        )
-
-                        Spacer(Modifier.width(if (immersive) 5.dp else 4.dp))
-
-                        Text(
-                            text = if (hiRes) "Hi-Res" else "Lossless",
-                            fontSize = if (immersive) 11.sp else 10.sp,
-                            lineHeight = if (immersive) 12.sp else 11.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = when {
-                                immersive -> Color.White
-                                hiRes -> Color(0xFF3D3728)
-                                else -> MaterialTheme.colorScheme.onSurface
-                            }
-                        )
-                    }
+                    Text(
+                        text = if (hiRes) "Hi-Res" else "Lossless",
+                        fontSize = if (immersive) 11.sp else 10.sp,
+                        lineHeight = if (immersive) 13.sp else 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (immersive) Color.White
+                            else MaterialTheme.colorScheme.onSurface
+                    )
                 }
             }
             AudioQualityBadge.DOLBY -> {
