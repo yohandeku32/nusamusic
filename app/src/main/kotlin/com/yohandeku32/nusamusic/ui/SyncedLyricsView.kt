@@ -60,6 +60,7 @@ internal fun SyncedLyricsView(
     val mainHeights = remember(lyrics) { HashMap<Int, Int>() }
     val followEnd = remember(lyrics) { lyrics.lines.maxOfOrNull { it.end }?.toLong()?.plus(160) ?: 0L }
     val timeline = remember(lyrics) { LyricsTimeline(lyrics.lines) }
+    val visualFocus = remember(lyrics) { LyricsVisualFocusController(lyrics.lines) }
     val frame by remember(timeline, clock) { derivedStateOf(structuralEqualityPolicy()) { timeline.frame(clock.read()) } }
     val dragging by listState.interactionSource.collectIsDraggedAsState()
     var positioned by remember(listState) { mutableStateOf(false) }
@@ -126,31 +127,48 @@ internal fun SyncedLyricsView(
                     ?: measured?.let { (it - gapHeight * fraction).coerceAtLeast(0f) } ?: gapHeight
                 return countdownRowAnchor(mainHeight, gapHeight, fraction)
             }
-            var lastSource = timeline.frame(clock.read()).anchor
             var targetRow = -1
+            var nextRow = -1
             var targetAnchor = 0f
+            var nextAnchor = 0f
+            var targetBlend = 0f
+            var targetResponse = 1f
             fun updateTarget(now: Int): Boolean {
                 val current = frame
-                val source = current.gap?.nextLine ?: current.anchor.takeIf { it in current.active }
-                    ?: current.active.firstOrNull() ?: lastSource
+                visualFocus.update(now)
+                val source = current.gap?.nextLine ?: visualFocus.fromSource
                 if (source !in lyrics.lines.indices) return false
-                lastSource = source
                 targetRow = display.lineToRow[source]
                 targetAnchor = anchorFor(targetRow, current.gap, now)
+                val next = if (current.gap == null) visualFocus.toSource else source
+                nextRow = display.lineToRow[next]
+                nextAnchor = anchorFor(nextRow, current.gap, now)
+                targetBlend = if (current.gap == null) visualFocus.blend else 0f
+                targetResponse = if (current.gap == null) visualFocus.responsiveness else 1f
                 return true
             }
-            fun requestedOffset() = (targetAnchor - center(targetRow)).roundToInt()
+            fun rejoinRow() = if (targetBlend > 0.5f) nextRow else targetRow
+            fun requestedOffset(): Int {
+                val row = rejoinRow()
+                val anchor = if (targetBlend > 0.5f) nextAnchor else targetAnchor
+                return (anchor - center(row)).roundToInt()
+            }
+            fun targetError(): Float {
+                val from = distance(targetRow, targetAnchor)
+                if (targetBlend <= 0f || targetRow == nextRow) return from
+                return from + (distance(nextRow, nextAnchor) - from) * targetBlend
+            }
             try {
                 val now = clock.read()
                 if (!updateTarget(now)) return@LaunchedEffect
                 if (!positioned) {
                     // One initial placement on opening; seeks and manual resumption never repeat this snap.
-                    listState.scrollToItem(targetRow, requestedOffset())
+                    listState.scrollToItem(rejoinRow(), requestedOffset())
                     positioned = true
                 } else if (now.toLong() < followEnd &&
-                    listState.layoutInfo.visibleItemsInfo.none { it.index == targetRow }) {
+                    listState.layoutInfo.visibleItemsInfo.none { it.index == rejoinRow() }) {
                     // One cancellable rejoin for distant seeks/browsing, owned by this same effect.
-                    listState.animateScrollToItem(targetRow, requestedOffset())
+                    listState.animateScrollToItem(rejoinRow(), requestedOffset())
                 }
                 while (isActive && interaction.canFollow) {
                     withFrameNanos { }
@@ -158,7 +176,7 @@ internal fun SyncedLyricsView(
                     val audio = clock.read()
                     if (audio.toLong() >= followEnd) break
                     if (!updateTarget(audio)) continue
-                    val error = distance(targetRow, targetAnchor)
+                    val error = targetError()
                     if (abs(error) <= 0.5f ||
                         (error > 0 && !listState.canScrollForward) || (error < 0 && !listState.canScrollBackward)) {
                         motion.reset()
@@ -175,10 +193,10 @@ internal fun SyncedLyricsView(
                             val latest = clock.read()
                             if (latest.toLong() >= followEnd) break
                             if (!updateTarget(latest)) break
-                            val error = distance(targetRow, targetAnchor)
+                            val error = targetError()
                             if (abs(error) <= 0.5f) break
                             val limit = (listState.layoutInfo.viewportSize.height / 6f).coerceAtLeast(1f)
-                            val step = motion.step(error, deltaMs).coerceIn(-limit, limit)
+                            val step = motion.step(error, deltaMs, targetResponse).coerceIn(-limit, limit)
                             val consumed = scrollBy(step)
                             if (abs(step - consumed) > 0.5f) break
                         }
@@ -222,7 +240,9 @@ internal fun SyncedLyricsView(
                     }
                     val main = row.main
                     if (main != null) Column(Modifier.fillMaxWidth().graphicsLayer {
-                        val focus = lyricsMainFocusDepth(visualDistanceDp(), main.start, main.end, clock.read())
+                        val now = clock.read()
+                        val focus = lyricsMainFocusDepth(visualDistanceDp(), main.start, main.end, now,
+                            visualFocus.focusAmount(row.sourceIndex, now))
                         alpha = focus.opacity
                         renderEffect = if (blurEffects.isNotEmpty()) {
                             blurEffects[(focus.blurDp * 10f).roundToInt().coerceIn(0, blurEffects.lastIndex)]

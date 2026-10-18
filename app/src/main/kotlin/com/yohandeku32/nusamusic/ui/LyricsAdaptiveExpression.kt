@@ -4,7 +4,12 @@ import com.mocharealm.accompanist.lyrics.core.model.karaoke.KaraokeLine
 import com.yohandeku32.nusamusic.data.LyricsUnitKey
 
 /** Visual weights only. Authored highlighting and the global wave phase never change. */
-internal class LyricsAdaptiveExpression(durationMs: Long, val phraseStrength: Float = 1f) {
+internal class LyricsAdaptiveExpression(
+    durationMs: Long,
+    val phraseStrength: Float = 1f,
+    val upcomingHold: Float = 0f,
+    val nextStartMs: Int? = null
+) {
     private val duration = durationMs.coerceAtLeast(0).toFloat()
     val glow = curve(0f, 0.06f, 0.34f, 0.78f, 1f)
     val wave = curve(0f, 0.10f, 0.45f, 0.85f, 1f)
@@ -25,48 +30,50 @@ internal class LyricsAdaptiveExpression(durationMs: Long, val phraseStrength: Fl
         val length = end.toLong() - start
         if (length <= 0 || now <= start || now >= end) return 0f
         val available = length.toFloat()
-        val attack = minOf(320f, available * 0.5f).coerceAtLeast(0.5f)
-        val release = minOf(340f, available * 0.5f).coerceAtLeast(0.5f)
+        val attack = minOf(320f + 140f * (1f - phraseStrength), available * 0.5f).coerceAtLeast(0.5f)
+        val release = minOf(340f + 100f * breathing, available * 0.5f).coerceAtLeast(0.5f)
         return lyricEase((now.toLong() - start) / attack) *
             lyricEase((end.toLong() - now) / release)
     }
 
     /** Recover gently from a rapid phrase into a hold, sampled from the media clock. */
-    fun phraseAt(start: Int, now: Int): Float = phraseStrength +
-        (1f - phraseStrength) * lyricEase((now.toLong() - start) / 800f)
+    fun phraseAt(start: Int, now: Int): Float {
+        val elapsed = (now.toLong() - start).toFloat()
+        val recovery = lyricEase(elapsed / 800f)
+        // Look ahead only shapes the CURRENT note's bounded amplitude. It
+        // never changes a future note's fill or starts its motion early.
+        val approach = 0.18f * upcomingHold *
+            lyricEase((elapsed / duration.coerceAtLeast(1f) - 0.45f) / 0.55f)
+        return phraseStrength + (1f - phraseStrength) * (recovery + (1f - recovery) * approach)
+    }
+
+    /** Keep a soft outgoing halo across a nearby onset, restricted to sung text. */
+    fun glowConnection(end: Int): Float {
+        val next = nextStartMs ?: return 0f
+        val gap = next.toLong() - end
+        // Retain only soft light at the boundary; full bloom releases before
+        // the note ends instead of being squeezed into a fast outgoing tail.
+        return if (gap >= 0) 0.6f * (1f - lyricEase(gap / 240f)) else 0f
+    }
+
+    fun glowEnvelope(start: Int, end: Int, now: Int, connection: Float = glowConnection(end)): Float {
+        val length = end.toLong() - start
+        if (length <= 0 || now <= start) return 0f
+        val releaseMs = minOf(160f, length * 0.4f).coerceAtLeast(1f)
+        val outgoing = 1f - lyricEase((now.toLong() - end) / releaseMs)
+        if (now >= end) return connection * outgoing
+        val inside = envelope(start, end, now)
+        val attackMs = minOf(320f + 140f * (1f - phraseStrength), length * 0.5f).coerceAtLeast(0.5f)
+        val sustained = lyricEase((now.toLong() - start) / attackMs)
+        return inside + (sustained - inside) * connection
+    }
 }
 
 internal data class LyricsExpressionTiming(val start: Int, val end: Int, val reliableEnd: Boolean = true)
 
 /** Prepared with measured layouts, never scanned or allocated on playback frames. */
-internal fun lyricsAdaptiveExpressions(timings: List<LyricsExpressionTiming>): List<LyricsAdaptiveExpression> {
-    val durations = timings.map { timing ->
-        (timing.end.toLong() - timing.start).coerceAtLeast(0).let {
-            // A container/song end is insufficient evidence of a sustained vowel.
-            if (timing.reliableEnd) it else minOf(it, 600L)
-        }
-    }
-    val strengths = FloatArray(timings.size) { 1f }
-    var index = 0
-    while (index < timings.size) {
-        if (durations[index] >= 600L) { index++; continue }
-        val first = index
-        var last = first
-        while (last + 1 < timings.size && durations[last + 1] < 600L &&
-            timings[last + 1].start.toLong() - timings[last].end in 0L..160L
-        ) last++
-        val count = last - first + 1
-        if (count >= 3) {
-            val damping = 1f - 0.6f * lyricEase((count - 2) / 4f)
-            for (i in first..last) strengths[i] = minOf(strengths[i], damping)
-            if (last + 1 < timings.size &&
-                timings[last + 1].start.toLong() - timings[last].end in 0L..160L
-            ) strengths[last + 1] = minOf(strengths[last + 1], damping)
-        }
-        index = last + 1
-    }
-    return timings.indices.map { LyricsAdaptiveExpression(durations[it], strengths[it]) }
-}
+internal fun lyricsAdaptiveExpressions(timings: List<LyricsExpressionTiming>): List<LyricsAdaptiveExpression> =
+    LyricsPhraseAnalysis(timings).expressions
 
 /** Main phrases may span rows; backing voices are prepared separately by the caller. */
 internal fun lyricsAdaptiveLineExpressions(

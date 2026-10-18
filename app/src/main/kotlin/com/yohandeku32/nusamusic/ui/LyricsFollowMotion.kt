@@ -18,15 +18,16 @@ internal fun lyricsFollowAnchor(
 internal class LyricsFollowMotion {
     private var velocity = 0f
     fun reset() { velocity = 0f }
-    fun step(distance: Float, deltaMs: Long): Float {
+    fun step(distance: Float, deltaMs: Long, responsiveness: Float = 1f): Float {
         if (deltaMs <= 0) return 0f
         val seconds = minOf(deltaMs, 350) / 1000f
         val steps = ceil(seconds * 120).toInt().coerceAtLeast(1)
         val dt = seconds / steps
+        val frequency = 14f * responsiveness.coerceIn(0.78f, 1f)
         var error = distance
         var movement = 0f
         repeat(steps) {
-            velocity += (196f * error - 2f * 0.92f * 14f * velocity) * dt
+            velocity += (frequency * frequency * error - 2f * 0.92f * frequency * velocity) * dt
             val step = velocity * dt
             movement += step
             error -= step

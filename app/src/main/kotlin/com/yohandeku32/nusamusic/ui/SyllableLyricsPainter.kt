@@ -81,6 +81,7 @@ internal class SyllableLyricsPainter(
         // Keep the approved V6 horizontal phase at this run's visual centre.
         val horizontalDp = (layout.position.x + width / 2f) / density
         val motion = LyricsFloatingMotion(horizontalDp)
+        val controller = LyricsExpressionController(layout.syllable.start, layout.syllable.end, expression)
         // Separate sustained-vocal accent. Reuses the intact syllable's
         // measured text run so no individual character can break apart.
         val bubble = LyricsLongVocalMotion(
@@ -158,11 +159,10 @@ internal class SyllableLyricsPainter(
                 front, glyph.pathStartDp, glyph.pathEndDp
             )
             val localIntensity = lineStrength * influence
-            val unit = glyph.layout.syllable
+            glyph.controller.update(waveTime)
             // Keep the original traveling mask and 4.2s carrier. Duration only
             // attenuates their amplitude; its playback phase never restarts.
-            glyph.motion.update(waveTime, localIntensity * glyph.expression.wave *
-                glyph.expression.phraseAt(unit.start, waveTime))
+            glyph.motion.update(waveTime, localIntensity * glyph.controller.wave)
             glyph.bubble.update(waveTime, localIntensity)
         }
 
@@ -174,11 +174,9 @@ internal class SyllableLyricsPainter(
             for (pass in 0..1) for (glyph in glyphs) {
                 val halo = pass == 0
                 val unit = glyph.layout.syllable
-                if (halo && (strength <= 0f || glyph.expression.glow <= 0f || now <= unit.start || now >= unit.end)) continue
+                if (halo && (strength <= 0f || glyph.controller.glow <= 0f)) continue
                 val progress = syllableProgress(unit, now)
-                val glow = glyph.expression.glow * glyph.expression.envelope(unit.start, unit.end, now) *
-                    glyph.expression.phraseAt(unit.start, now) *
-                    lyricBreathing(unit.start, unit.end, now) * strength
+                val glow = glyph.controller.glow * strength
 
                 drawGlyph(glyph, halo, progress, glow, strength, now)
             }
