@@ -44,7 +44,7 @@ import com.yohandeku32.nusamusic.model.Song
 /**
  * In the same Compose window as the player: no ModalBottomSheet, fixed-height
  * anchor or extra status bar. A single translated GPU layer rises from the
- * physical bottom edge to just below the measured Settings control.
+ * physical bottom edge to the safe top inset beneath the status bar.
  *
  * The original synchronized Lyrics view stays mounted until the exit spring
  * finishes, avoiding a flash or a reset of its wave/scroll clock mid-close.
