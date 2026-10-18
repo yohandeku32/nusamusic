@@ -39,8 +39,8 @@ internal object ArtworkBlur {
             small.getPixels(pixels, 0, width, 0, 0, width, height)
             // Retain faint cover shapes rather than an almost flat palette.
             // Both diffusions are computed once per artwork, off the UI thread.
-            val broad = blurArgb(pixels, width, height, radius = 14, passes = 2)
-            val detailed = blurArgb(pixels, width, height, radius = 5, passes = 2)
+            val broad = blurArgb(pixels, width, height, radius = 17, passes = 2)
+            val detailed = blurArgb(pixels, width, height, radius = 7, passes = 2)
             val ambient = blendAmbientArtwork(broad, detailed)
             // Set ambient luminance on the *actual blurred cover pixels*,
             // separately from the colour-preserving blend function. Avoid
