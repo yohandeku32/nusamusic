@@ -29,6 +29,14 @@ internal class LyricsLongVocalMotion(
     var glowBoost = 0f
         private set
 
+    /** Strength of the visual crescendo, independent from actual loudness. */
+    var luminousCrescendo = 0f
+        private set
+
+    /** Soft contour-only expansion; the filled text remains sharp. */
+    var edgeExpansion = 0f
+        private set
+
     fun update(playbackMs: Int, localInfluence: Float) {
         val duration = endMs.toLong() - startMs.toLong()
         if (duration <= 700L || playbackMs <= startMs || playbackMs >= endMs ||
@@ -78,6 +86,23 @@ internal class LyricsLongVocalMotion(
         // The original progressive highlight controls which letters glow.
         // This small breathing factor only nudges its existing halo strength.
         glowBoost = (energy * breathY.toFloat()).coerceIn(0f, 1f)
+
+        // A visual crescendo only: authored syllable duration supplies timing,
+        // NOT any inferred information about vocal volume or real vibrato.
+        // Reach full expression late in a held note, then the existing
+        // attack/release envelope carries both contour and bloom to zero.
+        val progress = (elapsed / duration.toFloat()).coerceIn(0f, 1f)
+        val rising = 0.22f + 0.78f * lyricEase(progress / 0.73f)
+        val crescendo = (energy * rising).coerceIn(0f, 1f)
+        val slowLight = 0.82 + 0.18 * breathY
+        luminousCrescendo = (crescendo * slowLight.toFloat()).coerceIn(0f, 1f)
+
+        // A second slow, globally aligned ripple affects the outline only.
+        // The face of the text remains one intact shaped glyph run; no
+        // independently animated per-character slices or shader allocations.
+        val edgePhase = t * 2.0 * PI / 3250.0 - x * 0.005
+        val edgePulse = 0.78 + 0.22 * (0.5 + 0.5 * sin(edgePhase))
+        edgeExpansion = (crescendo * edgePulse.toFloat()).coerceIn(0f, 1f)
     }
 
     private fun reset() {
@@ -86,5 +111,7 @@ internal class LyricsLongVocalMotion(
         offsetXDp = 0f
         offsetYDp = 0f
         glowBoost = 0f
+        luminousCrescendo = 0f
+        edgeExpansion = 0f
     }
 }
