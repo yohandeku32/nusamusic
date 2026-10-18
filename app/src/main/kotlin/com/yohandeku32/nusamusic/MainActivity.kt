@@ -3052,17 +3052,17 @@ private fun AudioQualityPill(
                                 else MaterialTheme.colorScheme.onSurface
                             ),
                             modifier = Modifier.size(
-                                width = 16.dp,
-                                height = 9.dp
+                                width = if (immersive) 18.dp else 16.dp,
+                                height = if (immersive) 10.dp else 9.dp
                             )
                         )
 
-                        Spacer(Modifier.width(4.dp))
+                        Spacer(Modifier.width(if (immersive) 5.dp else 4.dp))
 
                         Text(
                             text = if (hiRes) "Hi-Res" else "Lossless",
-                            fontSize = 10.sp,
-                            lineHeight = 11.sp,
+                            fontSize = if (immersive) 11.sp else 10.sp,
+                            lineHeight = if (immersive) 12.sp else 11.sp,
                             fontWeight = FontWeight.Medium,
                             color = when {
                                 immersive -> Color.White
@@ -3107,8 +3107,8 @@ private fun AudioQualityPill(
                                 append("Atmos")
                             }
                         },
-                        fontSize = 10.sp,
-                        lineHeight = 11.sp,
+                        fontSize = if (immersive) 11.sp else 10.sp,
+                        lineHeight = if (immersive) 12.sp else 11.sp,
                         letterSpacing = (-0.35).sp,
                         maxLines = 1,
                         color = if (immersive) Color.White
@@ -3437,7 +3437,7 @@ private fun SimpleProgressBar(
             }
     ) {
         val y = size.height / 2f
-        val stroke = (if (immersive) 3.dp else 5.dp).toPx()
+        val stroke = (if (immersive) 3.25.dp else 5.dp).toPx()
         val startX = stroke / 2f
         val endX = (size.width - startX).coerceAtLeast(startX)
 
@@ -3490,8 +3490,8 @@ private fun PlaybackProgress(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             val textColor = if (immersive) Color.White.copy(alpha = 0.75f) else MaterialTheme.colorScheme.onBackground
-            Text(formatTime(positionMs), fontSize = if (immersive) 11.sp else 12.sp, color = textColor)
-            Text(formatTime(durationMs), fontSize = if (immersive) 11.sp else 12.sp, color = textColor)
+            Text(formatTime(positionMs), fontSize = 12.sp, color = textColor)
+            Text(formatTime(durationMs), fontSize = 12.sp, color = textColor)
         }
     }
 }
