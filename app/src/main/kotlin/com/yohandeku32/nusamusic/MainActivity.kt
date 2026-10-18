@@ -1996,6 +1996,7 @@ private fun NusaMusicApp(
                                 isFavorite = isFavorite,
                                 shuffleEnabled = shuffleEnabled,
                                 repeatMode = repeatMode,
+                                ambientSong = currentSong,
                                 lyricsOpen = lyricsRequested,
                                 lyricsEnabled = LYRICS_ENABLED,
                                 onPlayPause = if (currentSong == null) onRequestPermission else onTogglePlay,
