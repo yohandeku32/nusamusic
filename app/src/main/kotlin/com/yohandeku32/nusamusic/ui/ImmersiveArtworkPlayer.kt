@@ -26,7 +26,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.TransformOrigin
@@ -269,11 +274,67 @@ internal fun ImmersiveArtworkPlayer(
                     }
                     IconButton(onClick = onPlayPause,
                         modifier = Modifier.size(if (compact) 64.dp else 68.dp)
+                            // Very soft depth around the floating control, while
+                            // keeping its hit target and playback behavior intact.
+                            .shadow(
+                                elevation = 3.dp,
+                                shape = CircleShape,
+                                ambientColor = Color.Black.copy(alpha = 0.13f),
+                                spotColor = Color.Black.copy(alpha = 0.18f)
+                            )
                             .clip(CircleShape)
-                            // Soft translucent surface with a restrained highlight,
-                            // preserving the touch area and full album-art ambience.
-                            .background(Color.White.copy(alpha = 0.11f))
-                            .border(1.dp, Color.White.copy(alpha = 0.13f), CircleShape)) {
+                            .drawWithCache {
+                                // Size-aware brushes are created only when the
+                                // button size/density changes, never per frame.
+                                // Transparent layers keep the album ambience visible.
+                                val diameter = size.minDimension
+                                val glass = Brush.linearGradient(
+                                    colors = listOf(
+                                        Color.White.copy(alpha = 0.25f),
+                                        Color.White.copy(alpha = 0.13f),
+                                        Color.White.copy(alpha = 0.07f)
+                                    ),
+                                    start = Offset.Zero,
+                                    end = Offset(size.width, size.height)
+                                )
+                                val softReflection = Brush.radialGradient(
+                                    colors = listOf(
+                                        Color.White.copy(alpha = 0.19f),
+                                        Color.White.copy(alpha = 0.04f),
+                                        Color.Transparent
+                                    ),
+                                    center = Offset(size.width * 0.28f, size.height * 0.16f),
+                                    radius = diameter * 0.78f
+                                )
+                                val curvedDepth = Brush.radialGradient(
+                                    colors = listOf(
+                                        Color.Black.copy(alpha = 0.08f),
+                                        Color.Transparent
+                                    ),
+                                    center = Offset(size.width * 0.88f, size.height * 1.04f),
+                                    radius = diameter * 0.85f
+                                )
+                                val edgeLight = Brush.linearGradient(
+                                    colors = listOf(
+                                        Color.White.copy(alpha = 0.38f),
+                                        Color.White.copy(alpha = 0.17f),
+                                        Color.White.copy(alpha = 0.06f)
+                                    ),
+                                    start = Offset.Zero,
+                                    end = Offset(size.width, size.height)
+                                )
+                                val edgeWidth = 1.dp.toPx()
+                                onDrawBehind {
+                                    drawCircle(brush = glass)
+                                    drawCircle(brush = softReflection)
+                                    drawCircle(brush = curvedDepth)
+                                    drawCircle(
+                                        brush = edgeLight,
+                                        radius = (diameter - edgeWidth) / 2f,
+                                        style = Stroke(width = edgeWidth)
+                                    )
+                                }
+                            }) {
                         Icon(if (isPlaying) NusaPlayerIcons.Pause else NusaPlayerIcons.Play,
                             if (isPlaying) immersiveText("Jeda", "Pause") else immersiveText("Putar", "Play"),
                             tint = Color.White, modifier = Modifier.size(if (compact) 35.dp else 38.dp))
