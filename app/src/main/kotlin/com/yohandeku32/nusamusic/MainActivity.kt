@@ -1988,6 +1988,7 @@ private fun NusaMusicApp(
                         if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
                             ImmersiveArtworkPlayer(
                                 title = currentSong?.title ?: nusaText("Pilih lagu", "Choose a song"),
+                                composerNames = currentSong?.let { lyricsState.forSong(it).data?.stored?.credits?.composers?.joinToString(", ") } ?: "",
                                 artist = currentSong?.artist ?: nusaText("Perpustakaan musik lokal Anda", "Your local music library"),
                                 titleFontFamily = if (uiPrefs.contains("title_font_family")) titleFontFamily else FontFamily.SansSerif,
                                 titleFontSize = titleFontSize,
