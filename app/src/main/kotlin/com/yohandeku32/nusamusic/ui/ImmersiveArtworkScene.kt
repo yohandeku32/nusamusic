@@ -20,7 +20,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-/** Presentation only: reuses the prepared cover/blur and existing animated-artwork slot. */
+/** Full-screen real artwork blur with a feathered sharp hero and protected control contrast. */
 @Composable
 internal fun ImmersiveArtworkScene(
     artwork: Bitmap?, blur: Bitmap?, backdrop: Color, heroHeight: Dp,
@@ -31,11 +31,15 @@ internal fun ImmersiveArtworkScene(
 ) {
     BoxWithConstraints(modifier.background(backdrop)) {
         val height = heroHeight.coerceAtMost(maxHeight)
-        Crossfade(targetState = blur, animationSpec = tween(if (animateChanges) 360 else 0), label = "immersiveAmbient",
+        // Crossfade the *actual album-derived bitmap*, not only the palette.
+        // Keep the old ambient during the transition so song changes never
+        // flash to a solid backdrop. The prepared image already carries both
+        // a broad blur and a softer detailed diffusion from the same cover.
+        Crossfade(targetState = blur, animationSpec = tween(if (animateChanges) 700 else 0), label = "immersiveAmbient",
             modifier = Modifier.matchParentSize()) { bitmap ->
             Box(Modifier.matchParentSize().drawWithCache {
                 val paint = bitmap?.let {
-                    val scale = maxOf(size.width / it.width, size.height / it.height) * 1.10f
+                    val scale = maxOf(size.width / it.width, size.height / it.height) * 1.06f
                     val matrix = android.graphics.Matrix().apply {
                         setScale(scale, scale)
                         postTranslate((size.width - it.width * scale) / 2f, (size.height - it.height * scale) / 2f)
@@ -52,7 +56,7 @@ internal fun ImmersiveArtworkScene(
             })
         }
         Box(Modifier.matchParentSize().drawWithCache {
-            val aura = Brush.radialGradient(listOf(backdrop.copy(alpha = 0.22f), Color.Transparent),
+            val aura = Brush.radialGradient(listOf(backdrop.copy(alpha = 0.09f), Color.Transparent),
                 center = Offset(size.width * 0.35f, size.height * 0.52f), radius = size.width * 1.2f)
             onDrawBehind { drawRect(aura) }
         })
@@ -80,22 +84,23 @@ internal fun ImmersiveArtworkScene(
             animatedArtwork()
         }
 
-        // A feathered, translucent floor retains the cover's colour through
-        // the controls. No solid black panel or hard artwork/control boundary.
+        // Translucent readability floor, not an opaque colour wash. The
+        // structured album blur must remain visible behind the playback area
+        // while white labels keep readable contrast on bright covers.
         Box(Modifier.matchParentSize().drawWithCache {
             val metadata = ((height.toPx() - 64.dp.toPx()) / size.height).coerceIn(0.28f, 0.82f)
             val fadeStart = (metadata - 0.18f).coerceAtLeast(0.16f)
             val floor = Brush.verticalGradient(
-                0f to Color.Black.copy(alpha = 0.28f),
+                0f to Color.Black.copy(alpha = 0.20f),
                 0.12f to Color.Transparent,
                 fadeStart to Color.Transparent,
-                metadata to Color.Black.copy(alpha = 0.48f + scrimOpacity * 0.30f),
-                1f to Color.Black.copy(alpha = 0.60f + scrimOpacity * 0.20f))
+                metadata to Color.Black.copy(alpha = 0.35f + scrimOpacity * 0.28f),
+                1f to Color.Black.copy(alpha = 0.50f + scrimOpacity * 0.18f))
             val side = if (heroWidthFraction < 1f) Brush.horizontalGradient(
                 0f to Color.Transparent,
                 (heroWidthFraction * 0.62f) to Color.Transparent,
-                heroWidthFraction to Color.Black.copy(alpha = 0.52f + scrimOpacity * 0.25f),
-                1f to Color.Black.copy(alpha = 0.62f + scrimOpacity * 0.20f)) else null
+                heroWidthFraction to Color.Black.copy(alpha = 0.43f + scrimOpacity * 0.22f),
+                1f to Color.Black.copy(alpha = 0.52f + scrimOpacity * 0.18f)) else null
             onDrawBehind {
                 drawRect(floor)
                 if (side != null) drawRect(side)
