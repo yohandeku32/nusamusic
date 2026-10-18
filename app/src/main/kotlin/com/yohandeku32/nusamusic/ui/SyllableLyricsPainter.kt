@@ -40,29 +40,39 @@ private class LyricsGlowPalette(density: Float) {
     fun tight(energy: Float) = tight[(energy * 64f).roundToInt().coerceIn(0, 64)]
 }
 
-internal class SyllableLyricsPainter(layouts: List<List<SyllableLayout>>, private val density: Float) {
-    private class Glyph(val layout: SyllableLayout, ordinal: Int, density: Float) {
+internal class SyllableLyricsPainter(
+    layouts: List<List<SyllableLayout>>,
+    private val density: Float,
+    private val lineStart: Int,
+    private val lineEnd: Int
+) {
+    private class Glyph(val layout: SyllableLayout, density: Float) {
         val width = layout.textLayoutResult.size.width.toFloat().coerceAtLeast(1f)
         val rtl = layout.textLayoutResult.getParagraphDirection(0) == ResolvedTextDirection.Rtl
         val feather = minOf(5f * density, width * 0.2f).coerceAtLeast(0.5f)
         val fill = MovingLyricsGradient(false)
         val sheen = MovingLyricsGradient(true)
-        val motion = LyricsFloatingMotion(layout.syllable.start, layout.syllable.end, ordinal)
+        // Horizontal glyph centre (dp) gives the spatial phase of the
+        // shared line-wide carrier. No per-syllable start/end oscillator.
+        val motion = LyricsFloatingMotion((layout.position.x + width / 2f) / density)
     }
-    private val glyphs = layouts.flatten().mapIndexedNotNull { index, layout ->
-        if (layout.syllable.content.isBlank()) null else Glyph(layout, index, density)
+    private val glyphs = layouts.flatten().mapNotNull { layout ->
+        if (layout.syllable.content.isBlank()) null else Glyph(layout, density)
     }
     private val glowPalette = LyricsGlowPalette(density)
 
     /** Both passes share one transform and stable shader objects; halos stay behind all glyphs. */
-    fun draw(scope: DrawScope, now: Int, focus: Float) = with(scope) {
+    fun draw(scope: DrawScope, now: Int, focus: Float, waveTime: Int) = with(scope) {
         val strength = focus.coerceIn(0f, 1f)
+        // Evaluated once for the entire row. Only highlights and glows
+        // depend on each syllable's own timestamps.
+        val waveStrength = lyricsLineWaveIntensity(lineStart, lineEnd, waveTime)
         for (pass in 0..1) for (glyph in glyphs) {
             val halo = pass == 0
             val layout = glyph.layout
             val unit = layout.syllable
             // Compute the audio-time transform once for both halo and fill passes.
-            if (pass == 0) glyph.motion.update(now)
+            if (pass == 0) glyph.motion.update(waveTime, waveStrength)
             if (halo && (strength <= 0f || now <= unit.start || now >= unit.end)) continue
             val result = layout.textLayoutResult
             val position = layout.position - Offset(0f, glyph.motion.liftDp * density)
