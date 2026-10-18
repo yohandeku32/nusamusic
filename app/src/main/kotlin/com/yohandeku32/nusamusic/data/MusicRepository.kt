@@ -4,11 +4,42 @@ import android.content.ContentUris
 import android.content.Context
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.os.Build
 import android.provider.DocumentsContract
 import android.provider.MediaStore
 import com.yohandeku32.nusamusic.model.Song
 import java.util.ArrayDeque
 import java.util.Locale
+
+/**
+ * Generation checkpoint is stored together with the persisted song list, so a
+ * killed process never treats an out-of-date library as fully synchronized.
+ */
+data class MediaStoreCheckpoint(val version: String, val generation: Long)
+
+data class MusicScanResult(
+    val songs: List<Song>,
+    val checkpoint: MediaStoreCheckpoint?
+)
+
+internal object MediaStoreSongIndex {
+    /**
+     * A lightweight ID query detects deleted, hidden or too-short tracks.
+     * Only newly indexed or modified rows need their complete tags reloaded.
+     */
+    fun merge(
+        cached: List<Song>,
+        visibleIds: Set<Long>,
+        changed: List<Song>
+    ): List<Song> {
+        val byId = cached.filter { it.id in visibleIds }
+            .associateByTo(LinkedHashMap()) { it.id }
+        changed.forEach { song ->
+            if (song.id in visibleIds) byId[song.id] = song
+        }
+        return byId.values.toList()
+    }
+}
 
 class MusicRepository(private val context: Context) {
     companion object {
@@ -28,48 +59,146 @@ class MusicRepository(private val context: Context) {
     }
 
     /**
-     * Loads music indexed by MediaStore and augments it with any SAF folders
-     * the user explicitly granted to Nusa.
+     * The Android media database is already indexed by the OS; never walk the
+     * device's filesystem to discover ordinary songs.
      *
-     * The normal MediaStore collection remains the primary source so existing
-     * local-library behavior is preserved. Manually selected folders are an
-     * additional source and are recursively scanned.
+     * Android 11+ on a single primary volume supports generation checkpoints.
+     * If nothing changed, reuse cached tags without a database query. If the
+     * generation advanced, query only changed rows plus a small ID-only cursor
+     * to detect removals. Other devices use the normal indexed MediaStore query.
+     *
+     * Selected SAF folders are different: there is no portable, reliable
+     * DocumentsProvider change-generation API, so an explicit refresh still
+     * enumerates them (but reuses cached tags for unchanged documents).
      */
     fun loadSongs(
         extraFolderUris: Set<String> = emptySet(),
-        cachedSongs: List<Song> = emptyList()
-    ): List<Song> {
-        val songs = loadMediaStoreSongs().toMutableList()
+        cachedSongs: List<Song> = emptyList(),
+        previousCheckpoint: MediaStoreCheckpoint? = null,
+        scanSelectedFolders: Boolean = true
+    ): MusicScanResult {
+        val media = loadMediaStoreSnapshot(cachedSongs, previousCheckpoint)
+        val songs = media.songs.toMutableList()
         val existingUris = songs.mapTo(HashSet()) { it.uri }
-
-        val existingKeys = songs
-            .mapTo(HashSet()) { songFingerprint(it.title, it.artist, it.album, it.durationMs) }
+        val existingKeys = songs.mapTo(HashSet()) {
+            songFingerprint(it.title, it.artist, it.album, it.durationMs)
+        }
 
         val cachedSongsByUri = cachedSongs.associateBy { it.uri }
 
-        extraFolderUris.forEach { folderUriString ->
-            val folderSongs = runCatching {
-                loadFolderSongs(Uri.parse(folderUriString), cachedSongsByUri)
-            }.getOrElse { emptyList() }
+        if (scanSelectedFolders) {
+            extraFolderUris.forEach { folderUriString ->
+                val folderSongs = runCatching {
+                    loadFolderSongs(Uri.parse(folderUriString), cachedSongsByUri)
+                }.getOrElse { emptyList() }
 
-            for (song in folderSongs) {
+                for (song in folderSongs) {
+                    val key = songFingerprint(
+                        song.title, song.artist, song.album, song.durationMs
+                    )
+                    if (existingUris.add(song.uri) && existingKeys.add(key)) {
+                        songs += song
+                    }
+                }
+            }
+        } else if (extraFolderUris.isNotEmpty()) {
+            // Publish newly indexed MediaStore songs immediately, without
+            // waiting for a potentially slow SAF provider's directory traversal.
+            // The second pass reconciles additions/removals in selected folders.
+            for (song in cachedSongs) {
+                if (isMediaStoreUri(song.uri)) continue
                 val key = songFingerprint(
-                    song.title,
-                    song.artist,
-                    song.album,
-                    song.durationMs
+                    song.title, song.artist, song.album, song.durationMs
                 )
-
                 if (existingUris.add(song.uri) && existingKeys.add(key)) {
                     songs += song
                 }
             }
         }
 
-        return songs.sortedBy { it.title.lowercase(Locale.ROOT) }
+        return MusicScanResult(
+            songs = songs.sortedBy { it.title.lowercase(Locale.ROOT) },
+            checkpoint = media.checkpoint
+        )
     }
 
-    private fun loadMediaStoreSongs(): List<Song> {
+    private data class MediaScan(
+        val songs: List<Song>,
+        val checkpoint: MediaStoreCheckpoint?
+    )
+
+    private fun isMediaStoreUri(uri: String): Boolean =
+        uri.startsWith("content://media/")
+
+    private fun loadMediaStoreSnapshot(
+        cachedSongs: List<Song>,
+        previousCheckpoint: MediaStoreCheckpoint?
+    ): MediaScan {
+        val currentCheckpoint = readMediaStoreCheckpoint()
+        val cachedMedia = cachedSongs.filter { isMediaStoreUri(it.uri) }
+
+        if (currentCheckpoint != null && currentCheckpoint == previousCheckpoint) {
+            return MediaScan(cachedMedia, currentCheckpoint)
+        }
+
+        if (currentCheckpoint != null &&
+            previousCheckpoint != null &&
+            currentCheckpoint.version == previousCheckpoint.version &&
+            currentCheckpoint.generation > previousCheckpoint.generation
+        ) {
+            // GEN_MODIFIED does not report deleted rows. A small query for just
+            // IDs ensures deleted files and files no longer marked as music are
+            // removed without loading 600+ sets of unchanged tags again.
+            val liveIds = queryVisibleMediaIds()
+            val changed = queryMediaStoreSongs(previousCheckpoint.generation)
+            return MediaScan(
+                MediaStoreSongIndex.merge(cachedMedia, liveIds, changed),
+                currentCheckpoint
+            )
+        }
+
+        // First run, Android 10, secondary SD volumes, database reset, or
+        // unavailable generation data: use the indexed MediaStore collection.
+        return MediaScan(queryMediaStoreSongs(), currentCheckpoint)
+    }
+
+    private fun readMediaStoreCheckpoint(): MediaStoreCheckpoint? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return null
+
+        return runCatching {
+            // Generation values only apply to specific volumes, never the
+            // synthetic "external" volume. Fall back when an SD card is present.
+            val volumes = MediaStore.getExternalVolumeNames(context)
+            if (volumes != setOf(MediaStore.VOLUME_EXTERNAL_PRIMARY)) {
+                return@runCatching null
+            }
+            val volume = MediaStore.VOLUME_EXTERNAL_PRIMARY
+            val version = MediaStore.getVersion(context, volume)
+                ?: return@runCatching null
+            MediaStoreCheckpoint(version, MediaStore.getGeneration(context, volume))
+        }.getOrNull()
+    }
+
+    private fun queryVisibleMediaIds(): Set<Long> {
+        val ids = HashSet<Long>()
+        context.contentResolver.query(
+            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+            arrayOf(MediaStore.Audio.Media._ID),
+            mediaSelection(),
+            arrayOf(MIN_TRACK_DURATION_MS.toString()),
+            null
+        )?.use { cursor ->
+            val idCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+            while (cursor.moveToNext()) ids += cursor.getLong(idCol)
+        } ?: error("MediaStore did not return an ID cursor")
+        return ids
+    }
+
+    private fun mediaSelection(): String =
+        MediaStore.Audio.Media.IS_MUSIC + " != 0 AND " +
+            MediaStore.Audio.Media.DURATION + " >= ?"
+
+    private fun queryMediaStoreSongs(changedSince: Long? = null): List<Song> {
         val songs = mutableListOf<Song>()
         val collection = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
         val projection = arrayOf(
@@ -81,50 +210,58 @@ class MusicRepository(private val context: Context) {
             MediaStore.Audio.Media.ALBUM_ID,
             MediaStore.Audio.Media.DATE_ADDED
         )
-        val selection =
-            MediaStore.Audio.Media.IS_MUSIC + " != 0 AND " +
-                MediaStore.Audio.Media.DURATION + " >= ?"
-        val selectionArgs = arrayOf(MIN_TRACK_DURATION_MS.toString())
+        val selection = if (changedSince != null) {
+            mediaSelection() + " AND (" +
+                MediaStore.MediaColumns.GENERATION_ADDED + " > ? OR " +
+                MediaStore.MediaColumns.GENERATION_MODIFIED + " > ?)"
+        } else {
+            mediaSelection()
+        }
+        val selectionArgs = if (changedSince != null) {
+            arrayOf(
+                MIN_TRACK_DURATION_MS.toString(),
+                changedSince.toString(),
+                changedSince.toString()
+            )
+        } else {
+            arrayOf(MIN_TRACK_DURATION_MS.toString())
+        }
         val sort = MediaStore.Audio.Media.TITLE + " COLLATE NOCASE ASC"
 
-        runCatching {
-            context.contentResolver.query(
-                collection,
-                projection,
-                selection,
-                selectionArgs,
-                sort
-            )?.use { cursor ->
-                val idCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
-                val titleCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
-                val artistCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
-                val albumCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
-                val durationCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
-                val albumIdCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
-                val dateAddedCol = cursor.getColumnIndexOrThrow(
-                    MediaStore.Audio.Media.DATE_ADDED
+        context.contentResolver.query(
+            collection,
+            projection,
+            selection,
+            selectionArgs,
+            sort
+        )?.use { cursor ->
+            val idCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+            val titleCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
+            val artistCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
+            val albumCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
+            val durationCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+            val albumIdCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
+            val dateAddedCol = cursor.getColumnIndexOrThrow(
+                MediaStore.Audio.Media.DATE_ADDED
+            )
+
+            while (cursor.moveToNext()) {
+                val id = cursor.getLong(idCol)
+                val durationMs = cursor.getLong(durationCol)
+                if (durationMs < MIN_TRACK_DURATION_MS) continue
+
+                songs += Song(
+                    id = id,
+                    title = cursor.getString(titleCol) ?: "Unknown title",
+                    artist = cursor.getString(artistCol) ?: "Unknown artist",
+                    album = cursor.getString(albumCol) ?: "Unknown album",
+                    uri = ContentUris.withAppendedId(collection, id).toString(),
+                    durationMs = durationMs,
+                    albumId = cursor.getLong(albumIdCol),
+                    dateAddedMs = cursor.getLong(dateAddedCol) * 1_000L
                 )
-
-                while (cursor.moveToNext()) {
-                    val id = cursor.getLong(idCol)
-                    val durationMs = cursor.getLong(durationCol)
-
-                    if (durationMs < MIN_TRACK_DURATION_MS) continue
-
-                    songs += Song(
-                        id = id,
-                        title = cursor.getString(titleCol) ?: "Unknown title",
-                        artist = cursor.getString(artistCol) ?: "Unknown artist",
-                        album = cursor.getString(albumCol) ?: "Unknown album",
-                        uri = ContentUris.withAppendedId(collection, id).toString(),
-                        durationMs = durationMs,
-                        albumId = cursor.getLong(albumIdCol),
-                        dateAddedMs = cursor.getLong(dateAddedCol) * 1_000L
-                    )
-                }
             }
-        }
-
+        } ?: error("MediaStore did not return a song cursor")
         return songs
     }
 
