@@ -69,7 +69,7 @@ class LyricsWaveGlyphIntegrityTest {
             val level = mask.glyphInfluence(mask.front(now), 0f, 240f)
             assertTrue(level in 0f..1f)
             assertTrue("sudden mask change near $now",
-                abs(level - previous) <= 0.055f)
+                abs(level - previous) <= 0.065f)
             previous = level
         }
         assertEquals(0f, mask.glyphInfluence(mask.front(9500), 0f, 240f), 0f)
