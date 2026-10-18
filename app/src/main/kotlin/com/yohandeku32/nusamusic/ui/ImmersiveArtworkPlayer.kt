@@ -3,8 +3,6 @@ package com.yohandeku32.nusamusic.ui
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.expandHorizontally
-import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateDpAsState
@@ -26,7 +24,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -199,19 +196,19 @@ internal fun ImmersiveArtworkPlayer(
                             translationY = -headerLift.toPx() * lyricsTransition
                         }
                 ) {
-                // Keep a single left-aligned metadata stack while Lyrics
-                // opens. No miniature cover is rendered in the top banner.
-                // Text sizes and vertical position animate smoothly together.
+                // Keep a single left-aligned metadata stack, without a cover.
+                // Switch to the compact text metrics only ONCE when the mode
+                // changes: animating fontSize and lineHeight remeasured text
+                // every frame, while the whole header already moves smoothly
+                // on the compositor via graphicsLayer above.
                 val expandedTitleSize = (titleFontSize *
                     if (compact) 0.72f else 0.78f).coerceIn(22f, 34f)
                 val expandedLineHeight = (titleFontSize *
                     if (compact) 0.84f else 0.90f).coerceIn(27f, 40f)
                 val compactTitleSize = if (compact) 14.5f else 15.5f
                 val compactLineHeight = if (compact) 18f else 19f
-                val titleSize = expandedTitleSize +
-                    (compactTitleSize - expandedTitleSize) * lyricsTransition
-                val lineHeight = expandedLineHeight +
-                    (compactLineHeight - expandedLineHeight) * lyricsTransition
+                val titleSize = if (lyricsOpen) compactTitleSize else expandedTitleSize
+                val lineHeight = if (lyricsOpen) compactLineHeight else expandedLineHeight
 
                 Row(
                     Modifier.fillMaxWidth(),
@@ -234,13 +231,13 @@ internal fun ImmersiveArtworkPlayer(
                         )
                         Text(
                             text = artist,
-                            fontSize = (15f - 3.5f * lyricsTransition).sp,
+                            fontSize = (if (lyricsOpen) 11.5f else 15f).sp,
                             color = Color.White.copy(alpha = 0.72f),
                             textAlign = TextAlign.Start,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.fillMaxWidth()
-                                .padding(top = (5f - 3f * lyricsTransition).dp)
+                                .padding(top = if (lyricsOpen) 2.dp else 5.dp)
                                 .clickable(enabled = hasSong, onClick = onArtist)
                         )
                         // Keep Hi-Res/Lossless in normal player only. The
@@ -253,10 +250,10 @@ internal fun ImmersiveArtworkPlayer(
                     }
                     AnimatedVisibility(
                         visible = !lyricsOpen,
-                        enter = expandHorizontally(tween(400, easing = FastOutSlowInEasing),
-                            expandFrom = Alignment.End) + fadeIn(tween(280)),
-                        exit = shrinkHorizontally(tween(340, easing = FastOutSlowInEasing),
-                            shrinkTowards = Alignment.End) + fadeOut(tween(170))
+                        // Fading the favorite is cheaper than expanding
+                        // the header width on every animation frame.
+                        enter = fadeIn(tween(180)),
+                        exit = fadeOut(tween(120))
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Spacer(Modifier.width(12.dp))
