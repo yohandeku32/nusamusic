@@ -47,6 +47,7 @@ private fun immersiveText(id: String, en: String) =
 internal fun ImmersiveArtworkPlayer(
     title: String,
     artist: String,
+    composerNames: String,
     titleFontFamily: FontFamily,
     titleFontSize: Float,
     hasSong: Boolean,
@@ -220,6 +221,23 @@ internal fun ImmersiveArtworkPlayer(
                         modifier = Modifier.weight(1f),
                         horizontalAlignment = Alignment.Start
                     ) {
+                        if (lyricsOpen) {
+                            Text(
+                                text = "COMPOSER",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White.copy(alpha = 0.58f)
+                            )
+                            Text(
+                                text = composerNames.ifBlank { "Unknown composer" },
+                                fontSize = if (compact) 13.sp else 14.sp,
+                                lineHeight = 18.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White.copy(alpha = 0.90f),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        } else {
                         Text(
                             text = title,
                             fontFamily = titleFontFamily,
@@ -242,6 +260,7 @@ internal fun ImmersiveArtworkPlayer(
                                 .padding(top = if (lyricsOpen) 2.dp else 5.dp)
                                 .clickable(enabled = hasSong, onClick = onArtist)
                         )
+                        }
                         // Keep Hi-Res/Lossless in normal player only. The
                         // Lyrics header contains exactly title and artist.
                         if (!lyricsOpen) {
