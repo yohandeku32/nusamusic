@@ -150,7 +150,9 @@ internal fun ImmersiveArtworkPlayer(
                 visible = lyricsOpen,
                 modifier = Modifier.align(if (wide) Alignment.TopStart else Alignment.TopCenter)
                     .fillMaxWidth(if (wide) (1f - controlsFraction).coerceIn(0.42f, 0.75f) else 1f)
-                    .padding(horizontal = horizontal)
+                    // Lyrics are intentionally closer to the left edge.
+                    // The row renderer keeps its own 16dp safe glow padding.
+                    .padding(start = if (wide) 10.dp else 8.dp, end = if (wide) 12.dp else 8.dp)
                     .padding(top = lyricsViewportTop)
                     .height(lyricsViewportHeight),
                 enter = fadeIn(animationSpec = tween(300, delayMillis = 150)) +
