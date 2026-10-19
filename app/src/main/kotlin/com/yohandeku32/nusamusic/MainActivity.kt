@@ -4648,6 +4648,21 @@ private fun AnimatedArtworkVideoBackground(
         }
     }
 
+    // Prevent speculative Apple/Spotify lookups and video downloads from
+    // taking bandwidth while the active Canvas is still filling its loop.
+    // READY may mean only ~450ms buffered; a first frame alone does not
+    // mean there is enough media to play smoothly.
+    fun protectForegroundCanvas() {
+        if (!isCanvasStream) return
+        val buffering = player.playbackState == Player.STATE_IDLE ||
+            player.playbackState == Player.STATE_BUFFERING
+        val bufferedAhead = (player.bufferedPosition - player.currentPosition).coerceAtLeast(0L)
+        val filling = player.isLoading && bufferedAhead < 3_500L
+        SpotifyCanvasVideoCache.setForegroundBuffering(
+            url, shouldPlayVideo && (buffering || filling)
+        )
+    }
+
     // Do not require a successful TextureView screenshot to reveal animated artwork.
     // Some devices render video correctly but never return a usable capture.
     LaunchedEffect(player, videoReady) {
@@ -4725,22 +4740,22 @@ private fun AnimatedArtworkVideoBackground(
         }
         val listener = object : Player.Listener {
             override fun onRenderedFirstFrame() {
-                if (isCanvasStream) SpotifyCanvasVideoCache.setForegroundBuffering(url, false)
+                protectForegroundCanvas()
                 videoReady = true
                 bufferingSinceMs = 0L
                 onFirstFrameCallback()
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
-                if (isCanvasStream) {
-                    SpotifyCanvasVideoCache.setForegroundBuffering(
-                        url, shouldPlayVideo && playbackState == Player.STATE_BUFFERING
-                    )
-                }
+                protectForegroundCanvas()
                 bufferingSinceMs =
                     if (playbackState == Player.STATE_BUFFERING && videoReady)
                         android.os.SystemClock.elapsedRealtime()
                     else 0L
+            }
+
+            override fun onIsLoadingChanged(isLoading: Boolean) {
+                protectForegroundCanvas()
             }
 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
@@ -4775,10 +4790,18 @@ private fun AnimatedArtworkVideoBackground(
     // without the expensive HLS player setup or re-buffering from scratch.
     LaunchedEffect(player, playbackVisible) {
         player.playWhenReady = playbackVisible
-        if (isCanvasStream) {
-            SpotifyCanvasVideoCache.setForegroundBuffering(
-                url, playbackVisible && player.playbackState == Player.STATE_BUFFERING
-            )
+        protectForegroundCanvas()
+        if (isCanvasStream && playbackVisible) {
+            // ExoPlayer may remain in READY while downloading. Check buffered
+            // headroom until at least 3.5s is available, so prefetch cannot
+            // starve the currently moving Canvas loop during track changes.
+            repeat(24) {
+                delay(250L)
+                protectForegroundCanvas()
+                if (!shouldPlayVideo || !player.isLoading ||
+                    (player.bufferedPosition - player.currentPosition) >= 3_500L
+                ) return@LaunchedEffect
+            }
         }
     }
 
