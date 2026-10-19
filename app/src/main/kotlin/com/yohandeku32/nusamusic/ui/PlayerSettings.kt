@@ -142,7 +142,10 @@ internal fun PlayerSettingsContent(
                     }
                     SettingToggle(
                         settingsText("Animasi sampul", "Animated artwork"),
-                        settingsText("Gerakan pada sampul album yang didukung.", "Motion for supported album artwork."),
+                        settingsText(
+                            "Apple Music lebih dulu, lalu Spotify Canvas jika tidak ada. Pencarian mengirim judul dan artis ke penyedia pihak ketiga.",
+                            "Apple Music first, then Spotify Canvas when unavailable. Searches send title and artist to third-party services."
+                        ),
                         animatedArtworkEnabled, onAnimatedArtworkChange
                     )
                 }
