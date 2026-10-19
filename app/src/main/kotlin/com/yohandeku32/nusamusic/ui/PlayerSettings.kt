@@ -401,115 +401,275 @@ internal fun PlayerSettingsContent(
 
 @Composable
 private fun SettingsSection(title: String, content: @Composable ColumnScope.() -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    val colors = MaterialTheme.colorScheme
+    Column(
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
         Text(
-            title, Modifier.padding(horizontal = 4.dp).semantics { heading() },
-            style = MaterialTheme.typography.titleSmall,
+            title,
+            modifier = Modifier.padding(start = 4.dp).semantics { heading() },
+            style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = colors.onSurfaceVariant
         )
         Surface(
-            shape = RoundedCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.surface,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f))
+            shape = RoundedCornerShape(22.dp),
+            color = colors.surfaceVariant.copy(alpha = 0.34f),
+            border = BorderStroke(1.dp, colors.onSurface.copy(alpha = 0.055f))
         ) {
-            Column(Modifier.fillMaxWidth().padding(16.dp), content = content)
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                content = content
+            )
+        }
+    }
+}
+
+/** Lightweight, visual player mode selector; no second nested scroll area. */
+@Composable
+private fun SettingModeTile(
+    label: String,
+    icon: ImageVector,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val colors = MaterialTheme.colorScheme
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(18.dp),
+        color = if (selected) colors.primary.copy(alpha = 0.13f)
+            else colors.surface.copy(alpha = if (enabled) 0.75f else 0.35f),
+        border = BorderStroke(
+            1.dp,
+            if (selected) colors.primary.copy(alpha = 0.55f)
+            else colors.onSurface.copy(alpha = 0.07f)
+        )
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth()
+                .height(120.dp)
+                .selectable(
+                    selected = selected,
+                    enabled = enabled,
+                    role = Role.RadioButton,
+                    onClick = onClick
+                )
+                .padding(12.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    icon, null, Modifier.size(29.dp),
+                    tint = (if (selected) colors.primary else colors.onSurface)
+                        .copy(alpha = if (enabled) 0.95f else 0.30f)
+                )
+                if (selected) {
+                    Icon(
+                        Icons.Default.CheckCircle,
+                        contentDescription = settingsText("Dipilih", "Selected"),
+                        modifier = Modifier.size(16.dp),
+                        tint = colors.primary
+                    )
+                }
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    label,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
+                    color = colors.onSurface.copy(alpha = if (enabled) 1f else 0.4f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (!enabled) {
+                    Text(
+                        settingsText("Belum tersedia", "Unavailable"),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = colors.onSurfaceVariant.copy(alpha = 0.6f),
+                        maxLines = 1
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingSegment(
+    label: String,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    val colors = MaterialTheme.colorScheme
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(13.dp),
+        color = if (selected) colors.surface else Color.Transparent,
+        tonalElevation = if (selected) 2.dp else 0.dp
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().height(42.dp)
+                .selectable(selected = selected, role = Role.RadioButton, onClick = onClick),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                label,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                color = if (selected) colors.onSurface else colors.onSurfaceVariant
+            )
         }
     }
 }
 
 @Composable
 private fun SettingIcon(icon: ImageVector, enabled: Boolean = true) {
+    val colors = MaterialTheme.colorScheme
     Box(
-        Modifier.size(44.dp).background(
-            MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 0.06f else 0.03f),
-            RoundedCornerShape(14.dp)
+        Modifier.size(40.dp).background(
+            colors.primary.copy(alpha = if (enabled) 0.10f else 0.035f),
+            RoundedCornerShape(13.dp)
         ),
         contentAlignment = Alignment.Center
     ) {
-        Icon(icon, null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 0.85f else 0.38f))
+        Icon(
+            icon, null, Modifier.size(21.dp),
+            tint = colors.primary.copy(alpha = if (enabled) 0.95f else 0.32f)
+        )
     }
 }
 
 @Composable
-private fun SettingChoice(title: String, subtitle: String, icon: ImageVector, selected: Boolean, onClick: () -> Unit, enabled: Boolean = true) {
+private fun SettingToggle(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    icon: ImageVector? = null
+) {
     val colors = MaterialTheme.colorScheme
-    Surface(
-        shape = RoundedCornerShape(18.dp),
-        color = if (selected) colors.primary.copy(alpha = 0.07f) else colors.surface,
-        border = BorderStroke(1.dp, if (selected) colors.primary.copy(alpha = 0.45f) else colors.onSurface.copy(alpha = 0.08f))
-    ) {
-        Row(
-            Modifier.fillMaxWidth().selectable(selected = selected, enabled = enabled, role = Role.RadioButton, onClick = onClick)
-                .heightIn(min = 76.dp).padding(horizontal = 12.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            SettingIcon(icon, enabled)
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = colors.onSurface.copy(alpha = if (enabled) 1f else 0.38f))
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant.copy(alpha = if (enabled) 1f else 0.5f))
-            }
-            RadioButton(selected = selected, onClick = null, enabled = enabled, modifier = Modifier.size(24.dp))
-        }
-    }
-}
-
-@Composable
-private fun SettingToggle(title: String, subtitle: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
     Row(
-        Modifier.fillMaxWidth().toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange)
-            .heightIn(min = 64.dp).padding(vertical = 8.dp),
+        modifier = Modifier.fillMaxWidth()
+            .toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange)
+            .heightIn(min = 64.dp)
+            .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (icon != null) SettingIcon(icon)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.onSurfaceVariant,
+                maxLines = 3
+            )
         }
         Switch(checked = checked, onCheckedChange = null)
     }
 }
 
 @Composable
-private fun SettingAction(title: String, subtitle: String, icon: ImageVector, onClick: () -> Unit, trailingIcon: ImageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight) {
-    Surface(onClick = onClick, shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surface) {
+private fun SettingAction(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+    trailingIcon: ImageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight
+) {
+    val colors = MaterialTheme.colorScheme
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(14.dp),
+        color = Color.Transparent
+    ) {
         Row(
-            Modifier.fillMaxWidth().heightIn(min = 76.dp).padding(vertical = 10.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 60.dp)
+                .padding(vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             SettingIcon(icon)
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Column(
+                Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
-            Icon(trailingIcon, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Icon(
+                trailingIcon, null, Modifier.size(20.dp),
+                tint = colors.onSurfaceVariant
+            )
         }
     }
 }
 
 @Composable
 private fun SettingCaption(text: String) {
-    Text(text, style = MaterialTheme.typography.labelSmall, letterSpacing = 1.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Text(
+        text,
+        style = MaterialTheme.typography.labelSmall,
+        letterSpacing = 0.6.sp,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
 }
 
 @Composable
 private fun SettingValue(text: String) {
-    Surface(shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
-        Text(text, Modifier.padding(horizontal = 12.dp, vertical = 6.dp), style = MaterialTheme.typography.labelLarge)
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.09f)
+    ) {
+        Text(
+            text,
+            Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
     }
 }
 
 @Composable
 private fun RangeLabels(start: String, end: String) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(start, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(end, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(start, style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(end, style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
 @Composable
 private fun SettingsDivider() {
-    HorizontalDivider(Modifier.padding(vertical = 16.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+    HorizontalDivider(
+        Modifier.padding(vertical = 10.dp),
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.075f)
+    )
 }
