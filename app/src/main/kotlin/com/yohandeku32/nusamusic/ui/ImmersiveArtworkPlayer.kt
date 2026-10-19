@@ -253,9 +253,11 @@ internal fun ImmersiveArtworkPlayer(
                             textAlign = TextAlign.Start,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.fillMaxWidth()
-                                .padding(top = 5.dp)
-                                .clickable(enabled = hasSong && !lyricsOpen, onClick = onArtist)
+                            // Artist navigation already has its explicit
+                            // action in the lower control pill. Do not leave
+                            // a full-width invisible click zone under the song
+                            // title: swipes and taps there are for the player.
+                            modifier = Modifier.padding(top = 5.dp)
                         )
                         // Still measured, but entirely faded out with the
                         // player title when the composer header becomes active.
