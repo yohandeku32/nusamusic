@@ -330,10 +330,7 @@ internal fun ImmersiveArtworkPlayer(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Box(
-                        Modifier.size(56.dp)
-                            .clip(RoundedCornerShape(50))
-                            .background(Color.White.copy(alpha = 0.09f))
-                            .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(50)),
+                        Modifier.size(56.dp).immersiveGlassPill(50.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         ImmersiveAction(NusaPlayerIcons.Artist,
@@ -343,9 +340,7 @@ internal fun ImmersiveArtworkPlayer(
                     Row(
                         Modifier.width(actionPillWidth)
                             .height(56.dp)
-                            .clip(RoundedCornerShape(100.dp))
-                            .background(Color.White.copy(alpha = 0.09f))
-                            .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(100.dp)),
+                            .immersiveGlassPill(100.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
