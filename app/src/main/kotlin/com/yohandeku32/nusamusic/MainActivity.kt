@@ -219,6 +219,11 @@ class MainActivity : ComponentActivity() {
     private var restoringPlaybackQueue = false
     private var songs by mutableStateOf<List<Song>>(emptyList())
     private var currentSong by mutableStateOf<Song?>(null)
+    private var pendingDeletedSong: Song? = null
+    private var deletionRequiresRetry = false
+    // Re-read the currently playing embedded metadata when an external app
+    // edits the audio file, without waiting for a manual Library rescan.
+    private var lyricsMetadataGeneration by mutableIntStateOf(0)
     private var isPlaying by mutableStateOf(false)
     private var lyricsPlaybackEpoch by mutableIntStateOf(0)
     private val playbackPositionState = mutableLongStateOf(0L)
@@ -255,6 +260,11 @@ class MainActivity : ComponentActivity() {
             super.onChange(selfChange, uri)
 
             if (!permissionGranted) return
+            // Notify cached embedded-lyrics state even if this media index
+            // change is otherwise handled by an incremental library scan.
+            if (uri == null || currentSong?.uri == uri.toString()) {
+                lyricsMetadataGeneration++
+            }
             if (isScanningMusic) {
                 // Never lose a change event received during a running scan.
                 mediaStoreRefreshPending = true
@@ -408,6 +418,23 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+    private val permanentDeleteLauncher = registerForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        val target = pendingDeletedSong
+        pendingDeletedSong = null
+        if (result.resultCode == android.app.Activity.RESULT_OK && target != null) {
+            if (deletionRequiresRetry) {
+                deletionRequiresRetry = false
+                lifecycleScope.launch { deleteWithGrantedPermission(target) }
+            } else {
+                completePermanentDeletion(target)
+            }
+        } else {
+            deletionRequiresRetry = false
+        }
+    }
+
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             permissionGranted = granted
@@ -442,6 +469,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        // External tag editors may modify ID3/FLAC without notifying
+        // MediaStore. A foreground return rechecks the current song.
+        lyricsMetadataGeneration++
         // Run after Android reapplies window focus; do not let a retained
         // BasicTextField bring the keyboard up over the music player.
         window.decorView.post { dismissRestoredKeyboard() }
@@ -613,12 +643,14 @@ class MainActivity : ComponentActivity() {
                     isPlaying = isPlaying,
                     positionMsState = playbackPositionState,
                     lyricsPlaybackEpoch = lyricsPlaybackEpoch,
+                    lyricsMetadataGeneration = lyricsMetadataGeneration,
                     readPlaybackPosition = { controller?.currentPosition?.coerceAtLeast(0L) ?: positionMs },
                     readPlaybackEpoch = { lyricsPlaybackEpoch },
                     durationMs = durationMs,
                     permissionGranted = permissionGranted,
                     onPlay = ::playSong,
                     onPlayNext = ::queueSongNext,
+                    onDeleteSong = ::requestPermanentSongDeletion,
                     onTogglePlay = ::togglePlay,
                     customTitleFontPath = customTitleFontPath,
                     customTitleFontName = customTitleFontName,
@@ -1354,6 +1386,105 @@ class MainActivity : ComponentActivity() {
         controller?.let(::scheduleArtworkLookahead)
     }
 
+    /**
+     * Two distinct confirmations: NusaMusic asks first, then Android grants
+     * access to delete the actual MediaStore item (Android 11+). Files from a
+     * user-picked SAF folder require the provider's write grant.
+     */
+    private fun requestPermanentSongDeletion(song: Song) {
+        val uri = runCatching { Uri.parse(song.uri) }.getOrNull() ?: return
+        if (uri.scheme != "content") {
+            deletionError("Only songs from device storage can be deleted.")
+            return
+        }
+        if (pendingDeletedSong != null) return
+        pendingDeletedSong = song
+        deletionRequiresRetry = false
+        if (uri.authority == MediaStore.AUTHORITY && Build.VERSION.SDK_INT >= 30) {
+            val request = runCatching {
+                MediaStore.createDeleteRequest(contentResolver, listOf(uri))
+            }
+            request.onSuccess { intentSender ->
+                val intent = androidx.activity.result.IntentSenderRequest.Builder(
+                    intentSender.intentSender
+                ).build()
+                permanentDeleteLauncher.launch(intent)
+            }.onFailure {
+                pendingDeletedSong = null
+                deletionError("Unable to request permission to delete this song.")
+            }
+        } else {
+            lifecycleScope.launch { deleteWithGrantedPermission(song) }
+        }
+    }
+
+    private suspend fun deleteWithGrantedPermission(song: Song) {
+        val uri = Uri.parse(song.uri)
+        try {
+            val removed = withContext(Dispatchers.IO) {
+                when {
+                    android.provider.DocumentsContract.isDocumentUri(this@MainActivity, uri) ->
+                        android.provider.DocumentsContract.deleteDocument(contentResolver, uri)
+                    uri.authority == MediaStore.AUTHORITY ->
+                        contentResolver.delete(uri, null, null) > 0
+                    else -> false
+                }
+            }
+            pendingDeletedSong = null
+            deletionRequiresRetry = false
+            if (removed) completePermanentDeletion(song)
+            else deletionError("File could not be deleted. Re-select its folder with write access.")
+        } catch (e: android.app.RecoverableSecurityException) {
+            if (Build.VERSION.SDK_INT >= 29) {
+                pendingDeletedSong = song
+                deletionRequiresRetry = true
+                val request = androidx.activity.result.IntentSenderRequest.Builder(
+                    e.userAction.actionIntent.intentSender
+                ).build()
+                permanentDeleteLauncher.launch(request)
+            } else {
+                pendingDeletedSong = null
+                deletionError("Storage provider denied deletion.")
+            }
+        } catch (_: Exception) {
+            pendingDeletedSong = null
+            deletionRequiresRetry = false
+            deletionError("Storage provider denied deletion. Grant folder write access.")
+        }
+    }
+
+    private fun completePermanentDeletion(song: Song) {
+        // Remove the deleted item from the active Media3 queue as well as
+        // the Library, so a Next/Previous action never opens a dead URI.
+        controller?.let { player ->
+            for (index in player.mediaItemCount - 1 downTo 0) {
+                if (player.getMediaItemAt(index).mediaId == song.id.toString()) {
+                    player.removeMediaItem(index)
+                }
+            }
+            if (player.mediaItemCount == 0) {
+                player.stop()
+                currentSong = null
+                isPlaying = false
+                positionMs = 0L
+                durationMs = 0L
+            } else syncCurrentSong(player)
+        }
+        songs = songs.filterNot { it.id == song.id && it.uri == song.uri }
+        lifecycleScope.launch(Dispatchers.IO) {
+            persistCachedSongs(songs, null)
+        }
+        lyricsMetadataGeneration++
+        startMusicScan(scanSelectedFolders = selectedMusicFolders.isNotEmpty(), showToast = false)
+        android.widget.Toast.makeText(
+            this, "Song permanently deleted", android.widget.Toast.LENGTH_SHORT
+        ).show()
+    }
+
+    private fun deletionError(message: String) {
+        android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_LONG).show()
+    }
+
     private fun nextSong() {
         controller?.let { it.seekToNextMediaItem(); it.play() }
     }
@@ -1664,10 +1795,12 @@ private fun NusaMusicApp(
     readPlaybackPosition: () -> Long,
     readPlaybackEpoch: () -> Int,
     lyricsPlaybackEpoch: Int,
+    lyricsMetadataGeneration: Int,
     durationMs: Long,
     permissionGranted: Boolean,
     onPlay: (Song, List<Song>) -> Unit,
     onPlayNext: (Song) -> Unit,
+    onDeleteSong: (Song) -> Unit,
     onTogglePlay: () -> Unit,
     customTitleFontPath: String?,
     customTitleFontName: String?,
@@ -2477,6 +2610,7 @@ private fun NusaMusicApp(
                                 },
                                 onPlay = onPlay,
                                 onPlayNext = onPlayNext,
+                                onDeleteSong = onDeleteSong,
                                 onShare = { onShare(it) },
                                 onTogglePlay = onTogglePlay,
                                 onScanMusic = onScanMusic,
