@@ -2065,6 +2065,25 @@ private fun NusaMusicApp(
 
     val keyboardForPager = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val focusForPager = androidx.compose.ui.platform.LocalFocusManager.current
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    // The Activity window can hide its keyboard while Compose still remembers
+    // a focused BasicTextField. Clear Compose focus on both backgrounding and
+    // return; otherwise Android reopens Gboard on top of the main player.
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            when (event) {
+                androidx.lifecycle.Lifecycle.Event.ON_PAUSE,
+                androidx.lifecycle.Lifecycle.Event.ON_STOP,
+                androidx.lifecycle.Lifecycle.Event.ON_RESUME -> {
+                    keyboardForPager?.hide()
+                    focusForPager.clearFocus(force = true)
+                }
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     // Off-screen pages remain composed for swiping. Explicitly clear their
     // text focus so the IME cannot follow a reverse swipe to Now Playing.
     LaunchedEffect(pagerState.settledPage) {
