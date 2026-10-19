@@ -417,7 +417,7 @@ private fun ImmersiveTrackRow(
                         painter = painterResource(id = R.drawable.hi_res_audio_logo),
                         contentDescription = "Hi-Res Audio",
                         contentScale = ContentScale.Fit,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(18.dp)
                     )
                 }
             }
