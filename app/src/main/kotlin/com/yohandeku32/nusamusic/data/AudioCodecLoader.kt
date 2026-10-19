@@ -4,6 +4,7 @@ import android.content.Context
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.net.Uri
+import androidx.compose.runtime.mutableStateMapOf
 import com.yohandeku32.nusamusic.model.Song
 import java.security.MessageDigest
 import kotlinx.coroutines.currentCoroutineContext
@@ -25,6 +26,18 @@ object AudioCodecLoader {
         ): Boolean = size > 2_048
     }
     private val metadataPermit = Semaphore(2)
+    // Compose observes the verified badge of each song separately. This makes
+    // already-visible rows update as soon as metadata becomes available,
+    // without recomposing the entire library or decoding its logo per row.
+    private val verifiedHiRes = mutableStateMapOf<String, Boolean>()
+
+    fun isHiResCached(uriString: String): Boolean = verifiedHiRes[uriString] == true
+
+    private suspend fun publishHiRes(uriString: String, info: AudioCodecInfo?) {
+        if (info?.isHiRes == true) withContext(Dispatchers.Main.immediate) {
+            verifiedHiRes[uriString] = true
+        }
+    }
     private const val HI_RES_PREFS = "hi_res_index_v1"
     private const val HI_RES_TTL_MS = 14L * 24 * 60 * 60 * 1_000
 
@@ -62,18 +75,33 @@ object AudioCodecLoader {
             .edit().putString(persistKey(uri), record).apply()
     }
 
-    /** Restore verified labels in bulk, off the UI thread, before flinging. */
-    suspend fun warmVerifiedBadges(context: Context, songs: List<Song>) = withContext(Dispatchers.IO) {
-        val records = context.applicationContext.getSharedPreferences(
-            HI_RES_PREFS, Context.MODE_PRIVATE
-        ).all
-        val now = System.currentTimeMillis()
-        for (song in songs) {
-            currentCoroutineContext().ensureActive()
-            val info = decodeStored(records[persistKey(song.uri)] as? String, now) ?: continue
-            synchronized(metadataCache) {
-                if (!metadataCache.containsKey(song.uri)) metadataCache[song.uri] = info
+    /**
+     * Read the persisted index once off-main and publish the entire verified
+     * set in one snapshot on main. No file extraction or bitmap work during
+     * IME animations or fast LazyColumn flings.
+     */
+    suspend fun warmVerifiedBadges(context: Context, songs: List<Song>) {
+        val restored = withContext(Dispatchers.IO) {
+            val records = context.applicationContext.getSharedPreferences(
+                HI_RES_PREFS, Context.MODE_PRIVATE
+            ).all
+            val now = System.currentTimeMillis()
+            buildMap<String, AudioCodecInfo> {
+                for (song in songs) {
+                    currentCoroutineContext().ensureActive()
+                    val info = decodeStored(records[persistKey(song.uri)] as? String, now)
+                        ?: continue
+                    synchronized(metadataCache) {
+                        if (!metadataCache.containsKey(song.uri)) metadataCache[song.uri] = info
+                    }
+                    put(song.uri, info)
+                }
             }
+        }
+        withContext(Dispatchers.Main.immediate) {
+            // One Compose snapshot notification rather than thousands of
+            // separate row invalidations during library startup.
+            verifiedHiRes.putAll(restored.mapValues { true })
         }
     }
 
@@ -90,6 +118,7 @@ object AudioCodecLoader {
             }
             savedHiRes(context, uriString)?.let { saved ->
                 synchronized(metadataCache) { metadataCache[uriString] = saved }
+                publishHiRes(uriString, saved)
                 return@withContext saved
             }
             metadataPermit.withPermit {
@@ -102,7 +131,10 @@ object AudioCodecLoader {
                 }
                 val info = inspect(context, uriString)
                 synchronized(metadataCache) { metadataCache[uriString] = info }
-                if (info?.isHiRes == true) saveHiRes(context, uriString, info)
+                if (info?.isHiRes == true) {
+                    saveHiRes(context, uriString, info)
+                    publishHiRes(uriString, info)
+                }
                 info
             }
         }
