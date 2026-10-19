@@ -115,14 +115,12 @@ internal object SpotifyCanvasVideoCache {
                 val maxBytes = if (immediateNext) 10L * 1024 * 1024
                     else 3L * 1024 * 1024
                 val reader = factory.createDataSource()
-                var opened = false
                 try {
                     // Foreground video wins at startup or during a stall.
                     // Do not start a secondary request that competes with it.
                     if (!waitForForeground()) return@withLock
                     currentCoroutineContext().ensureActive()
                     reader.open(DataSpec.Builder().setUri(url).build())
-                    opened = true
                     val buffer = ByteArray(32 * 1024)
                     var readBytes = 0L
                     while (readBytes < maxBytes) {
@@ -140,7 +138,9 @@ internal object SpotifyCanvasVideoCache {
                     // the selected provider or previously committed bytes.
                     currentCoroutineContext().ensureActive()
                 } finally {
-                    if (opened) runCatching { reader.close() }
+                    // close also when open() failed halfway, otherwise a
+                    // stale upstream connection may hold a cache span lock.
+                    runCatching { reader.close() }
                 }
             }
         }
