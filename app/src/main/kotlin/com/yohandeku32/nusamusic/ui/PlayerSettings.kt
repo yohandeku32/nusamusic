@@ -68,8 +68,8 @@ internal fun PlayerSettingsContent(
     onResetCustomTitleFont: () -> Unit,
     playerPresentationMode: PlayerPresentationMode,
     onPresentationSelected: (PlayerPresentationMode) -> Unit,
-    immersiveLightMode: Boolean,
-    onImmersiveLightModeChange: (Boolean) -> Unit,
+    libraryLightMode: Boolean,
+    onLibraryLightModeChange: (Boolean) -> Unit,
     animatedArtworkEnabled: Boolean,
     roundedCarouselCorners: Boolean,
     onRoundedCarouselCornersChange: (Boolean) -> Unit,
@@ -243,11 +243,13 @@ internal fun PlayerSettingsContent(
                     SettingsDivider()
                     if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
                         SettingToggle(
-                            settingsText("Mode terang", "Light mode"),
-                            settingsText("Tema terang untuk Immersive dan daftar lagu.",
-                                "Light appearance for Immersive and its library."),
-                            immersiveLightMode,
-                            onImmersiveLightModeChange,
+                            settingsText("Daftar lagu terang", "Light song list"),
+                            settingsText(
+                                "Hanya daftar lagu dan pencarian. Tampilan pemutar tetap gelap.",
+                                "Song list and search only. Now Playing stays dark."
+                            ),
+                            libraryLightMode,
+                            onLibraryLightModeChange,
                             icon = Icons.Default.LightMode
                         )
                         SettingsDivider()
