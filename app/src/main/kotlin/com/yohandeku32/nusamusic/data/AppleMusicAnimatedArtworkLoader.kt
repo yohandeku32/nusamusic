@@ -160,10 +160,12 @@ object AppleMusicAnimatedArtworkLoader {
         return response
     }
 
-    private fun animatedUrls(json: JSONObject?): List<String> = preferredAnimatedArtworkUrls(
-        tall = json?.optString("url_tall"),
-        square = json?.optString("url")
-    ).filter(::isAppleArtworkUrl)
+    // The service returns url_tall (portrait) and url (square) independently.
+    // Never fall back to its square URL: the full-height Immersive player must
+    // display genuine Tall artwork, not a zoomed/cropped square video.
+    private fun animatedUrls(json: JSONObject?): List<String> =
+        preferredAnimatedArtworkUrls(json?.optString("url_tall"))
+            .filter(::isAppleArtworkUrl)
     private fun isAppleArtworkUrl(value: String): Boolean = runCatching {
         val parsed = URL(value)
         val host = parsed.host.lowercase(Locale.ROOT)
