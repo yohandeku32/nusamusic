@@ -1989,6 +1989,19 @@ private fun NusaMusicApp(
     }
 
     if (showSettings) {
+        val settingsPalette = immersiveColors(immersiveLightMode)
+        val lightImmersiveSettings =
+            immersiveLightMode && playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
+        val settingsColorScheme = if (lightImmersiveSettings) lightColorScheme(
+            background = settingsPalette.background,
+            surface = settingsPalette.surface,
+            surfaceVariant = settingsPalette.surfaceVariant,
+            onBackground = settingsPalette.primaryText,
+            onSurface = settingsPalette.primaryText,
+            onSurfaceVariant = settingsPalette.secondaryText,
+            primary = Color(0xFF315A96),
+            onPrimary = Color.White
+        ) else MaterialTheme.colorScheme
         val settingsSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         var settingsClosing by remember { mutableStateOf(false) }
         val closeSettings: () -> Unit = {
@@ -2014,8 +2027,8 @@ private fun NusaMusicApp(
             // inside Settings cannot make the entire panel jitter.
             sheetGesturesEnabled = false,
             dragHandle = null,
-            containerColor = MaterialTheme.colorScheme.background,
-            contentColor = MaterialTheme.colorScheme.onBackground
+            containerColor = settingsColorScheme.background,
+            contentColor = settingsColorScheme.onBackground
         ) {
             // ModalBottomSheet owns a separate dialog window. Configure its
             // fullscreen flags ONCE when that window is attached, instead of
@@ -2036,6 +2049,7 @@ private fun NusaMusicApp(
                 onDispose { /* Dialog window is destroyed on dismiss. */ }
             }
 
+            MaterialTheme(colorScheme = settingsColorScheme) {
             PlayerSettingsContent(
                 lyricsFontSize = lyricsFontSize,
                 onLyricsFontSizeChange = { lyricsFontSize = it },
@@ -2122,6 +2136,7 @@ private fun NusaMusicApp(
                 onScanMusic = onScanMusic,
                 onDismiss = closeSettings
             )
+            }
         }
     }
 
