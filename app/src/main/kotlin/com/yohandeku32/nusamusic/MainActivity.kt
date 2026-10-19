@@ -179,11 +179,13 @@ import com.yohandeku32.nusamusic.ui.ImmersiveLyricsState
 import com.yohandeku32.nusamusic.ui.MiuixHorizontalPager
 import com.yohandeku32.nusamusic.ui.animateMiuixScrollToPage
 import com.yohandeku32.nusamusic.ui.artworkBackdropColor
-import kotlinx.coroutines.CoroutineStart
+
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.selects.select
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -4030,6 +4032,7 @@ private fun ImmersiveArtwork(
     var animatedArtworkUrl by remember(song?.id, song?.uri) { mutableStateOf<String?>(null) }
     var artworkProvider by remember(song?.uri) { mutableStateOf(AnimatedArtworkProvider.APPLE_MUSIC) }
     var spotifyFallbackRequested by remember(song?.uri) { mutableStateOf(false) }
+    var animatedFirstFrameUrl by remember(song?.uri) { mutableStateOf<String?>(null) }
     // Freeze the first usable animated frame's colours for the entire song,
     // including when an unavailable stream switches to an alternative URL.
     var frozenAnimatedBlur by remember(song?.uri) { mutableStateOf<Bitmap?>(null) }
@@ -4109,45 +4112,69 @@ private fun ImmersiveArtwork(
             animatedArtworkUrl = null
             return@LaunchedEffect
         }
-        // Apple retains presentation priority. If it takes longer than
-        // 250 ms, SPECULATIVELY resolve Spotify in parallel so its Canvas
-        // URL is already ready when Apple reports no animation. No forced
-        // second Apple network lookup or artificial 1.5 s delay on misses.
-        // The helper is cancelled on a quick Apple hit or song change,
-        // preventing extra network work and stale results.
+        // Start BOTH metadata lookups without serially blocking Spotify on a
+        // slow Apple catalog search. Apple wins immediately when available
+        // within a short priority window; after that whichever provider
+        // resolves first can be shown. A late Apple hit may upgrade Spotify
+        // only BEFORE the Canvas video renders its first frame, so a playing
+        // Canvas never flickers/rebuffers halfway through the track.
         if (!spotifyFallbackRequested) {
             coroutineScope {
                 val apple = async {
                     AppleMusicAnimatedArtworkLoader.loadAnimatedArtworkUrl(context, song)
                 }
-                val spotify = async(start = CoroutineStart.LAZY) {
-                    SpotifyCanvasArtworkLoader.findCanvasUrl(song)
-                }
-                val speculativeLookup = launch {
-                    delay(250L)
-                    if (apple.isActive) spotify.start()
+                val spotify = async {
+                    SpotifyCanvasArtworkLoader.findCanvasUrl(context, song)
                 }
                 try {
-                    val appleUrl = apple.await()
-                    speculativeLookup.cancel()
-                    if (appleUrl != null) {
-                        spotify.cancel()
+                    val fastAppleUrl = withTimeoutOrNull(400L) { apple.await() }
+                    if (fastAppleUrl != null) {
                         artworkProvider = AnimatedArtworkProvider.APPLE_MUSIC
-                        animatedArtworkUrl = appleUrl
+                        animatedArtworkUrl = fastAppleUrl
                     } else {
-                        artworkProvider = AnimatedArtworkProvider.SPOTIFY_CANVAS
-                        animatedArtworkUrl = spotify.await()
+                        // If Apple answered "missing" early, this selects the
+                        // completed null and waits for Spotify. Otherwise
+                        // Spotify can win as soon as it has a valid Canvas.
+                        val (source, firstUrl) = select<Pair<AnimatedArtworkProvider, String?>> {
+                            apple.onAwait { AnimatedArtworkProvider.APPLE_MUSIC to it }
+                            spotify.onAwait { AnimatedArtworkProvider.SPOTIFY_CANVAS to it }
+                        }
+                        when (source) {
+                            AnimatedArtworkProvider.APPLE_MUSIC -> {
+                                artworkProvider = if (firstUrl != null) {
+                                    AnimatedArtworkProvider.APPLE_MUSIC
+                                } else AnimatedArtworkProvider.SPOTIFY_CANVAS
+                                animatedArtworkUrl = firstUrl ?: spotify.await()
+                            }
+                            AnimatedArtworkProvider.SPOTIFY_CANVAS -> {
+                                if (firstUrl == null) {
+                                    artworkProvider = AnimatedArtworkProvider.APPLE_MUSIC
+                                    animatedArtworkUrl = apple.await()
+                                } else {
+                                    // Fast Canvas first; leave Apple searching.
+                                    artworkProvider = AnimatedArtworkProvider.SPOTIFY_CANVAS
+                                    animatedArtworkUrl = firstUrl
+                                    val eventualAppleUrl = apple.await()
+                                    if (eventualAppleUrl != null &&
+                                        animatedArtworkUrl == firstUrl &&
+                                        animatedFirstFrameUrl != firstUrl
+                                    ) {
+                                        artworkProvider = AnimatedArtworkProvider.APPLE_MUSIC
+                                        animatedArtworkUrl = eventualAppleUrl
+                                    }
+                                }
+                            }
+                        }
                     }
                 } finally {
-                    speculativeLookup.cancel()
+                    if (apple.isActive) apple.cancel()
                     if (spotify.isActive) spotify.cancel()
                 }
             }
         } else {
-            // Apple's video was found but its playback candidates failed:
-            // switch directly to Spotify, never re-run Apple search.
+            // All Apple playback candidates failed. Never repeat its lookup.
             artworkProvider = AnimatedArtworkProvider.SPOTIFY_CANVAS
-            animatedArtworkUrl = SpotifyCanvasArtworkLoader.findCanvasUrl(song)
+            animatedArtworkUrl = SpotifyCanvasArtworkLoader.findCanvasUrl(context, song)
         }
     }
 
@@ -4200,6 +4227,9 @@ private fun ImmersiveArtwork(
                             frozenAnimatedBackdrop = frameColor
                         }
                     },
+                    onFirstFrame = {
+                        if (animatedArtworkUrl == activeUrl) animatedFirstFrameUrl = activeUrl
+                    },
                     onUnavailable = {
                         if (animatedArtworkUrl == activeUrl) {
                             when (artworkProvider) {
@@ -4215,8 +4245,9 @@ private fun ImmersiveArtwork(
                                     }
                                 }
                                 AnimatedArtworkProvider.SPOTIFY_CANVAS -> {
-                                    // No loop of retries for a missing/expired
-                                    // unofficial Canvas stream.
+                                    // Evict a stale cached URL so replay
+                                    // requests a new Canvas instead of looping.
+                                    SpotifyCanvasArtworkLoader.invalidate(context, activeUrl)
                                     animatedArtworkUrl = null
                                 }
                             }
@@ -4236,6 +4267,7 @@ private fun AnimatedArtworkVideoBackground(
     modifier: Modifier = Modifier,
     captureBackdrop: Boolean,
     onBackdropReady: (Bitmap, Color) -> Unit,
+    onFirstFrame: () -> Unit,
     onUnavailable: () -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -4245,6 +4277,7 @@ private fun AnimatedArtworkVideoBackground(
     var artworkPlayerView by remember { mutableStateOf<androidx.media3.ui.PlayerView?>(null) }
     val onBackdropReadyCallback by rememberUpdatedState(onBackdropReady)
     val onUnavailableCallback by rememberUpdatedState(onUnavailable)
+    val onFirstFrameCallback by rememberUpdatedState(onFirstFrame)
     val shouldCaptureBackdrop by rememberUpdatedState(captureBackdrop)
     val shouldPlayVideo by rememberUpdatedState(playbackVisible)
 
@@ -4351,6 +4384,7 @@ private fun AnimatedArtworkVideoBackground(
         val listener = object : Player.Listener {
             override fun onRenderedFirstFrame() {
                 videoReady = true
+                onFirstFrameCallback()
             }
 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
