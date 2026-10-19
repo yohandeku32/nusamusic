@@ -198,7 +198,7 @@ internal fun ImmersiveSearchDialog(
                 }
             }
             Text(
-                if (matches.size == 1) "1 song" else "\${matches.size} songs",
+                if (matches.size == 1) "1 song" else "${matches.size} songs",
                 color = secondary, fontSize = 12.sp,
                 modifier = Modifier.padding(start = 24.dp, top = 12.dp, bottom = 8.dp)
             )
