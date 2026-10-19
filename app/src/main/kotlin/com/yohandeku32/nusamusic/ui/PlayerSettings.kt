@@ -266,8 +266,8 @@ internal fun PlayerSettingsContent(
                     SettingToggle(
                         settingsText("Animasi sampul", "Animated artwork"),
                         settingsText(
-                            "Apple Music → Spotify Canvas. Judul dan artis dikirim saat pencarian.",
-                            "Apple Music → Spotify Canvas. Searches share title and artist."
+                            "Mengikuti prioritas sumber animasi di bawah.",
+                            "Uses your chosen animation source priority below."
                         ),
                         animatedArtworkEnabled, onAnimatedArtworkChange,
                         icon = Icons.Default.AutoAwesome
