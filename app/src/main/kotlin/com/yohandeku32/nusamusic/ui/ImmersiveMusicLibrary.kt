@@ -11,9 +11,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Check
@@ -40,7 +37,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -48,12 +44,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -147,11 +141,11 @@ internal fun ImmersiveMusicLibrary(
         }.getOrDefault(ImmersiveSort.TITLE))
     }
     var sortOpen by remember { mutableStateOf(false) }
-    var searchFocused by remember { mutableStateOf(false) }
+    var searchDialogOpen by remember { mutableStateOf(false) }
     val dismissKeyboard: () -> Unit = {
         keyboard?.hide()
         focusManager.clearFocus(force = true)
-        searchFocused = false
+        searchDialogOpen = false
     }
     LaunchedEffect(isVisible) {
         if (!isVisible) dismissKeyboard()
@@ -166,7 +160,8 @@ internal fun ImmersiveMusicLibrary(
     }
     val canReadMetadata by remember(listState, imeInsets, density) {
         derivedStateOf {
-            !listState.isScrollInProgress && imeInsets.getBottom(density) == 0
+            !listState.isScrollInProgress && !searchDialogOpen &&
+                imeInsets.getBottom(density) == 0
         }
     }
     // Single decoded painter reused by every row (the logo is an 89 KB PNG).
@@ -174,11 +169,11 @@ internal fun ImmersiveMusicLibrary(
 
     // Progressively index all tracks only while the library is displayed.
     // Suspend native metadata extraction during keyboard use and flings.
-    LaunchedEffect(songs, isVisible) {
-        if (!isVisible) return@LaunchedEffect
+    LaunchedEffect(songs, isVisible, searchDialogOpen) {
+        if (!isVisible || searchDialogOpen) return@LaunchedEffect
         delay(260L)
         for (track in songs) {
-            while (searchFocused || imeVisible || listState.isScrollInProgress) delay(100L)
+            while (imeVisible || listState.isScrollInProgress) delay(100L)
             AudioCodecLoader.load(context, track.uri)
             delay(65L)
         }
@@ -198,6 +193,21 @@ internal fun ImmersiveMusicLibrary(
     BackHandler(enabled = focus != null) {
         focus = null
         search = ""
+    }
+
+    // New window: only text rendering and search filtering are active while
+    // Gboard animates. Existing player, blur, album art and metadata jobs are
+    // not recomposed by IME input.
+    if (searchDialogOpen && isVisible) {
+        ImmersiveSearchDialog(
+            songs = songs,
+            initialQuery = search,
+            onDismiss = { query ->
+                searchDialogOpen = false
+                search = query
+            },
+            onPlay = onPlay
+        )
     }
 
     MaterialTheme(
@@ -301,12 +311,32 @@ internal fun ImmersiveMusicLibrary(
                 }
             }
 
-            // Raw keystrokes no longer recompose the whole Library page.
-            key(focus) {
-                ImmersiveLibrarySearchField(
-                    onQuerySettled = { search = it },
-                    onFocusChanged = { searchFocused = it }
+            // A lightweight, separate dialog window handles Gboard.
+            // The heavy Library pager and all artwork stay at a fixed size.
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 20.dp)
+                    .height(48.dp).clip(RoundedCornerShape(15.dp))
+                    .background(librarySurface)
+                    .clickable { searchDialogOpen = true }
+                    .padding(horizontal = 15.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Rounded.Search, null, tint = librarySecondary,
+                    modifier = Modifier.size(19.dp))
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    search.ifBlank { "Search songs, artists, albums" },
+                    color = if (search.isBlank()) librarySecondary else libraryWhite,
+                    fontSize = 13.sp, maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
                 )
+                if (search.isNotBlank()) {
+                    IconButton(onClick = { search = "" }, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Rounded.Close, "Clear search", tint = librarySecondary,
+                            modifier = Modifier.size(17.dp))
+                    }
+                }
             }
             Row(
                 Modifier.fillMaxWidth().padding(start = 24.dp, end = 22.dp, top = 19.dp, bottom = 7.dp),
@@ -354,7 +384,7 @@ internal fun ImmersiveMusicLibrary(
                         ) { song ->
                             ImmersiveTrackRow(
                                 song = song, active = currentSong?.id == song.id,
-                                loadMetadata = canReadMetadata && !searchFocused,
+                                loadMetadata = canReadMetadata && !searchDialogOpen,
                                 hiResPainter = hiResPainter, artwork = artwork,
                                 onPlay = { onPlay(song, visibleSongs) },
                                 onPlayNext = { onPlayNext(song) },
@@ -390,66 +420,6 @@ internal fun ImmersiveMusicLibrary(
     } // Immersive-only dark Material theme
 }
 
-
-// The input field owns its fast-changing state. The parent only receives
-// debounced searches, keeping IME transitions independent of list filtering.
-@Composable
-private fun ImmersiveLibrarySearchField(
-    onQuerySettled: (String) -> Unit,
-    onFocusChanged: (Boolean) -> Unit
-) {
-    var input by rememberSaveable { mutableStateOf("") }
-    val keyboard = LocalSoftwareKeyboardController.current
-    val focusManager = LocalFocusManager.current
-
-    LaunchedEffect(input) {
-        if (input.isNotBlank()) delay(130L)
-        onQuerySettled(input)
-    }
-
-    BasicTextField(
-        value = input,
-        onValueChange = { if (it != input) input = it },
-        singleLine = true,
-        textStyle = TextStyle(fontSize = 14.sp, color = libraryWhite),
-        cursorBrush = SolidColor(libraryWhite),
-        keyboardOptions = KeyboardOptions(
-            keyboardType = androidx.compose.ui.text.input.KeyboardType.Text,
-            imeAction = androidx.compose.ui.text.input.ImeAction.Search
-        ),
-        keyboardActions = KeyboardActions(onSearch = {
-            keyboard?.hide()
-            focusManager.clearFocus()
-        }),
-        decorationBox = { field ->
-            Row(
-                Modifier.fillMaxSize().padding(horizontal = 15.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(Icons.Rounded.Search, null, tint = librarySecondary,
-                    modifier = Modifier.size(19.dp))
-                Spacer(Modifier.width(10.dp))
-                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                    if (input.isEmpty()) {
-                        Text("Search songs, artists, albums",
-                            color = librarySecondary, fontSize = 13.sp)
-                    }
-                    field()
-                }
-                if (input.isNotEmpty()) {
-                    IconButton(onClick = { input = "" }, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Rounded.Close, "Clear search",
-                            tint = librarySecondary, modifier = Modifier.size(17.dp))
-                    }
-                }
-            }
-        },
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)
-            .height(48.dp).clip(RoundedCornerShape(15.dp))
-            .background(librarySurface)
-            .onFocusChanged { onFocusChanged(it.isFocused) }
-    )
-}
 
 @Composable
 private fun ImmersiveTrackRow(
