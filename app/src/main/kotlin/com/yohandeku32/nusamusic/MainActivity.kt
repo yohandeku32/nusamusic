@@ -1633,6 +1633,12 @@ private fun NusaMusicApp(
     }
 
     val context = androidx.compose.ui.platform.LocalContext.current
+    // Restore verified Hi-Res badges as soon as the library becomes available,
+    // before the user opens or flings through the song list. All disk IO stays
+    // off the main thread; badge cache lookups inside rows are synchronous.
+    LaunchedEffect(songs) {
+        AudioCodecLoader.warmVerifiedBadges(context, songs)
+    }
     val lyricsState = remember(context) { ImmersiveLyricsState(LyricsRepository(context)) }
     val artistPageStates = remember { androidx.collection.LruCache<String, ImmersiveArtistPageState>(8) }
     val artistPageState = remember(artistKey) {
