@@ -1869,54 +1869,32 @@ private fun NusaMusicApp(
         ModalBottomSheet(
             onDismissRequest = { showSettings = false },
             sheetState = settingsSheetState,
+            // Settings is a scrollable page inside a sheet, not a draggable
+            // sheet itself. Dragging the outer sheet competes with LazyColumn
+            // nested scrolling near its boundaries and causes jitter/bounce.
+            // The X button, outside tap, and system Back still dismiss it.
+            sheetGesturesEnabled = false,
+            dragHandle = null,
             containerColor = MaterialTheme.colorScheme.background,
             contentColor = MaterialTheme.colorScheme.onBackground
         ) {
-            // ModalBottomSheet is hosted in its own dialog window. Hiding the
-            // Activity status bar alone is not enough because the dialog can
-            // reveal its own system bars while opening.
+            // ModalBottomSheet owns a separate dialog window. Configure its
+            // fullscreen flags ONCE when that window is attached, instead of
+            // writing WindowInsets/systemUiVisibility every 100 ms during
+            // scroll. Repeated writes can invalidate dialog measurements and
+            // make the entire settings sheet appear to shake.
             val sheetView = androidx.compose.ui.platform.LocalView.current
             val sheetWindow = (sheetView.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window
-
-            // Keep the Settings dialog in fullscreen mode. ModalBottomSheet can
-            // reset system-bar visibility during its entrance/settling animation,
-            // so re-apply the hidden state when its window or sheet state changes.
-            val hideSettingsStatusBar: () -> Unit = {
+            androidx.compose.runtime.DisposableEffect(sheetWindow) {
                 sheetWindow?.let { dialogWindow ->
                     dialogWindow.addFlags(android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN)
                     WindowCompat.setDecorFitsSystemWindows(dialogWindow, false)
-
-                    @Suppress("DEPRECATION")
-                    run {
-                        dialogWindow.decorView.systemUiVisibility =
-                            dialogWindow.decorView.systemUiVisibility or
-                                android.view.View.SYSTEM_UI_FLAG_FULLSCREEN or
-                                android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                    }
-
                     androidx.core.view.WindowInsetsControllerCompat(
                         dialogWindow,
                         dialogWindow.decorView
-                    ).apply {
-                        systemBarsBehavior =
-                            androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                        hide(androidx.core.view.WindowInsetsCompat.Type.statusBars())
-                    }
+                    ).hide(androidx.core.view.WindowInsetsCompat.Type.statusBars())
                 }
-            }
-
-            androidx.compose.runtime.SideEffect {
-                hideSettingsStatusBar()
-            }
-
-            LaunchedEffect(sheetWindow) {
-                // Keep enforcing fullscreen for the entire lifetime of Settings.
-                // The sheet/dialog can restore status-bar visibility after its
-                // entrance animation, so a one-time hide is not reliable.
-                while (kotlinx.coroutines.currentCoroutineContext().isActive) {
-                    hideSettingsStatusBar()
-                    delay(100)
-                }
+                onDispose { /* Dialog window is destroyed on dismiss. */ }
             }
 
             PlayerSettingsContent(
