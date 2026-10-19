@@ -217,7 +217,7 @@ internal fun ImmersiveMusicLibrary(
                         when (focus?.type) {
                             FocusType.ALBUM -> "ALBUM"
                             FocusType.ARTIST -> "ARTIST"
-                            null -> "\${songs.size} songs on this device"
+                            null -> "${songs.size} songs on this device"
                         },
                         color = librarySecondary, fontSize = 12.sp
                     )
@@ -276,7 +276,7 @@ internal fun ImmersiveMusicLibrary(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    if (visibleSongs.size == 1) "1 song" else "\${visibleSongs.size} songs",
+                    if (visibleSongs.size == 1) "1 song" else "${visibleSongs.size} songs",
                     color = librarySecondary, fontSize = 12.sp, fontWeight = FontWeight.Medium,
                     modifier = Modifier.weight(1f)
                 )
@@ -431,7 +431,7 @@ private fun ImmersiveTrackRow(
         Text(librarySongDuration(song.durationMs), color = librarySecondary, fontSize = 10.5.sp)
         Box {
             IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(38.dp)) {
-                Icon(Icons.Rounded.MoreHoriz, "More options for \${song.title}",
+                Icon(Icons.Rounded.MoreHoriz, "More options for ${song.title}",
                     tint = librarySecondary, modifier = Modifier.size(21.dp))
             }
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
