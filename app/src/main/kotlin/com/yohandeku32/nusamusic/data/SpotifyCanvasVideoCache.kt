@@ -84,11 +84,15 @@ internal object SpotifyCanvasVideoCache {
     }
 
     /**
-     * Speculatively cache only the first 512 KiB of the NEXT track, never
-     * download whole albums/playlists. The URL has already been validated by
-     * SpotifyCanvasArtworkLoader. Canceled prefetches don't affect playback.
+     * Warm up to 4 MiB of the immediately upcoming MP4, enough to hold
+     * typical short Canvas loops entirely; more distant tracks get a smaller
+     * 1.5 MiB prefix to conserve bandwidth. This reuses Media3's persistent
+     * disk cache so revisiting a track does not require another proxy request.
+     * Canceled prefetches never invalidate a successful playback URL.
      */
-    suspend fun prefetchNext(context: Context, url: String) {
+    suspend fun prefetchNext(
+        context: Context, url: String, immediateNext: Boolean = false
+    ) {
         if (!SpotifyCanvasArtworkLoader.isSpotifyCanvasVideo(url)) return
         prepare(context)
         withContext(Dispatchers.IO) {
@@ -99,7 +103,7 @@ internal object SpotifyCanvasVideoCache {
                 val spec = DataSpec.Builder()
                     .setUri(url)
                     .setPosition(0)
-                    .setLength(512L * 1024)
+                    .setLength(if (immediateNext) 4L * 1024 * 1024 else 1536L * 1024)
                     .build()
                 lateinit var writer: CacheWriter
                 // CacheWriter.cache() performs blocking reads. Cancelling the
