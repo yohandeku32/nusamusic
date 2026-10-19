@@ -146,6 +146,9 @@ import com.yohandeku32.nusamusic.data.ArtworkBlur
 import com.yohandeku32.nusamusic.data.ImmersiveArtworkCache
 import com.yohandeku32.nusamusic.data.ImmersiveArtworkSnapshot
 import com.yohandeku32.nusamusic.data.AppleMusicAnimatedArtworkLoader
+import com.yohandeku32.nusamusic.data.AnimatedArtworkQueuePreloader
+import com.yohandeku32.nusamusic.data.AppleTallVideoCache
+import com.yohandeku32.nusamusic.data.upcomingPlaybackIndices
 import com.yohandeku32.nusamusic.data.SpotifyCanvasArtworkLoader
 import com.yohandeku32.nusamusic.data.SpotifyCanvasVideoCache
 import com.yohandeku32.nusamusic.data.AudioCodecInfo
@@ -208,9 +211,9 @@ class MainActivity : ComponentActivity() {
     // Avoid checking every Media3 queue item whenever a carousel disc is tapped.
     private var queuedPlaybackOrder: List<Song>? = null
     private var pendingPlaySongJob: Job? = null
-    private var nextCanvasPrefetchJob: Job? = null
-    private var nextCanvasPrefetchTrackId: Long? = null
-    private var nextCanvasPrefetchStartedAtMs = 0L
+    private var nextArtworkLookaheadJob: Job? = null
+    private var nextArtworkLookaheadIds: List<Long> = emptyList()
+    private var restoringPlaybackQueue = false
     private var songs by mutableStateOf<List<Song>>(emptyList())
     private var currentSong by mutableStateOf<Song?>(null)
     private var isPlaying by mutableStateOf(false)
@@ -537,7 +540,7 @@ class MainActivity : ComponentActivity() {
                     positionMs = c.currentPosition.coerceAtLeast(0L)
                     durationMs = c.duration.coerceAtLeast(0L)
                     persistPlaybackState(c, force = true)
-                    scheduleNextCanvasPrefetch(c)
+                    scheduleArtworkLookahead(c)
                 }
 
                 override fun onTimelineChanged(
@@ -546,18 +549,19 @@ class MainActivity : ComponentActivity() {
                 ) {
                     // Queue rebuilds, restores, and shuffled order can change
                     // the next song without changing the currently playing song.
-                    scheduleNextCanvasPrefetch(c)
+                    scheduleArtworkLookahead(c)
                 }
 
                 override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
                     shuffleEnabled = shuffleModeEnabled
                     persistPlaybackState(c, force = true)
-                    scheduleNextCanvasPrefetch(c)
+                    scheduleArtworkLookahead(c)
                 }
 
                 override fun onRepeatModeChanged(repeatModeValue: Int) {
                     repeatMode = repeatModeValue
                     persistPlaybackState(c, force = true)
+                    scheduleArtworkLookahead(c)
                 }
             })
 
@@ -827,6 +831,7 @@ class MainActivity : ComponentActivity() {
 
         // Start with the saved track, then build the surrounding queue in small
         // batches. This avoids one large setMediaItems() call freezing the UI.
+        restoringPlaybackQueue = true
         c.shuffleModeEnabled = false
         c.setMediaItems(listOf(mediaItems[index]), 0, savedPosition)
 
@@ -863,6 +868,8 @@ class MainActivity : ComponentActivity() {
         } else {
             isPlaying = false
         }
+        restoringPlaybackQueue = false
+        scheduleArtworkLookahead(c)
     }
 
     private fun toggleShuffle() {
@@ -870,6 +877,7 @@ class MainActivity : ComponentActivity() {
             c.shuffleModeEnabled = !c.shuffleModeEnabled
             shuffleEnabled = c.shuffleModeEnabled
             persistPlaybackState(c, force = true)
+            scheduleArtworkLookahead(c)
         }
     }
 
@@ -1262,47 +1270,63 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Prefetch the actual next queue item, not a guessed library neighbor.
-     * Timeline notifications for an unchanged target must not cancel and
-     * restart an already running third-party resolver request.
+     * Keep exactly five real upcoming Media3 entries warm, including its
+     * shuffled order. Do not guess the next tracks from library sorting.
+     * No ExoPlayer instances are created here (five decoders would stutter);
+     * metadata resolution is capped at two and video-byte IO at one.
      */
-    private fun scheduleNextCanvasPrefetch(player: MediaController) {
+    private fun scheduleArtworkLookahead(player: MediaController) {
+        if (restoringPlaybackQueue) return
         val preferences = uiPrefsForFonts()
         val enabled = preferences.getBoolean("animated_artwork_enabled", true) &&
             PlayerPresentationMode.fromPreference(
                 preferences.getString("player_presentation_mode", null)
             ) == PlayerPresentationMode.IMMERSIVE_ARTWORK
-
-        val index = player.nextMediaItemIndex
-        val nextId = if (enabled && index in 0 until player.mediaItemCount) {
-            player.getMediaItemAt(index).mediaId.toLongOrNull()
-        } else null
-        if (nextId == null) {
-            nextCanvasPrefetchJob?.cancel()
-            nextCanvasPrefetchJob = null
-            nextCanvasPrefetchTrackId = null
+        if (!enabled || songs.isEmpty() || player.mediaItemCount <= 1) {
+            nextArtworkLookaheadJob?.cancel()
+            nextArtworkLookaheadJob = null
+            nextArtworkLookaheadIds = emptyList()
             return
         }
-        val now = android.os.SystemClock.elapsedRealtime()
-        if (nextId == nextCanvasPrefetchTrackId &&
-            now - nextCanvasPrefetchStartedAtMs < 45_000L
-        ) return
 
-        nextCanvasPrefetchJob?.cancel()
-        nextCanvasPrefetchTrackId = nextId
-        nextCanvasPrefetchStartedAtMs = now
-        val librarySnapshot = songs
-        nextCanvasPrefetchJob = lifecycleScope.launch {
-            // Coalesce queue restoration without waiting a full second to
-            // start the next song's network lookup and video cache.
-            delay(180L)
-            val candidate = withContext(Dispatchers.Default) {
-                librarySnapshot.firstOrNull { it.id == nextId }
-            } ?: return@launch
-            if (currentSong?.id == candidate.id) return@launch
-            val url = SpotifyCanvasArtworkLoader.findCanvasUrl(this@MainActivity, candidate)
-                ?: return@launch
-            SpotifyCanvasVideoCache.prefetchNext(this@MainActivity, url)
+        val timeline = player.currentTimeline
+        if (timeline.isEmpty) return
+        val mode = if (player.repeatMode == Player.REPEAT_MODE_ALL)
+            Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
+        val indices = upcomingPlaybackIndices(
+            currentIndex = player.currentMediaItemIndex,
+            itemCount = player.mediaItemCount,
+            limit = 5,
+            nextIndex = { index ->
+                timeline.getNextWindowIndex(index, mode, player.shuffleModeEnabled)
+            }
+        )
+        val ids = indices.mapNotNull { index ->
+            player.getMediaItemAt(index).mediaId.toLongOrNull()
+        }
+        if (ids == nextArtworkLookaheadIds) return
+        nextArtworkLookaheadJob?.cancel()
+        nextArtworkLookaheadIds = ids
+        if (ids.isEmpty()) return
+        val library = songs
+        nextArtworkLookaheadJob = lifecycleScope.launch {
+            delay(160L)
+            val ordered = withContext(Dispatchers.Default) {
+                val byId = library.associateBy { it.id }
+                ids.mapNotNull(byId::get)
+            }
+            kotlinx.coroutines.supervisorScope {
+                ordered.forEachIndexed { offset, song ->
+                    launch {
+                        // Prioritize the imminent track and gently stagger the
+                        // remaining lookups so rapid skips don't flood the CDN.
+                        delay(offset * 90L)
+                        AnimatedArtworkQueuePreloader.preload(
+                            this@MainActivity, song, priority = offset
+                        )
+                    }
+                }
+            }
         }
     }
 
@@ -1351,9 +1375,9 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        nextCanvasPrefetchJob?.cancel()
-        nextCanvasPrefetchJob = null
-        nextCanvasPrefetchTrackId = null
+        nextArtworkLookaheadJob?.cancel()
+        nextArtworkLookaheadJob = null
+        nextArtworkLookaheadIds = emptyList()
         pendingPlaySongJob?.cancel()
         pendingPlaySongJob = null
         automaticMusicScanJob?.cancel()
