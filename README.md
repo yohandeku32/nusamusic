@@ -73,7 +73,7 @@ To run Android lint:
 
 Run the unit tests with `./gradlew :app:testDebugUnitTest`. There are no instrumentation tests yet. Playback, folder permissions, and crossfade still need testing on Android devices.
 
-Choose **Immersive art** in the player settings to switch from the vinyl view. Nusa reads the playing file's tags and searches Apple's catalog by title and artist. Animated streams come from the m8tec lookup service; the local cover stays visible when a stream is unavailable.
+Choose **Immersive artwork** in Player Settings to use animated album covers. Nusa first searches Apple Music via the m8tec artwork resolver. Only if Apple's animation is missing or all its video variants fail to play does Nusa search **Spotify Canvas** by local song artist and title via the independent [Spotycovs API](https://www.spotycovs.lol/). The Spotify resolver is unofficial, uses no Spotify login or cookie in the APK, and may change or become unavailable. Only MP4 video URLs from Spotify's `canvaz.scdn.co` CDN are accepted. Results are cached to reduce network calls, and local static artwork always remains as the final fallback. The artwork animation switch enables or disables both sources together. These lookups send artist and title metadata to external providers; the audio file itself is never uploaded.
 
 ## Last.fm biographies
 
