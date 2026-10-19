@@ -5,14 +5,19 @@ import androidx.annotation.OptIn
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.cache.CacheDataSource
+import androidx.media3.datasource.cache.CacheWriter
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
 import java.io.File
 
 /**
@@ -56,20 +61,52 @@ internal object SpotifyCanvasVideoCache {
      * Factory creation is lightweight; SimpleCache has already opened on IO.
      * Return null until ready so first playback works even without caching.
      */
-    fun mediaSourceFactory(context: Context): DefaultMediaSourceFactory? {
+    private fun dataSourceFactory(): CacheDataSource.Factory? {
         val cache = store ?: return null
         val upstream = DefaultHttpDataSource.Factory()
             .setUserAgent("NusaMusic/SpotifyCanvas")
             .setConnectTimeoutMs(4_000)
             .setReadTimeoutMs(8_000)
             .setAllowCrossProtocolRedirects(false)
-
-        val source = CacheDataSource.Factory()
+        return CacheDataSource.Factory()
             .setCache(cache)
             .setUpstreamDataSourceFactory(upstream)
             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+    }
 
+    fun mediaSourceFactory(context: Context): DefaultMediaSourceFactory? {
+        val source = dataSourceFactory() ?: return null
         return DefaultMediaSourceFactory(context.applicationContext)
             .setDataSourceFactory(source)
+    }
+
+    /**
+     * Speculatively cache only the first 512 KiB of the NEXT track, never
+     * download whole albums/playlists. The URL has already been validated by
+     * SpotifyCanvasArtworkLoader. Canceled prefetches don't affect playback.
+     */
+    suspend fun prefetchNext(context: Context, url: String) {
+        if (!SpotifyCanvasArtworkLoader.isSpotifyCanvasVideo(url)) return
+        prepare(context)
+        withContext(Dispatchers.IO) {
+            val factory = dataSourceFactory() ?: return@withContext
+            val spec = DataSpec.Builder()
+                .setUri(url)
+                .setPosition(0)
+                .setLength(512L * 1024)
+                .build()
+            val writer = CacheWriter(factory.createDataSource(), spec, null, null)
+            try {
+                writer.cache()
+            } catch (cancelled: CancellationException) {
+                writer.cancel()
+                throw cancelled
+            } catch (_: Exception) {
+                // Offline, 429, and expired Canvas links should never block
+                // local audio playback; a later normal lookup may retry.
+            } finally {
+                if (!currentCoroutineContext().isActive) writer.cancel()
+            }
+        }
     }
 }
