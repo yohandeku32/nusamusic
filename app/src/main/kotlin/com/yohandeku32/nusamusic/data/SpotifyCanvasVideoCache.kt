@@ -125,7 +125,7 @@ internal object SpotifyCanvasVideoCache {
                     var readBytes = 0L
                     while (readBytes < maxBytes) {
                         currentCoroutineContext().ensureActive()
-                        if (!waitForForeground(context.applicationContext)) break
+                        if (!waitForForeground()) break
                         val length = minOf(buffer.size.toLong(), maxBytes - readBytes).toInt()
                         val count = reader.read(buffer, 0, length)
                         if (count == -1) break
