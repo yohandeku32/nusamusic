@@ -41,12 +41,14 @@ fun ImmersiveArtistPage(
     biography: ArtistBiography?,
     biographyLoading: Boolean,
     isVisible: Boolean,
+    lightMode: Boolean = false,
     state: ImmersiveArtistPageState,
     onVisible: () -> Unit,
     onBack: () -> Unit,
     onPlay: (Song, List<Song>) -> Unit,
     artwork: @Composable (Song, Modifier) -> Unit
 ) {
+    val palette = immersiveColors(lightMode)
     val context = LocalContext.current
     val artist = ArtistNameUtils.firstArtist(artistName)
     val tracks = remember(songs, artist) { ArtistLibrary.tracks(songs, artist) }
@@ -78,10 +80,22 @@ fun ImmersiveArtistPage(
     fun back() { if (selectedAlbumKey != null) selectAlbum(null) else onBack() }
     BackHandler(enabled = isVisible) { back() }
 
-    MaterialTheme(colorScheme = darkColorScheme(background = Color.Black, surface = Color(0xFF151515), primary = Color.White)) {
+    MaterialTheme(colorScheme = if (lightMode) lightColorScheme(
+        background = palette.background,
+        surface = palette.surface,
+        primary = palette.primaryText,
+        onBackground = palette.primaryText,
+        onSurface = palette.primaryText
+    ) else darkColorScheme(
+        background = palette.background,
+        surface = palette.surface,
+        primary = palette.primaryText,
+        onBackground = palette.primaryText,
+        onSurface = palette.primaryText
+    )) {
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize().background(Color.Black),
+            modifier = Modifier.fillMaxSize().background(palette.background),
             contentPadding = PaddingValues(bottom = 40.dp)
         ) {
             item(key = "hero") {
@@ -155,7 +169,7 @@ fun ImmersiveArtistPage(
                                 biography != null -> biography.text
                                 else -> artistText("Biografi belum tersedia untuk artis ini.", "A biography is not available for this artist yet.")
                             },
-                            color = Color(0xFFBBBBBB), fontSize = 14.sp, lineHeight = 22.sp,
+                            color = palette.secondaryText, fontSize = 14.sp, lineHeight = 22.sp,
                             maxLines = if (bioExpanded) Int.MAX_VALUE else 4, overflow = TextOverflow.Ellipsis
                         )
                         if (biography != null) {
@@ -167,7 +181,7 @@ fun ImmersiveArtistPage(
                             // page must never launch Chrome over Now Playing.
                             Text(
                                 "Source: Last.fm • ${biography.sourceLanguage.uppercase(Locale.ROOT)}",
-                                color = Color(0xFF999999),
+                                color = palette.secondaryText,
                                 fontSize = 11.sp,
                                 modifier = Modifier.padding(top = 7.dp, bottom = 10.dp)
                             )
@@ -179,16 +193,16 @@ fun ImmersiveArtistPage(
                 item(key = "popular-title") {
                     Column(Modifier.padding(horizontal = 24.dp)) {
                         ArtistSectionTitle(artistText("Sering diputar", "Most played"))
-                        Text(artistText("Dari riwayat putar Anda", "From your listening history"), color = Color(0xFF888888), fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp, bottom = 12.dp))
+                        Text(artistText("Dari riwayat putar Anda", "From your listening history"), color = palette.secondaryText, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp, bottom = 12.dp))
                         if (popular.isEmpty()) Text(artistText("Lagu yang sering Anda dengarkan akan muncul di sini.", "Your most listened-to tracks will appear here."),
-                            color = Color(0xFFAAAAAA), fontSize = 14.sp, modifier = Modifier.padding(bottom = 16.dp))
+                            color = palette.secondaryText, fontSize = 14.sp, modifier = Modifier.padding(bottom = 16.dp))
                     }
                 }
                 items(popular, key = { "popular:${it.uri}" }) { song ->
                     ArtistTrackRow(song, currentSong, counts[song.uri], { onPlay(song, popular) }, artwork)
                 }
                 item(key = "albums-title") {
-                    Text(artistText("Album di koleksi Anda", "Albums in your library"), color = Color.White,
+                    Text(artistText("Album di koleksi Anda", "Albums in your library"), color = palette.primaryText,
                         fontWeight = FontWeight.Bold, fontSize = 22.sp, modifier = Modifier.padding(24.dp))
                 }
                 items(albums.chunked(2), key = { "albums:${it.first().key}" }) { row ->
@@ -196,10 +210,10 @@ fun ImmersiveArtistPage(
                         row.forEach { album ->
                             Column(Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).clickable { selectAlbum(album.key) }.padding(bottom = 8.dp)) {
                                 artwork(album.tracks.first(), Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(10.dp)))
-                                Text(album.title.ifBlank { artistText("Album tanpa judul", "Untitled album") }, color = Color.White,
+                                Text(album.title.ifBlank { artistText("Album tanpa judul", "Untitled album") }, color = palette.primaryText,
                                     fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.padding(top = 10.dp))
-                                Text(artistText("${album.tracks.size} lagu", "${album.tracks.size} tracks"), color = Color(0xFF888888), fontSize = 12.sp)
+                                Text(artistText("${album.tracks.size} lagu", "${album.tracks.size} tracks"), color = palette.secondaryText, fontSize = 12.sp)
                             }
                         }
                         if (row.size == 1) Spacer(Modifier.weight(1f))
@@ -207,7 +221,7 @@ fun ImmersiveArtistPage(
                 }
                 if (tracks.isEmpty()) item(key = "empty") {
                     Text(artistText("Putar lagu dari koleksi lokal untuk melihat halaman artisnya.", "Play a song from your local library to see its artist page."),
-                        color = Color(0xFFAAAAAA), fontSize = 14.sp, modifier = Modifier.padding(horizontal = 24.dp))
+                        color = palette.secondaryText, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 24.dp))
                 }
             }
         }
@@ -216,7 +230,7 @@ fun ImmersiveArtistPage(
 
 @Composable
 private fun ArtistSectionTitle(title: String) {
-    Text(title, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+    Text(title, color = MaterialTheme.colorScheme.onBackground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
 }
 
 @Composable
@@ -224,9 +238,9 @@ private fun ArtistTrackRow(song: Song, currentSong: Song?, count: Long?, onClick
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 24.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
         artwork(song, Modifier.size(48.dp).clip(RoundedCornerShape(7.dp)))
         Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-            Text(song.title, color = Color.White, fontSize = 15.sp, fontWeight = if (song.uri == currentSong?.uri) FontWeight.Bold else FontWeight.Medium,
+            Text(song.title, color = MaterialTheme.colorScheme.onBackground, fontSize = 15.sp, fontWeight = if (song.uri == currentSong?.uri) FontWeight.Bold else FontWeight.Medium,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(count?.let { artistText("$it kali diputar", "$it plays") } ?: song.album, color = Color(0xFF888888), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(count?.let { artistText("$it kali diputar", "$it plays") } ?: song.album, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Icon(if (song.uri == currentSong?.uri) Icons.Default.MusicNote else Icons.Default.PlayArrow,
             contentDescription = artistText("Putar ${song.title}", "Play ${song.title}"), tint = Color(0xFFCCCCCC), modifier = Modifier.size(20.dp))
