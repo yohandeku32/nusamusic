@@ -3,7 +3,9 @@ package com.yohandeku32.nusamusic.ui
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
@@ -11,10 +13,18 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -78,42 +88,120 @@ internal fun PlayerSettingsContent(
     modifier: Modifier = Modifier
 ) {
     val colors = MaterialTheme.colorScheme
-    // Keep sheet geometry fixed. Only the content list scrolls; the header
-    // stays in place even when the last item reaches the bottom.
-    Column(modifier.fillMaxWidth().fillMaxHeight(0.92f)) {
-        Row(
-            Modifier.fillMaxWidth().padding(start = 24.dp, end = 20.dp, top = 4.dp, bottom = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    settingsText("Pengaturan", "Settings"),
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.semantics { heading() }
-                )
+    val listState = rememberLazyListState()
+    val swipeThresholdPx = with(LocalDensity.current) { 76.dp.toPx() }
+    val latestDismiss by rememberUpdatedState(onDismiss)
+    var swipeDismissTriggered by remember { mutableStateOf(false) }
+
+    fun dismissFromSwipe() {
+        if (!swipeDismissTriggered) {
+            swipeDismissTriggered = true
+            latestDismiss()
+        }
+    }
+
+    // Only the header/handle and an overscroll pull at the absolute top can
+    // dismiss the sheet. The outer ModalBottomSheet remains non-draggable,
+    // preventing the sheet/LazyColumn gesture fight that caused the old jitter.
+    val headerSwipe = Modifier.pointerInput(swipeThresholdPx) {
+        var dragDistance = 0f
+        detectVerticalDragGestures(
+            onDragStart = { dragDistance = 0f },
+            onVerticalDrag = { change, amount ->
+                dragDistance = (dragDistance + amount).coerceAtLeast(0f)
+                change.consume()
+            },
+            onDragEnd = {
+                if (dragDistance >= swipeThresholdPx) dismissFromSwipe()
+                dragDistance = 0f
+            },
+            onDragCancel = { dragDistance = 0f }
+        )
+    }
+    val scrollPull = remember(listState, swipeThresholdPx) {
+        object : NestedScrollConnection {
+            private var pull = 0f
+
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (available.y < 0f) pull = 0f
+                return Offset.Zero
             }
+
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource
+            ): Offset {
+                if (source == NestedScrollSource.UserInput &&
+                    listState.firstVisibleItemIndex == 0 &&
+                    listState.firstVisibleItemScrollOffset == 0 &&
+                    available.y > 0f
+                ) {
+                    pull += available.y
+                    if (pull >= swipeThresholdPx) {
+                        pull = 0f
+                        dismissFromSwipe()
+                    }
+                }
+                return Offset.Zero
+            }
+
+            override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+                pull = 0f
+                return Velocity.Zero
+            }
+        }
+    }
+
+    // Keep geometry fixed while the list scrolls; add breathing room at the
+    // top and a small drag indicator so swipe-to-dismiss is discoverable.
+    Column(modifier.fillMaxWidth().fillMaxHeight(0.92f)) {
+        Box(
+            modifier = Modifier.fillMaxWidth().height(24.dp).then(headerSwipe),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                Modifier.width(36.dp).height(4.dp).background(
+                    colors.onSurfaceVariant.copy(alpha = 0.32f),
+                    CircleShape
+                )
+            )
+        }
+        Row(
+            Modifier.fillMaxWidth()
+                .then(headerSwipe)
+                .padding(start = 16.dp, end = 24.dp, top = 12.dp, bottom = 20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
             Surface(
                 onClick = onDismiss,
-                modifier = Modifier.size(40.dp),
+                modifier = Modifier.size(42.dp),
                 shape = CircleShape,
                 color = colors.surfaceVariant.copy(alpha = 0.68f)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
-                        Icons.Default.Close,
-                        settingsText("Tutup pengaturan", "Close settings"),
-                        Modifier.size(19.dp)
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        settingsText("Kembali", "Back"),
+                        Modifier.size(21.dp)
                     )
                 }
             }
+            Text(
+                settingsText("Pengaturan", "Settings"),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f).semantics { heading() }
+            )
         }
         HorizontalDivider(
             Modifier.padding(horizontal = 20.dp),
             color = colors.onSurface.copy(alpha = 0.07f)
         )
         LazyColumn(
-            modifier = Modifier.weight(1f),
+            state = listState,
+            modifier = Modifier.weight(1f).nestedScroll(scrollPull),
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(22.dp)
         ) {
