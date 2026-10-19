@@ -143,6 +143,19 @@ internal fun ImmersiveMusicLibrary(
         derivedStateOf { !listState.isScrollInProgress }
     }
 
+    // Restore all verified Hi-Res results at once. Then gradually index
+    // nearby/early tracks away from the frame loop. Pausing the background
+    // index while flinging keeps image decoding and touch gestures responsive.
+    LaunchedEffect(songs) {
+        AudioCodecLoader.warmVerifiedBadges(context, songs)
+        delay(200L)
+        for (track in songs.take(240)) {
+            while (listState.isScrollInProgress) delay(180L)
+            AudioCodecLoader.load(context, track.uri)
+            delay(22L)
+        }
+    }
+
     // Debounce search. Sorting/filtering run off the UI thread and are cancelled
     // when the query changes, so fast typing cannot queue up list rebuilds.
     LaunchedEffect(songs, search, focus, sort) {
@@ -381,8 +394,14 @@ private fun ImmersiveTrackRow(
     var menuOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(song.uri, loadMetadata) {
-        if (codec == null && loadMetadata) {
-            delay(180)
+        if (codec != null) return@LaunchedEffect
+        // Background indexing may already have supplied the answer. Do not
+        // show a delayed badge simply because this row was just composed.
+        val ready = AudioCodecLoader.cached(song.uri)
+        if (ready != null) {
+            codec = ready
+        } else if (loadMetadata) {
+            delay(45L)
             codec = AudioCodecLoader.load(context, song.uri)
         }
     }
