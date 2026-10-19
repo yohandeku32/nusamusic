@@ -418,6 +418,29 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+    // Android can restore a Compose text field's focus when the activity
+    // returns from the background, even while the library page is offscreen.
+    // Clear native focus AND request IME hide on both lifecycle boundaries.
+    private fun dismissRestoredKeyboard() {
+        currentFocus?.clearFocus()
+        window.decorView.clearFocus()
+        androidx.core.view.WindowInsetsControllerCompat(
+            window, window.decorView
+        ).hide(androidx.core.view.WindowInsetsCompat.Type.ime())
+    }
+
+    override fun onPause() {
+        dismissRestoredKeyboard()
+        super.onPause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Run after Android reapplies window focus; do not let a retained
+        // BasicTextField bring the keyboard up over the music player.
+        window.decorView.post { dismissRestoredKeyboard() }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -2040,6 +2063,17 @@ private fun NusaMusicApp(
         if (pagerState.settledPage != playerPage) lyricsRequested = false
     }
 
+    val keyboardForPager = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    val focusForPager = androidx.compose.ui.platform.LocalFocusManager.current
+    // Off-screen pages remain composed for swiping. Explicitly clear their
+    // text focus so the IME cannot follow a reverse swipe to Now Playing.
+    LaunchedEffect(pagerState.settledPage) {
+        if (pagerState.settledPage != libraryPage) {
+            keyboardForPager?.hide()
+            focusForPager.clearFocus(force = true)
+        }
+    }
+
     Scaffold(
         // The CD player uses a permanently dark surface even on phones in
         // light mode. Match it behind the swipeable library to avoid flashes.
@@ -2054,7 +2088,11 @@ private fun NusaMusicApp(
             MiuixHorizontalPager(
                 state = pagerState,
                 backgroundColor = pageBackdrop,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
+                onHorizontalSwipeStarted = {
+                    keyboardForPager?.hide()
+                    focusForPager.clearFocus(force = true)
+                }
             ) { page ->
                 when {
                     artistPageEnabled && page == 0 -> ImmersiveArtistPage(
@@ -2101,7 +2139,8 @@ private fun NusaMusicApp(
                                 artwork = { artworkModifier, heroHeight, heroWidth ->
                                     ImmersiveArtwork(
                                         currentSong, animatedArtworkEnabled, heroHeight, heroWidth,
-                                        artworkModifier, lyricsMode = lyricsRequested
+                                        artworkModifier, lyricsMode = lyricsRequested,
+                                        playerPageVisible = pagerState.settledPage == playerPage
                                     )
                                 },
                                 progress = { progressModifier ->
@@ -4116,7 +4155,8 @@ private fun ImmersiveArtwork(
     heroHeight: androidx.compose.ui.unit.Dp,
     heroWidthFraction: Float = 1f,
     modifier: Modifier = Modifier,
-    lyricsMode: Boolean = false
+    lyricsMode: Boolean = false,
+    playerPageVisible: Boolean = true
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     // Open the persistent MP4 cache off the UI thread while Apple is searched.
@@ -4225,12 +4265,10 @@ private fun ImmersiveArtwork(
             animatedArtworkUrl = null
             return@LaunchedEffect
         }
-        // Start BOTH metadata lookups without serially blocking Spotify on a
-        // slow Apple catalog search. Apple wins immediately when available
-        // within a short priority window; after that whichever provider
-        // resolves first can be shown. A late Apple hit may upgrade Spotify
-        // only BEFORE the Canvas video renders its first frame, so a playing
-        // Canvas never flickers/rebuffers halfway through the track.
+        // Apple Tall retains its short priority window. Once any provider
+        // wins, keep that stream for this song. Previously a late Apple
+        // lookup could replace an already playing Canvas and release the
+        // Media3 video/TextureView, producing freeze/blank/restart flicker.
         if (!spotifyFallbackRequested) {
             coroutineScope {
                 val apple = async {
@@ -4245,38 +4283,21 @@ private fun ImmersiveArtwork(
                         artworkProvider = AnimatedArtworkProvider.APPLE_MUSIC
                         animatedArtworkUrl = fastAppleUrl
                     } else {
-                        // If Apple answered "missing" early, this selects the
-                        // completed null and waits for Spotify. Otherwise
-                        // Spotify can win as soon as it has a valid Canvas.
-                        val (source, firstUrl) = select<Pair<AnimatedArtworkProvider, String?>> {
-                            apple.onAwait { AnimatedArtworkProvider.APPLE_MUSIC to it }
-                            spotify.onAwait { AnimatedArtworkProvider.SPOTIFY_CANVAS to it }
-                        }
-                        when (source) {
-                            AnimatedArtworkProvider.APPLE_MUSIC -> {
-                                artworkProvider = if (firstUrl != null) {
-                                    AnimatedArtworkProvider.APPLE_MUSIC
-                                } else AnimatedArtworkProvider.SPOTIFY_CANVAS
-                                animatedArtworkUrl = firstUrl ?: spotify.await()
+                        val (firstProvider, firstUrl) =
+                            select<Pair<AnimatedArtworkProvider, String?>> {
+                                apple.onAwait { AnimatedArtworkProvider.APPLE_MUSIC to it }
+                                spotify.onAwait { AnimatedArtworkProvider.SPOTIFY_CANVAS to it }
                             }
-                            AnimatedArtworkProvider.SPOTIFY_CANVAS -> {
-                                if (firstUrl == null) {
-                                    artworkProvider = AnimatedArtworkProvider.APPLE_MUSIC
-                                    animatedArtworkUrl = apple.await()
-                                } else {
-                                    // Fast Canvas first; leave Apple searching.
-                                    artworkProvider = AnimatedArtworkProvider.SPOTIFY_CANVAS
-                                    animatedArtworkUrl = firstUrl
-                                    val eventualAppleUrl = apple.await()
-                                    if (eventualAppleUrl != null &&
-                                        animatedArtworkUrl == firstUrl &&
-                                        animatedFirstFrameUrl != firstUrl
-                                    ) {
-                                        artworkProvider = AnimatedArtworkProvider.APPLE_MUSIC
-                                        animatedArtworkUrl = eventualAppleUrl
-                                    }
-                                }
-                            }
+                        if (firstUrl != null) {
+                            artworkProvider = firstProvider
+                            animatedArtworkUrl = firstUrl
+                            // Lock now; do not upgrade to Apple when it finishes.
+                        } else if (firstProvider == AnimatedArtworkProvider.APPLE_MUSIC) {
+                            artworkProvider = AnimatedArtworkProvider.SPOTIFY_CANVAS
+                            animatedArtworkUrl = spotify.await()
+                        } else {
+                            artworkProvider = AnimatedArtworkProvider.APPLE_MUSIC
+                            animatedArtworkUrl = apple.await()
                         }
                     }
                 } finally {
@@ -4331,7 +4352,7 @@ private fun ImmersiveArtwork(
             if (animatedArtworkEnabled && activeUrl != null) {
                 AnimatedArtworkVideoBackground(
                     url = activeUrl,
-                    playbackVisible = !lyricsMode,
+                    playbackVisible = !lyricsMode && playerPageVisible,
                     modifier = Modifier.fillMaxSize(),
                     captureBackdrop = frozenAnimatedBlur == null,
                     onBackdropReady = { blurredFrame, frameColor ->
