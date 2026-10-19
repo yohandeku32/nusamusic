@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 @Composable
 internal fun ImmersiveArtworkScene(
     artwork: Bitmap?, blur: Bitmap?, backdrop: Color, heroHeight: Dp,
+    lightMode: Boolean = false,
     modifier: Modifier = Modifier,
     heroWidthFraction: Float = 1f, scrimOpacity: Float = 0.2f,
     heroOpacity: Float = 1f,
@@ -31,7 +32,7 @@ internal fun ImmersiveArtworkScene(
 ) {
     // Only real blurred cover pixels create the ambience; black is used only
     // if the device has not loaded album artwork at all.
-    BoxWithConstraints(modifier.background(Color.Black)) {
+    BoxWithConstraints(modifier.background(if (lightMode) Color(0xFFF8F9FB) else Color.Black)) {
         val height = heroHeight.coerceAtMost(maxHeight)
         // Draw the actual blurred cover through Compose's Image renderer,
         // just like the visible album artwork. The previous native BitmapShader
@@ -55,9 +56,13 @@ internal fun ImmersiveArtworkScene(
                 )
             }
         }
-        // Intentionally no colour or black-gradient overlay: the ambient IS
-        // the blurred album-art bitmap, retaining its real colours and shapes.
-        // Adding scrims here makes vibrant covers look like a flat dark fill.
+        // Light appearance keeps the real blurred artwork underneath a soft
+        // translucent paper tint, letting dark controls remain legible.
+        // Dark mode retains the exact full-colour ambient with no extra tint.
+        if (lightMode) Box(
+            Modifier.matchParentSize()
+                .background(Color(0xFFF8F9FB).copy(alpha = 0.79f))
+        )
 
         Box(Modifier.fillMaxWidth(heroWidthFraction).height(height).align(Alignment.TopStart)
             .graphicsLayer {
@@ -84,7 +89,8 @@ internal fun ImmersiveArtworkScene(
                 if (cover != null) Image(cover.asImageBitmap(), description,
                     contentScale = ContentScale.Crop, alignment = Alignment.Center,
                     modifier = Modifier.fillMaxSize())
-                else Icon(Icons.Filled.MusicNote, null, tint = Color.White.copy(alpha = 0.16f),
+                else Icon(Icons.Filled.MusicNote, null,
+                    tint = (if (lightMode) Color.Black else Color.White).copy(alpha = 0.16f),
                     modifier = Modifier.size(52.dp).align(Alignment.Center))
             }
             animatedArtwork()
