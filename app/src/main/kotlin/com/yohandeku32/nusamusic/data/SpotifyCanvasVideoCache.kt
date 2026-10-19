@@ -7,17 +7,16 @@ import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.cache.CacheDataSource
-import androidx.media3.datasource.cache.CacheWriter
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.ensureActive
 import java.io.File
 
@@ -40,6 +39,16 @@ internal object SpotifyCanvasVideoCache {
     private val prefetchMutex = Mutex()
 
     @Volatile private var store: SimpleCache? = null
+
+    // Give the foreground stream its first frame or rebuffer before a
+    // speculative request can consume the same CDN/cache I/O bandwidth.
+    @Volatile private var foregroundBufferingUrl: String? = null
+
+    fun setForegroundBuffering(url: String, buffering: Boolean) {
+        if (!SpotifyCanvasArtworkLoader.isSpotifyCanvasVideo(url)) return
+        if (buffering) foregroundBufferingUrl = url
+        else if (foregroundBufferingUrl == url) foregroundBufferingUrl = null
+    }
 
     suspend fun prepare(context: Context) {
         if (store != null) return
@@ -84,11 +93,15 @@ internal object SpotifyCanvasVideoCache {
     }
 
     /**
-     * Warm up to 4 MiB of the immediately upcoming MP4, enough to hold
-     * typical short Canvas loops entirely; more distant tracks get a smaller
-     * 1.5 MiB prefix to conserve bandwidth. This reuses Media3's persistent
-     * disk cache so revisiting a track does not require another proxy request.
-     * Canceled prefetches never invalidate a successful playback URL.
+     * Cache the entire short Canvas loop whenever it fits within a bounded
+     * byte budget. The previous fixed-length CacheWriter (4 MiB for Next)
+     * could read beyond EOF for a short MP4 and produce a failed prefetch,
+     * making every repeat go back to the third-party CDN.
+     *
+     * An unknown-length DataSpec reads until real EOF. Normal Media3 playback
+     * shares the exact same SimpleCache; cached loops replay without network
+     * buffering. If the clip exceeds the budget it still retains a useful
+     * prefix and falls back to streaming.
      */
     suspend fun prefetchNext(
         context: Context, url: String, immediateNext: Boolean = false
@@ -96,37 +109,50 @@ internal object SpotifyCanvasVideoCache {
         if (!SpotifyCanvasArtworkLoader.isSpotifyCanvasVideo(url)) return
         prepare(context)
         withContext(Dispatchers.IO) {
-            val prefetchContext = currentCoroutineContext()
             prefetchMutex.withLock {
-                prefetchContext.ensureActive()
                 val factory = dataSourceFactory() ?: return@withLock
-                val spec = DataSpec.Builder()
-                    .setUri(url)
-                    .setPosition(0)
-                    .setLength(if (immediateNext) 4L * 1024 * 1024 else 1536L * 1024)
-                    .build()
-                lateinit var writer: CacheWriter
-                // CacheWriter.cache() performs blocking reads. Cancelling the
-                // coroutine alone doesn't stop them, so cancel the writer at
-                // the next progress callback when the queue changes.
-                val progress = CacheWriter.ProgressListener { _, _, _ ->
-                    if (!prefetchContext.isActive) writer.cancel()
-                }
-                writer = CacheWriter(factory.createDataSource(), spec, null, progress)
+                // Up to five prepared tracks but only one low-priority reader.
+                val maxBytes = if (immediateNext) 10L * 1024 * 1024
+                    else 3L * 1024 * 1024
+                val reader = factory.createDataSource()
+                var opened = false
                 try {
-                    writer.cache()
-                    prefetchContext.ensureActive()
+                    // Foreground video wins at startup or during a stall.
+                    // Do not start a secondary request that competes with it.
+                    if (!waitForForeground()) return@withLock
+                    currentCoroutineContext().ensureActive()
+                    reader.open(DataSpec.Builder().setUri(url).build())
+                    opened = true
+                    val buffer = ByteArray(32 * 1024)
+                    var readBytes = 0L
+                    while (readBytes < maxBytes) {
+                        currentCoroutineContext().ensureActive()
+                        if (!waitForForeground(context.applicationContext)) break
+                        val length = minOf(buffer.size.toLong(), maxBytes - readBytes).toInt()
+                        val count = reader.read(buffer, 0, length)
+                        if (count == -1) break
+                        if (count > 0) readBytes += count
+                    }
                 } catch (cancelled: CancellationException) {
-                    writer.cancel()
                     throw cancelled
                 } catch (_: Exception) {
-                    // Network errors are best-effort, but an IO exception
-                    // caused by cancellation must not turn into normal work.
-                    prefetchContext.ensureActive()
+                    // A slow or temporarily unavailable CDN does not erase
+                    // the selected provider or previously committed bytes.
+                    currentCoroutineContext().ensureActive()
                 } finally {
-                    if (!prefetchContext.isActive) writer.cancel()
+                    if (opened) runCatching { reader.close() }
                 }
             }
         }
+    }
+
+    private suspend fun waitForForeground(): Boolean {
+        var elapsed = 0L
+        while (foregroundBufferingUrl != null && elapsed < 6_000L) {
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            delay(100L)
+            elapsed += 100L
+        }
+        return foregroundBufferingUrl == null
     }
 }
