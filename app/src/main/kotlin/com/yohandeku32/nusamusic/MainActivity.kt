@@ -1316,18 +1316,32 @@ class MainActivity : ComponentActivity() {
                 ids.mapNotNull(byId::get)
             }
             kotlinx.coroutines.supervisorScope {
-                ordered.forEachIndexed { offset, song ->
-                    launch {
-                        // Prioritize the imminent track and gently stagger the
-                        // remaining lookups so rapid skips don't flood the CDN.
+                // Resolve two metadata requests concurrently, but fetch actual
+                // video bytes strictly in playback order (next track first).
+                // A faster response from song five must not take the
+                // bandwidth allocated to the immediate Next track.
+                val lookups = ordered.mapIndexed { offset, song ->
+                    async {
                         delay(offset * 90L)
-                        AnimatedArtworkQueuePreloader.preload(
-                            this@MainActivity, song, priority = offset
+                        AnimatedArtworkQueuePreloader.resolve(
+                            this@MainActivity, song
                         )
                     }
                 }
+                for ((offset, song) in ordered.withIndex()) {
+                    lookups[offset].await()
+                    AnimatedArtworkQueuePreloader.preload(
+                        this@MainActivity, song, priority = offset
+                    )
+                }
             }
         }
+    }
+
+    // Re-evaluate after a library scan, mode switch or animated-artwork
+    // setting change; controller timeline may have existed before songs loaded.
+    internal fun refreshArtworkLookahead() {
+        controller?.let(::scheduleArtworkLookahead)
     }
 
     private fun nextSong() {
@@ -1920,6 +1934,10 @@ private fun NusaMusicApp(
     }
 
     // Opening the library must not change the user's manually chosen scroll position.
+    LaunchedEffect(songs, playerPresentationMode, animatedArtworkEnabled) {
+        (context as? MainActivity)?.refreshArtworkLookahead()
+    }
+
     LaunchedEffect(pagerState.settledPage, lyricsRequested, playerPage) {
         libraryWasVisible = pagerState.settledPage == libraryPage
         onPlaybackPageVisibilityChanged(
