@@ -4427,6 +4427,9 @@ private fun AnimatedArtworkVideoBackground(
     var videoReady by remember(url) { mutableStateOf(false) }
     var videoVisible by remember(url) { mutableStateOf(false) }
     var playbackRetryCount by remember(url) { mutableIntStateOf(0) }
+    // A stalled stream is different from a provider switch: keep the last
+    // rendered frame visible while Media3 performs a bounded recovery.
+    var bufferingSinceMs by remember(url) { mutableLongStateOf(0L) }
     var artworkPlayerView by remember { mutableStateOf<androidx.media3.ui.PlayerView?>(null) }
     val onBackdropReadyCallback by rememberUpdatedState(onBackdropReady)
     val onUnavailableCallback by rememberUpdatedState(onUnavailable)
@@ -4503,8 +4506,8 @@ private fun AnimatedArtworkVideoBackground(
         // Start after the video has actually faded in: hidden TextureViews on
         // some devices return a black bitmap even when playback has started.
         if (!videoVisible || !shouldCaptureBackdrop || !playbackVisible) return@LaunchedEffect
-        delay(450L)
-        repeat(40) {
+        delay(650L)
+        repeat(8) {
             if (!shouldPlayVideo) return@LaunchedEffect
             androidx.compose.runtime.withFrameNanos { }
             val frame = ArtworkBlur.captureViewport(view)
@@ -4520,16 +4523,36 @@ private fun AnimatedArtworkVideoBackground(
                 }
                 frame.recycle()
             }
-            delay(150L)
+            delay(220L)
         }
     }
 
     LaunchedEffect(player, playbackRetryCount) {
         if (playbackRetryCount > 0) {
-            delay(750L * playbackRetryCount)
+            delay(650L * playbackRetryCount)
             if (!shouldPlayVideo) return@LaunchedEffect
+            // Re-prepare the same ExoPlayer, not a new TextureView. The
+            // transparent shutter retains its prior frame during rebuffering.
             player.prepare()
             player.playWhenReady = true
+        }
+    }
+
+    LaunchedEffect(player, bufferingSinceMs, playbackVisible, playbackRetryCount) {
+        if (!playbackVisible || bufferingSinceMs == 0L || !videoReady) return@LaunchedEffect
+        delay(6_500L)
+        if (!shouldPlayVideo || player.playbackState != Player.STATE_BUFFERING ||
+            bufferingSinceMs == 0L
+        ) return@LaunchedEffect
+        if (playbackRetryCount < 2) {
+            // An IO stream can stall indefinitely without emitting
+            // onPlayerError. Recover once, without hiding the last frame.
+            playbackRetryCount++
+            bufferingSinceMs = 0L
+        } else {
+            videoReady = false
+            videoVisible = false
+            onUnavailableCallback()
         }
     }
 
@@ -4537,15 +4560,30 @@ private fun AnimatedArtworkVideoBackground(
         val listener = object : Player.Listener {
             override fun onRenderedFirstFrame() {
                 videoReady = true
+                bufferingSinceMs = 0L
                 onFirstFrameCallback()
             }
 
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                bufferingSinceMs =
+                    if (playbackState == Player.STATE_BUFFERING && videoReady)
+                        android.os.SystemClock.elapsedRealtime()
+                    else 0L
+            }
+
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                videoReady = false
-                videoVisible = false
+                bufferingSinceMs = 0L
                 if (error.errorCode in 2000..2999 && playbackRetryCount < 2) {
+                    // Transient CDN/proxy IO errors should not make Canvas
+                    // disappear between retries after the first frame.
                     playbackRetryCount++
-                } else onUnavailableCallback()
+                } else {
+                    // Only give up after recovery is exhausted, not on every
+                    // buffering interruption or on a late Apple response.
+                    videoReady = false
+                    videoVisible = false
+                    onUnavailableCallback()
+                }
             }
         }
 
