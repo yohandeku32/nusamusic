@@ -1,6 +1,7 @@
 package com.yohandeku32.nusamusic.ui
 
 import android.content.Context
+import java.util.Locale
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -31,6 +32,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -89,14 +92,14 @@ private fun findImmersiveSongs(
             song.album.contains(term, ignoreCase = true))
     }
     return when (sort) {
-        ImmersiveSort.TITLE -> matches.sortedBy { it.title.lowercase() }
-        ImmersiveSort.TITLE_DESC -> matches.sortedByDescending { it.title.lowercase() }
+        ImmersiveSort.TITLE -> matches.sortedBy { it.title.lowercase(Locale.ROOT) }
+        ImmersiveSort.TITLE_DESC -> matches.sortedByDescending { it.title.lowercase(Locale.ROOT) }
         ImmersiveSort.ARTIST -> matches.sortedWith(
-            compareBy<Song> { it.artist.lowercase() }.thenBy { it.title.lowercase() })
+            compareBy<Song> { it.artist.lowercase(Locale.ROOT) }.thenBy { it.title.lowercase(Locale.ROOT) })
         ImmersiveSort.ALBUM -> matches.sortedWith(
-            compareBy<Song> { it.album.lowercase() }.thenBy { it.title.lowercase() })
+            compareBy<Song> { it.album.lowercase(Locale.ROOT) }.thenBy { it.title.lowercase(Locale.ROOT) })
         ImmersiveSort.NEWEST -> matches.sortedWith(
-            compareByDescending<Song> { it.dateAddedMs }.thenBy { it.title.lowercase() })
+            compareByDescending<Song> { it.dateAddedMs }.thenBy { it.title.lowercase(Locale.ROOT) })
         ImmersiveSort.LONGEST -> matches.sortedByDescending { it.durationMs }
     }
 }
@@ -153,6 +156,18 @@ internal fun ImmersiveMusicLibrary(
         search = ""
     }
 
+    MaterialTheme(
+        colorScheme = darkColorScheme(
+            background = libraryBlack,
+            surface = librarySurface,
+            surfaceVariant = Color(0xFF25262D),
+            onBackground = libraryWhite,
+            onSurface = libraryWhite,
+            onSurfaceVariant = librarySecondary,
+            primary = libraryWhite,
+            onPrimary = libraryBlack
+        )
+    ) {
     Box(
         modifier = modifier.fillMaxSize().background(libraryBlack)
             .windowInsetsPadding(WindowInsets.safeDrawing)
@@ -376,6 +391,7 @@ internal fun ImmersiveMusicLibrary(
             }
         }
     }
+    } // Immersive-only dark Material theme
 }
 
 @Composable
