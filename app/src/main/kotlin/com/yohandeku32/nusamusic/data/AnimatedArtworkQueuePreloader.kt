@@ -21,6 +21,14 @@ import java.util.Locale
  * simultaneous album lookups: limit network resolution to two tracks at once,
  * and warm actual video bytes one stream at a time.
  */
+internal enum class ArtworkSourceOrder {
+    APPLE_FIRST, SPOTIFY_FIRST, APPLE_ONLY, SPOTIFY_ONLY;
+    companion object {
+        fun fromPreference(value: String?): ArtworkSourceOrder =
+            entries.firstOrNull { it.name == value } ?: APPLE_FIRST
+    }
+}
+
 internal object AnimatedArtworkQueuePreloader {
     enum class Provider { APPLE_TALL, SPOTIFY_CANVAS }
     data class Result(val provider: Provider, val url: String)
@@ -41,20 +49,24 @@ internal object AnimatedArtworkQueuePreloader {
     private const val SPOTIFY_FALLBACK_TTL_MS = 5L * 60 * 1_000
     private const val MISS_TTL_MS = 45_000L
 
-    private fun key(song: Song): String =
-        listOf(song.uri, song.title, song.artist, song.album)
+    private fun key(song: Song, order: ArtworkSourceOrder): String =
+        order.name + "|" + listOf(song.uri, song.title, song.artist, song.album)
             .joinToString("|") { it.trim().lowercase(Locale.ROOT) }
 
-    fun ready(song: Song): Result? = synchronized(monitor) {
-        resolved[key(song)]?.takeIf { it.expiresAt > System.currentTimeMillis() }?.result
-    }
+    fun ready(song: Song, order: ArtworkSourceOrder = ArtworkSourceOrder.APPLE_FIRST): Result? =
+        synchronized(monitor) {
+            resolved[key(song, order)]?.takeIf { it.expiresAt > System.currentTimeMillis() }?.result
+        }
 
     /**
      * Cancellations of a stale queue's speculative await never kill a lookup
      * already shared with the Now Playing screen.
      */
-    suspend fun resolve(context: Context, song: Song): Result? {
-        val cacheKey = key(song)
+    suspend fun resolve(
+        context: Context, song: Song,
+        order: ArtworkSourceOrder = ArtworkSourceOrder.APPLE_FIRST
+    ): Result? {
+        val cacheKey = key(song, order)
         val now = System.currentTimeMillis()
         val task: Deferred<Result?>
         synchronized(monitor) {
@@ -63,14 +75,18 @@ internal object AnimatedArtworkQueuePreloader {
             task = inFlight[cacheKey] ?: scope.async {
                 val result = try {
                     lookupSlots.withPermit {
-                        val apple = AppleMusicAnimatedArtworkLoader.loadAnimatedArtworkUrl(
-                            context.applicationContext, song
-                        )
-                        if (apple != null) Result(Provider.APPLE_TALL, apple)
-                        else {
-                            SpotifyCanvasArtworkLoader.findCanvasUrl(
-                                context.applicationContext, song
-                            )?.let { Result(Provider.SPOTIFY_CANVAS, it) }
+                        val app = context.applicationContext
+                        suspend fun apple() =
+                            AppleMusicAnimatedArtworkLoader.loadAnimatedArtworkUrl(app, song)
+                                ?.let { Result(Provider.APPLE_TALL, it) }
+                        suspend fun spotify() =
+                            SpotifyCanvasArtworkLoader.findCanvasUrl(app, song)
+                                ?.let { Result(Provider.SPOTIFY_CANVAS, it) }
+                        when (order) {
+                            ArtworkSourceOrder.APPLE_FIRST -> apple() ?: spotify()
+                            ArtworkSourceOrder.SPOTIFY_FIRST -> spotify() ?: apple()
+                            ArtworkSourceOrder.APPLE_ONLY -> apple()
+                            ArtworkSourceOrder.SPOTIFY_ONLY -> spotify()
                         }
                     }
                 } catch (cancelled: kotlinx.coroutines.CancellationException) {
@@ -97,7 +113,10 @@ internal object AnimatedArtworkQueuePreloader {
     }
 
     /** Preload the chosen provider's video bytes, not just the artwork URL. */
-    suspend fun preload(context: Context, song: Song, priority: Int) = coroutineScope {
+    suspend fun preload(
+        context: Context, song: Song, priority: Int,
+        order: ArtworkSourceOrder = ArtworkSourceOrder.APPLE_FIRST
+    ) = coroutineScope {
         // Small album cover is cheap to retain in RAM and can be shown during
         // the first video frame wait. Never load five 1600px full covers.
         val coverJob = launch(Dispatchers.IO) {
@@ -108,7 +127,7 @@ internal object AnimatedArtworkQueuePreloader {
                 )
             }
         }
-        val candidate = resolve(context, song)
+        val candidate = resolve(context, song, order)
         if (candidate != null) {
             videoSlots.withPermit {
                 when (candidate.provider) {
@@ -126,8 +145,10 @@ internal object AnimatedArtworkQueuePreloader {
     fun invalidate(song: Song?, failedUrl: String) {
         synchronized(monitor) {
             if (song != null) {
-                val cacheKey = key(song)
-                if (resolved[cacheKey]?.result?.url == failedUrl) resolved.remove(cacheKey)
+                resolved.entries.removeAll { (cacheKey, entry) ->
+                    cacheKey.contains("|" + song.uri.lowercase(Locale.ROOT) + "|") &&
+                        entry.result?.url == failedUrl
+                }
             } else {
                 resolved.entries.removeAll { it.value.result?.url == failedUrl }
             }
