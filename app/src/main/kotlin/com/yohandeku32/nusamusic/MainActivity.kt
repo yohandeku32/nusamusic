@@ -279,11 +279,15 @@ class MainActivity : ComponentActivity() {
         registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
             if (uri == null) return@registerForActivityResult
 
+            // Persist write access too when the DocumentsProvider grants it.
+            // This is required for explicit per-song SAF deletion. Providers
+            // with read-only folders can still be imported normally.
+            val read = Intent.FLAG_GRANT_READ_URI_PERMISSION
+            val write = Intent.FLAG_GRANT_WRITE_URI_PERMISSION
             runCatching {
-                contentResolver.takePersistableUriPermission(
-                    uri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
+                contentResolver.takePersistableUriPermission(uri, read or write)
+            }.onFailure {
+                runCatching { contentResolver.takePersistableUriPermission(uri, read) }
             }
 
             val uriString = uri.toString()
@@ -1471,8 +1475,9 @@ class MainActivity : ComponentActivity() {
             } else syncCurrentSong(player)
         }
         songs = songs.filterNot { it.id == song.id && it.uri == song.uri }
+        val updatedSongs = songs
         lifecycleScope.launch(Dispatchers.IO) {
-            persistCachedSongs(songs, null)
+            persistCachedSongs(updatedSongs, null)
         }
         lyricsMetadataGeneration++
         startMusicScan(scanSelectedFolders = selectedMusicFolders.isNotEmpty(), showToast = false)
