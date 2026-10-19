@@ -13,12 +13,12 @@ class MiuixPagerMotionTest {
         assertEquals(0f, v.scrimAlpha, 0.001f)
     }
 
-    @Test fun coveredPageUsesSubtleParallaxAndDepth() {
+    @Test fun coveredPageKeepsNaturalScaleAndFivePercentParallax() {
         val v = miuixPagerVisuals(1f, 1080f, false)
-        assertEquals(918f, v.translationX, 0.1f)
-        assertEquals(0.962f, v.scale, 0.001f)
-        assertTrue(v.scrimAlpha < 0.20f)
-        assertTrue(v.alpha > 0.95f)
+        assertEquals(54f, v.translationX, 0.1f)
+        assertEquals(1f, v.scale, 0.001f)
+        assertEquals(0f, v.scrimAlpha, 0.001f)
+        assertEquals(1f, v.alpha, 0.001f)
     }
 
     @Test fun reversedLayoutMirrorsHorizontalMotionOnly() {
