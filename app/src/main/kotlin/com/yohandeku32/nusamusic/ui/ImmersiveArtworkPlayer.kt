@@ -264,7 +264,16 @@ internal fun ImmersiveArtworkPlayer(
                         )
                         // Still measured, but entirely faded out with the
                         // player title when the composer header becomes active.
-                        Box(Modifier.align(Alignment.Start).padding(top = 4.dp)) {
+                        // Reserve the quality-label row from the very first
+                        // frame. Native FLAC/ALAC inspection may finish later;
+                        // the label fades into this slot instead of moving the
+                        // progress bar and transport controls vertically.
+                        Box(
+                            Modifier.align(Alignment.Start)
+                                .padding(top = 4.dp)
+                                .height(25.dp),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
                             quality()
                         }
                     }
