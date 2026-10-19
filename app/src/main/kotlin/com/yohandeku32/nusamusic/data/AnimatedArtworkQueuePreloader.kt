@@ -155,6 +155,20 @@ internal object AnimatedArtworkQueuePreloader {
         }
     }
 
+    /**
+     * A selected track may try the alternate provider once after a terminal
+     * video error, never oscillating Apple -> Spotify -> Apple -> Spotify.
+     * Spotify-first must not retry Spotify after its stream already failed.
+     */
+    fun spotifyAfterAppleFailure(
+        order: ArtworkSourceOrder,
+        spotifyAlreadyFailed: Boolean
+    ): Boolean = when (order) {
+        ArtworkSourceOrder.APPLE_FIRST -> true
+        ArtworkSourceOrder.SPOTIFY_FIRST -> !spotifyAlreadyFailed
+        ArtworkSourceOrder.APPLE_ONLY, ArtworkSourceOrder.SPOTIFY_ONLY -> false
+    }
+
     fun choose(
         apple: String?, spotify: String?,
         order: ArtworkSourceOrder = ArtworkSourceOrder.APPLE_FIRST
