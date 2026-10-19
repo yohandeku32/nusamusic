@@ -41,18 +41,17 @@ class PlaybackLookaheadTest {
     @Test fun sourceOrderFollowsUserSelectionWithoutLosingFallback() {
         val apple = "https://a.mzstatic.com/tall.m3u8"
         val spotify = "https://canvaz.scdn.co/video.mp4"
-        val pref = ArtworkSourceOrder
         assertEquals(AnimatedArtworkQueuePreloader.Provider.SPOTIFY_CANVAS,
-            AnimatedArtworkQueuePreloader.choose(apple, spotify, pref.SPOTIFY_FIRST)?.provider)
+            AnimatedArtworkQueuePreloader.choose(apple, spotify, ArtworkSourceOrder.SPOTIFY_FIRST)?.provider)
         assertEquals(AnimatedArtworkQueuePreloader.Provider.APPLE_TALL,
-            AnimatedArtworkQueuePreloader.choose(apple, spotify, pref.APPLE_FIRST)?.provider)
+            AnimatedArtworkQueuePreloader.choose(apple, spotify, ArtworkSourceOrder.APPLE_FIRST)?.provider)
         assertEquals(AnimatedArtworkQueuePreloader.Provider.APPLE_TALL,
-            AnimatedArtworkQueuePreloader.choose(apple, spotify, pref.APPLE_ONLY)?.provider)
+            AnimatedArtworkQueuePreloader.choose(apple, spotify, ArtworkSourceOrder.APPLE_ONLY)?.provider)
         assertEquals(AnimatedArtworkQueuePreloader.Provider.SPOTIFY_CANVAS,
-            AnimatedArtworkQueuePreloader.choose(apple, spotify, pref.SPOTIFY_ONLY)?.provider)
-        assertNull(AnimatedArtworkQueuePreloader.choose(null, spotify, pref.APPLE_ONLY))
-        assertNull(AnimatedArtworkQueuePreloader.choose(apple, null, pref.SPOTIFY_ONLY))
-        assertEquals(pref.APPLE_FIRST, pref.fromPreference("NOT_A_SETTING"))
-        assertEquals(pref.SPOTIFY_FIRST, pref.fromPreference("SPOTIFY_FIRST"))
+            AnimatedArtworkQueuePreloader.choose(apple, spotify, ArtworkSourceOrder.SPOTIFY_ONLY)?.provider)
+        assertNull(AnimatedArtworkQueuePreloader.choose(null, spotify, ArtworkSourceOrder.APPLE_ONLY))
+        assertNull(AnimatedArtworkQueuePreloader.choose(apple, null, ArtworkSourceOrder.SPOTIFY_ONLY))
+        assertEquals(ArtworkSourceOrder.APPLE_FIRST, ArtworkSourceOrder.fromPreference("NOT_A_SETTING"))
+        assertEquals(ArtworkSourceOrder.SPOTIFY_FIRST, ArtworkSourceOrder.fromPreference("SPOTIFY_FIRST"))
     }
 }
