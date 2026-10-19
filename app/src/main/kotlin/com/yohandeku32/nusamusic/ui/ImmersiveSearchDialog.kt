@@ -56,13 +56,15 @@ import kotlinx.coroutines.withContext
 internal fun ImmersiveSearchDialog(
     songs: List<Song>,
     initialQuery: String,
+    lightMode: Boolean = false,
     onDismiss: (String) -> Unit,
     onPlay: (Song, List<Song>) -> Unit
 ) {
-    val black = Color(0xFF090A0D)
-    val white = Color(0xFFF8F8FA)
-    val secondary = Color(0xFF92949E)
-    val surface = Color(0xFF1B1D22)
+    val colors = immersiveColors(lightMode)
+    val black = colors.background
+    val white = colors.primaryText
+    val secondary = colors.secondaryText
+    val surface = colors.surface
     val keyboard = LocalSoftwareKeyboardController.current
     val focus = LocalFocusManager.current
     val requester = remember { FocusRequester() }
