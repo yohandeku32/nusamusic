@@ -207,6 +207,7 @@ class MainActivity : ComponentActivity() {
     // Avoid checking every Media3 queue item whenever a carousel disc is tapped.
     private var queuedPlaybackOrder: List<Song>? = null
     private var pendingPlaySongJob: Job? = null
+    private var nextCanvasPrefetchJob: Job? = null
     private var songs by mutableStateOf<List<Song>>(emptyList())
     private var currentSong by mutableStateOf<Song?>(null)
     private var isPlaying by mutableStateOf(false)
@@ -510,11 +511,22 @@ class MainActivity : ComponentActivity() {
                     positionMs = c.currentPosition.coerceAtLeast(0L)
                     durationMs = c.duration.coerceAtLeast(0L)
                     persistPlaybackState(c, force = true)
+                    scheduleNextCanvasPrefetch(c)
+                }
+
+                override fun onTimelineChanged(
+                    timeline: androidx.media3.common.Timeline,
+                    reason: Int
+                ) {
+                    // Queue rebuilds, restores, and shuffled order can change
+                    // the next song without changing the currently playing song.
+                    scheduleNextCanvasPrefetch(c)
                 }
 
                 override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
                     shuffleEnabled = shuffleModeEnabled
                     persistPlaybackState(c, force = true)
+                    scheduleNextCanvasPrefetch(c)
                 }
 
                 override fun onRepeatModeChanged(repeatModeValue: Int) {
@@ -1202,6 +1214,41 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Warm the next real Media3 queue item (including shuffle order), never a
+     * guessed library neighbor. A 1.8 s debounce coalesces queue restores and
+     * rapid skips. At most one 512 KiB speculative Canvas request runs at once.
+     * No player/decoder is created until the user actually plays that song.
+     */
+    private fun scheduleNextCanvasPrefetch(player: MediaController) {
+        nextCanvasPrefetchJob?.cancel()
+        nextCanvasPrefetchJob = null
+
+        val preferences = uiPrefsForFonts()
+        if (!preferences.getBoolean("animated_artwork_enabled", true) ||
+            PlayerPresentationMode.fromPreference(
+                preferences.getString("player_presentation_mode", null)
+            ) != PlayerPresentationMode.IMMERSIVE_ARTWORK
+        ) return
+
+        val nextIndex = player.nextMediaItemIndex
+        if (nextIndex !in 0 until player.mediaItemCount) return
+        val nextId = player.getMediaItemAt(nextIndex).mediaId.toLongOrNull() ?: return
+        val librarySnapshot = songs
+
+        nextCanvasPrefetchJob = lifecycleScope.launch {
+            delay(1_800L)
+            val candidate = withContext(Dispatchers.Default) {
+                librarySnapshot.firstOrNull { it.id == nextId }
+            } ?: return@launch
+            if (currentSong?.id == candidate.id) return@launch
+
+            val url = SpotifyCanvasArtworkLoader.findCanvasUrl(this@MainActivity, candidate)
+                ?: return@launch
+            SpotifyCanvasVideoCache.prefetchNext(this@MainActivity, url)
+        }
+    }
+
     private fun nextSong() {
         controller?.let { it.seekToNextMediaItem(); it.play() }
     }
@@ -1247,6 +1294,8 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        nextCanvasPrefetchJob?.cancel()
+        nextCanvasPrefetchJob = null
         pendingPlaySongJob?.cancel()
         pendingPlaySongJob = null
         automaticMusicScanJob?.cancel()
