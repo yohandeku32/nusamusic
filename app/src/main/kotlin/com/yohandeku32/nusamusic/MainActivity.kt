@@ -4381,21 +4381,29 @@ private fun ImmersiveArtwork(
             allowSmallerPreview = false
         )
         if (cachedFullArtwork != null) {
-            if (cachedFullArtwork !== artwork) publish(cachedFullArtwork)
-            else if (staticBlur == null) publish(cachedFullArtwork)
-            else if (restored != null) ImmersiveArtworkCache.save(context, targetSong, restored)
+            if (restored != null) {
+                // The restored blur is already the correct album. Avoid
+                // regenerating it and restarting a full-screen crossfade on
+                // every Next -> Previous revisit.
+                artwork = cachedFullArtwork
+            } else if (cachedFullArtwork !== artwork || staticBlur == null) {
+                publish(cachedFullArtwork)
+            }
             return@LaunchedEffect
         }
 
-        // The vinyl view normally has a 512 px cover in memory already. Present it
-        // immediately, then crossfade to the full-resolution immersive cover.
+        // Show the ready thumbnail immediately, but do NOT start another
+        // full-screen blur transition for it. The blur retains its previous
+        // frame until the new full cover is prepared. Avoid two successive
+        // fullscreen fades (preview -> full -> video), which caused flashes
+        // during consecutive Next presses on 90/120Hz devices.
         val cachedPreview = ArtworkLoader.cached(
             uriString = targetSong.uri,
             maxSize = 512,
             cacheKey = albumCacheKey
         )
         if (restored == null && cachedPreview != null && cachedPreview !== artwork) {
-            publish(cachedPreview)
+            artwork = cachedPreview
         }
 
         val loaded = ArtworkLoader.load(
@@ -4404,8 +4412,17 @@ private fun ImmersiveArtwork(
             maxSize = 1_600,
             cacheKey = albumCacheKey
         )
-        if (loaded != null && loaded !== artwork) publish(loaded)
-        else if (loaded == null && restored == null && cachedPreview == null) publish(null)
+        if (loaded != null && restored == null) {
+            publish(loaded)
+        } else if (loaded != null && loaded !== artwork) {
+            // Existing disk-restored ambient is valid for this track; the
+            // higher-resolution hero can change without a second blur fade.
+            artwork = loaded
+        } else if (loaded == null && restored == null && cachedPreview != null) {
+            // Full-size extraction can fail for some formats; settle on the
+            // thumbnail's blur rather than keeping another song's ambience.
+            publish(cachedPreview)
+        }
     }
 
     LaunchedEffect(
@@ -4489,54 +4506,60 @@ private fun ImmersiveArtwork(
         animatedArtwork = {
             val activeUrl = animatedArtworkUrl
             if (animatedArtworkEnabled && activeUrl != null) {
-                AnimatedArtworkVideoBackground(
-                    url = activeUrl,
-                    playbackVisible = !lyricsMode && playerPageVisible,
-                    modifier = Modifier.fillMaxSize(),
-                    captureBackdrop = frozenAnimatedBlur == null,
-                    onBackdropReady = { blurredFrame, frameColor ->
-                        if (animatedArtworkUrl == activeUrl && frozenAnimatedBlur == null) {
-                            frozenAnimatedBlur = blurredFrame
-                            retainedAmbientBlur = blurredFrame
-                            frozenAnimatedBackdrop = frameColor
-                        }
-                    },
-                    onFirstFrame = {
-                        if (animatedArtworkUrl == activeUrl) animatedFirstFrameUrl = activeUrl
-                    },
-                    onUnavailable = {
-                        if (animatedArtworkUrl == activeUrl) {
-                            when (artworkProvider) {
-                                AnimatedArtworkProvider.APPLE_MUSIC -> {
-                                    AnimatedArtworkQueuePreloader.invalidate(song, activeUrl)
-                                    val alternative = AppleMusicAnimatedArtworkLoader.nextPlaybackUrl(activeUrl)
-                                    if (alternative != null) {
-                                        animatedArtworkUrl = alternative
-                                    } else {
-                                        // Apple streams can exist but be unplayable.
-                                        // After exhausting candidates try Spotify once.
-                                        animatedArtworkUrl = null
-                                        spotifyFallbackRequested = true
+                // A new video URL must get its OWN animation state. Without
+                // this key, animateFloatAsState carries alpha=1 from the old
+                // TextureView, exposing the new player's empty/black surface
+                // for 1–3 frames each time Next is pressed.
+                androidx.compose.runtime.key(song?.uri, activeUrl) {
+                    AnimatedArtworkVideoBackground(
+                        url = activeUrl,
+                        playbackVisible = !lyricsMode && playerPageVisible,
+                        modifier = Modifier.fillMaxSize(),
+                        captureBackdrop = frozenAnimatedBlur == null,
+                        onBackdropReady = { blurredFrame, frameColor ->
+                            if (animatedArtworkUrl == activeUrl && frozenAnimatedBlur == null) {
+                                frozenAnimatedBlur = blurredFrame
+                                retainedAmbientBlur = blurredFrame
+                                frozenAnimatedBackdrop = frameColor
+                            }
+                        },
+                        onFirstFrame = {
+                            if (animatedArtworkUrl == activeUrl) animatedFirstFrameUrl = activeUrl
+                        },
+                        onUnavailable = {
+                            if (animatedArtworkUrl == activeUrl) {
+                                when (artworkProvider) {
+                                    AnimatedArtworkProvider.APPLE_MUSIC -> {
+                                        AnimatedArtworkQueuePreloader.invalidate(song, activeUrl)
+                                        val alternative = AppleMusicAnimatedArtworkLoader.nextPlaybackUrl(activeUrl)
+                                        if (alternative != null) {
+                                            animatedArtworkUrl = alternative
+                                        } else {
+                                            // Apple streams can exist but be unplayable.
+                                            // After exhausting candidates try Spotify once.
+                                            animatedArtworkUrl = null
+                                            spotifyFallbackRequested = true
+                                        }
                                     }
-                                }
-                                AnimatedArtworkProvider.SPOTIFY_CANVAS -> {
-                                    // A CDN stall is not evidence the Canvas
-                                    // URL disappeared. Retain the verified
-                                    // lookup across Next -> Previous, so the
-                                    // song can play again with a fresh player.
-                                    // Only hide this exhausted player instance.
-                                    // In Spotify-first mode, try Apple Tall
-                                    // once. For Spotify-only stay on the static
-                                    // cover until the user revisits this song.
-                                    animatedArtworkUrl = null
-                                    if (sourceOrder == ArtworkSourceOrder.SPOTIFY_FIRST) {
-                                        spotifyPlaybackFailed = true
+                                    AnimatedArtworkProvider.SPOTIFY_CANVAS -> {
+                                        // A CDN stall is not evidence the Canvas
+                                        // URL disappeared. Retain the verified
+                                        // lookup across Next -> Previous, so the
+                                        // song can play again with a fresh player.
+                                        // Only hide this exhausted player instance.
+                                        // In Spotify-first mode, try Apple Tall
+                                        // once. For Spotify-only stay on the static
+                                        // cover until the user revisits this song.
+                                        animatedArtworkUrl = null
+                                        if (sourceOrder == ArtworkSourceOrder.SPOTIFY_FIRST) {
+                                            spotifyPlaybackFailed = true
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
-                )
+                    )
+                }
             }
         },
         modifier = modifier
