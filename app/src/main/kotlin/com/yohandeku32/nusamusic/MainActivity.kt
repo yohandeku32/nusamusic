@@ -1152,7 +1152,7 @@ class MainActivity : ComponentActivity() {
 
     private fun queueSongNext(song: Song) {
         val c = controller ?: return
-        if (c.currentMediaItemIndex == Player.INDEX_UNSET || c.mediaItemCount == 0) {
+        if (c.currentMediaItemIndex < 0 || c.mediaItemCount == 0) {
             playSong(song, listOf(song))
             return
         }
