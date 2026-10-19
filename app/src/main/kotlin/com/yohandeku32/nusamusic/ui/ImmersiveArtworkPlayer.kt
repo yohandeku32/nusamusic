@@ -52,6 +52,7 @@ internal fun ImmersiveArtworkPlayer(
     titleFontSize: Float,
     hasSong: Boolean,
     isPlaying: Boolean,
+    lightMode: Boolean = false,
     isFavorite: Boolean,
     shuffleEnabled: Boolean,
     repeatMode: Int,
@@ -76,6 +77,8 @@ internal fun ImmersiveArtworkPlayer(
     contentInsets: WindowInsets = WindowInsets.safeDrawing
 ) {
     BoxWithConstraints(modifier) {
+        val primaryInk = if (lightMode) Color(0xFF171A20) else Color.White
+        val mutedInk = primaryInk.copy(alpha = 0.72f)
         val density = LocalDensity.current
         val viewportHeight = maxHeight
         val layoutDirection = LocalLayoutDirection.current
@@ -242,14 +245,14 @@ internal fun ImmersiveArtworkPlayer(
                             fontSize = expandedTitleSize.sp,
                             lineHeight = expandedLineHeight.sp,
                             textAlign = TextAlign.Start,
-                            color = Color.White,
+                            color = primaryInk,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = artist,
                             fontSize = 16.25f.sp,
-                            color = Color.White.copy(alpha = 0.72f),
+                            color = mutedInk,
                             textAlign = TextAlign.Start,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -269,7 +272,7 @@ internal fun ImmersiveArtworkPlayer(
                     // changes to title wrapping on every Lyrics toggle.
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Spacer(Modifier.width(12.dp))
-                        ImmersiveAction(
+                        ImmersiveAction(lightMode, 
                             if (isFavorite) NusaPlayerIcons.HeartFilled else NusaPlayerIcons.Heart,
                             immersiveText("Favorit", "Favorite"), onFavorite, hasSong && !lyricsOpen,
                             active = isFavorite, iconSize = 25.dp
@@ -283,12 +286,12 @@ internal fun ImmersiveArtworkPlayer(
                 Spacer(Modifier.height(progressToTransportGap))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween) {
-                    ImmersiveAction(NusaPlayerIcons.Shuffle,
+                    ImmersiveAction(lightMode, NusaPlayerIcons.Shuffle,
                         if (shuffleEnabled) immersiveText("Acak aktif", "Shuffle on") else immersiveText("Acak nonaktif", "Shuffle off"),
                         onShuffle, hasSong, active = shuffleEnabled, iconSize = 26.dp)
                     IconButton(onClick = onPrevious, enabled = hasSong, modifier = Modifier.size(56.dp)) {
                         Icon(NusaPlayerIcons.Previous, immersiveText("Sebelumnya", "Previous"),
-                            tint = Color.White.copy(alpha = if (hasSong) 0.94f else 0.3f),
+                            tint = primaryInk.copy(alpha = if (hasSong) 0.94f else 0.3f),
                             modifier = Modifier.size(38.dp))
                     }
                     // Clean, background-free Play/Pause control.
@@ -301,16 +304,16 @@ internal fun ImmersiveArtworkPlayer(
                         Icon(
                             if (isPlaying) NusaPlayerIcons.Pause else NusaPlayerIcons.Play,
                             if (isPlaying) immersiveText("Jeda", "Pause") else immersiveText("Putar", "Play"),
-                            tint = Color.White,
+                            tint = primaryInk,
                             modifier = Modifier.size(if (compact) 44.dp else 47.dp)
                         )
                     }
                     IconButton(onClick = onNext, enabled = hasSong, modifier = Modifier.size(56.dp)) {
                         Icon(NusaPlayerIcons.Next, immersiveText("Berikutnya", "Next"),
-                            tint = Color.White.copy(alpha = if (hasSong) 0.94f else 0.3f),
+                            tint = primaryInk.copy(alpha = if (hasSong) 0.94f else 0.3f),
                             modifier = Modifier.size(38.dp))
                     }
-                    ImmersiveAction(if (repeatMode == 1) NusaPlayerIcons.RepeatOne else NusaPlayerIcons.Repeat,
+                    ImmersiveAction(lightMode, if (repeatMode == 1) NusaPlayerIcons.RepeatOne else NusaPlayerIcons.Repeat,
                         when (repeatMode) {
                             1 -> immersiveText("Ulangi satu lagu", "Repeat one")
                             2 -> immersiveText("Ulangi semua", "Repeat all")
@@ -330,30 +333,30 @@ internal fun ImmersiveArtworkPlayer(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Box(
-                        Modifier.size(56.dp).immersiveGlassPill(50.dp),
+                        Modifier.size(56.dp).immersiveGlassPill(50.dp, lightMode),
                         contentAlignment = Alignment.Center
                     ) {
-                        ImmersiveAction(NusaPlayerIcons.Artist,
+                        ImmersiveAction(lightMode, NusaPlayerIcons.Artist,
                             immersiveText("Buka halaman artis", "Open artist page"),
                             onArtist, hasSong, iconSize = 23.dp)
                     }
                     Row(
                         Modifier.width(actionPillWidth)
                             .height(56.dp)
-                            .immersiveGlassPill(100.dp),
+                            .immersiveGlassPill(100.dp, lightMode),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
-                    if (lyricsEnabled) ImmersiveAction(NusaPlayerIcons.Lyrics,
+                    if (lyricsEnabled) ImmersiveAction(lightMode, NusaPlayerIcons.Lyrics,
                         if (lyricsOpen) immersiveText("Tutup lirik", "Close lyrics") else immersiveText("Buka lirik", "Open lyrics"),
                         onLyrics, hasSong, active = lyricsOpen, iconSize = 23.dp)
-                    ImmersiveAction(NusaPlayerIcons.Library,
+                    ImmersiveAction(lightMode, NusaPlayerIcons.Library,
                         immersiveText("Perpustakaan", "Library"),
                         onLibrary, iconSize = 23.dp)
-                    ImmersiveAction(NusaPlayerIcons.Share,
+                    ImmersiveAction(lightMode, NusaPlayerIcons.Share,
                         immersiveText("Bagikan lagu", "Share song"),
                         onShare, hasSong, iconSize = 23.dp)
-                    ImmersiveAction(NusaPlayerIcons.More,
+                    ImmersiveAction(lightMode, NusaPlayerIcons.More,
                         immersiveText("Pengaturan", "Settings"),
                         onSettings, iconSize = 23.dp)
                     }
@@ -381,12 +384,13 @@ internal fun ImmersiveArtworkPlayer(
 
 @Composable
 private fun ImmersiveAction(
+    lightMode: Boolean,
     icon: ImageVector, label: String, onClick: () -> Unit, enabled: Boolean = true,
     active: Boolean = false, iconSize: Dp = 22.dp
 ) {
     IconButton(onClick = onClick, enabled = enabled,
         modifier = Modifier.size(50.dp).semantics { selected = active }) {
-        Icon(icon, label, tint = Color.White.copy(alpha = if (!enabled) 0.26f else if (active) 1f else 0.62f),
+        Icon(icon, label, tint = (if (lightMode) Color(0xFF171A20) else Color.White).copy(alpha = if (!enabled) 0.26f else if (active) 1f else 0.68f),
             modifier = Modifier.size(iconSize))
     }
 }
