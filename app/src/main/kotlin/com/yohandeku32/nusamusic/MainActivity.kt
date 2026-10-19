@@ -3198,6 +3198,7 @@ private enum class AudioQualityBadge {
 private fun AudioQualityPill(
     song: Song?,
     immersive: Boolean = false,
+    immersiveLightMode: Boolean = false,
     onBadgeVisibilityChanged: ((Boolean) -> Unit)? = null
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -3258,7 +3259,7 @@ private fun AudioQualityPill(
                             // Preserve the original compact rounded rectangle;
                             // only its translucent glass material matches the
                             // bottom controls, not their capsule silhouette.
-                            if (immersive) Modifier.immersiveGlassPill(7.dp)
+                            if (immersive) Modifier.immersiveGlassPill(7.dp, immersiveLightMode)
                             else Modifier
                                 .clip(RoundedCornerShape(7.dp))
                                 .background(
@@ -3276,8 +3277,9 @@ private fun AudioQualityPill(
                         fontSize = if (immersive) 11.sp else 10.sp,
                         lineHeight = if (immersive) 13.sp else 12.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = if (immersive) Color.White
-                            else MaterialTheme.colorScheme.onSurface
+                        color = if (immersive) {
+                            if (immersiveLightMode) Color(0xFF171A20) else Color.White
+                        } else MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
@@ -3286,7 +3288,7 @@ private fun AudioQualityPill(
                     modifier = Modifier
                         .padding(top = if (immersive) 0.dp else 4.dp)
                         .then(
-                            if (immersive) Modifier.immersiveGlassPill(100.dp)
+                            if (immersive) Modifier.immersiveGlassPill(100.dp, immersiveLightMode)
                             else Modifier
                                 .clip(RoundedCornerShape(50))
                                 .background(MaterialTheme.colorScheme.surfaceVariant)
@@ -3319,8 +3321,9 @@ private fun AudioQualityPill(
                         lineHeight = if (immersive) 12.sp else 11.sp,
                         letterSpacing = (-0.35).sp,
                         maxLines = 1,
-                        color = if (immersive) Color.White
-                            else MaterialTheme.colorScheme.onSurface
+                        color = if (immersive) {
+                            if (immersiveLightMode) Color(0xFF171A20) else Color.White
+                        } else MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
@@ -3603,6 +3606,7 @@ private fun SimpleProgressBar(
     enabled: Boolean,
     onSeek: (Long) -> Unit,
     immersive: Boolean = false,
+    immersiveLightMode: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val fraction = if (durationMs > 0L) {
@@ -3610,7 +3614,9 @@ private fun SimpleProgressBar(
     } else {
         0f
     }
-    val primary = if (immersive) Color.White else MaterialTheme.colorScheme.primary
+    val primary = if (immersive) {
+        if (immersiveLightMode) Color(0xFF20242D) else Color.White
+    } else MaterialTheme.colorScheme.primary
 
     androidx.compose.foundation.Canvas(
         modifier = modifier
@@ -3651,7 +3657,8 @@ private fun SimpleProgressBar(
 
         drawLine(
             color = if (immersive) {
-                Color.White.copy(alpha = 0.22f)
+                if (immersiveLightMode) Color.Black.copy(alpha = 0.19f)
+                else Color.White.copy(alpha = 0.22f)
             } else {
                 Color(0xFFD0CDC6)
             },
@@ -3680,6 +3687,7 @@ private fun PlaybackProgress(
     enabled: Boolean,
     onSeek: (Long) -> Unit,
     immersive: Boolean = false,
+    immersiveLightMode: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val positionMs by positionMsState
@@ -3691,13 +3699,17 @@ private fun PlaybackProgress(
             enabled = enabled,
             onSeek = onSeek,
             immersive = immersive,
+            immersiveLightMode = immersiveLightMode,
             modifier = Modifier.fillMaxWidth()
         )
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            val textColor = if (immersive) Color.White.copy(alpha = 0.75f) else MaterialTheme.colorScheme.onBackground
+            val textColor = if (immersive) {
+                if (immersiveLightMode) Color(0xFF30343A).copy(alpha = 0.77f)
+                else Color.White.copy(alpha = 0.75f)
+            } else MaterialTheme.colorScheme.onBackground
             Text(formatTime(positionMs), fontSize = 12.sp, color = textColor)
             Text(formatTime(durationMs), fontSize = 12.sp, color = textColor)
         }
