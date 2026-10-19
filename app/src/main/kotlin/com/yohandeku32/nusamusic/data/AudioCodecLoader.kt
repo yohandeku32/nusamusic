@@ -4,6 +4,10 @@ import android.content.Context
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.net.Uri
+import com.yohandeku32.nusamusic.model.Song
+import java.security.MessageDigest
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Semaphore
@@ -15,12 +19,63 @@ object AudioCodecLoader {
     // enters the viewport can saturate storage while the user scrolls.
     // Keep a small LRU (including missing/unreadable results) and allow only
     // two native metadata reads at once across the entire app.
-    private val metadataCache = object : LinkedHashMap<String, AudioCodecInfo?>(192, 0.75f, true) {
+    private val metadataCache = object : LinkedHashMap<String, AudioCodecInfo?>(2_048, 0.75f, true) {
         override fun removeEldestEntry(
             eldest: MutableMap.MutableEntry<String, AudioCodecInfo?>?
-        ): Boolean = size > 192
+        ): Boolean = size > 2_048
     }
     private val metadataPermit = Semaphore(2)
+    private const val HI_RES_PREFS = "hi_res_index_v1"
+    private const val HI_RES_TTL_MS = 14L * 24 * 60 * 60 * 1_000
+
+    private fun persistKey(uri: String): String =
+        MessageDigest.getInstance("SHA-256")
+            .digest(uri.toByteArray(Charsets.UTF_8))
+            .take(12).joinToString("") { "%02x".format(it) }
+
+    // Only persist confirmed bit depths; an audio file extension alone
+    // cannot prove that a track qualifies for the Hi-Res badge.
+    private fun decodeStored(record: String?, now: Long): AudioCodecInfo? {
+        val parts = record?.split('|') ?: return null
+        if (parts.size != 4 || (parts[0].toLongOrNull() ?: 0L) <= now) return null
+        val bits = parts[3].toIntOrNull() ?: return null
+        if (bits < 24) return null
+        return AudioCodecInfo(
+            codecName = parts[1],
+            sampleRateHz = parts[2].toIntOrNull()?.takeIf { it > 0 },
+            bitDepth = bits
+        )
+    }
+
+    private fun savedHiRes(context: Context, uri: String): AudioCodecInfo? =
+        decodeStored(
+            context.applicationContext.getSharedPreferences(
+                HI_RES_PREFS, Context.MODE_PRIVATE
+            ).getString(persistKey(uri), null),
+            System.currentTimeMillis()
+        )
+
+    private fun saveHiRes(context: Context, uri: String, info: AudioCodecInfo) {
+        if (!info.isHiRes) return
+        val record = "${System.currentTimeMillis() + HI_RES_TTL_MS}|${info.codecName}|${info.sampleRateHz ?: -1}|${info.bitDepth}"
+        context.applicationContext.getSharedPreferences(HI_RES_PREFS, Context.MODE_PRIVATE)
+            .edit().putString(persistKey(uri), record).apply()
+    }
+
+    /** Restore verified labels in bulk, off the UI thread, before flinging. */
+    suspend fun warmVerifiedBadges(context: Context, songs: List<Song>) = withContext(Dispatchers.IO) {
+        val records = context.applicationContext.getSharedPreferences(
+            HI_RES_PREFS, Context.MODE_PRIVATE
+        ).all
+        val now = System.currentTimeMillis()
+        for (song in songs) {
+            currentCoroutineContext().ensureActive()
+            val info = decodeStored(records[persistKey(song.uri)] as? String, now) ?: continue
+            synchronized(metadataCache) {
+                if (!metadataCache.containsKey(song.uri)) metadataCache[song.uri] = info
+            }
+        }
+    }
 
     /** Instant, non-blocking lookup for badges in recycled list rows. */
     fun cached(uriString: String): AudioCodecInfo? =
@@ -33,6 +88,10 @@ object AudioCodecLoader {
                     return@withContext metadataCache[uriString]
                 }
             }
+            savedHiRes(context, uriString)?.let { saved ->
+                synchronized(metadataCache) { metadataCache[uriString] = saved }
+                return@withContext saved
+            }
             metadataPermit.withPermit {
                 // A neighbouring row may have finished the same lookup
                 // while this coroutine waited for a metadata permit.
@@ -43,6 +102,7 @@ object AudioCodecLoader {
                 }
                 val info = inspect(context, uriString)
                 synchronized(metadataCache) { metadataCache[uriString] = info }
+                if (info?.isHiRes == true) saveHiRes(context, uriString, info)
                 info
             }
         }
