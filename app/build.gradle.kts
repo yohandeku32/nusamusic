@@ -99,6 +99,9 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.4")
     implementation("androidx.media3:media3-exoplayer:1.9.3")
+    // Persistent, bounded video cache for Spotify Canvas (Media3 SimpleCache).
+    implementation("androidx.media3:media3-datasource:1.9.3")
+    implementation("androidx.media3:media3-database:1.9.3")
     implementation("androidx.media3:media3-exoplayer-hls:1.9.3")
     implementation("androidx.media3:media3-session:1.9.3")
     implementation("androidx.media3:media3-ui:1.9.3")
