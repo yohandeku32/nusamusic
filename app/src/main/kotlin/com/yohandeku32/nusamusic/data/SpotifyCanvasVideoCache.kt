@@ -18,6 +18,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.ensureActive
 import java.io.File
 
 /**
@@ -35,6 +36,8 @@ internal object SpotifyCanvasVideoCache {
     private const val MAX_BYTES = 64L * 1024 * 1024
     private const val DIR_NAME = "spotify-canvas-video-v1"
     private val initMutex = Mutex()
+    // Speculative requests must not compete with each other during rapid skips.
+    private val prefetchMutex = Mutex()
 
     @Volatile private var store: SimpleCache? = null
 
@@ -89,23 +92,36 @@ internal object SpotifyCanvasVideoCache {
         if (!SpotifyCanvasArtworkLoader.isSpotifyCanvasVideo(url)) return
         prepare(context)
         withContext(Dispatchers.IO) {
-            val factory = dataSourceFactory() ?: return@withContext
-            val spec = DataSpec.Builder()
-                .setUri(url)
-                .setPosition(0)
-                .setLength(512L * 1024)
-                .build()
-            val writer = CacheWriter(factory.createDataSource(), spec, null, null)
-            try {
-                writer.cache()
-            } catch (cancelled: CancellationException) {
-                writer.cancel()
-                throw cancelled
-            } catch (_: Exception) {
-                // Offline, 429, and expired Canvas links should never block
-                // local audio playback; a later normal lookup may retry.
-            } finally {
-                if (!currentCoroutineContext().isActive) writer.cancel()
+            val prefetchContext = currentCoroutineContext()
+            prefetchMutex.withLock {
+                prefetchContext.ensureActive()
+                val factory = dataSourceFactory() ?: return@withLock
+                val spec = DataSpec.Builder()
+                    .setUri(url)
+                    .setPosition(0)
+                    .setLength(512L * 1024)
+                    .build()
+                lateinit var writer: CacheWriter
+                // CacheWriter.cache() performs blocking reads. Cancelling the
+                // coroutine alone doesn't stop them, so cancel the writer at
+                // the next progress callback when the queue changes.
+                val progress = CacheWriter.ProgressListener { _, _, _ ->
+                    if (!prefetchContext.isActive) writer.cancel()
+                }
+                writer = CacheWriter(factory.createDataSource(), spec, null, progress)
+                try {
+                    writer.cache()
+                    prefetchContext.ensureActive()
+                } catch (cancelled: CancellationException) {
+                    writer.cancel()
+                    throw cancelled
+                } catch (_: Exception) {
+                    // Network errors are best-effort, but an IO exception
+                    // caused by cancellation must not turn into normal work.
+                    prefetchContext.ensureActive()
+                } finally {
+                    if (!prefetchContext.isActive) writer.cancel()
+                }
             }
         }
     }
