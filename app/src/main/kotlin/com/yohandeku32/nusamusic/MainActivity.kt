@@ -209,6 +209,8 @@ class MainActivity : ComponentActivity() {
     private var queuedPlaybackOrder: List<Song>? = null
     private var pendingPlaySongJob: Job? = null
     private var nextCanvasPrefetchJob: Job? = null
+    private var nextCanvasPrefetchTrackId: Long? = null
+    private var nextCanvasPrefetchStartedAtMs = 0L
     private var songs by mutableStateOf<List<Song>>(emptyList())
     private var currentSong by mutableStateOf<Song?>(null)
     private var isPlaying by mutableStateOf(false)
@@ -1237,34 +1239,44 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Warm the next real Media3 queue item (including shuffle order), never a
-     * guessed library neighbor. A short 750 ms debounce coalesces queue restores and
-     * rapid skips without delaying normal next-track prefetch. At most one 512 KiB speculative Canvas request runs at once.
-     * No player/decoder is created until the user actually plays that song.
+     * Prefetch the actual next queue item, not a guessed library neighbor.
+     * Timeline notifications for an unchanged target must not cancel and
+     * restart an already running third-party resolver request.
      */
     private fun scheduleNextCanvasPrefetch(player: MediaController) {
-        nextCanvasPrefetchJob?.cancel()
-        nextCanvasPrefetchJob = null
-
         val preferences = uiPrefsForFonts()
-        if (!preferences.getBoolean("animated_artwork_enabled", true) ||
+        val enabled = preferences.getBoolean("animated_artwork_enabled", true) &&
             PlayerPresentationMode.fromPreference(
                 preferences.getString("player_presentation_mode", null)
-            ) != PlayerPresentationMode.IMMERSIVE_ARTWORK
+            ) == PlayerPresentationMode.IMMERSIVE_ARTWORK
+
+        val index = player.nextMediaItemIndex
+        val nextId = if (enabled && index in 0 until player.mediaItemCount) {
+            player.getMediaItemAt(index).mediaId.toLongOrNull()
+        } else null
+        if (nextId == null) {
+            nextCanvasPrefetchJob?.cancel()
+            nextCanvasPrefetchJob = null
+            nextCanvasPrefetchTrackId = null
+            return
+        }
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (nextId == nextCanvasPrefetchTrackId &&
+            now - nextCanvasPrefetchStartedAtMs < 45_000L
         ) return
 
-        val nextIndex = player.nextMediaItemIndex
-        if (nextIndex !in 0 until player.mediaItemCount) return
-        val nextId = player.getMediaItemAt(nextIndex).mediaId.toLongOrNull() ?: return
+        nextCanvasPrefetchJob?.cancel()
+        nextCanvasPrefetchTrackId = nextId
+        nextCanvasPrefetchStartedAtMs = now
         val librarySnapshot = songs
-
         nextCanvasPrefetchJob = lifecycleScope.launch {
-            delay(750L)
+            // Coalesce queue restoration without waiting a full second to
+            // start the next song's network lookup and video cache.
+            delay(180L)
             val candidate = withContext(Dispatchers.Default) {
                 librarySnapshot.firstOrNull { it.id == nextId }
             } ?: return@launch
             if (currentSong?.id == candidate.id) return@launch
-
             val url = SpotifyCanvasArtworkLoader.findCanvasUrl(this@MainActivity, candidate)
                 ?: return@launch
             SpotifyCanvasVideoCache.prefetchNext(this@MainActivity, url)
@@ -1318,6 +1330,7 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         nextCanvasPrefetchJob?.cancel()
         nextCanvasPrefetchJob = null
+        nextCanvasPrefetchTrackId = null
         pendingPlaySongJob?.cancel()
         pendingPlaySongJob = null
         automaticMusicScanJob?.cancel()
