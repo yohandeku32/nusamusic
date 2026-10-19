@@ -37,7 +37,8 @@ internal object AnimatedArtworkQueuePreloader {
     private val videoSlots = Semaphore(1)
     private val coverSlots = Semaphore(1)
 
-    private const val SUCCESS_TTL_MS = 12L * 60 * 60 * 1_000
+    private const val APPLE_TTL_MS = 12L * 60 * 60 * 1_000
+    private const val SPOTIFY_FALLBACK_TTL_MS = 5L * 60 * 1_000
     private const val MISS_TTL_MS = 45_000L
 
     private fun key(song: Song): String =
@@ -78,10 +79,15 @@ internal object AnimatedArtworkQueuePreloader {
                     null
                 }
                 synchronized(monitor) {
-                    resolved[cacheKey] = Entry(
-                        result, System.currentTimeMillis() +
-                            if (result == null) MISS_TTL_MS else SUCCESS_TTL_MS
-                    )
+                    // Spotify may have won only because Apple's lookup
+                    // temporarily failed. Recheck Apple sooner rather than
+                    // locking Spotify as the provider for half a day.
+                    val ttl = when (result?.provider) {
+                        Provider.APPLE_TALL -> APPLE_TTL_MS
+                        Provider.SPOTIFY_CANVAS -> SPOTIFY_FALLBACK_TTL_MS
+                        null -> MISS_TTL_MS
+                    }
+                    resolved[cacheKey] = Entry(result, System.currentTimeMillis() + ttl)
                     inFlight.remove(cacheKey)
                 }
                 result
