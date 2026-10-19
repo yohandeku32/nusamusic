@@ -10,25 +10,20 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.pager.PagerSnapDistance
 import androidx.compose.foundation.pager.PagerState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.zIndex
 
-// MIUIX-style critically damped settling: fluid, with no bounce past the page.
-internal val miuixPageSpring = spring<Float>(dampingRatio = 0.92f, stiffness = 195f, visibilityThreshold = 1f)
+// Natural, critically damped settling. No jelly bounce or overshoot.
+internal val miuixPageSpring = spring<Float>(dampingRatio = 1f, stiffness = 330f, visibilityThreshold = 1f)
 
 internal suspend fun PagerState.animateMiuixScrollToPage(page: Int) {
     animateScrollToPage(page = page, animationSpec = miuixPageSpring)
@@ -91,28 +86,14 @@ internal fun MiuixHorizontalPager(
     ) { page ->
         Box(
             Modifier.fillMaxSize()
-                // Higher-index pages slide over the quarter-speed covered page.
-                .zIndex(page.toFloat())
+                // Preserve the system pager's ordinary horizontal movement.
+                // Only a tiny 5% depth parallax remains; NO page zoom,
+                // corner morphing, opacity flicker or black scrim.
                 .graphicsLayer {
                     val depth = state.currentPage + state.currentPageOffsetFraction - page
-                    val visuals = miuixPagerVisuals(depth, size.width, isRtl)
-                    translationX = visuals.translationX
-                    scaleX = visuals.scale
-                    scaleY = visuals.scale
-                    alpha = visuals.alpha
-                    clip = true
-                    shape = if (visuals.leadingCornerFraction > 0f) {
-                        val radius = 24.dp * visuals.leadingCornerFraction
-                        RoundedCornerShape(topStart = radius, bottomStart = radius)
-                    } else RectangleShape
+                    translationX = miuixPagerVisuals(depth, size.width, isRtl).translationX
                 }
                 .background(backgroundColor)
-                .drawWithContent {
-                    drawContent()
-                    val depth = state.currentPage + state.currentPageOffsetFraction - page
-                    val dim = miuixPagerVisuals(depth, size.width, isRtl).scrimAlpha
-                    if (dim > 0f) drawRect(Color.Black.copy(alpha = dim))
-                }
         ) {
             content(page)
         }
