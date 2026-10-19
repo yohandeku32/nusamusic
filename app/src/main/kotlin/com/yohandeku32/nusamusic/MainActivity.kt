@@ -39,6 +39,7 @@ import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
@@ -1840,6 +1841,7 @@ private fun NusaMusicApp(
 ) {
     var isFavorite by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
+    var deleteFromLibrary by remember { mutableStateOf<Song?>(null) }
     var biographyExpanded by remember { mutableStateOf(false) }
     val artistKey = ArtistNameUtils.cacheKey(currentSong?.artist)
     var artistBiography by remember(artistKey) {
@@ -2145,6 +2147,34 @@ private fun NusaMusicApp(
             ArtistBiographyLoader.load(context, it)
         }
         biographyLoading = false
+    }
+
+    deleteFromLibrary?.let { candidate ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { deleteFromLibrary = null },
+            title = {
+                Text(nusaText("Hapus lagu permanen?", "Delete song permanently?"))
+            },
+            text = {
+                Text(nusaText(
+                    "“${candidate.title}” akan dihapus dari penyimpanan perangkat, bukan hanya dari daftar lagu. Tindakan ini tidak dapat dibatalkan.",
+                    "“${candidate.title}” will be deleted from device storage, not just the song list. This cannot be undone."
+                ))
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    deleteFromLibrary = null
+                    onDeleteSong(candidate)
+                }) {
+                    Text(nusaText("Hapus permanen", "Delete permanently"), color = Color(0xFFD54A4A))
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { deleteFromLibrary = null }) {
+                    Text(nusaText("Batal", "Cancel"))
+                }
+            }
+        )
     }
 
     if (showSettings) {
@@ -2770,6 +2800,7 @@ private fun NusaMusicApp(
                                         songs = filtered,
                                         currentSongId = currentSong?.id,
                                         onPlay = { onPlay(it, filtered) },
+                                        onRequestDelete = { deleteFromLibrary = it },
                                         artwork = { song, artworkModifier ->
                                             ArtworkView(song = song, maxSizePx = 512, modifier = artworkModifier)
                                         },
@@ -2789,6 +2820,7 @@ private fun NusaMusicApp(
                                         pauseLabel = nusaText("Jeda", "Pause"),
                                         unknownArtistLabel = nusaText("Artis tidak dikenal", "Unknown artist"),
                                         onPlay = { onPlay(it, filtered) },
+                                        onRequestDelete = { deleteFromLibrary = it },
                                         onTogglePlay = onTogglePlay,
                                         artwork = { song, artworkModifier ->
                                             ArtworkView(song = song, maxSizePx = 256, modifier = artworkModifier)
@@ -2824,7 +2856,8 @@ private fun NusaMusicApp(
                                             loadDetails = libraryRowLoadsEnabled,
                                             onPlay = { selectedSong ->
                                                 onPlay(selectedSong, filtered)
-                                            }
+                                            },
+                                            onRequestDelete = { deleteFromLibrary = it }
                                         )
                                     }
                                 } else if (!permissionGranted && selectedMusicFolders.isEmpty()) {
@@ -5442,12 +5475,14 @@ private fun WornCoverArtwork(
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun LibrarySongListRow(
     song: Song,
     selected: Boolean,
     loadDetails: Boolean,
-    onPlay: (Song) -> Unit
+    onPlay: (Song) -> Unit,
+    onRequestDelete: (Song) -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     // Cached Hi-Res information appears on the first composed frame, even
@@ -5482,7 +5517,11 @@ private fun LibrarySongListRow(
                     Modifier
                 }
             )
-            .clickable { onPlay(song) }
+            .combinedClickable(
+                onClick = { onPlay(song) },
+                onLongClick = { onRequestDelete(song) },
+                onLongClickLabel = "Delete ${song.title} permanently"
+            )
             .padding(
                 horizontal = 8.dp,
                 vertical = 7.dp
