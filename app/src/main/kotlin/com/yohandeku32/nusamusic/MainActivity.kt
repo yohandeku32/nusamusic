@@ -147,6 +147,7 @@ import com.yohandeku32.nusamusic.data.ImmersiveArtworkCache
 import com.yohandeku32.nusamusic.data.ImmersiveArtworkSnapshot
 import com.yohandeku32.nusamusic.data.AppleMusicAnimatedArtworkLoader
 import com.yohandeku32.nusamusic.data.SpotifyCanvasArtworkLoader
+import com.yohandeku32.nusamusic.data.SpotifyCanvasVideoCache
 import com.yohandeku32.nusamusic.data.AudioCodecInfo
 import com.yohandeku32.nusamusic.data.AudioCodecLoader
 import com.yohandeku32.nusamusic.data.ArtistImageLoader
@@ -4003,6 +4004,11 @@ private fun ImmersiveArtwork(
     lyricsMode: Boolean = false
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
+    // Open the persistent MP4 cache off the UI thread while Apple is searched.
+    // Reuses one cache for all Canvas players; no disk work on a draw frame.
+    LaunchedEffect(animatedArtworkEnabled) {
+        if (animatedArtworkEnabled) SpotifyCanvasVideoCache.prepare(context)
+    }
     // Retain the current frame while the next song's artwork is decoded. Resetting
     // these states on every URI change briefly exposed the empty placeholder.
     val initialSnapshot = remember { song?.let { ImmersiveArtworkCache.cached(it) } }
@@ -4104,7 +4110,7 @@ private fun ImmersiveArtwork(
             return@LaunchedEffect
         }
         // Apple retains presentation priority. If it takes longer than
-        // 600 ms, SPECULATIVELY resolve Spotify in parallel so its Canvas
+        // 250 ms, SPECULATIVELY resolve Spotify in parallel so its Canvas
         // URL is already ready when Apple reports no animation. No forced
         // second Apple network lookup or artificial 1.5 s delay on misses.
         // The helper is cancelled on a quick Apple hit or song change,
@@ -4118,7 +4124,7 @@ private fun ImmersiveArtwork(
                     SpotifyCanvasArtworkLoader.findCanvasUrl(song)
                 }
                 val speculativeLookup = launch {
-                    delay(600L)
+                    delay(250L)
                     if (apple.isActive) spotify.start()
                 }
                 try {
@@ -4251,14 +4257,22 @@ private fun AnimatedArtworkVideoBackground(
                 .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_AUDIO, true)
                 .build()
         }
-        androidx.media3.exoplayer.ExoPlayer.Builder(context)
+        val builder = androidx.media3.exoplayer.ExoPlayer.Builder(context)
+        if (SpotifyCanvasArtworkLoader.isSpotifyCanvasVideo(url)) {
+            // Fast repeat playback: reuse disk-backed MP4 bytes if available.
+            // Apple Music HLS must keep its original MediaSource factory.
+            SpotifyCanvasVideoCache.mediaSourceFactory(context)?.let {
+                builder.setMediaSourceFactory(it)
+            }
+        }
+        builder
             .setTrackSelector(trackSelector)
             // Canvas is a short muted background loop, not the audio player.
             // Begin when roughly half a second is buffered instead of the
             // default 1 s, while keeping a larger reserve for rebuffering.
             .setLoadControl(
                 androidx.media3.exoplayer.DefaultLoadControl.Builder()
-                    .setBufferDurationsMs(2_500, 15_000, 450, 1_250)
+                    .setBufferDurationsMs(2_500, 15_000, 350, 1_250)
                     .build()
             )
             .setAudioAttributes(
@@ -4293,12 +4307,9 @@ private fun AnimatedArtworkVideoBackground(
     // Do not require a successful TextureView screenshot to reveal animated artwork.
     // Some devices render video correctly but never return a usable capture.
     LaunchedEffect(player, videoReady) {
-        if (videoReady) {
-            // onRenderedFirstFrame is a reliable frame-ready signal.
-            // Avoid keeping the decoded Canvas hidden for another 400 ms.
-            delay(75L)
-            videoVisible = true
-        }
+        // The first rendered video frame is already decoded and drawable:
+        // start the crossfade immediately, without an arbitrary timer.
+        videoVisible = videoReady
     }
 
     LaunchedEffect(player, artworkPlayerView, videoVisible, playbackVisible) {
@@ -4369,7 +4380,7 @@ private fun AnimatedArtworkVideoBackground(
 
     val videoAlpha by animateFloatAsState(
         targetValue = if (videoVisible) 1f else 0f,
-        animationSpec = tween(durationMillis = 210),
+        animationSpec = tween(durationMillis = 180),
         label = "animatedArtworkFade"
     )
 
