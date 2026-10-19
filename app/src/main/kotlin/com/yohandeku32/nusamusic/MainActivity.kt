@@ -4522,10 +4522,14 @@ private fun ImmersiveArtwork(
                                         if (alternative != null) {
                                             animatedArtworkUrl = alternative
                                         } else {
-                                            // Apple streams can exist but be unplayable.
-                                            // After exhausting candidates try Spotify once.
+                                            // A failed Apple fallback after
+                                            // Spotify-first must not return to
+                                            // the same failed Canvas repeatedly.
                                             animatedArtworkUrl = null
-                                            spotifyFallbackRequested = true
+                                            if (!(sourceOrder == ArtworkSourceOrder.SPOTIFY_FIRST &&
+                                                    spotifyPlaybackFailed)) {
+                                                spotifyFallbackRequested = true
+                                            }
                                         }
                                     }
                                     AnimatedArtworkProvider.SPOTIFY_CANVAS -> {
