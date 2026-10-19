@@ -54,4 +54,17 @@ class PlaybackLookaheadTest {
         assertEquals(ArtworkSourceOrder.APPLE_FIRST, ArtworkSourceOrder.fromPreference("NOT_A_SETTING"))
         assertEquals(ArtworkSourceOrder.SPOTIFY_FIRST, ArtworkSourceOrder.fromPreference("SPOTIFY_FIRST"))
     }
+    @Test fun exhaustedSpotifyFirstNeverReturnsToTheSameFailedCanvas() {
+        assertEquals(true, AnimatedArtworkQueuePreloader.spotifyAfterAppleFailure(
+            ArtworkSourceOrder.SPOTIFY_FIRST, spotifyAlreadyFailed = false))
+        assertEquals(false, AnimatedArtworkQueuePreloader.spotifyAfterAppleFailure(
+            ArtworkSourceOrder.SPOTIFY_FIRST, spotifyAlreadyFailed = true))
+        assertEquals(true, AnimatedArtworkQueuePreloader.spotifyAfterAppleFailure(
+            ArtworkSourceOrder.APPLE_FIRST, spotifyAlreadyFailed = false))
+        assertEquals(false, AnimatedArtworkQueuePreloader.spotifyAfterAppleFailure(
+            ArtworkSourceOrder.APPLE_ONLY, spotifyAlreadyFailed = false))
+        assertEquals(false, AnimatedArtworkQueuePreloader.spotifyAfterAppleFailure(
+            ArtworkSourceOrder.SPOTIFY_ONLY, spotifyAlreadyFailed = false))
+    }
+
 }
