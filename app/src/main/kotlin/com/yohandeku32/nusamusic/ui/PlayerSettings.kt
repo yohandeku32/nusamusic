@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -15,7 +16,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -77,14 +78,13 @@ internal fun PlayerSettingsContent(
     modifier: Modifier = Modifier
 ) {
     val colors = MaterialTheme.colorScheme
-    val uriHandler = LocalUriHandler.current
+    // Keep sheet geometry fixed. Only the content list scrolls; the header
+    // stays in place even when the last item reaches the bottom.
     Column(modifier.fillMaxWidth().fillMaxHeight(0.92f)) {
         Row(
-            Modifier.fillMaxWidth().padding(start = 24.dp, end = 12.dp, bottom = 20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            Modifier.fillMaxWidth().padding(start = 24.dp, end = 20.dp, top = 4.dp, bottom = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            SettingIcon(Icons.Default.Tune)
             Column(Modifier.weight(1f)) {
                 Text(
                     settingsText("Pengaturan", "Settings"),
@@ -93,37 +93,59 @@ internal fun PlayerSettingsContent(
                     modifier = Modifier.semantics { heading() }
                 )
             }
-            IconButton(onClick = onDismiss) {
-                Icon(Icons.Default.Close, settingsText("Tutup pengaturan", "Close settings"))
+            Surface(
+                onClick = onDismiss,
+                modifier = Modifier.size(40.dp),
+                shape = CircleShape,
+                color = colors.surfaceVariant.copy(alpha = 0.68f)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.Close,
+                        settingsText("Tutup pengaturan", "Close settings"),
+                        Modifier.size(19.dp)
+                    )
+                }
             }
         }
+        HorizontalDivider(
+            Modifier.padding(horizontal = 20.dp),
+            color = colors.onSurface.copy(alpha = 0.07f)
+        )
         LazyColumn(
             modifier = Modifier.weight(1f),
-            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(24.dp)
+            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(22.dp)
         ) {
             item(key = "presentation") {
                 SettingsSection(settingsText("Tampilan pemutar", "Player appearance")) {
-                    Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        SettingChoice(
-                            "CD", settingsText("Pemutar CD dengan carousel.", "CD player with carousel."),
-                            Icons.Default.Album, playerPresentationMode == PlayerPresentationMode.CD,
-                            { onPresentationSelected(PlayerPresentationMode.CD) }
+                    Row(
+                        Modifier.fillMaxWidth().selectableGroup(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        SettingModeTile(
+                            label = "CD",
+                            icon = Icons.Default.Album,
+                            selected = playerPresentationMode == PlayerPresentationMode.CD,
+                            enabled = PlayerPresentationMode.CD.isAvailable,
+                            onClick = { onPresentationSelected(PlayerPresentationMode.CD) },
+                            modifier = Modifier.weight(1f)
                         )
-                        SettingChoice(
-                            "Vinyl",
-                            if (!PlayerPresentationMode.VINYL.isAvailable) settingsText("Belum tersedia", "Unavailable")
-                            else settingsText("Pemutar piringan hitam.", "Vinyl record player."),
-                            Icons.Default.GraphicEq, playerPresentationMode == PlayerPresentationMode.VINYL,
-                            { onPresentationSelected(PlayerPresentationMode.VINYL) },
-                            enabled = PlayerPresentationMode.VINYL.isAvailable
+                        SettingModeTile(
+                            label = "Vinyl",
+                            icon = Icons.Default.GraphicEq,
+                            selected = playerPresentationMode == PlayerPresentationMode.VINYL,
+                            enabled = PlayerPresentationMode.VINYL.isAvailable,
+                            onClick = { onPresentationSelected(PlayerPresentationMode.VINYL) },
+                            modifier = Modifier.weight(1f)
                         )
-                        SettingChoice(
-                            settingsText("Sampul imersif", "Immersive artwork"),
-                            settingsText("Sampul album layar penuh.", "Full-screen album cover."),
-                            Icons.Default.CropOriginal, playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK,
-                            { onPresentationSelected(PlayerPresentationMode.IMMERSIVE_ARTWORK) },
-                            enabled = PlayerPresentationMode.IMMERSIVE_ARTWORK.isAvailable
+                        SettingModeTile(
+                            label = settingsText("Imersif", "Immersive"),
+                            icon = Icons.Default.CropOriginal,
+                            selected = playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK,
+                            enabled = PlayerPresentationMode.IMMERSIVE_ARTWORK.isAvailable,
+                            onClick = { onPresentationSelected(PlayerPresentationMode.IMMERSIVE_ARTWORK) },
+                            modifier = Modifier.weight(1f)
                         )
                     }
                     SettingsDivider()
@@ -131,7 +153,8 @@ internal fun PlayerSettingsContent(
                         SettingToggle(
                             settingsText("Sudut carousel", "Carousel corners"),
                             settingsText("Bulat atau kotak.", "Rounded or square."),
-                            roundedCarouselCorners, onRoundedCarouselCornersChange
+                            roundedCarouselCorners, onRoundedCarouselCornersChange,
+                            icon = Icons.Default.ViewCarousel
                         )
                         SettingsDivider()
                     }
@@ -141,16 +164,26 @@ internal fun PlayerSettingsContent(
                             "Apple Music → Spotify Canvas. Judul dan artis dikirim saat pencarian.",
                             "Apple Music → Spotify Canvas. Searches share title and artist."
                         ),
-                        animatedArtworkEnabled, onAnimatedArtworkChange
+                        animatedArtworkEnabled, onAnimatedArtworkChange,
+                        icon = Icons.Default.AutoAwesome
                     )
                 }
             }
             if (LYRICS_ENABLED && playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) item(key = "lyrics") {
                 SettingsSection(settingsText("Lirik", "Lyrics")) {
-                    Surface(shape = RoundedCornerShape(16.dp), color = colors.surfaceVariant.copy(alpha = 0.45f)) {
-                        Text(settingsText("Contoh lirik", "Lyric preview"),
-                            Modifier.fillMaxWidth().padding(20.dp), fontSize = lyricsFontSize.sp,
-                            lineHeight = (lyricsFontSize * 1.25f).sp, textAlign = TextAlign.Center, fontWeight = FontWeight.Bold)
+                    Surface(
+                        shape = RoundedCornerShape(18.dp),
+                        color = colors.primary.copy(alpha = 0.08f)
+                    ) {
+                        Text(
+                            settingsText("Contoh lirik", "Lyric preview"),
+                            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 20.dp),
+                            fontSize = lyricsFontSize.sp,
+                            lineHeight = (lyricsFontSize * 1.25f).sp,
+                            maxLines = 2,
+                            textAlign = TextAlign.Center,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                     Spacer(Modifier.height(16.dp))
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -172,14 +205,22 @@ internal fun PlayerSettingsContent(
             }
             item(key = "typography") {
                 SettingsSection(settingsText("Judul lagu", "Song title")) {
-                    Surface(shape = RoundedCornerShape(16.dp), color = colors.surfaceVariant.copy(alpha = 0.45f)) {
-                        Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            SettingCaption(settingsText("PRATINJAU FONT", "FONT PREVIEW"))
+                    Surface(
+                        shape = RoundedCornerShape(18.dp),
+                        color = colors.primary.copy(alpha = 0.08f)
+                    ) {
+                        Column(
+                            Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp),
+                            verticalArrangement = Arrangement.spacedBy(9.dp)
+                        ) {
+                            SettingCaption(settingsText("PRATINJAU", "PREVIEW"))
                             Text(
                                 "Nusa Music",
                                 fontFamily = titleFontFamily,
                                 fontSize = titleFontSize.sp,
-                                lineHeight = (titleFontSize * 1.2f).sp
+                                lineHeight = (titleFontSize * 1.2f).sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
@@ -239,23 +280,37 @@ internal fun PlayerSettingsContent(
             }
             item(key = "playback") {
                 SettingsSection(settingsText("Pemutaran", "Playback")) {
-                    Text(settingsText("Gaya tombol", "Button style"), fontWeight = FontWeight.SemiBold)
-                    Spacer(Modifier.height(12.dp))
-                    Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        SettingChoice(
-                            settingsText("3D", "3D"),
-                            settingsText("Efek tombol timbul.", "Raised button effect."),
-                            Icons.Default.ViewInAr, realisticControls, { onRealisticControlsChange(true) }
+                    Text(
+                        settingsText("Gaya tombol", "Button style"),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Row(
+                        Modifier.fillMaxWidth()
+                            .background(colors.onSurface.copy(alpha = 0.055f), RoundedCornerShape(16.dp))
+                            .padding(4.dp)
+                            .selectableGroup(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        SettingSegment(
+                            label = "3D",
+                            selected = realisticControls,
+                            modifier = Modifier.weight(1f),
+                            onClick = { onRealisticControlsChange(true) }
                         )
-                        SettingChoice(
-                            "Flat", settingsText("Tanpa efek 3D.", "No 3D effect."),
-                            Icons.Default.RadioButtonUnchecked, !realisticControls, { onRealisticControlsChange(false) }
+                        SettingSegment(
+                            label = "Flat",
+                            selected = !realisticControls,
+                            modifier = Modifier.weight(1f),
+                            onClick = { onRealisticControlsChange(false) }
                         )
                     }
                     SettingsDivider()
                     SettingToggle(
                         "Crossfade", settingsText("Peralihan antarlagu.", "Fade between tracks."),
-                        crossfadeEnabled, onCrossfadeChange
+                        crossfadeEnabled, onCrossfadeChange,
+                        icon = Icons.Default.GraphicEq
                     )
                     Spacer(Modifier.height(12.dp))
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
