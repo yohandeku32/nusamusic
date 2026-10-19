@@ -3240,7 +3240,10 @@ private fun AudioQualityPill(
                     modifier = Modifier
                         .padding(top = if (immersive) 0.dp else 4.dp)
                         .then(
-                            if (immersive) Modifier.immersiveGlassPill(100.dp)
+                            // Preserve the original compact rounded rectangle;
+                            // only its translucent glass material matches the
+                            // bottom controls, not their capsule silhouette.
+                            if (immersive) Modifier.immersiveGlassPill(7.dp)
                             else Modifier
                                 .clip(RoundedCornerShape(7.dp))
                                 .background(
