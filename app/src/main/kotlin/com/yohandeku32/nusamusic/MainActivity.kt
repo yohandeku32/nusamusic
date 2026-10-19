@@ -1316,7 +1316,9 @@ class MainActivity : ComponentActivity() {
         if (ids.isEmpty()) return
         val library = songs
         nextArtworkLookaheadJob = lifecycleScope.launch {
-            delay(160L)
+            // Give the foreground Canvas/Apple decoder time to acquire its
+            // first frame before speculative network reads begin.
+            delay(1_100L)
             val ordered = withContext(Dispatchers.Default) {
                 val byId = library.associateBy { it.id }
                 ids.mapNotNull(byId::get)
@@ -4315,6 +4317,7 @@ private fun ImmersiveArtwork(
     var animatedArtworkUrl by remember(song?.id, song?.uri) { mutableStateOf<String?>(null) }
     var artworkProvider by remember(song?.uri) { mutableStateOf(AnimatedArtworkProvider.APPLE_MUSIC) }
     var spotifyFallbackRequested by remember(song?.uri) { mutableStateOf(false) }
+    var spotifyPlaybackFailed by remember(song?.uri) { mutableStateOf(false) }
     var animatedFirstFrameUrl by remember(song?.uri) { mutableStateOf<String?>(null) }
     // Freeze the first usable animated frame's colours for the entire song,
     // including when an unavailable stream switches to an alternative URL.
@@ -4342,10 +4345,8 @@ private fun ImmersiveArtwork(
             staticBlur = prepared.first
             retainedAmbientBlur = prepared.first
             backdrop = prepared.second
-            if (true) {
-                ImmersiveArtworkCache.save(context, targetSong,
-                    ImmersiveArtworkSnapshot(bitmap, prepared.first, prepared.second.toArgb()))
-            }
+            ImmersiveArtworkCache.save(context, targetSong,
+                ImmersiveArtworkSnapshot(bitmap, prepared.first, prepared.second.toArgb()))
         }
 
         // Restore the small prepared preview before reopening the audio file.
@@ -4394,7 +4395,7 @@ private fun ImmersiveArtwork(
 
     LaunchedEffect(
         song?.id, song?.title, song?.artist, song?.album,
-        animatedArtworkEnabled, spotifyFallbackRequested, sourceOrder
+        animatedArtworkEnabled, spotifyFallbackRequested, spotifyPlaybackFailed, sourceOrder
     ) {
         if (!animatedArtworkEnabled || song == null) {
             animatedArtworkUrl = null
@@ -4404,7 +4405,13 @@ private fun ImmersiveArtwork(
         // Apple's genuine Tall animation must win when available; only a
         // confirmed Apple miss allows Spotify. No provider races or late
         // switching can tear down the TextureView mid-song.
-        if (!spotifyFallbackRequested) {
+        if (spotifyPlaybackFailed && sourceOrder == ArtworkSourceOrder.SPOTIFY_FIRST) {
+            // The preferred Spotify stream failed after bounded Media3
+            // recovery: only now try Apple Tall, with no provider race.
+            artworkProvider = AnimatedArtworkProvider.APPLE_MUSIC
+            animatedArtworkUrl =
+                AppleMusicAnimatedArtworkLoader.loadAnimatedArtworkUrl(context, song)
+        } else if (!spotifyFallbackRequested) {
             val candidate = AnimatedArtworkQueuePreloader.ready(song, sourceOrder)
                 ?: AnimatedArtworkQueuePreloader.resolve(context, song, sourceOrder)
             if (candidate != null) {
@@ -4503,7 +4510,13 @@ private fun ImmersiveArtwork(
                                     // lookup across Next -> Previous, so the
                                     // song can play again with a fresh player.
                                     // Only hide this exhausted player instance.
+                                    // In Spotify-first mode, try Apple Tall
+                                    // once. For Spotify-only stay on the static
+                                    // cover until the user revisits this song.
                                     animatedArtworkUrl = null
+                                    if (sourceOrder == ArtworkSourceOrder.SPOTIFY_FIRST) {
+                                        spotifyPlaybackFailed = true
+                                    }
                                 }
                             }
                         }
@@ -4639,14 +4652,15 @@ private fun AnimatedArtworkVideoBackground(
         }
     }
 
-    LaunchedEffect(player, playbackRetryCount) {
-        if (playbackRetryCount > 0) {
+    LaunchedEffect(player, playbackRetryCount, playbackVisible) {
+        if (playbackRetryCount > 0 && playbackVisible) {
             delay(650L * playbackRetryCount)
             if (!shouldPlayVideo) return@LaunchedEffect
-            // Re-prepare the same ExoPlayer, not a new TextureView. The
-            // transparent shutter retains its prior frame during rebuffering.
+            // Resume an interrupted loop from the beginning on the SAME
+            // player/TextureView; don't wait on a stalled partial MP4 read.
+            player.seekTo(0L)
             player.prepare()
-            player.playWhenReady = true
+            player.playWhenReady = shouldPlayVideo
         }
     }
 
