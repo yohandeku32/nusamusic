@@ -38,6 +38,14 @@ class ImmersiveLyricsState(private val repository: LyricsRepository) {
             previous.attempted = previous.data != null
         }
         activeLoad = state
+        // Metadata updates from another tag editor supersede an older read.
+        // In particular, do not drop forced refreshes just because the
+        // previous request is still reading the original audio file.
+        if (state.loading && retry) {
+            state.generation++
+            state.job?.cancel()
+            state.loading = false
+        }
         if (state.loading || (state.attempted && !retry)) return
         val generation = ++state.generation
         state.loading = true
