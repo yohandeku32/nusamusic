@@ -146,6 +146,7 @@ import com.yohandeku32.nusamusic.data.ArtworkBlur
 import com.yohandeku32.nusamusic.data.ImmersiveArtworkCache
 import com.yohandeku32.nusamusic.data.ImmersiveArtworkSnapshot
 import com.yohandeku32.nusamusic.data.AppleMusicAnimatedArtworkLoader
+import com.yohandeku32.nusamusic.data.SpotifyCanvasArtworkLoader
 import com.yohandeku32.nusamusic.data.AudioCodecInfo
 import com.yohandeku32.nusamusic.data.AudioCodecLoader
 import com.yohandeku32.nusamusic.data.ArtistImageLoader
@@ -3988,6 +3989,9 @@ private fun immersiveScrimOpacity(bitmap: Bitmap?): Float {
 }
 
 @Composable
+private enum class AnimatedArtworkProvider { APPLE_MUSIC, SPOTIFY_CANVAS }
+
+@Composable
 private fun ImmersiveArtwork(
     song: Song?,
     animatedArtworkEnabled: Boolean = true,
@@ -4016,7 +4020,8 @@ private fun ImmersiveArtwork(
         }
     }
     var animatedArtworkUrl by remember(song?.id, song?.uri) { mutableStateOf<String?>(null) }
-    var artworkReloadAttempt by remember(song?.uri) { mutableIntStateOf(0) }
+    var artworkProvider by remember(song?.uri) { mutableStateOf(AnimatedArtworkProvider.APPLE_MUSIC) }
+    var spotifyFallbackRequested by remember(song?.uri) { mutableStateOf(false) }
     // Freeze the first usable animated frame's colours for the entire song,
     // including when an unavailable stream switches to an alternative URL.
     var frozenAnimatedBlur by remember(song?.uri) { mutableStateOf<Bitmap?>(null) }
@@ -4090,22 +4095,30 @@ private fun ImmersiveArtwork(
     }
 
     LaunchedEffect(
-        song?.id, song?.title, song?.artist, song?.album, animatedArtworkEnabled, artworkReloadAttempt
+        song?.id, song?.title, song?.artist, song?.album, animatedArtworkEnabled, spotifyFallbackRequested
     ) {
         if (!animatedArtworkEnabled || song == null) {
             animatedArtworkUrl = null
             return@LaunchedEffect
         }
-        repeat(2) { attempt ->
-            val url = AppleMusicAnimatedArtworkLoader.loadAnimatedArtworkUrl(
-                context, song, forceRefresh = artworkReloadAttempt > 0 || attempt > 0
-            )
-            if (url != null) {
-                animatedArtworkUrl = url
-                return@LaunchedEffect
+        // Apple is always first. Resolve Spotify only when Apple cannot
+        // provide animated artwork, or all Apple's playback URLs have failed.
+        // Both network resolvers run off the UI thread and cache failures.
+        if (!spotifyFallbackRequested) {
+            repeat(2) { attempt ->
+                val url = AppleMusicAnimatedArtworkLoader.loadAnimatedArtworkUrl(
+                    context, song, forceRefresh = attempt > 0
+                )
+                if (url != null) {
+                    artworkProvider = AnimatedArtworkProvider.APPLE_MUSIC
+                    animatedArtworkUrl = url
+                    return@LaunchedEffect
+                }
+                if (attempt == 0) delay(1_500L)
             }
-            if (attempt == 0) delay(1_500L)
         }
+        artworkProvider = AnimatedArtworkProvider.SPOTIFY_CANVAS
+        animatedArtworkUrl = SpotifyCanvasArtworkLoader.findCanvasUrl(song)
     }
 
     val activeBlur = if (animatedArtworkEnabled && animatedArtworkUrl != null) {
@@ -4159,9 +4172,24 @@ private fun ImmersiveArtwork(
                     },
                     onUnavailable = {
                         if (animatedArtworkUrl == activeUrl) {
-                            val alternative = AppleMusicAnimatedArtworkLoader.nextPlaybackUrl(activeUrl)
-                            animatedArtworkUrl = alternative
-                            if (alternative == null && artworkReloadAttempt < 1) artworkReloadAttempt++
+                            when (artworkProvider) {
+                                AnimatedArtworkProvider.APPLE_MUSIC -> {
+                                    val alternative = AppleMusicAnimatedArtworkLoader.nextPlaybackUrl(activeUrl)
+                                    if (alternative != null) {
+                                        animatedArtworkUrl = alternative
+                                    } else {
+                                        // Apple streams can exist but be unplayable.
+                                        // After exhausting candidates try Spotify once.
+                                        animatedArtworkUrl = null
+                                        spotifyFallbackRequested = true
+                                    }
+                                }
+                                AnimatedArtworkProvider.SPOTIFY_CANVAS -> {
+                                    // No loop of retries for a missing/expired
+                                    // unofficial Canvas stream.
+                                    animatedArtworkUrl = null
+                                }
+                            }
                         }
                     }
                 )
@@ -4215,7 +4243,11 @@ private fun AnimatedArtworkVideoBackground(
             setMediaItem(
                 MediaItem.Builder()
                     .setUri(url)
-                    .setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8)
+                    .setMimeType(
+                        if (url.substringBefore('?').endsWith(".mp4", ignoreCase = true))
+                            androidx.media3.common.MimeTypes.VIDEO_MP4
+                        else androidx.media3.common.MimeTypes.APPLICATION_M3U8
+                    )
                     .build()
             )
         }
