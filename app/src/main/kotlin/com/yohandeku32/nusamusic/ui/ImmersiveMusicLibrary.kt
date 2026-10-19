@@ -30,6 +30,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -114,6 +115,7 @@ internal fun ImmersiveMusicLibrary(
     currentSong: Song?,
     isPlaying: Boolean,
     isVisible: Boolean,
+    lightMode: Boolean = false,
     hasMusicAccess: Boolean,
     isScanning: Boolean,
     emptyMessage: String,
@@ -127,6 +129,7 @@ internal fun ImmersiveMusicLibrary(
     artwork: @Composable (Song, Modifier) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val palette = immersiveColors(lightMode)
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
@@ -202,6 +205,7 @@ internal fun ImmersiveMusicLibrary(
         ImmersiveSearchDialog(
             songs = songs,
             initialQuery = search,
+            lightMode = lightMode,
             onDismiss = { query ->
                 searchDialogOpen = false
                 search = query
@@ -211,19 +215,28 @@ internal fun ImmersiveMusicLibrary(
     }
 
     MaterialTheme(
-        colorScheme = darkColorScheme(
-            background = libraryBlack,
-            surface = librarySurface,
-            surfaceVariant = Color(0xFF25262D),
-            onBackground = libraryWhite,
-            onSurface = libraryWhite,
-            onSurfaceVariant = librarySecondary,
-            primary = libraryWhite,
-            onPrimary = libraryBlack
+        colorScheme = if (lightMode) lightColorScheme(
+            background = palette.background,
+            surface = palette.surface,
+            surfaceVariant = palette.surfaceVariant,
+            onBackground = palette.primaryText,
+            onSurface = palette.primaryText,
+            onSurfaceVariant = palette.secondaryText,
+            primary = palette.primaryText,
+            onPrimary = palette.background
+        ) else darkColorScheme(
+            background = palette.background,
+            surface = palette.surface,
+            surfaceVariant = palette.surfaceVariant,
+            onBackground = palette.primaryText,
+            onSurface = palette.primaryText,
+            onSurfaceVariant = palette.secondaryText,
+            primary = palette.primaryText,
+            onPrimary = palette.background
         )
     ) {
     Box(
-        modifier = modifier.fillMaxSize().background(libraryBlack)
+        modifier = modifier.fillMaxSize().background(palette.background)
             .windowInsetsPadding(WindowInsets.safeDrawing)
 
     ) {
@@ -239,19 +252,19 @@ internal fun ImmersiveMusicLibrary(
                     if (focus != null) { focus = null; search = "" }
                     else onReturnToPlayer()
                 }) {
-                    Icon(Icons.Rounded.ArrowBack, "Back", tint = libraryWhite)
+                    Icon(Icons.Rounded.ArrowBack, "Back", tint = palette.primaryText)
                 }
                 Text(
-                    "Library", color = libraryWhite, fontSize = 16.sp,
+                    "Library", color = palette.primaryText, fontSize = 16.sp,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.weight(1f).padding(start = 8.dp)
                 )
                 IconButton(onClick = onScanMusic, enabled = !isScanning) {
-                    Icon(Icons.Rounded.Refresh, "Refresh library", tint = libraryWhite)
+                    Icon(Icons.Rounded.Refresh, "Refresh library", tint = palette.primaryText)
                 }
                 Box {
                     IconButton(onClick = { sortOpen = true }) {
-                        Icon(Icons.Rounded.Sort, "Sort songs", tint = libraryWhite)
+                        Icon(Icons.Rounded.Sort, "Sort songs", tint = palette.primaryText)
                     }
                     DropdownMenu(expanded = sortOpen, onDismissRequest = { sortOpen = false }) {
                         ImmersiveSort.entries.forEach { option ->
@@ -280,7 +293,7 @@ internal fun ImmersiveMusicLibrary(
             ) {
                 Column(Modifier.weight(1f)) {
                     Text(
-                        focus?.name ?: "Songs", color = libraryWhite,
+                        focus?.name ?: "Songs", color = palette.primaryText,
                         fontSize = 29.sp, fontWeight = FontWeight.SemiBold,
                         letterSpacing = (-0.8).sp, lineHeight = 36.sp,
                         maxLines = 1, overflow = TextOverflow.Ellipsis
@@ -292,7 +305,7 @@ internal fun ImmersiveMusicLibrary(
                             FocusType.ARTIST -> "ARTIST"
                             null -> "On this device"
                         },
-                        color = librarySecondary, fontSize = 12.sp
+                        color = palette.secondaryText, fontSize = 12.sp
                     )
                 }
                 if (visibleSongs.isNotEmpty()) {
@@ -300,7 +313,7 @@ internal fun ImmersiveMusicLibrary(
                         onClick = { onPlay(visibleSongs.first(), visibleSongs) },
                         shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = libraryWhite, contentColor = libraryBlack),
+                            containerColor = palette.primaryText, contentColor = palette.background),
                         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
                         modifier = Modifier.height(40.dp)
                     ) {
@@ -316,24 +329,24 @@ internal fun ImmersiveMusicLibrary(
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 20.dp)
                     .height(48.dp).clip(RoundedCornerShape(15.dp))
-                    .background(librarySurface)
+                    .background(palette.surface)
                     .clickable { searchDialogOpen = true }
                     .padding(horizontal = 15.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Rounded.Search, null, tint = librarySecondary,
+                Icon(Icons.Rounded.Search, null, tint = palette.secondaryText,
                     modifier = Modifier.size(19.dp))
                 Spacer(Modifier.width(10.dp))
                 Text(
                     search.ifBlank { "Search songs, artists, albums" },
-                    color = if (search.isBlank()) librarySecondary else libraryWhite,
+                    color = if (search.isBlank()) palette.secondaryText else palette.primaryText,
                     fontSize = 13.sp, maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
                 if (search.isNotBlank()) {
                     IconButton(onClick = { search = "" }, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Rounded.Close, "Clear search", tint = librarySecondary,
+                        Icon(Icons.Rounded.Close, "Clear search", tint = palette.secondaryText,
                             modifier = Modifier.size(17.dp))
                     }
                 }
@@ -344,10 +357,10 @@ internal fun ImmersiveMusicLibrary(
             ) {
                 Text(
                     if (visibleSongs.size == 1) "1 song" else "${visibleSongs.size} songs",
-                    color = librarySecondary, fontSize = 12.sp, fontWeight = FontWeight.Medium,
+                    color = palette.secondaryText, fontSize = 12.sp, fontWeight = FontWeight.Medium,
                     modifier = Modifier.weight(1f)
                 )
-                Text(sort.label, color = librarySecondary, fontSize = 11.sp)
+                Text(sort.label, color = palette.secondaryText, fontSize = 11.sp)
             }
 
             PullToRefreshBox(
@@ -362,12 +375,12 @@ internal fun ImmersiveMusicLibrary(
                     ) {
                         Text(
                             if (!hasMusicAccess) "Allow access to your music" else emptyMessage,
-                            color = libraryWhite, fontWeight = FontWeight.SemiBold,
+                            color = palette.primaryText, fontWeight = FontWeight.SemiBold,
                             fontSize = 17.sp, textAlign = TextAlign.Center
                         )
                         Spacer(Modifier.height(14.dp))
                         OutlinedButton(onClick = if (!hasMusicAccess) onRequestPermission else onScanMusic) {
-                            Text(if (!hasMusicAccess) "Allow access" else "Scan again", color = libraryWhite)
+                            Text(if (!hasMusicAccess) "Allow access" else "Scan again", color = palette.primaryText)
                         }
                     }
                 } else {
@@ -384,6 +397,7 @@ internal fun ImmersiveMusicLibrary(
                         ) { song ->
                             ImmersiveTrackRow(
                                 song = song, active = currentSong?.id == song.id,
+                                lightMode = lightMode,
                                 loadMetadata = canReadMetadata && !searchDialogOpen,
                                 hiResPainter = hiResPainter, artwork = artwork,
                                 onPlay = { onPlay(song, visibleSongs) },
@@ -405,7 +419,7 @@ internal fun ImmersiveMusicLibrary(
                         }
                         if (visibleSongs.isEmpty()) {
                             item(key = "empty-search", contentType = "empty") {
-                                Text("No matching songs", color = librarySecondary,
+                                Text("No matching songs", color = palette.secondaryText,
                                     textAlign = TextAlign.Center, fontSize = 14.sp,
                                     modifier = Modifier.fillMaxWidth().padding(top = 70.dp))
                             }
@@ -424,11 +438,13 @@ internal fun ImmersiveMusicLibrary(
 @Composable
 private fun ImmersiveTrackRow(
     song: Song, active: Boolean, loadMetadata: Boolean,
+    lightMode: Boolean,
     hiResPainter: Painter,
     artwork: @Composable (Song, Modifier) -> Unit,
     onPlay: () -> Unit, onPlayNext: () -> Unit, onShare: () -> Unit,
     onAlbum: () -> Unit, onArtist: () -> Unit
 ) {
+    val palette = immersiveColors(lightMode)
     val context = LocalContext.current
     // This per-song snapshot lookup makes the badge appear as soon as native
     // metadata finishes, even if the row stays visible throughout a fling.
@@ -444,7 +460,7 @@ private fun ImmersiveTrackRow(
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
             .clip(RoundedCornerShape(15.dp))
-            .background(if (active) Color.White.copy(alpha = 0.075f) else Color.Transparent)
+            .background(if (active) palette.activeRow else Color.Transparent)
             .clickable(onClick = onPlay)
             .padding(start = 8.dp, end = 4.dp, top = 7.dp, bottom = 7.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -452,18 +468,18 @@ private fun ImmersiveTrackRow(
         artwork(song, Modifier.size(52.dp).clip(RoundedCornerShape(12.dp)))
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(song.title, color = libraryWhite, fontSize = 14.5.sp,
+            Text(song.title, color = palette.primaryText, fontSize = 14.5.sp,
                 lineHeight = 19.sp, fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(4.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (active) {
-                    Icon(Icons.Rounded.GraphicEq, "Now playing", tint = libraryWhite,
+                    Icon(Icons.Rounded.GraphicEq, "Now playing", tint = palette.primaryText,
                         modifier = Modifier.size(12.dp))
                     Spacer(Modifier.width(5.dp))
                 }
                 Text(song.artist.ifBlank { "Unknown artist" },
-                    color = librarySecondary, fontSize = 11.5.sp,
+                    color = palette.secondaryText, fontSize = 11.5.sp,
                     maxLines = 1, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false))
                 if (isHiRes) {
@@ -478,11 +494,11 @@ private fun ImmersiveTrackRow(
             }
         }
         Spacer(Modifier.width(7.dp))
-        Text(librarySongDuration(song.durationMs), color = librarySecondary, fontSize = 10.5.sp)
+        Text(librarySongDuration(song.durationMs), color = palette.secondaryText, fontSize = 10.5.sp)
         Box {
             IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(38.dp)) {
                 Icon(Icons.Rounded.MoreHoriz, "More options for ${song.title}",
-                    tint = librarySecondary, modifier = Modifier.size(21.dp))
+                    tint = palette.secondaryText, modifier = Modifier.size(21.dp))
             }
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                 DropdownMenuItem(text = { Text("Play next") }, onClick = {
