@@ -4564,6 +4564,7 @@ private fun AnimatedArtworkVideoBackground(
     onUnavailable: () -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
+    val isCanvasStream = remember(url) { SpotifyCanvasArtworkLoader.isSpotifyCanvasVideo(url) }
     var videoReady by remember(url) { mutableStateOf(false) }
     var videoVisible by remember(url) { mutableStateOf(false) }
     var playbackRetryCount by remember(url) { mutableIntStateOf(0) }
@@ -4715,14 +4716,23 @@ private fun AnimatedArtworkVideoBackground(
     }
 
     androidx.compose.runtime.DisposableEffect(player, url) {
+        if (isCanvasStream && shouldPlayVideo) {
+            SpotifyCanvasVideoCache.setForegroundBuffering(url, true)
+        }
         val listener = object : Player.Listener {
             override fun onRenderedFirstFrame() {
+                if (isCanvasStream) SpotifyCanvasVideoCache.setForegroundBuffering(url, false)
                 videoReady = true
                 bufferingSinceMs = 0L
                 onFirstFrameCallback()
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
+                if (isCanvasStream) {
+                    SpotifyCanvasVideoCache.setForegroundBuffering(
+                        url, shouldPlayVideo && playbackState == Player.STATE_BUFFERING
+                    )
+                }
                 bufferingSinceMs =
                     if (playbackState == Player.STATE_BUFFERING && videoReady)
                         android.os.SystemClock.elapsedRealtime()
@@ -4730,6 +4740,7 @@ private fun AnimatedArtworkVideoBackground(
             }
 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                if (isCanvasStream) SpotifyCanvasVideoCache.setForegroundBuffering(url, false)
                 bufferingSinceMs = 0L
                 if (error.errorCode in 2000..2999 && playbackRetryCount < 2) {
                     // Transient CDN/proxy IO errors should not make Canvas
@@ -4749,6 +4760,7 @@ private fun AnimatedArtworkVideoBackground(
         player.prepare()
         player.playWhenReady = shouldPlayVideo
         onDispose {
+            if (isCanvasStream) SpotifyCanvasVideoCache.setForegroundBuffering(url, false)
             player.removeListener(listener)
             player.release()
         }
@@ -4759,6 +4771,11 @@ private fun AnimatedArtworkVideoBackground(
     // without the expensive HLS player setup or re-buffering from scratch.
     LaunchedEffect(player, playbackVisible) {
         player.playWhenReady = playbackVisible
+        if (isCanvasStream) {
+            SpotifyCanvasVideoCache.setForegroundBuffering(
+                url, playbackVisible && player.playbackState == Player.STATE_BUFFERING
+            )
+        }
     }
 
     val videoAlpha by animateFloatAsState(
