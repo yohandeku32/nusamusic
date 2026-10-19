@@ -7,6 +7,8 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import java.util.Locale
@@ -33,6 +35,7 @@ internal object AnimatedArtworkQueuePreloader {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val lookupSlots = Semaphore(2)
     private val videoSlots = Semaphore(1)
+    private val coverSlots = Semaphore(1)
 
     private const val SUCCESS_TTL_MS = 12L * 60 * 60 * 1_000
     private const val MISS_TTL_MS = 45_000L
@@ -88,16 +91,29 @@ internal object AnimatedArtworkQueuePreloader {
     }
 
     /** Preload the chosen provider's video bytes, not just the artwork URL. */
-    suspend fun preload(context: Context, song: Song, priority: Int) {
-        val candidate = resolve(context, song) ?: return
-        videoSlots.withPermit {
-            when (candidate.provider) {
-                Provider.APPLE_TALL ->
-                    AppleTallVideoCache.warm(context, candidate.url, firstInQueue = priority == 0)
-                Provider.SPOTIFY_CANVAS ->
-                    SpotifyCanvasVideoCache.prefetchNext(context, candidate.url)
+    suspend fun preload(context: Context, song: Song, priority: Int) = coroutineScope {
+        // Small album cover is cheap to retain in RAM and can be shown during
+        // the first video frame wait. Never load five 1600px full covers.
+        val coverJob = launch(Dispatchers.IO) {
+            coverSlots.withPermit {
+                ArtworkLoader.load(
+                    context, song.uri, maxSize = 512,
+                    cacheKey = song.albumId.takeIf { it > 0L }?.toString()
+                )
             }
         }
+        val candidate = resolve(context, song)
+        if (candidate != null) {
+            videoSlots.withPermit {
+                when (candidate.provider) {
+                    Provider.APPLE_TALL ->
+                        AppleTallVideoCache.warm(context, candidate.url, firstInQueue = priority == 0)
+                    Provider.SPOTIFY_CANVAS ->
+                        SpotifyCanvasVideoCache.prefetchNext(context, candidate.url)
+                }
+            }
+        }
+        coverJob.join()
     }
 
     /** A failed stream is never handed back from the prefetch cache. */
