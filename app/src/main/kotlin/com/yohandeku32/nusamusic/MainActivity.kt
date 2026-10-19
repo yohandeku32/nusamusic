@@ -538,6 +538,14 @@ class MainActivity : ComponentActivity() {
         // Restore the last track before Compose draws the first frame. The full
         // library and Media3 controller can finish initializing in the background.
         currentSong = readLastSongForLaunch()
+        // Start verifying the one visible badge before Compose inflates the
+        // expensive artwork/player tree. It shares AudioCodecLoader's cache
+        // with the Library, so no duplicate MediaExtractor runs.
+        currentSong?.let { launchSong ->
+            lifecycleScope.launch {
+                AudioCodecLoader.load(this@MainActivity, launchSong.uri)
+            }
+        }
         if (PlayerPresentationMode.fromPreference(
                 uiPrefsForFonts().getString("player_presentation_mode", null)
             ) == PlayerPresentationMode.IMMERSIVE_ARTWORK
@@ -2393,8 +2401,12 @@ private fun NusaMusicApp(
                                     )
                                 },
                                 progress = { progressModifier ->
-                                    PlaybackProgress(positionMsState, durationMs, currentSong != null && durationMs > 0,
-                                        onSeek, immersive = true, modifier = progressModifier)
+                                    PlaybackProgress(
+                                        positionMsState,
+                                        durationMs.takeIf { it > 0L } ?: currentSong?.durationMs ?: 0L,
+                                        currentSong != null,
+                                        onSeek, immersive = true, modifier = progressModifier
+                                    )
                                 },
                                 quality = { AudioQualityPill(song = currentSong, immersive = true) },
                                 lyrics = { lyricsModifier ->
@@ -3376,8 +3388,13 @@ private fun AudioQualityPill(
     onBadgeVisibilityChanged: ((Boolean) -> Unit)? = null
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    var codecInfo by remember { mutableStateOf<AudioCodecInfo?>(null) }
-    var resolvedCodecUri by remember { mutableStateOf<String?>(null) }
+    // Use already verified codec data immediately when a row/player exists
+    // instead of waiting one extra LaunchedEffect frame to reveal Hi-Res.
+    val initialCodec = song?.uri?.let(AudioCodecLoader::cached)
+    var codecInfo by remember(song?.uri) { mutableStateOf(initialCodec) }
+    var resolvedCodecUri by remember(song?.uri) {
+        mutableStateOf(if (initialCodec != null) song?.uri else null)
+    }
     var showMetadataDialog by remember(song?.uri) { mutableStateOf(false) }
 
     LaunchedEffect(song?.uri) {
