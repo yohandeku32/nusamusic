@@ -68,6 +68,8 @@ internal fun PlayerSettingsContent(
     onResetCustomTitleFont: () -> Unit,
     playerPresentationMode: PlayerPresentationMode,
     onPresentationSelected: (PlayerPresentationMode) -> Unit,
+    immersiveLightMode: Boolean,
+    onImmersiveLightModeChange: (Boolean) -> Unit,
     animatedArtworkEnabled: Boolean,
     roundedCarouselCorners: Boolean,
     onRoundedCarouselCornersChange: (Boolean) -> Unit,
@@ -237,6 +239,17 @@ internal fun PlayerSettingsContent(
                         )
                     }
                     SettingsDivider()
+                    if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
+                        SettingToggle(
+                            settingsText("Mode terang", "Light mode"),
+                            settingsText("Tema terang untuk Immersive dan daftar lagu.",
+                                "Light appearance for Immersive and its library."),
+                            immersiveLightMode,
+                            onImmersiveLightModeChange,
+                            icon = Icons.Default.LightMode
+                        )
+                        SettingsDivider()
+                    }
                     if (playerPresentationMode == PlayerPresentationMode.CD) {
                         SettingToggle(
                             settingsText("Sudut carousel", "Carousel corners"),
