@@ -1,5 +1,6 @@
 package com.yohandeku32.nusamusic.data
 
+import android.content.Context
 import android.net.Uri
 import com.yohandeku32.nusamusic.model.Song
 import kotlinx.coroutines.CancellationException
@@ -11,6 +12,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.MessageDigest
 import java.text.Normalizer
 import java.util.Locale
 import javax.net.ssl.HttpsURLConnection
@@ -35,12 +37,17 @@ internal object SpotifyCanvasArtworkLoader {
     private const val POSITIVE_TTL = 6 * 60 * 60 * 1000L
     private const val NEGATIVE_TTL = 5 * 60 * 1000L
     private const val FAILURE_TTL = 30_000L
+    // Unlike in-memory URL lookups, persisted positive Canvas matches survive
+    // closing/reopening NusaMusic, avoiding repeat calls to the slow resolver.
+    private const val DISK_POSITIVE_TTL = 3L * 24 * 60 * 60 * 1_000
+    private const val MAX_DISK_ENTRIES = 150
+    private const val DISK_PREFS = "spotify_canvas_urls_v1"
     private val cache = LinkedHashMap<String, CacheEntry>(32, 0.75f, true)
 
     private data class CacheEntry(val url: String?, val expires: Long)
     private data class LookupResult(val videoUrl: String?, val temporaryFailure: Boolean)
 
-    suspend fun findCanvasUrl(song: Song): String? = withContext(Dispatchers.IO) {
+    suspend fun findCanvasUrl(context: Context, song: Song): String? = withContext(Dispatchers.IO) {
         val title = song.title.trim().take(160)
         val artist = song.artist.trim().take(160)
         if (title.isBlank() || artist.isBlank() ||
@@ -52,6 +59,17 @@ internal object SpotifyCanvasArtworkLoader {
         synchronized(cache) {
             cache[key]?.takeIf { it.expires > now }?.let { return@withContext it.url }
             cache.remove(key)
+        }
+
+        // Local lookup avoids an HTTP request on every track revisit or app
+        // launch. Validate again in case cache data becomes corrupted.
+        val saved = readSavedUrl(context, key, now)
+        if (saved != null) {
+            synchronized(cache) {
+                cache[key] = CacheEntry(saved, now + POSITIVE_TTL)
+                while (cache.size > MAX_ITEMS) cache.remove(cache.entries.first().key)
+            }
+            return@withContext saved
         }
 
         currentCoroutineContext().ensureActive()
@@ -70,7 +88,55 @@ internal object SpotifyCanvasArtworkLoader {
             cache[key] = CacheEntry(result.videoUrl, System.currentTimeMillis() + ttl)
             while (cache.size > MAX_ITEMS) cache.remove(cache.entries.first().key)
         }
+        if (result.videoUrl != null) saveUrl(context, key, result.videoUrl)
         result.videoUrl
+    }
+
+    private fun diskKey(key: String): String = MessageDigest.getInstance("SHA-256")
+        .digest(key.toByteArray(Charsets.UTF_8))
+        .take(16).joinToString("") { "%02x".format(it) }
+
+    private fun readSavedUrl(context: Context, key: String, now: Long): String? {
+        val pref = context.applicationContext.getSharedPreferences(DISK_PREFS, Context.MODE_PRIVATE)
+        val record = pref.getString(diskKey(key), null) ?: return null
+        val expiresAt = record.substringBefore('|').toLongOrNull() ?: 0L
+        val url = record.substringAfter('|', "")
+        if (expiresAt <= now || !isSpotifyCanvasVideo(url)) {
+            pref.edit().remove(diskKey(key)).apply()
+            return null
+        }
+        return url
+    }
+
+    private fun saveUrl(context: Context, key: String, url: String) {
+        val pref = context.applicationContext.getSharedPreferences(DISK_PREFS, Context.MODE_PRIVATE)
+        val now = System.currentTimeMillis()
+        val editor = pref.edit()
+            .putString(diskKey(key), "${now + DISK_POSITIVE_TTL}|$url")
+        // Bound the on-disk metadata just like the in-memory LRU. This work
+        // happens in Dispatchers.IO and never touches Compose's frame loop.
+        val records = pref.all.mapNotNull { (id, value) ->
+            val expiry = (value as? String)?.substringBefore('|')?.toLongOrNull()
+            if (expiry == null) null else id to expiry
+        }.sortedBy { it.second }
+        if (records.size >= MAX_DISK_ENTRIES) {
+            val toRemove = records.size - MAX_DISK_ENTRIES + 1
+            records.take(toRemove).forEach { editor.remove(it.first) }
+        }
+        editor.apply()
+    }
+
+    /** A failed playback must not pin a stale/unplayable stream for three days. */
+    fun invalidate(context: Context, failedUrl: String) {
+        synchronized(cache) {
+            cache.entries.removeAll { it.value.url == failedUrl }
+        }
+        val pref = context.applicationContext.getSharedPreferences(DISK_PREFS, Context.MODE_PRIVATE)
+        val editor = pref.edit()
+        pref.all.forEach { (id, value) ->
+            if ((value as? String)?.substringAfter('|', "") == failedUrl) editor.remove(id)
+        }
+        editor.apply()
     }
 
     private suspend fun fetchAndValidate(endpoint: String, title: String, artist: String): LookupResult {
