@@ -170,6 +170,7 @@ import com.yohandeku32.nusamusic.ui.CdPlayer
 import com.yohandeku32.nusamusic.ui.TurntablePlayer
 import com.yohandeku32.nusamusic.ui.TurntableLabels
 import com.yohandeku32.nusamusic.ui.VinylSongList
+import com.yohandeku32.nusamusic.ui.ImmersiveMusicLibrary
 import com.yohandeku32.nusamusic.ui.ImmersiveArtworkPlayer
 import com.yohandeku32.nusamusic.ui.ImmersiveArtworkScene
 import com.yohandeku32.nusamusic.ui.ImmersiveArtistPage
@@ -585,6 +586,7 @@ class MainActivity : ComponentActivity() {
                     durationMs = durationMs,
                     permissionGranted = permissionGranted,
                     onPlay = ::playSong,
+                    onPlayNext = ::queueSongNext,
                     onTogglePlay = ::togglePlay,
                     customTitleFontPath = customTitleFontPath,
                     customTitleFontName = customTitleFontName,
@@ -1167,6 +1169,26 @@ class MainActivity : ComponentActivity() {
             )
             .build()
 
+    private fun queueSongNext(song: Song) {
+        val c = controller ?: return
+        if (c.currentMediaItemIndex < 0 || c.mediaItemCount == 0) {
+            playSong(song, listOf(song))
+            return
+        }
+        // Inserting a track requires one MediaController call; do not
+        // rebuild the entire Media3 queue when tapping "Play next".
+        pendingPlaySongJob?.cancel()
+        pendingPlaySongJob = null
+        c.addMediaItem(
+            (c.currentMediaItemIndex + 1).coerceAtMost(c.mediaItemCount),
+            mediaItemFor(song)
+        )
+        queuedPlaybackOrder = null
+        android.widget.Toast.makeText(
+            this, "Added to Up Next", android.widget.Toast.LENGTH_SHORT
+        ).show()
+    }
+
     private fun playSong(song: Song, orderedSongs: List<Song>) {
         val c = controller ?: return
         val queueSongs = orderedSongs.ifEmpty { songs }
@@ -1561,6 +1583,7 @@ private fun NusaMusicApp(
     durationMs: Long,
     permissionGranted: Boolean,
     onPlay: (Song, List<Song>) -> Unit,
+    onPlayNext: (Song) -> Unit,
     onTogglePlay: () -> Unit,
     customTitleFontPath: String?,
     customTitleFontName: String?,
@@ -2278,6 +2301,34 @@ private fun NusaMusicApp(
                     }
 
                     page == libraryPage -> {
+                        if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
+                            ImmersiveMusicLibrary(
+                                songs = songs,
+                                currentSong = currentSong,
+                                isPlaying = isPlaying,
+                                hasMusicAccess = hasMusicAccess,
+                                isScanning = isScanningMusic,
+                                emptyMessage = emptyLibraryMessage,
+                                onReturnToPlayer = {
+                                    scope.launch { pagerState.animateMiuixScrollToPage(playerPage) }
+                                },
+                                onPlay = onPlay,
+                                onPlayNext = onPlayNext,
+                                onShare = { onShare(it) },
+                                onTogglePlay = onTogglePlay,
+                                onScanMusic = onScanMusic,
+                                onRequestPermission = onRequestPermission,
+                                artwork = { track, tileModifier ->
+                                    ArtworkView(
+                                        song = track,
+                                        maxSizePx = 144,
+                                        loadDelayMs = 32L,
+                                        grainOverlay = false,
+                                        modifier = tileModifier
+                                    )
+                                }
+                            )
+                        } else {
                         val vinylLibrary = playerPresentationMode == PlayerPresentationMode.VINYL
                         val cdLibrary = playerPresentationMode == PlayerPresentationMode.CD
                         // Match the CD player's charcoal background and lime
@@ -2759,6 +2810,7 @@ private fun NusaMusicApp(
 
                         }
                         } // Library-only theme
+                        } // Legacy CD/Vinyl library
                     }
                 }
             }
