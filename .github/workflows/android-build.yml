@@ -33,6 +33,33 @@ jobs:
           # Accompanist Lyrics Core's JVM test dependency uses Java 21 bytecode.
           java-version: "21"
           cache: gradle
+      - name: Diagnose public Spotify Canvas resolver (PR 176)
+        if: github.event_name == 'pull_request' && github.event.pull_request.number == 176
+        continue-on-error: true
+        run: |
+          python3 - <<'PY'
+          import json, urllib.request, urllib.error
+          urls = [
+              'https://www.spotycovs.lol/api/resolve?track=SZA%20-%20Snooze%26results=1',
+              'https://www.spotycovs.lol/api/canvas?track=SZA%20-%20Snooze%26results=1',
+              'https://www.spotycovs.lol/api/canvas?id=3zlJIBfHmFMjvT8TtGf1BW',
+          ]
+          for url in urls:
+              # These are public example songs, not user's metadata or tokens.
+              url = url.replace('%26results=1', '&results=1')
+              try:
+                  req = urllib.request.Request(url, headers={
+                      'Accept': 'application/json',
+                      'User-Agent': 'NusaMusic/SpotifyCanvasFallback'
+                  })
+                  with urllib.request.urlopen(req, timeout=12) as r:
+                      payload = r.read(3500).decode('utf-8', errors='replace')
+                      print('URL:', url, 'HTTP:', r.status, 'TYPE:', r.headers.get('content-type'))
+                      print('RESPONSE:', payload[:1800])
+              except Exception as e:
+                  print('URL:', url, 'ERROR:', str(e)[:400])
+          PY
+
       - name: Compile Android sources and run unit tests
         run: |
           chmod +x gradlew
