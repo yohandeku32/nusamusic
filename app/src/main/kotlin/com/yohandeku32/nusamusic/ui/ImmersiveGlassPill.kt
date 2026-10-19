@@ -16,9 +16,9 @@ import androidx.compose.ui.unit.dp
  * pill, so the small audio-quality badge matches without a separate opaque
  * card. Never apply a new blur RenderEffect per chip during animations.
  */
-internal fun Modifier.immersiveGlassPill(radius: Dp = 100.dp): Modifier {
+internal fun Modifier.immersiveGlassPill(radius: Dp = 100.dp, lightMode: Boolean = false): Modifier {
     val shape = RoundedCornerShape(radius)
     return this.clip(shape)
-        .background(Color.White.copy(alpha = 0.09f))
-        .border(1.dp, Color.White.copy(alpha = 0.08f), shape)
+        .background(if (lightMode) Color.Black.copy(alpha = 0.055f) else Color.White.copy(alpha = 0.09f))
+        .border(1.dp, if (lightMode) Color.Black.copy(alpha = 0.09f) else Color.White.copy(alpha = 0.08f), shape)
 }
