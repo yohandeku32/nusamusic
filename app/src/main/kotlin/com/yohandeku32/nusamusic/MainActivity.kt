@@ -178,8 +178,11 @@ import com.yohandeku32.nusamusic.ui.ImmersiveLyricsState
 import com.yohandeku32.nusamusic.ui.MiuixHorizontalPager
 import com.yohandeku32.nusamusic.ui.animateMiuixScrollToPage
 import com.yohandeku32.nusamusic.ui.artworkBackdropColor
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -4100,24 +4103,46 @@ private fun ImmersiveArtwork(
             animatedArtworkUrl = null
             return@LaunchedEffect
         }
-        // Apple is always first. Resolve Spotify only when Apple cannot
-        // provide animated artwork, or all Apple's playback URLs have failed.
-        // Both network resolvers run off the UI thread and cache failures.
+        // Apple retains presentation priority. If it takes longer than
+        // 600 ms, SPECULATIVELY resolve Spotify in parallel so its Canvas
+        // URL is already ready when Apple reports no animation. No forced
+        // second Apple network lookup or artificial 1.5 s delay on misses.
+        // The helper is cancelled on a quick Apple hit or song change,
+        // preventing extra network work and stale results.
         if (!spotifyFallbackRequested) {
-            repeat(2) { attempt ->
-                val url = AppleMusicAnimatedArtworkLoader.loadAnimatedArtworkUrl(
-                    context, song, forceRefresh = attempt > 0
-                )
-                if (url != null) {
-                    artworkProvider = AnimatedArtworkProvider.APPLE_MUSIC
-                    animatedArtworkUrl = url
-                    return@LaunchedEffect
+            coroutineScope {
+                val apple = async {
+                    AppleMusicAnimatedArtworkLoader.loadAnimatedArtworkUrl(context, song)
                 }
-                if (attempt == 0) delay(1_500L)
+                val spotify = async(start = CoroutineStart.LAZY) {
+                    SpotifyCanvasArtworkLoader.findCanvasUrl(song)
+                }
+                val speculativeLookup = launch {
+                    delay(600L)
+                    if (apple.isActive) spotify.start()
+                }
+                try {
+                    val appleUrl = apple.await()
+                    speculativeLookup.cancel()
+                    if (appleUrl != null) {
+                        spotify.cancel()
+                        artworkProvider = AnimatedArtworkProvider.APPLE_MUSIC
+                        animatedArtworkUrl = appleUrl
+                    } else {
+                        artworkProvider = AnimatedArtworkProvider.SPOTIFY_CANVAS
+                        animatedArtworkUrl = spotify.await()
+                    }
+                } finally {
+                    speculativeLookup.cancel()
+                    if (spotify.isActive) spotify.cancel()
+                }
             }
+        } else {
+            // Apple's video was found but its playback candidates failed:
+            // switch directly to Spotify, never re-run Apple search.
+            artworkProvider = AnimatedArtworkProvider.SPOTIFY_CANVAS
+            animatedArtworkUrl = SpotifyCanvasArtworkLoader.findCanvasUrl(song)
         }
-        artworkProvider = AnimatedArtworkProvider.SPOTIFY_CANVAS
-        animatedArtworkUrl = SpotifyCanvasArtworkLoader.findCanvasUrl(song)
     }
 
     val activeBlur = if (animatedArtworkEnabled && animatedArtworkUrl != null) {
@@ -4228,6 +4253,14 @@ private fun AnimatedArtworkVideoBackground(
         }
         androidx.media3.exoplayer.ExoPlayer.Builder(context)
             .setTrackSelector(trackSelector)
+            // Canvas is a short muted background loop, not the audio player.
+            // Begin when roughly half a second is buffered instead of the
+            // default 1 s, while keeping a larger reserve for rebuffering.
+            .setLoadControl(
+                androidx.media3.exoplayer.DefaultLoadControl.Builder()
+                    .setBufferDurationsMs(2_500, 15_000, 450, 1_250)
+                    .build()
+            )
             .setAudioAttributes(
                 androidx.media3.common.AudioAttributes.Builder()
                     .setUsage(androidx.media3.common.C.USAGE_MEDIA)
@@ -4261,7 +4294,9 @@ private fun AnimatedArtworkVideoBackground(
     // Some devices render video correctly but never return a usable capture.
     LaunchedEffect(player, videoReady) {
         if (videoReady) {
-            delay(400L)
+            // onRenderedFirstFrame is a reliable frame-ready signal.
+            // Avoid keeping the decoded Canvas hidden for another 400 ms.
+            delay(75L)
             videoVisible = true
         }
     }
@@ -4334,7 +4369,7 @@ private fun AnimatedArtworkVideoBackground(
 
     val videoAlpha by animateFloatAsState(
         targetValue = if (videoVisible) 1f else 0f,
-        animationSpec = tween(durationMillis = 360),
+        animationSpec = tween(durationMillis = 210),
         label = "animatedArtworkFade"
     )
 
