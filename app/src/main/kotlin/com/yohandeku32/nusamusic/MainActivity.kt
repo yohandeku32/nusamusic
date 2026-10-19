@@ -1238,8 +1238,8 @@ class MainActivity : ComponentActivity() {
 
     /**
      * Warm the next real Media3 queue item (including shuffle order), never a
-     * guessed library neighbor. A 1.8 s debounce coalesces queue restores and
-     * rapid skips. At most one 512 KiB speculative Canvas request runs at once.
+     * guessed library neighbor. A short 750 ms debounce coalesces queue restores and
+     * rapid skips without delaying normal next-track prefetch. At most one 512 KiB speculative Canvas request runs at once.
      * No player/decoder is created until the user actually plays that song.
      */
     private fun scheduleNextCanvasPrefetch(player: MediaController) {
@@ -1259,7 +1259,7 @@ class MainActivity : ComponentActivity() {
         val librarySnapshot = songs
 
         nextCanvasPrefetchJob = lifecycleScope.launch {
-            delay(1_800L)
+            delay(750L)
             val candidate = withContext(Dispatchers.Default) {
                 librarySnapshot.firstOrNull { it.id == nextId }
             } ?: return@launch
