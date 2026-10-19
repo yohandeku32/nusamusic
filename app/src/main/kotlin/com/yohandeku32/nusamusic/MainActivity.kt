@@ -1849,6 +1849,14 @@ private fun NusaMusicApp(
         AudioCodecLoader.warmVerifiedBadges(context, songs)
     }
     val lyricsState = remember(context) { ImmersiveLyricsState(LyricsRepository(context)) }
+    LaunchedEffect(currentSong?.uri, lyricsMetadataGeneration) {
+        val activeSong = currentSong ?: return@LaunchedEffect
+        if (!LYRICS_ENABLED || lyricsMetadataGeneration == 0) return@LaunchedEffect
+        // ContentObserver changes arrive in bursts when another tag editor
+        // saves. Coalesce writes, then bypass both parsed + on-disk caches.
+        delay(420L)
+        lyricsState.load(activeSong, this, retry = true)
+    }
     val artistPageStates = remember { androidx.collection.LruCache<String, ImmersiveArtistPageState>(8) }
     val artistPageState = remember(artistKey) {
         artistPageStates.get(artistKey) ?: ImmersiveArtistPageState(
