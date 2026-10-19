@@ -2325,6 +2325,7 @@ private fun NusaMusicApp(
                                 songs = songs,
                                 currentSong = currentSong,
                                 isPlaying = isPlaying,
+                                isVisible = pagerState.currentPage == libraryPage,
                                 hasMusicAccess = hasMusicAccess,
                                 isScanning = isScanningMusic,
                                 emptyMessage = emptyLibraryMessage,
