@@ -4205,7 +4205,12 @@ private fun ImmersiveArtwork(
     // Open the persistent MP4 cache off the UI thread while Apple is searched.
     // Reuses one cache for all Canvas players; no disk work on a draw frame.
     LaunchedEffect(animatedArtworkEnabled) {
-        if (animatedArtworkEnabled) SpotifyCanvasVideoCache.prepare(context)
+        if (animatedArtworkEnabled) {
+            coroutineScope {
+                launch { SpotifyCanvasVideoCache.prepare(context) }
+                launch { AppleTallVideoCache.prepare(context) }
+            }
+        }
     }
     // Retain the current frame while the next song's artwork is decoded. Resetting
     // these states on every URI change briefly exposed the empty placeholder.
@@ -4308,47 +4313,24 @@ private fun ImmersiveArtwork(
             animatedArtworkUrl = null
             return@LaunchedEffect
         }
-        // Apple Tall retains its short priority window. Once any provider
-        // wins, keep that stream for this song. Previously a late Apple
-        // lookup could replace an already playing Canvas and release the
-        // Media3 video/TextureView, producing freeze/blank/restart flicker.
+        // Use the same provider decision prepared for the next five songs.
+        // Apple's genuine Tall animation must win when available; only a
+        // confirmed Apple miss allows Spotify. No provider races or late
+        // switching can tear down the TextureView mid-song.
         if (!spotifyFallbackRequested) {
-            coroutineScope {
-                val apple = async {
-                    AppleMusicAnimatedArtworkLoader.loadAnimatedArtworkUrl(context, song)
+            val candidate = AnimatedArtworkQueuePreloader.ready(song)
+                ?: AnimatedArtworkQueuePreloader.resolve(context, song)
+            if (candidate != null) {
+                artworkProvider = when (candidate.provider) {
+                    AnimatedArtworkQueuePreloader.Provider.APPLE_TALL ->
+                        AnimatedArtworkProvider.APPLE_MUSIC
+                    AnimatedArtworkQueuePreloader.Provider.SPOTIFY_CANVAS ->
+                        AnimatedArtworkProvider.SPOTIFY_CANVAS
                 }
-                val spotify = async {
-                    SpotifyCanvasArtworkLoader.findCanvasUrl(context, song)
-                }
-                try {
-                    val fastAppleUrl = withTimeoutOrNull(400L) { apple.await() }
-                    if (fastAppleUrl != null) {
-                        artworkProvider = AnimatedArtworkProvider.APPLE_MUSIC
-                        animatedArtworkUrl = fastAppleUrl
-                    } else {
-                        val (firstProvider, firstUrl) =
-                            select<Pair<AnimatedArtworkProvider, String?>> {
-                                apple.onAwait { AnimatedArtworkProvider.APPLE_MUSIC to it }
-                                spotify.onAwait { AnimatedArtworkProvider.SPOTIFY_CANVAS to it }
-                            }
-                        if (firstUrl != null) {
-                            artworkProvider = firstProvider
-                            animatedArtworkUrl = firstUrl
-                            // Lock now; do not upgrade to Apple when it finishes.
-                        } else if (firstProvider == AnimatedArtworkProvider.APPLE_MUSIC) {
-                            artworkProvider = AnimatedArtworkProvider.SPOTIFY_CANVAS
-                            animatedArtworkUrl = spotify.await()
-                        } else {
-                            artworkProvider = AnimatedArtworkProvider.APPLE_MUSIC
-                            animatedArtworkUrl = apple.await()
-                        }
-                    }
-                } finally {
-                    if (apple.isActive) apple.cancel()
-                    if (spotify.isActive) spotify.cancel()
-                }
-            }
-        } else {
+                animatedArtworkUrl = candidate.url
+            } else {
+                animatedArtworkUrl = null
+            }        } else {
             // All Apple playback candidates failed. Never repeat its lookup.
             artworkProvider = AnimatedArtworkProvider.SPOTIFY_CANVAS
             animatedArtworkUrl = SpotifyCanvasArtworkLoader.findCanvasUrl(context, song)
@@ -4411,6 +4393,7 @@ private fun ImmersiveArtwork(
                         if (animatedArtworkUrl == activeUrl) {
                             when (artworkProvider) {
                                 AnimatedArtworkProvider.APPLE_MUSIC -> {
+                                    AnimatedArtworkQueuePreloader.invalidate(song, activeUrl)
                                     val alternative = AppleMusicAnimatedArtworkLoader.nextPlaybackUrl(activeUrl)
                                     if (alternative != null) {
                                         animatedArtworkUrl = alternative
@@ -4425,6 +4408,7 @@ private fun ImmersiveArtwork(
                                     // Evict a stale cached URL so replay
                                     // requests a new Canvas instead of looping.
                                     SpotifyCanvasArtworkLoader.invalidate(context, activeUrl)
+                                    AnimatedArtworkQueuePreloader.invalidate(song, activeUrl)
                                     animatedArtworkUrl = null
                                 }
                             }
@@ -4473,9 +4457,13 @@ private fun AnimatedArtworkVideoBackground(
         val builder = androidx.media3.exoplayer.ExoPlayer.Builder(context)
         val isSpotifyCanvas = SpotifyCanvasArtworkLoader.isSpotifyCanvasVideo(url)
         if (isSpotifyCanvas) {
-            // Fast repeat playback: reuse disk-backed MP4 bytes if available.
-            // Apple Music HLS must keep its original MediaSource factory.
             SpotifyCanvasVideoCache.mediaSourceFactory(context)?.let {
+                builder.setMediaSourceFactory(it)
+            }
+        } else {
+            // Reuse the very same Apple HLS playlist/segment bytes fetched for
+            // songs 2-6 in the speculative playback queue.
+            AppleTallVideoCache.mediaSourceFactory(context)?.let {
                 builder.setMediaSourceFactory(it)
             }
         }
