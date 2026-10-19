@@ -22,7 +22,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -49,7 +48,6 @@ fun ImmersiveArtistPage(
     artwork: @Composable (Song, Modifier) -> Unit
 ) {
     val context = LocalContext.current
-    val uriHandler = LocalUriHandler.current
     val artist = ArtistNameUtils.firstArtist(artistName)
     val tracks = remember(songs, artist) { ArtistLibrary.tracks(songs, artist) }
     val albums = remember(tracks) { ArtistLibrary.albums(tracks) }
@@ -164,9 +162,15 @@ fun ImmersiveArtistPage(
                             TextButton(onClick = { bioExpanded = !bioExpanded }, contentPadding = PaddingValues(0.dp)) {
                                 Text(if (bioExpanded) artistText("Lebih sedikit", "Show less") else artistText("Selengkapnya", "Read more"))
                             }
-                            TextButton(onClick = { runCatching { uriHandler.openUri(biography.sourceUrl) } }, contentPadding = PaddingValues(0.dp)) {
-                                Text("Last.fm • ${biography.sourceLanguage.uppercase(Locale.ROOT)} ↗", color = Color(0xFF999999), fontSize = 11.sp)
-                            }
+                            // Attribution is intentionally not a tap target.
+                            // A dragged/partially visible neighboring Artist
+                            // page must never launch Chrome over Now Playing.
+                            Text(
+                                "Source: Last.fm • ${biography.sourceLanguage.uppercase(Locale.ROOT)}",
+                                color = Color(0xFF999999),
+                                fontSize = 11.sp,
+                                modifier = Modifier.padding(top = 7.dp, bottom = 10.dp)
+                            )
                         }
                         if (portrait != null) Text(artistText("Foto artis: Deezer", "Artist portrait: Deezer"), color = Color(0xFF777777), fontSize = 11.sp)
                         else if (portraitLoading) Text(artistText("Memuat foto artis…", "Loading artist portrait…"), color = Color(0xFF777777), fontSize = 11.sp)
