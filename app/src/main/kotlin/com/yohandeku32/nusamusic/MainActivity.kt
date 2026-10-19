@@ -175,6 +175,7 @@ import com.yohandeku32.nusamusic.ui.TurntableLabels
 import com.yohandeku32.nusamusic.ui.VinylSongList
 import com.yohandeku32.nusamusic.ui.ImmersiveMusicLibrary
 import com.yohandeku32.nusamusic.ui.ImmersiveArtworkPlayer
+import com.yohandeku32.nusamusic.ui.immersiveGlassPill
 import com.yohandeku32.nusamusic.ui.ImmersiveArtworkScene
 import com.yohandeku32.nusamusic.ui.ImmersiveArtistPage
 import com.yohandeku32.nusamusic.ui.ImmersiveArtistPageState
@@ -3238,10 +3239,13 @@ private fun AudioQualityPill(
                 Box(
                     modifier = Modifier
                         .padding(top = if (immersive) 0.dp else 4.dp)
-                        .clip(RoundedCornerShape(7.dp))
-                        .background(
-                            if (immersive) Color.White.copy(alpha = 0.10f)
-                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                        .then(
+                            if (immersive) Modifier.immersiveGlassPill(100.dp)
+                            else Modifier
+                                .clip(RoundedCornerShape(7.dp))
+                                .background(
+                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                                )
                         )
                         .clickable(enabled = metadataMatchesSong && info != null) {
                             showMetadataDialog = true
@@ -3264,7 +3268,7 @@ private fun AudioQualityPill(
                     modifier = Modifier
                         .padding(top = if (immersive) 0.dp else 4.dp)
                         .then(
-                            if (immersive) Modifier
+                            if (immersive) Modifier.immersiveGlassPill(100.dp)
                             else Modifier
                                 .clip(RoundedCornerShape(50))
                                 .background(MaterialTheme.colorScheme.surfaceVariant)
@@ -3272,7 +3276,7 @@ private fun AudioQualityPill(
                         .clickable(enabled = metadataMatchesSong && info != null) {
                             showMetadataDialog = true
                         }
-                        .padding(horizontal = if (immersive) 0.dp else 8.dp, vertical = 3.dp),
+                        .padding(horizontal = if (immersive) 9.dp else 8.dp, vertical = if (immersive) 4.dp else 3.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
