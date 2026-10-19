@@ -4659,9 +4659,16 @@ private fun AnimatedArtworkVideoBackground(
     // Do not require a successful TextureView screenshot to reveal animated artwork.
     // Some devices render video correctly but never return a usable capture.
     LaunchedEffect(player, videoReady) {
-        // The first rendered video frame is already decoded and drawable:
-        // start the crossfade immediately, without an arbitrary timer.
-        videoVisible = videoReady
+        if (videoReady) {
+            // Media3 first-frame notification can precede the View hierarchy's
+            // next composition. Wait just one vsync to guarantee its TextureView
+            // is attached before showing alpha>0; otherwise a black rectangle
+            // can appear during rapid skips.
+            androidx.compose.runtime.withFrameNanos { }
+            videoVisible = true
+        } else {
+            videoVisible = false
+        }
     }
 
     LaunchedEffect(player, artworkPlayerView, videoVisible, playbackVisible) {
