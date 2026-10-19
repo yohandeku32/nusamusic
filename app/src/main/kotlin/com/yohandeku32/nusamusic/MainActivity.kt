@@ -1865,14 +1865,28 @@ private fun NusaMusicApp(
 
     if (showSettings) {
         val settingsSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        var settingsClosing by remember { mutableStateOf(false) }
+        val closeSettings: () -> Unit = {
+            if (!settingsClosing) {
+                settingsClosing = true
+                scope.launch {
+                    try {
+                        // Dismiss with the sheet's own downward animation,
+                        // including when pulled from the top of the list.
+                        settingsSheetState.hide()
+                    } finally {
+                        showSettings = false
+                    }
+                }
+            }
+        }
 
         ModalBottomSheet(
-            onDismissRequest = { showSettings = false },
+            onDismissRequest = closeSettings,
             sheetState = settingsSheetState,
-            // Settings is a scrollable page inside a sheet, not a draggable
-            // sheet itself. Dragging the outer sheet competes with LazyColumn
-            // nested scrolling near its boundaries and causes jitter/bounce.
-            // The X button, outside tap, and system Back still dismiss it.
+            // Only the dedicated header and top-of-list overscroll trigger
+            // dismissal. Outer sheet dragging stays disabled so scrolling
+            // inside Settings cannot make the entire panel jitter.
             sheetGesturesEnabled = false,
             dragHandle = null,
             containerColor = MaterialTheme.colorScheme.background,
@@ -1965,7 +1979,7 @@ private fun NusaMusicApp(
                 onSelectMusicFolder = onSelectMusicFolder,
                 onRemoveMusicFolder = onRemoveMusicFolder,
                 onScanMusic = onScanMusic,
-                onDismiss = { showSettings = false }
+                onDismiss = closeSettings
             )
         }
     }
