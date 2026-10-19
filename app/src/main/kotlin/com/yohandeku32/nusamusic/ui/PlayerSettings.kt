@@ -92,11 +92,6 @@ internal fun PlayerSettingsContent(
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.semantics { heading() }
                 )
-                Text(
-                    settingsText("Musikmu, sesuai gayamu.", "Your music, your way."),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = colors.onSurfaceVariant
-                )
             }
             IconButton(onClick = onDismiss) {
                 Icon(Icons.Default.Close, settingsText("Tutup pengaturan", "Close settings"))
@@ -111,21 +106,21 @@ internal fun PlayerSettingsContent(
                 SettingsSection(settingsText("Tampilan pemutar", "Player appearance")) {
                     Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         SettingChoice(
-                            "CD", settingsText("Cakram berputar dengan koleksi geser.", "Rotating disc with a swipeable collection."),
+                            "CD", settingsText("Pemutar CD dengan carousel.", "CD player with carousel."),
                             Icons.Default.Album, playerPresentationMode == PlayerPresentationMode.CD,
                             { onPresentationSelected(PlayerPresentationMode.CD) }
                         )
                         SettingChoice(
                             "Vinyl",
-                            if (!PlayerPresentationMode.VINYL.isAvailable) settingsText("Sementara dinonaktifkan", "Temporarily disabled")
-                            else settingsText("Piringan hitam berputar.", "A spinning vinyl record."),
+                            if (!PlayerPresentationMode.VINYL.isAvailable) settingsText("Belum tersedia", "Unavailable")
+                            else settingsText("Pemutar piringan hitam.", "Vinyl record player."),
                             Icons.Default.GraphicEq, playerPresentationMode == PlayerPresentationMode.VINYL,
                             { onPresentationSelected(PlayerPresentationMode.VINYL) },
                             enabled = PlayerPresentationMode.VINYL.isAvailable
                         )
                         SettingChoice(
                             settingsText("Sampul imersif", "Immersive artwork"),
-                            settingsText("Sampul album memenuhi layar.", "Edge-to-edge album artwork."),
+                            settingsText("Sampul album layar penuh.", "Full-screen album cover."),
                             Icons.Default.CropOriginal, playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK,
                             { onPresentationSelected(PlayerPresentationMode.IMMERSIVE_ARTWORK) },
                             enabled = PlayerPresentationMode.IMMERSIVE_ARTWORK.isAvailable
@@ -134,8 +129,8 @@ internal fun PlayerSettingsContent(
                     SettingsDivider()
                     if (playerPresentationMode == PlayerPresentationMode.CD) {
                         SettingToggle(
-                            settingsText("Sudut carousel melengkung", "Rounded carousel corners"),
-                            settingsText("Aktif: melengkung. Nonaktif: lurus.", "On: rounded. Off: square."),
+                            settingsText("Sudut carousel", "Carousel corners"),
+                            settingsText("Bulat atau kotak.", "Rounded or square."),
                             roundedCarouselCorners, onRoundedCarouselCornersChange
                         )
                         SettingsDivider()
@@ -143,8 +138,8 @@ internal fun PlayerSettingsContent(
                     SettingToggle(
                         settingsText("Animasi sampul", "Animated artwork"),
                         settingsText(
-                            "Apple Music lebih dulu, lalu Spotify Canvas jika tidak ada. Pencarian mengirim judul dan artis ke penyedia pihak ketiga.",
-                            "Apple Music first, then Spotify Canvas when unavailable. Searches send title and artist to third-party services."
+                            "Apple Music → Spotify Canvas. Judul dan artis dikirim saat pencarian.",
+                            "Apple Music → Spotify Canvas. Searches share title and artist."
                         ),
                         animatedArtworkEnabled, onAnimatedArtworkChange
                     )
@@ -153,7 +148,7 @@ internal fun PlayerSettingsContent(
             if (LYRICS_ENABLED && playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) item(key = "lyrics") {
                 SettingsSection(settingsText("Lirik", "Lyrics")) {
                     Surface(shape = RoundedCornerShape(16.dp), color = colors.surfaceVariant.copy(alpha = 0.45f)) {
-                        Text(settingsText("Musik menemani harimu", "Music follows your day"),
+                        Text(settingsText("Contoh lirik", "Lyric preview"),
                             Modifier.fillMaxWidth().padding(20.dp), fontSize = lyricsFontSize.sp,
                             lineHeight = (lyricsFontSize * 1.25f).sp, textAlign = TextAlign.Center, fontWeight = FontWeight.Bold)
                     }
@@ -169,10 +164,10 @@ internal fun PlayerSettingsContent(
                     if (hasLyricsSong) {
                         SettingsDivider()
                         TextButton(onClick = onRetryLyrics, enabled = !lyricsLoading) {
-                            Text(settingsText("Baca ulang metadata lirik", "Reload embedded lyrics"))
+                            Text(settingsText("Muat ulang lirik", "Reload lyrics"))
                         }
                     }
-                    Text(settingsText("Lirik hanya dibaca dari metadata file audio.", "Lyrics are read only from audio file metadata."), color = colors.onSurfaceVariant)
+                    Text(settingsText("Lirik dari metadata audio.", "Lyrics from audio metadata."), color = colors.onSurfaceVariant)
                 }
             }
             item(key = "typography") {
@@ -185,11 +180,6 @@ internal fun PlayerSettingsContent(
                                 fontFamily = titleFontFamily,
                                 fontSize = titleFontSize.sp,
                                 lineHeight = (titleFontSize * 1.2f).sp
-                            )
-                            Text(
-                                settingsText("Untuk judul lagu di pemutar.", "For song titles in the player."),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = colors.onSurfaceVariant
                             )
                         }
                     }
@@ -235,13 +225,13 @@ internal fun PlayerSettingsContent(
                     }
                     SettingAction(
                         settingsText("Impor font", "Import font"),
-                        settingsText("Pilih file .TTF atau .OTF", "Choose a .TTF or .OTF file"),
+                        settingsText("File TTF atau OTF", "TTF or OTF file"),
                         Icons.Default.FolderOpen, onChooseCustomTitleFont
                     )
                     if (hasCustomTitleFont) {
                         SettingAction(
-                            settingsText("Kembalikan font bawaan", "Reset to system font"),
-                            customTitleFontName ?: settingsText("Font kustom aktif", "Custom font active"),
+                            settingsText("Reset font", "Reset font"),
+                            customTitleFontName ?: settingsText("Font kustom", "Custom font"),
                             Icons.Default.RestartAlt, onResetCustomTitleFont
                         )
                     }
@@ -253,18 +243,18 @@ internal fun PlayerSettingsContent(
                     Spacer(Modifier.height(12.dp))
                     Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         SettingChoice(
-                            settingsText("3D realistis", "3D realistic"),
-                            settingsText("Tekstur dan kedalaman tombol fisik.", "The texture and depth of physical buttons."),
+                            settingsText("3D", "3D"),
+                            settingsText("Efek tombol timbul.", "Raised button effect."),
                             Icons.Default.ViewInAr, realisticControls, { onRealisticControlsChange(true) }
                         )
                         SettingChoice(
-                            "Flat", settingsText("Tombol datar dan minimalis.", "Simple, minimal buttons."),
+                            "Flat", settingsText("Tanpa efek 3D.", "No 3D effect."),
                             Icons.Default.RadioButtonUnchecked, !realisticControls, { onRealisticControlsChange(false) }
                         )
                     }
                     SettingsDivider()
                     SettingToggle(
-                        "Crossfade", settingsText("Transisi halus antara dua lagu.", "Smooth transitions between songs."),
+                        "Crossfade", settingsText("Peralihan antarlagu.", "Fade between tracks."),
                         crossfadeEnabled, onCrossfadeChange
                     )
                     Spacer(Modifier.height(12.dp))
@@ -294,7 +284,7 @@ internal fun PlayerSettingsContent(
                 SettingsSection(settingsText("Koleksi musik", "Music library")) {
                     SettingAction(
                         settingsText("Tambah folder musik", "Add music folder"),
-                        settingsText("Pilih folder lokal untuk dipindai.", "Choose a local folder to scan."),
+                        settingsText("Ambil musik dari folder perangkat.", "Add music from your device."),
                         Icons.Default.CreateNewFolder, onSelectMusicFolder
                     )
                     if (musicFolders.isNotEmpty()) {
@@ -329,7 +319,7 @@ internal fun PlayerSettingsContent(
                             Icon(Icons.Default.Refresh, null, modifier = Modifier.size(20.dp))
                         }
                         Spacer(Modifier.width(10.dp))
-                        Text(if (isScanningMusic) settingsText("Memindai musik…", "Scanning music…") else settingsText("Pindai musik sekarang", "Scan music now"))
+                        Text(if (isScanningMusic) settingsText("Memindai musik…", "Scanning music…") else settingsText("Pindai ulang musik", "Rescan music"))
                     }
                 }
             }
@@ -342,19 +332,11 @@ internal fun PlayerSettingsContent(
                             Text(settingsText("Versi ${BuildConfig.VERSION_NAME}", "Version ${BuildConfig.VERSION_NAME}"), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
                         }
                     }
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(12.dp))
                     Text(
-                        settingsText("Pemutar musik lokal untuk pengalaman mendengarkan yang bersih dan sederhana.", "A local music player for a clean, simple listening experience."),
-                        style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant
-                    )
-                    SettingsDivider()
-                    Text(settingsText("Dikembangkan oleh yohandeku32", "Developed by yohandeku32"), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                    Spacer(Modifier.height(8.dp))
-                    Text("Kotlin • Jetpack Compose • Material 3 • Media3", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        settingsText("Biografi artis melalui Last.fm jika dikonfigurasi.", "Artist biographies via Last.fm when configured."),
-                        style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant
+                        settingsText("Dibuat oleh yohandeku32", "By yohandeku32"),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colors.onSurfaceVariant
                     )
                 }
             }
