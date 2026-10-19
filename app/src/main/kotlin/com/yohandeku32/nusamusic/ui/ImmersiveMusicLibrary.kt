@@ -3,8 +3,8 @@ package com.yohandeku32.nusamusic.ui
 import android.content.Context
 import java.util.Locale
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -19,7 +19,6 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.MoreHoriz
-import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
@@ -47,6 +46,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
@@ -56,6 +57,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.yohandeku32.nusamusic.R
 import com.yohandeku32.nusamusic.data.AudioCodecLoader
 import com.yohandeku32.nusamusic.model.Song
 import kotlinx.coroutines.Dispatchers
@@ -184,8 +186,8 @@ internal fun ImmersiveMusicLibrary(
                     Icon(Icons.Rounded.ArrowBack, "Back", tint = libraryWhite)
                 }
                 Text(
-                    "LIBRARY", color = librarySecondary, fontSize = 10.sp,
-                    fontWeight = FontWeight.SemiBold, letterSpacing = 2.sp,
+                    "Library", color = libraryWhite, fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.weight(1f).padding(start = 8.dp)
                 )
                 IconButton(onClick = onScanMusic, enabled = !isScanning) {
@@ -222,8 +224,8 @@ internal fun ImmersiveMusicLibrary(
             ) {
                 Column(Modifier.weight(1f)) {
                     Text(
-                        focus?.name ?: "Your Music", color = libraryWhite,
-                        fontSize = 31.sp, fontWeight = FontWeight.Bold,
+                        focus?.name ?: "Songs", color = libraryWhite,
+                        fontSize = 29.sp, fontWeight = FontWeight.SemiBold,
                         letterSpacing = (-0.8).sp, lineHeight = 36.sp,
                         maxLines = 1, overflow = TextOverflow.Ellipsis
                     )
@@ -232,7 +234,7 @@ internal fun ImmersiveMusicLibrary(
                         when (focus?.type) {
                             FocusType.ALBUM -> "ALBUM"
                             FocusType.ARTIST -> "ARTIST"
-                            null -> "${songs.size} songs on this device"
+                            null -> "On this device"
                         },
                         color = librarySecondary, fontSize = 12.sp
                     )
@@ -323,7 +325,7 @@ internal fun ImmersiveMusicLibrary(
                         state = listState, modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(
                             start = 12.dp, end = 12.dp, top = 2.dp,
-                            bottom = if (currentSong != null) 114.dp else 24.dp)
+                            bottom = 24.dp)
                     ) {
                         items(
                             items = visibleSongs,
@@ -362,34 +364,7 @@ internal fun ImmersiveMusicLibrary(
             }
         }
 
-        if (currentSong != null) {
-            Row(
-                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 14.dp)
-                    .clip(RoundedCornerShape(20.dp)).background(librarySurface)
-                    .border(0.7.dp, Color.White.copy(alpha = 0.09f), RoundedCornerShape(20.dp))
-                    .clickable(onClick = onReturnToPlayer)
-                    .padding(start = 9.dp, end = 5.dp, top = 8.dp, bottom = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                artwork(currentSong, Modifier.size(43.dp).clip(RoundedCornerShape(12.dp)))
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(currentSong.title, color = libraryWhite, fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold, maxLines = 1,
-                        overflow = TextOverflow.Ellipsis)
-                    Spacer(Modifier.height(2.dp))
-                    Text(currentSong.artist.ifBlank { "Unknown artist" },
-                        color = librarySecondary, fontSize = 11.sp,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                IconButton(onClick = onTogglePlay, modifier = Modifier.size(46.dp)) {
-                    Icon(if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                        if (isPlaying) "Pause" else "Play", tint = libraryWhite,
-                        modifier = Modifier.size(24.dp))
-                }
-            }
-        }
+
     }
     } // Immersive-only dark Material theme
 }
@@ -438,8 +413,12 @@ private fun ImmersiveTrackRow(
                     modifier = Modifier.weight(1f, fill = false))
                 if (codec?.isHiRes == true) {
                     Spacer(Modifier.width(8.dp))
-                    Text("HI-RES", color = librarySecondary, fontSize = 8.sp,
-                        fontWeight = FontWeight.Bold, letterSpacing = 0.4.sp)
+                    Image(
+                        painter = painterResource(id = R.drawable.hi_res_audio_logo),
+                        contentDescription = "Hi-Res Audio",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.size(22.dp)
+                    )
                 }
             }
         }
