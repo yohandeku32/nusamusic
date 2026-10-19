@@ -7,26 +7,42 @@ import org.junit.Test
 
 class AnimatedArtworkResolverTest {
     @Test
-    fun portraitArtworkIsPreferredAndSquareRemainsAFallback() {
-        assertEquals(listOf("tall", "square"), preferredAnimatedArtworkUrls("tall", "square"))
-        assertEquals(listOf("square"), preferredAnimatedArtworkUrls(null, "square"))
-        assertEquals(listOf("square"), preferredAnimatedArtworkUrls("null", "square"))
-        assertEquals(listOf("tall"), preferredAnimatedArtworkUrls("tall", "tall"))
-        assertEquals(emptyList<String>(), preferredAnimatedArtworkUrls(" ", null))
+    fun tallArtworkIsTheOnlyAppleAnimationVariant() {
+        assertEquals(listOf("tall"), preferredAnimatedArtworkUrls("tall"))
+        assertEquals(emptyList<String>(), preferredAnimatedArtworkUrls(null))
+        assertEquals(emptyList<String>(), preferredAnimatedArtworkUrls("null"))
+        assertEquals(emptyList<String>(), preferredAnimatedArtworkUrls("NONE"))
+        assertEquals(emptyList<String>(), preferredAnimatedArtworkUrls(" "))
+        assertEquals(listOf("https://apple.com/tall.m3u8"),
+            preferredAnimatedArtworkUrls("  https://apple.com/tall.m3u8  "))
     }
     private val metadata = ArtworkLookupMetadata("Song", "Singer", "Album (Deluxe Edition)")
     private val stream = "https://example.mzstatic.com/artwork.m3u8"
 
     @Test
-    fun failedTallArtworkFallsBackToSquareWithoutSelectingTheBrokenStreamAgain() {
+    fun failedTallArtworkNeverFallsBackToSquareVideo() {
         val tall = "https://example.mzstatic.com/tall.m3u8"
-        val original = ArtworkReply(tall, alternatives = listOf(tall, stream))
-        val square = original.afterPlaybackFailure(tall)
-        assertEquals(stream, square.url)
-        assertTrue(square.alternatives.isEmpty())
-        val exhausted = square.afterPlaybackFailure(stream)
+        // No square fallback is added to the result when only Tall is allowed.
+        val original = ArtworkReply(tall)
+        val exhausted = original.afterPlaybackFailure(tall)
         assertEquals(null, exhausted.url)
+        assertTrue(exhausted.alternatives.isEmpty())
         assertTrue(exhausted.failed)
+    }
+
+    @Test
+    fun resolverContinuesLookingForTallWhenFirstAlbumHasOnlySquare() = runBlocking {
+        val tall = "https://example.mzstatic.com/tall.m3u8"
+        val secondAlbum = AppleCatalogSong(
+            "Song", "Singer", "Alternate Album", "https://music.apple.com/us/album/7654321"
+        )
+        val result = resolveAnimatedArtwork(
+            metadata, metadata, "US",
+            searchAlbum = { ArtworkReply() }, // Square-only response maps to no Tall URL.
+            searchCatalog = { _, _ -> CatalogReply(listOf(secondAlbum)) },
+            loadAlbumUrl = { ArtworkReply(tall) }
+        )
+        assertEquals(tall, result.url)
     }
 
     @Test
