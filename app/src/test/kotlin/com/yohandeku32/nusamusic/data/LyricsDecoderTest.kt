@@ -146,4 +146,65 @@ class LyricsDecoderTest {
         assertEquals(listOf(1_000, 1_400, 1_800), line.syllables.map { it.start })
         assertEquals(listOf(1_400, 1_800, 2_300), line.syllables.map { it.end })
     }
+    @Test fun duetTtmlUsesExplicitAgentTagsInsteadOfAlternatingRows() {
+        val content = """
+            <tt xmlns="http://www.w3.org/ns/ttml"
+                xmlns:ttm="http://www.w3.org/ns/ttml#metadata">
+                <head><metadata>
+                    <ttm:agent xml:id="singer1" type="person"/>
+                    <ttm:agent xml:id="singer2" type="person"/>
+                </metadata></head>
+                <body><div>
+                    <p begin="1s" end="3s" ttm:agent="singer1">
+                        <span begin="1s" end="2s">Hello </span>
+                        <span begin="2s" end="3s">there</span>
+                    </p>
+                    <p begin="3s" end="5s" ttm:agent="singer2">
+                        <span begin="3s" end="4s">Answer </span>
+                        <span begin="4s" end="5s">me</span>
+                    </p>
+                    <p begin="5s" end="7s" ttm:agent="singer1">
+                        <span begin="5s" end="7s">Together</span>
+                    </p>
+                </div></body>
+            </tt>
+        """.trimIndent()
+        val result = LyricsDecoder.decodeWithTiming(content, 10_000)
+        assertEquals(3, result.lyrics.lines.size)
+        assertEquals(setOf(1), result.duetRightLines)
+        assertTrue(result.lyrics.lines[1] is KaraokeLine)
+        assertEquals(listOf(3_000, 4_000),
+            (result.lyrics.lines[1] as KaraokeLine).syllables.map { it.start })
+    }
+
+    @Test fun soloTtmlWithOnlyOneAgentKeepsEveryLineLeft() {
+        val content = """
+            <tt xmlns:ttm="http://www.w3.org/ns/ttml#metadata">
+                <body>
+                    <p begin="1s" end="2s" ttm:agent="solo">Only one</p>
+                    <p begin="3s" end="4s" ttm:agent="solo">Still solo</p>
+                </body>
+            </tt>
+        """.trimIndent()
+        assertTrue(LyricsDecoder.decodeWithTiming(content, 5_000).duetRightLines.isEmpty())
+    }
+
+    @Test fun simultaneousDuetLinesRetainSourceAndRightSideIdentity() {
+        val content = """
+            <tt xmlns:ttm="http://www.w3.org/ns/ttml#metadata">
+                <body><div>
+                    <p begin="2s" end="4s" ttm:agent="first">
+                        <span begin="2s" end="4s">First line</span>
+                    </p>
+                    <p begin="2s" end="4s" ttm:agent="second">
+                        <span begin="2s" end="4s">Second line</span>
+                    </p>
+                </div></body>
+            </tt>
+        """.trimIndent()
+        val result = LyricsDecoder.decodeWithTiming(content, 5_000)
+        assertEquals(listOf(2_000, 2_000), result.lyrics.lines.map { it.start })
+        assertEquals(setOf(1), result.duetRightLines)
+    }
+
 }

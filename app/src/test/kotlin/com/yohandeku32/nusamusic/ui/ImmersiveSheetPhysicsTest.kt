@@ -4,21 +4,21 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ImmersiveSheetPhysicsTest {
-    @Test fun panelStopsJustBelowTheMeasuredSettingsButtonOnMultipleDisplays() {
-        for ((height, bottom, gap) in listOf(
-            Triple(1280, 105, 16),
-            Triple(2340, 132, 24),
-            Triple(2700, 153, 24),
-            Triple(900, 92, 12)
+    @Test fun panelStopsJustBelowSafeTopInsetOnMultipleDisplays() {
+        for ((height, safeInset, gap) in listOf(
+            Triple(1280, 42, 16),
+            Triple(2340, 72, 24),
+            Triple(2700, 88, 24),
+            Triple(900, 24, 12)
         )) {
-            val top = immersiveLyricsSheetTopPx(bottom, height, gap)
-            assertEquals(bottom + gap, top)
-            assertEquals(height - top, height - immersiveLyricsSheetTopPx(bottom, height, gap))
+            val top = immersiveLyricsSheetTopPx(safeInset, height, gap)
+            assertEquals(safeInset + gap, top)
+            assertEquals(height - top, height - immersiveLyricsSheetTopPx(safeInset, height, gap))
             assertTrue(top < height / 2) // never the previous half-window sheet
         }
     }
 
-    @Test fun heightAndInsetsAreClampedWithoutOvershootingTheSettingsRegion() {
+    @Test fun heightAndInsetsAreClampedToTheViewport() {
         assertEquals(0, immersiveLyricsSheetTopPx(-50, 1000, -20))
         assertEquals(1000, immersiveLyricsSheetTopPx(975, 1000, 50))
         assertEquals(0, immersiveLyricsSheetTopPx(500, -1, 10))

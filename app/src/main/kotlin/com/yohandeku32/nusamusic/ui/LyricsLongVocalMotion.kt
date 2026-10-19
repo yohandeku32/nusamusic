@@ -66,8 +66,8 @@ internal class LyricsLongVocalMotion(
             horizontalDp.toDouble() * 0.0045
         val breathX = 0.5 + 0.5 * sin(phase - 0.65)
         val breathY = 0.5 + 0.5 * sin(phase - 0.4)
-        scaleX = (1.0 + 0.024 * energy * breathX).toFloat()
-        scaleY = (1.0 + 0.026 * energy * breathY).toFloat()
+        scaleX = (1.0 + 0.052 * energy * breathX).toFloat()
+        scaleY = (1.0 + 0.056 * energy * breathY).toFloat()
 
         // Continuous 1.0–1.4Hz resonances, under 0.32dp combined.
         // They move the complete glyph run as a unit, never its sub-pixels

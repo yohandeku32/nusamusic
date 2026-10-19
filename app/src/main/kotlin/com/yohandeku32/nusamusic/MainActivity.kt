@@ -146,6 +146,8 @@ import com.yohandeku32.nusamusic.data.ArtworkBlur
 import com.yohandeku32.nusamusic.data.ImmersiveArtworkCache
 import com.yohandeku32.nusamusic.data.ImmersiveArtworkSnapshot
 import com.yohandeku32.nusamusic.data.AppleMusicAnimatedArtworkLoader
+import com.yohandeku32.nusamusic.data.SpotifyCanvasArtworkLoader
+import com.yohandeku32.nusamusic.data.SpotifyCanvasVideoCache
 import com.yohandeku32.nusamusic.data.AudioCodecInfo
 import com.yohandeku32.nusamusic.data.AudioCodecLoader
 import com.yohandeku32.nusamusic.data.ArtistImageLoader
@@ -177,8 +179,13 @@ import com.yohandeku32.nusamusic.ui.ImmersiveLyricsState
 import com.yohandeku32.nusamusic.ui.MiuixHorizontalPager
 import com.yohandeku32.nusamusic.ui.animateMiuixScrollToPage
 import com.yohandeku32.nusamusic.ui.artworkBackdropColor
+
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.selects.select
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -200,6 +207,7 @@ class MainActivity : ComponentActivity() {
     // Avoid checking every Media3 queue item whenever a carousel disc is tapped.
     private var queuedPlaybackOrder: List<Song>? = null
     private var pendingPlaySongJob: Job? = null
+    private var nextCanvasPrefetchJob: Job? = null
     private var songs by mutableStateOf<List<Song>>(emptyList())
     private var currentSong by mutableStateOf<Song?>(null)
     private var isPlaying by mutableStateOf(false)
@@ -503,11 +511,22 @@ class MainActivity : ComponentActivity() {
                     positionMs = c.currentPosition.coerceAtLeast(0L)
                     durationMs = c.duration.coerceAtLeast(0L)
                     persistPlaybackState(c, force = true)
+                    scheduleNextCanvasPrefetch(c)
+                }
+
+                override fun onTimelineChanged(
+                    timeline: androidx.media3.common.Timeline,
+                    reason: Int
+                ) {
+                    // Queue rebuilds, restores, and shuffled order can change
+                    // the next song without changing the currently playing song.
+                    scheduleNextCanvasPrefetch(c)
                 }
 
                 override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
                     shuffleEnabled = shuffleModeEnabled
                     persistPlaybackState(c, force = true)
+                    scheduleNextCanvasPrefetch(c)
                 }
 
                 override fun onRepeatModeChanged(repeatModeValue: Int) {
@@ -1195,6 +1214,41 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Warm the next real Media3 queue item (including shuffle order), never a
+     * guessed library neighbor. A 1.8 s debounce coalesces queue restores and
+     * rapid skips. At most one 512 KiB speculative Canvas request runs at once.
+     * No player/decoder is created until the user actually plays that song.
+     */
+    private fun scheduleNextCanvasPrefetch(player: MediaController) {
+        nextCanvasPrefetchJob?.cancel()
+        nextCanvasPrefetchJob = null
+
+        val preferences = uiPrefsForFonts()
+        if (!preferences.getBoolean("animated_artwork_enabled", true) ||
+            PlayerPresentationMode.fromPreference(
+                preferences.getString("player_presentation_mode", null)
+            ) != PlayerPresentationMode.IMMERSIVE_ARTWORK
+        ) return
+
+        val nextIndex = player.nextMediaItemIndex
+        if (nextIndex !in 0 until player.mediaItemCount) return
+        val nextId = player.getMediaItemAt(nextIndex).mediaId.toLongOrNull() ?: return
+        val librarySnapshot = songs
+
+        nextCanvasPrefetchJob = lifecycleScope.launch {
+            delay(1_800L)
+            val candidate = withContext(Dispatchers.Default) {
+                librarySnapshot.firstOrNull { it.id == nextId }
+            } ?: return@launch
+            if (currentSong?.id == candidate.id) return@launch
+
+            val url = SpotifyCanvasArtworkLoader.findCanvasUrl(this@MainActivity, candidate)
+                ?: return@launch
+            SpotifyCanvasVideoCache.prefetchNext(this@MainActivity, url)
+        }
+    }
+
     private fun nextSong() {
         controller?.let { it.seekToNextMediaItem(); it.play() }
     }
@@ -1240,6 +1294,8 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        nextCanvasPrefetchJob?.cancel()
+        nextCanvasPrefetchJob = null
         pendingPlaySongJob?.cancel()
         pendingPlaySongJob = null
         automaticMusicScanJob?.cancel()
@@ -1809,58 +1865,50 @@ private fun NusaMusicApp(
 
     if (showSettings) {
         val settingsSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        var settingsClosing by remember { mutableStateOf(false) }
+        val closeSettings: () -> Unit = {
+            if (!settingsClosing) {
+                settingsClosing = true
+                scope.launch {
+                    try {
+                        // Dismiss with the sheet's own downward animation,
+                        // including when pulled from the top of the list.
+                        settingsSheetState.hide()
+                    } finally {
+                        showSettings = false
+                    }
+                }
+            }
+        }
 
         ModalBottomSheet(
-            onDismissRequest = { showSettings = false },
+            onDismissRequest = closeSettings,
             sheetState = settingsSheetState,
+            // Only the dedicated header and top-of-list overscroll trigger
+            // dismissal. Outer sheet dragging stays disabled so scrolling
+            // inside Settings cannot make the entire panel jitter.
+            sheetGesturesEnabled = false,
+            dragHandle = null,
             containerColor = MaterialTheme.colorScheme.background,
             contentColor = MaterialTheme.colorScheme.onBackground
         ) {
-            // ModalBottomSheet is hosted in its own dialog window. Hiding the
-            // Activity status bar alone is not enough because the dialog can
-            // reveal its own system bars while opening.
+            // ModalBottomSheet owns a separate dialog window. Configure its
+            // fullscreen flags ONCE when that window is attached, instead of
+            // writing WindowInsets/systemUiVisibility every 100 ms during
+            // scroll. Repeated writes can invalidate dialog measurements and
+            // make the entire settings sheet appear to shake.
             val sheetView = androidx.compose.ui.platform.LocalView.current
             val sheetWindow = (sheetView.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window
-
-            // Keep the Settings dialog in fullscreen mode. ModalBottomSheet can
-            // reset system-bar visibility during its entrance/settling animation,
-            // so re-apply the hidden state when its window or sheet state changes.
-            val hideSettingsStatusBar: () -> Unit = {
+            androidx.compose.runtime.DisposableEffect(sheetWindow) {
                 sheetWindow?.let { dialogWindow ->
                     dialogWindow.addFlags(android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN)
                     WindowCompat.setDecorFitsSystemWindows(dialogWindow, false)
-
-                    @Suppress("DEPRECATION")
-                    run {
-                        dialogWindow.decorView.systemUiVisibility =
-                            dialogWindow.decorView.systemUiVisibility or
-                                android.view.View.SYSTEM_UI_FLAG_FULLSCREEN or
-                                android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                    }
-
                     androidx.core.view.WindowInsetsControllerCompat(
                         dialogWindow,
                         dialogWindow.decorView
-                    ).apply {
-                        systemBarsBehavior =
-                            androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                        hide(androidx.core.view.WindowInsetsCompat.Type.statusBars())
-                    }
+                    ).hide(androidx.core.view.WindowInsetsCompat.Type.statusBars())
                 }
-            }
-
-            androidx.compose.runtime.SideEffect {
-                hideSettingsStatusBar()
-            }
-
-            LaunchedEffect(sheetWindow) {
-                // Keep enforcing fullscreen for the entire lifetime of Settings.
-                // The sheet/dialog can restore status-bar visibility after its
-                // entrance animation, so a one-time hide is not reliable.
-                while (kotlinx.coroutines.currentCoroutineContext().isActive) {
-                    hideSettingsStatusBar()
-                    delay(100)
-                }
+                onDispose { /* Dialog window is destroyed on dismiss. */ }
             }
 
             PlayerSettingsContent(
@@ -1931,7 +1979,7 @@ private fun NusaMusicApp(
                 onSelectMusicFolder = onSelectMusicFolder,
                 onRemoveMusicFolder = onRemoveMusicFolder,
                 onScanMusic = onScanMusic,
-                onDismiss = { showSettings = false }
+                onDismiss = closeSettings
             )
         }
     }
@@ -1988,6 +2036,7 @@ private fun NusaMusicApp(
                         if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
                             ImmersiveArtworkPlayer(
                                 title = currentSong?.title ?: nusaText("Pilih lagu", "Choose a song"),
+                                composerNames = currentSong?.let { lyricsState.forSong(it).data?.stored?.credits?.composers?.joinToString(", ") } ?: "",
                                 artist = currentSong?.artist ?: nusaText("Perpustakaan musik lokal Anda", "Your local music library"),
                                 titleFontFamily = if (uiPrefs.contains("title_font_family")) titleFontFamily else FontFamily.SansSerif,
                                 titleFontSize = titleFontSize,
@@ -1996,7 +2045,6 @@ private fun NusaMusicApp(
                                 isFavorite = isFavorite,
                                 shuffleEnabled = shuffleEnabled,
                                 repeatMode = repeatMode,
-                                ambientSong = currentSong,
                                 lyricsOpen = lyricsRequested,
                                 lyricsEnabled = LYRICS_ENABLED,
                                 onPlayPause = if (currentSong == null) onRequestPermission else onTogglePlay,
@@ -2004,7 +2052,6 @@ private fun NusaMusicApp(
                                 onShuffle = onToggleShuffle, onRepeat = onToggleRepeat,
                                 onFavorite = { isFavorite = !isFavorite },
                                 onLyrics = { lyricsRequested = !lyricsRequested },
-                                onDismissLyrics = { lyricsRequested = false },
                                 onArtist = { scope.launch { pagerState.animateMiuixScrollToPage(0); lyricsRequested = false } },
                                 onLibrary = { scope.launch { pagerState.animateMiuixScrollToPage(libraryPage) } },
                                 onShare = { onShare(currentSong) },
@@ -2020,14 +2067,6 @@ private fun NusaMusicApp(
                                         onSeek, immersive = true, modifier = progressModifier)
                                 },
                                 quality = { AudioQualityPill(song = currentSong, immersive = true) },
-                                miniArtwork = { tileModifier ->
-                                    ArtworkView(
-                                        song = currentSong,
-                                        maxSizePx = 160,
-                                        modifier = tileModifier,
-                                        grainOverlay = false
-                                    )
-                                },
                                 lyrics = { lyricsModifier ->
                                     ImmersiveLyricsPanel(
                                         song = currentSong,
@@ -3027,66 +3066,41 @@ private fun AudioQualityPill(
                 Box(
                     modifier = Modifier
                         .padding(top = if (immersive) 0.dp else 4.dp)
-                        .clip(RoundedCornerShape(50))
+                        .clip(RoundedCornerShape(7.dp))
                         .background(
-                            color = if (immersive) {
-                                Color.White
-                            } else if (hiRes) {
-                                Color(0xFFB5A77C).copy(alpha = 0.42f)
-                            } else {
-                                MaterialTheme.colorScheme.surfaceVariant
-                            }
+                            if (immersive) Color.White.copy(alpha = 0.10f)
+                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
                         )
                         .clickable(enabled = metadataMatchesSong && info != null) {
                             showMetadataDialog = true
                         }
+                        .padding(horizontal = 9.dp, vertical = 4.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        androidx.compose.foundation.Image(
-                            painter = painterResource(id = R.drawable.apple_lossless_logo),
-                            contentDescription = if (hiRes) "Hi-Res" else "Lossless",
-                            contentScale = ContentScale.Fit,
-                            colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(
-                                if (hiRes) Color(0xFF3D3728) else MaterialTheme.colorScheme.onSurface
-                            ),
-                            modifier = Modifier.size(
-                                width = 16.dp,
-                                height = 9.dp
-                            )
-                        )
-
-                        Spacer(Modifier.width(4.dp))
-
-                        Text(
-                            text = if (hiRes) "Hi-Res" else "Lossless",
-                            fontSize = 10.sp,
-                            lineHeight = 11.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = if (hiRes) {
-                                Color(0xFF3D3728)
-                            } else {
-                                MaterialTheme.colorScheme.onSurface
-                            }
-                        )
-                    }
+                    Text(
+                        text = if (hiRes) "Hi-Res" else "Lossless",
+                        fontSize = if (immersive) 11.sp else 10.sp,
+                        lineHeight = if (immersive) 13.sp else 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (immersive) Color.White
+                            else MaterialTheme.colorScheme.onSurface
+                    )
                 }
             }
             AudioQualityBadge.DOLBY -> {
                 Box(
                     modifier = Modifier
                         .padding(top = if (immersive) 0.dp else 4.dp)
-                        .clip(RoundedCornerShape(50))
-                        .background(
-                            if (immersive) Color.White else MaterialTheme.colorScheme.surfaceVariant
+                        .then(
+                            if (immersive) Modifier
+                            else Modifier
+                                .clip(RoundedCornerShape(50))
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
                         )
                         .clickable(enabled = metadataMatchesSong && info != null) {
                             showMetadataDialog = true
                         }
-                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                        .padding(horizontal = if (immersive) 0.dp else 8.dp, vertical = 3.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -3107,15 +3121,12 @@ private fun AudioQualityPill(
                                 append("Atmos")
                             }
                         },
-                        fontSize = 10.sp,
-                        lineHeight = 11.sp,
+                        fontSize = if (immersive) 11.sp else 10.sp,
+                        lineHeight = if (immersive) 12.sp else 11.sp,
                         letterSpacing = (-0.35).sp,
                         maxLines = 1,
-                        color = if (immersive) {
-                            Color(0xFF1B1B1B)
-                        } else {
-                            MaterialTheme.colorScheme.onSurface
-                        }
+                        color = if (immersive) Color.White
+                            else MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
@@ -3440,7 +3451,7 @@ private fun SimpleProgressBar(
             }
     ) {
         val y = size.height / 2f
-        val stroke = (if (immersive) 3.dp else 5.dp).toPx()
+        val stroke = (if (immersive) 3.25.dp else 5.dp).toPx()
         val startX = stroke / 2f
         val endX = (size.width - startX).coerceAtLeast(startX)
 
@@ -3493,8 +3504,8 @@ private fun PlaybackProgress(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             val textColor = if (immersive) Color.White.copy(alpha = 0.75f) else MaterialTheme.colorScheme.onBackground
-            Text(formatTime(positionMs), fontSize = if (immersive) 11.sp else 12.sp, color = textColor)
-            Text(formatTime(durationMs), fontSize = if (immersive) 11.sp else 12.sp, color = textColor)
+            Text(formatTime(positionMs), fontSize = 12.sp, color = textColor)
+            Text(formatTime(durationMs), fontSize = 12.sp, color = textColor)
         }
     }
 }
@@ -4024,6 +4035,8 @@ private fun immersiveScrimOpacity(bitmap: Bitmap?): Float {
     return (0.06f + brightness * 0.50f).coerceIn(0.08f, 0.56f)
 }
 
+private enum class AnimatedArtworkProvider { APPLE_MUSIC, SPOTIFY_CANVAS }
+
 @Composable
 private fun ImmersiveArtwork(
     song: Song?,
@@ -4034,6 +4047,11 @@ private fun ImmersiveArtwork(
     lyricsMode: Boolean = false
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
+    // Open the persistent MP4 cache off the UI thread while Apple is searched.
+    // Reuses one cache for all Canvas players; no disk work on a draw frame.
+    LaunchedEffect(animatedArtworkEnabled) {
+        if (animatedArtworkEnabled) SpotifyCanvasVideoCache.prepare(context)
+    }
     // Retain the current frame while the next song's artwork is decoded. Resetting
     // these states on every URI change briefly exposed the empty placeholder.
     val initialSnapshot = remember { song?.let { ImmersiveArtworkCache.cached(it) } }
@@ -4053,7 +4071,9 @@ private fun ImmersiveArtwork(
         }
     }
     var animatedArtworkUrl by remember(song?.id, song?.uri) { mutableStateOf<String?>(null) }
-    var artworkReloadAttempt by remember(song?.uri) { mutableIntStateOf(0) }
+    var artworkProvider by remember(song?.uri) { mutableStateOf(AnimatedArtworkProvider.APPLE_MUSIC) }
+    var spotifyFallbackRequested by remember(song?.uri) { mutableStateOf(false) }
+    var animatedFirstFrameUrl by remember(song?.uri) { mutableStateOf<String?>(null) }
     // Freeze the first usable animated frame's colours for the entire song,
     // including when an unavailable stream switches to an alternative URL.
     var frozenAnimatedBlur by remember(song?.uri) { mutableStateOf<Bitmap?>(null) }
@@ -4127,21 +4147,75 @@ private fun ImmersiveArtwork(
     }
 
     LaunchedEffect(
-        song?.id, song?.title, song?.artist, song?.album, animatedArtworkEnabled, artworkReloadAttempt
+        song?.id, song?.title, song?.artist, song?.album, animatedArtworkEnabled, spotifyFallbackRequested
     ) {
         if (!animatedArtworkEnabled || song == null) {
             animatedArtworkUrl = null
             return@LaunchedEffect
         }
-        repeat(2) { attempt ->
-            val url = AppleMusicAnimatedArtworkLoader.loadAnimatedArtworkUrl(
-                context, song, forceRefresh = artworkReloadAttempt > 0 || attempt > 0
-            )
-            if (url != null) {
-                animatedArtworkUrl = url
-                return@LaunchedEffect
+        // Start BOTH metadata lookups without serially blocking Spotify on a
+        // slow Apple catalog search. Apple wins immediately when available
+        // within a short priority window; after that whichever provider
+        // resolves first can be shown. A late Apple hit may upgrade Spotify
+        // only BEFORE the Canvas video renders its first frame, so a playing
+        // Canvas never flickers/rebuffers halfway through the track.
+        if (!spotifyFallbackRequested) {
+            coroutineScope {
+                val apple = async {
+                    AppleMusicAnimatedArtworkLoader.loadAnimatedArtworkUrl(context, song)
+                }
+                val spotify = async {
+                    SpotifyCanvasArtworkLoader.findCanvasUrl(context, song)
+                }
+                try {
+                    val fastAppleUrl = withTimeoutOrNull(400L) { apple.await() }
+                    if (fastAppleUrl != null) {
+                        artworkProvider = AnimatedArtworkProvider.APPLE_MUSIC
+                        animatedArtworkUrl = fastAppleUrl
+                    } else {
+                        // If Apple answered "missing" early, this selects the
+                        // completed null and waits for Spotify. Otherwise
+                        // Spotify can win as soon as it has a valid Canvas.
+                        val (source, firstUrl) = select<Pair<AnimatedArtworkProvider, String?>> {
+                            apple.onAwait { AnimatedArtworkProvider.APPLE_MUSIC to it }
+                            spotify.onAwait { AnimatedArtworkProvider.SPOTIFY_CANVAS to it }
+                        }
+                        when (source) {
+                            AnimatedArtworkProvider.APPLE_MUSIC -> {
+                                artworkProvider = if (firstUrl != null) {
+                                    AnimatedArtworkProvider.APPLE_MUSIC
+                                } else AnimatedArtworkProvider.SPOTIFY_CANVAS
+                                animatedArtworkUrl = firstUrl ?: spotify.await()
+                            }
+                            AnimatedArtworkProvider.SPOTIFY_CANVAS -> {
+                                if (firstUrl == null) {
+                                    artworkProvider = AnimatedArtworkProvider.APPLE_MUSIC
+                                    animatedArtworkUrl = apple.await()
+                                } else {
+                                    // Fast Canvas first; leave Apple searching.
+                                    artworkProvider = AnimatedArtworkProvider.SPOTIFY_CANVAS
+                                    animatedArtworkUrl = firstUrl
+                                    val eventualAppleUrl = apple.await()
+                                    if (eventualAppleUrl != null &&
+                                        animatedArtworkUrl == firstUrl &&
+                                        animatedFirstFrameUrl != firstUrl
+                                    ) {
+                                        artworkProvider = AnimatedArtworkProvider.APPLE_MUSIC
+                                        animatedArtworkUrl = eventualAppleUrl
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } finally {
+                    if (apple.isActive) apple.cancel()
+                    if (spotify.isActive) spotify.cancel()
+                }
             }
-            if (attempt == 0) delay(1_500L)
+        } else {
+            // All Apple playback candidates failed. Never repeat its lookup.
+            artworkProvider = AnimatedArtworkProvider.SPOTIFY_CANVAS
+            animatedArtworkUrl = SpotifyCanvasArtworkLoader.findCanvasUrl(context, song)
         }
     }
 
@@ -4166,7 +4240,7 @@ private fun ImmersiveArtwork(
 
     val heroOpacity by animateFloatAsState(
         targetValue = if (lyricsMode) 0f else 1f,
-        animationSpec = tween(430),
+        animationSpec = tween(190),
         label = "immersiveLyricsHeroFade"
     )
 
@@ -4185,6 +4259,7 @@ private fun ImmersiveArtwork(
             if (animatedArtworkEnabled && activeUrl != null) {
                 AnimatedArtworkVideoBackground(
                     url = activeUrl,
+                    playbackVisible = !lyricsMode,
                     modifier = Modifier.fillMaxSize(),
                     captureBackdrop = frozenAnimatedBlur == null,
                     onBackdropReady = { blurredFrame, frameColor ->
@@ -4193,11 +4268,30 @@ private fun ImmersiveArtwork(
                             frozenAnimatedBackdrop = frameColor
                         }
                     },
+                    onFirstFrame = {
+                        if (animatedArtworkUrl == activeUrl) animatedFirstFrameUrl = activeUrl
+                    },
                     onUnavailable = {
                         if (animatedArtworkUrl == activeUrl) {
-                            val alternative = AppleMusicAnimatedArtworkLoader.nextPlaybackUrl(activeUrl)
-                            animatedArtworkUrl = alternative
-                            if (alternative == null && artworkReloadAttempt < 1) artworkReloadAttempt++
+                            when (artworkProvider) {
+                                AnimatedArtworkProvider.APPLE_MUSIC -> {
+                                    val alternative = AppleMusicAnimatedArtworkLoader.nextPlaybackUrl(activeUrl)
+                                    if (alternative != null) {
+                                        animatedArtworkUrl = alternative
+                                    } else {
+                                        // Apple streams can exist but be unplayable.
+                                        // After exhausting candidates try Spotify once.
+                                        animatedArtworkUrl = null
+                                        spotifyFallbackRequested = true
+                                    }
+                                }
+                                AnimatedArtworkProvider.SPOTIFY_CANVAS -> {
+                                    // Evict a stale cached URL so replay
+                                    // requests a new Canvas instead of looping.
+                                    SpotifyCanvasArtworkLoader.invalidate(context, activeUrl)
+                                    animatedArtworkUrl = null
+                                }
+                            }
                         }
                     }
                 )
@@ -4210,9 +4304,11 @@ private fun ImmersiveArtwork(
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 private fun AnimatedArtworkVideoBackground(
     url: String,
+    playbackVisible: Boolean,
     modifier: Modifier = Modifier,
     captureBackdrop: Boolean,
     onBackdropReady: (Bitmap, Color) -> Unit,
+    onFirstFrame: () -> Unit,
     onUnavailable: () -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -4222,7 +4318,9 @@ private fun AnimatedArtworkVideoBackground(
     var artworkPlayerView by remember { mutableStateOf<androidx.media3.ui.PlayerView?>(null) }
     val onBackdropReadyCallback by rememberUpdatedState(onBackdropReady)
     val onUnavailableCallback by rememberUpdatedState(onUnavailable)
+    val onFirstFrameCallback by rememberUpdatedState(onFirstFrame)
     val shouldCaptureBackdrop by rememberUpdatedState(captureBackdrop)
+    val shouldPlayVideo by rememberUpdatedState(playbackVisible)
 
     val player = remember(url) {
         val trackSelector = androidx.media3.exoplayer.trackselection.DefaultTrackSelector(context).apply {
@@ -4233,8 +4331,24 @@ private fun AnimatedArtworkVideoBackground(
                 .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_AUDIO, true)
                 .build()
         }
-        androidx.media3.exoplayer.ExoPlayer.Builder(context)
+        val builder = androidx.media3.exoplayer.ExoPlayer.Builder(context)
+        if (SpotifyCanvasArtworkLoader.isSpotifyCanvasVideo(url)) {
+            // Fast repeat playback: reuse disk-backed MP4 bytes if available.
+            // Apple Music HLS must keep its original MediaSource factory.
+            SpotifyCanvasVideoCache.mediaSourceFactory(context)?.let {
+                builder.setMediaSourceFactory(it)
+            }
+        }
+        builder
             .setTrackSelector(trackSelector)
+            // Canvas is a short muted background loop, not the audio player.
+            // Begin when roughly half a second is buffered instead of the
+            // default 1 s, while keeping a larger reserve for rebuffering.
+            .setLoadControl(
+                androidx.media3.exoplayer.DefaultLoadControl.Builder()
+                    .setBufferDurationsMs(2_500, 15_000, 350, 1_250)
+                    .build()
+            )
             .setAudioAttributes(
                 androidx.media3.common.AudioAttributes.Builder()
                     .setUsage(androidx.media3.common.C.USAGE_MEDIA)
@@ -4249,7 +4363,16 @@ private fun AnimatedArtworkVideoBackground(
             setMediaItem(
                 MediaItem.Builder()
                     .setUri(url)
-                    .setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8)
+                    .setMimeType(
+                        // Spotycovs delivers Canvas as an MP4 stream from
+                        // /api/canvas?id=...&stream=1 (no .mp4 suffix).
+                        // Classifying it as HLS caused Media3 to parse
+                        // progressive video bytes as an m3u8 playlist.
+                        if (SpotifyCanvasArtworkLoader.isSpotifyCanvasVideo(url) ||
+                            url.substringBefore('?').endsWith(".mp4", ignoreCase = true)
+                        ) androidx.media3.common.MimeTypes.VIDEO_MP4
+                        else androidx.media3.common.MimeTypes.APPLICATION_M3U8
+                    )
                     .build()
             )
         }
@@ -4258,19 +4381,19 @@ private fun AnimatedArtworkVideoBackground(
     // Do not require a successful TextureView screenshot to reveal animated artwork.
     // Some devices render video correctly but never return a usable capture.
     LaunchedEffect(player, videoReady) {
-        if (videoReady) {
-            delay(400L)
-            videoVisible = true
-        }
+        // The first rendered video frame is already decoded and drawable:
+        // start the crossfade immediately, without an arbitrary timer.
+        videoVisible = videoReady
     }
 
-    LaunchedEffect(player, artworkPlayerView, videoVisible) {
+    LaunchedEffect(player, artworkPlayerView, videoVisible, playbackVisible) {
         val view = artworkPlayerView ?: return@LaunchedEffect
         // Start after the video has actually faded in: hidden TextureViews on
         // some devices return a black bitmap even when playback has started.
-        if (!videoVisible || !shouldCaptureBackdrop) return@LaunchedEffect
+        if (!videoVisible || !shouldCaptureBackdrop || !playbackVisible) return@LaunchedEffect
         delay(450L)
         repeat(40) {
+            if (!shouldPlayVideo) return@LaunchedEffect
             androidx.compose.runtime.withFrameNanos { }
             val frame = ArtworkBlur.captureViewport(view)
             if (frame != null) {
@@ -4292,6 +4415,7 @@ private fun AnimatedArtworkVideoBackground(
     LaunchedEffect(player, playbackRetryCount) {
         if (playbackRetryCount > 0) {
             delay(750L * playbackRetryCount)
+            if (!shouldPlayVideo) return@LaunchedEffect
             player.prepare()
             player.playWhenReady = true
         }
@@ -4301,6 +4425,7 @@ private fun AnimatedArtworkVideoBackground(
         val listener = object : Player.Listener {
             override fun onRenderedFirstFrame() {
                 videoReady = true
+                onFirstFrameCallback()
             }
 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
@@ -4314,16 +4439,23 @@ private fun AnimatedArtworkVideoBackground(
 
         player.addListener(listener)
         player.prepare()
-        player.playWhenReady = true
+        player.playWhenReady = shouldPlayVideo
         onDispose {
             player.removeListener(listener)
             player.release()
         }
     }
 
+    // Hidden animated covers must stop decoding while Lyrics paints the
+    // TTML glyphs. Retain ExoPlayer/TextureView so closing Lyrics resumes
+    // without the expensive HLS player setup or re-buffering from scratch.
+    LaunchedEffect(player, playbackVisible) {
+        player.playWhenReady = playbackVisible
+    }
+
     val videoAlpha by animateFloatAsState(
         targetValue = if (videoVisible) 1f else 0f,
-        animationSpec = tween(durationMillis = 360),
+        animationSpec = tween(durationMillis = 180),
         label = "animatedArtworkFade"
     )
 

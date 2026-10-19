@@ -25,7 +25,9 @@ import kotlinx.coroutines.isActive
  * vocals, credits and cached text) without a separate modal window.
  *
  * Its parent owns the size and entrance/exit motion; no anchored bottom
- * sheet or modal scrim can cover the Now Playing playback controls.
+ * sheet or modal scrim can cover the Now Playing playback controls. The
+ * parent supplies the left margin; synced rows retain their 16dp padding
+ * for the glow and plain lines use the same horizontal start.
  */
 @Composable
 fun ImmersiveLyricsPanel(
@@ -94,9 +96,10 @@ fun ImmersiveLyricsPanel(
                         onSeek(target)
                     },
                     fontSize = fontSize,
-                    credits = data.stored.credits,
-                    modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
-                    inferredEnds = data.inferredEnds
+                    credits = com.yohandeku32.nusamusic.data.SongCredits(),
+                    modifier = Modifier.fillMaxSize(),
+                    inferredEnds = data.inferredEnds,
+                    duetRightLines = data.duetRightLines
                 )
             }
 
@@ -104,7 +107,7 @@ fun ImmersiveLyricsPanel(
                 val lines = remember(data) { data.stored.content.lines() }
                 LazyColumn(
                     Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 28.dp, vertical = 20.dp)
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 20.dp)
                 ) {
                     items(lines) { line ->
                         Text(
@@ -114,9 +117,6 @@ fun ImmersiveLyricsPanel(
                             lineHeight = (fontSize * 1.25f).sp,
                             fontWeight = FontWeight.Bold
                         )
-                    }
-                    if (!data.stored.credits.isEmpty) item {
-                        LyricsCredits(data.stored.credits)
                     }
                 }
             }

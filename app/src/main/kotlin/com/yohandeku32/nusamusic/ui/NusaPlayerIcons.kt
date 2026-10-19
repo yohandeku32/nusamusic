@@ -11,7 +11,7 @@ import androidx.compose.ui.unit.dp
 /**
  * Consistent, lightweight NusaMusic Now Playing icon family.
  *
- * Soft terminals, rounded joins, restrained 1.85dp stroke, and intentionally
+ * Soft terminals, rounded joins, balanced 2dp stroke, and intentionally
  * generous negative space. Each ImageVector is built once, not on every
  * recomposition or animation frame. Compose Icon tint handles disabled/active
  * states without changing any interaction semantics.
@@ -30,7 +30,7 @@ internal object NusaPlayerIcons {
             addPath(
                 pathData = PathBuilder().apply(draw).nodes,
                 stroke = ink,
-                strokeLineWidth = 1.85f,
+                strokeLineWidth = 2f,
                 strokeLineCap = StrokeCap.Round,
                 strokeLineJoin = StrokeJoin.Round
             )
@@ -47,63 +47,70 @@ internal object NusaPlayerIcons {
             addPath(pathData = PathBuilder().apply(draw).nodes, fill = ink)
         }.build()
 
+    // Round-ended, softly weighted primary transport glyph.
     val Play = solid("play") {
-        moveTo(8.05f, 4.85f)
-        curveTo(7.35f, 4.4f, 6.5f, 4.9f, 6.5f, 5.85f)
-        lineTo(6.5f, 18.15f)
-        curveTo(6.5f, 19.1f, 7.35f, 19.6f, 8.05f, 19.15f)
-        lineTo(19.0f, 12.95f)
-        curveTo(19.7f, 12.55f, 19.7f, 11.45f, 19f, 11.05f)
+        moveTo(8.05f, 4.6f)
+        curveTo(7.02f, 3.98f, 6.05f, 4.54f, 6.05f, 5.8f)
+        lineTo(6.05f, 18.2f)
+        curveTo(6.05f, 19.46f, 7.02f, 20.02f, 8.05f, 19.4f)
+        lineTo(19.1f, 12.98f)
+        curveTo(19.9f, 12.53f, 19.9f, 11.47f, 19.1f, 11.02f)
         close()
     }
     val Pause = solid("pause") {
-        moveTo(7.35f, 4.8f); lineTo(9.25f, 4.8f)
-        quadTo(10.35f, 4.8f, 10.35f, 5.9f)
-        lineTo(10.35f, 18.1f)
-        quadTo(10.35f, 19.2f, 9.25f, 19.2f)
-        lineTo(7.35f, 19.2f)
-        quadTo(6.25f, 19.2f, 6.25f, 18.1f)
-        lineTo(6.25f, 5.9f)
-        quadTo(6.25f, 4.8f, 7.35f, 4.8f)
+        moveTo(7.45f, 4.6f); lineTo(9.25f, 4.6f)
+        quadTo(10.52f, 4.6f, 10.52f, 5.87f)
+        lineTo(10.52f, 18.13f)
+        quadTo(10.52f, 19.4f, 9.25f, 19.4f)
+        lineTo(7.45f, 19.4f)
+        quadTo(6.18f, 19.4f, 6.18f, 18.13f)
+        lineTo(6.18f, 5.87f)
+        quadTo(6.18f, 4.6f, 7.45f, 4.6f)
         close()
-        moveTo(14.75f, 4.8f); lineTo(16.65f, 4.8f)
-        quadTo(17.75f, 4.8f, 17.75f, 5.9f)
-        lineTo(17.75f, 18.1f)
-        quadTo(17.75f, 19.2f, 16.65f, 19.2f)
-        lineTo(14.75f, 19.2f)
-        quadTo(13.65f, 19.2f, 13.65f, 18.1f)
-        lineTo(13.65f, 5.9f)
-        quadTo(13.65f, 4.8f, 14.75f, 4.8f)
+        moveTo(14.75f, 4.6f); lineTo(16.55f, 4.6f)
+        quadTo(17.82f, 4.6f, 17.82f, 5.87f)
+        lineTo(17.82f, 18.13f)
+        quadTo(17.82f, 19.4f, 16.55f, 19.4f)
+        lineTo(14.75f, 19.4f)
+        quadTo(13.48f, 19.4f, 13.48f, 18.13f)
+        lineTo(13.48f, 5.87f)
+        quadTo(13.48f, 4.6f, 14.75f, 4.6f)
         close()
     }
     val Previous = solid("previous") {
-        moveTo(5.25f, 5.7f); quadTo(5.25f, 4.75f, 6.15f, 4.75f)
-        quadTo(7.05f, 4.75f, 7.05f, 5.7f)
-        lineTo(7.05f, 18.3f)
-        quadTo(7.05f, 19.25f, 6.15f, 19.25f)
-        quadTo(5.25f, 19.25f, 5.25f, 18.3f)
+        moveTo(5.3f, 4.65f); lineTo(5.95f, 4.65f)
+        quadTo(7.15f, 4.65f, 7.15f, 5.85f)
+        lineTo(7.15f, 18.15f)
+        quadTo(7.15f, 19.35f, 5.95f, 19.35f)
+        lineTo(5.3f, 19.35f)
+        quadTo(4.1f, 19.35f, 4.1f, 18.15f)
+        lineTo(4.1f, 5.85f)
+        quadTo(4.1f, 4.65f, 5.3f, 4.65f)
         close()
-        moveTo(18.15f, 5.65f)
-        curveTo(18.7f, 5.3f, 19.25f, 5.65f, 19.25f, 6.35f)
-        lineTo(19.25f, 17.65f)
-        curveTo(19.25f, 18.35f, 18.7f, 18.7f, 18.15f, 18.35f)
-        lineTo(8.7f, 12.7f)
-        quadTo(8.05f, 12.25f, 8.7f, 11.3f)
+        moveTo(18.05f, 5.1f)
+        curveTo(18.99f, 4.53f, 19.9f, 5.1f, 19.9f, 6.28f)
+        lineTo(19.9f, 17.72f)
+        curveTo(19.9f, 18.9f, 18.99f, 19.47f, 18.05f, 18.9f)
+        lineTo(8.55f, 12.97f)
+        curveTo(7.81f, 12.5f, 7.81f, 11.5f, 8.55f, 11.03f)
         close()
     }
     val Next = solid("next") {
-        moveTo(16.95f, 5.7f); quadTo(16.95f, 4.75f, 17.85f, 4.75f)
-        quadTo(18.75f, 4.75f, 18.75f, 5.7f)
-        lineTo(18.75f, 18.3f)
-        quadTo(18.75f, 19.25f, 17.85f, 19.25f)
-        quadTo(16.95f, 19.25f, 16.95f, 18.3f)
+        moveTo(18.05f, 4.65f); lineTo(18.7f, 4.65f)
+        quadTo(19.9f, 4.65f, 19.9f, 5.85f)
+        lineTo(19.9f, 18.15f)
+        quadTo(19.9f, 19.35f, 18.7f, 19.35f)
+        lineTo(18.05f, 19.35f)
+        quadTo(16.85f, 19.35f, 16.85f, 18.15f)
+        lineTo(16.85f, 5.85f)
+        quadTo(16.85f, 4.65f, 18.05f, 4.65f)
         close()
-        moveTo(5.85f, 5.65f)
-        curveTo(5.3f, 5.3f, 4.75f, 5.65f, 4.75f, 6.35f)
-        lineTo(4.75f, 17.65f)
-        curveTo(4.75f, 18.35f, 5.3f, 18.7f, 5.85f, 18.35f)
-        lineTo(15.3f, 12.7f)
-        quadTo(15.95f, 12.25f, 15.3f, 11.3f)
+        moveTo(5.95f, 5.1f)
+        curveTo(5.01f, 4.53f, 4.1f, 5.1f, 4.1f, 6.28f)
+        lineTo(4.1f, 17.72f)
+        curveTo(4.1f, 18.9f, 5.01f, 19.47f, 5.95f, 18.9f)
+        lineTo(15.45f, 12.97f)
+        curveTo(16.19f, 12.5f, 16.19f, 11.5f, 15.45f, 11.03f)
         close()
     }
     val Shuffle = outline("shuffle") {
@@ -158,23 +165,39 @@ internal object NusaPlayerIcons {
         close()
     }
     val Lyrics = outline("lyrics") {
-        moveTo(4f, 5f); quadTo(4f, 3.5f, 5.6f, 3.5f)
-        lineTo(18.4f, 3.5f); quadTo(20f, 3.5f, 20f, 5f)
-        lineTo(20f, 16f); quadTo(20f, 17.5f, 18.4f, 17.5f)
-        lineTo(10f, 17.5f); lineTo(5.2f, 21f); lineTo(5.2f, 17.5f)
-        quadTo(4f, 17.1f, 4f, 16f); close()
-        moveTo(8f, 8.4f); lineTo(16f, 8.4f)
-        moveTo(8f, 12.3f); lineTo(13.7f, 12.3f)
+        // Rounded speech-sheet silhouette with music-lyrics lines.
+        moveTo(6.25f, 3.75f); lineTo(17.75f, 3.75f)
+        quadTo(20.35f, 3.75f, 20.35f, 6.35f)
+        lineTo(20.35f, 15.05f)
+        quadTo(20.35f, 17.65f, 17.75f, 17.65f)
+        lineTo(10.45f, 17.65f)
+        lineTo(5.15f, 20.95f)
+        lineTo(5.35f, 17.55f)
+        quadTo(3.65f, 16.95f, 3.65f, 15.05f)
+        lineTo(3.65f, 6.35f)
+        quadTo(3.65f, 3.75f, 6.25f, 3.75f)
+        close()
+        moveTo(7.9f, 8.45f); lineTo(16.1f, 8.45f)
+        moveTo(7.9f, 12.3f); lineTo(13.65f, 12.3f)
     }
     val Library = outline("library") {
-        moveTo(4.8f, 5.3f); quadTo(4.8f, 4f, 6.2f, 4f)
-        lineTo(17.8f, 4f); quadTo(19.2f, 4f, 19.2f, 5.3f)
-        lineTo(19.2f, 18.7f); quadTo(19.2f, 20f, 17.8f, 20f)
-        lineTo(6.2f, 20f); quadTo(4.8f, 20f, 4.8f, 18.7f)
+        // Rounded stacked cards instead of a rigid list box.
+        moveTo(5.25f, 6.15f); lineTo(5.25f, 5.35f)
+        quadTo(5.25f, 3.65f, 6.95f, 3.65f)
+        lineTo(18.05f, 3.65f)
+        quadTo(19.75f, 3.65f, 19.75f, 5.35f)
+        lineTo(19.75f, 16f)
+        moveTo(5.85f, 6.45f); lineTo(16.95f, 6.45f)
+        quadTo(18.65f, 6.45f, 18.65f, 8.15f)
+        lineTo(18.65f, 18.65f)
+        quadTo(18.65f, 20.35f, 16.95f, 20.35f)
+        lineTo(5.85f, 20.35f)
+        quadTo(4.15f, 20.35f, 4.15f, 18.65f)
+        lineTo(4.15f, 8.15f)
+        quadTo(4.15f, 6.45f, 5.85f, 6.45f)
         close()
-        moveTo(9f, 8f); lineTo(15.1f, 8f)
-        moveTo(9f, 11.5f); lineTo(15.1f, 11.5f)
-        moveTo(9f, 15f); lineTo(13.2f, 15f)
+        moveTo(7.7f, 11.15f); lineTo(15.15f, 11.15f)
+        moveTo(7.7f, 15.05f); lineTo(12.85f, 15.05f)
     }
     val Artist = outline("artist") {
         moveTo(12f, 12.2f)
@@ -211,9 +234,26 @@ internal object NusaPlayerIcons {
     val Back = outline("back") {
         moveTo(7f, 9.5f); lineTo(12f, 14.5f); lineTo(17f, 9.5f)
     }
-    val More = outline("more") {
-        moveTo(5f, 12f); lineTo(5.08f, 12f)
-        moveTo(12f, 12f); lineTo(12.08f, 12f)
-        moveTo(19f, 12f); lineTo(19.08f, 12f)
+    // True circular dots, not tiny strokes whose caps depend on rendering.
+    val More = solid("more") {
+        moveTo(7.1f, 12f)
+        curveTo(7.1f, 13.15f, 6.15f, 14.1f, 5f, 14.1f)
+        curveTo(3.85f, 14.1f, 2.9f, 13.15f, 2.9f, 12f)
+        curveTo(2.9f, 10.85f, 3.85f, 9.9f, 5f, 9.9f)
+        curveTo(6.15f, 9.9f, 7.1f, 10.85f, 7.1f, 12f)
+        close()
+        moveTo(14.1f, 12f)
+        curveTo(14.1f, 13.15f, 13.15f, 14.1f, 12f, 14.1f)
+        curveTo(10.85f, 14.1f, 9.9f, 13.15f, 9.9f, 12f)
+        curveTo(9.9f, 10.85f, 10.85f, 9.9f, 12f, 9.9f)
+        curveTo(13.15f, 9.9f, 14.1f, 10.85f, 14.1f, 12f)
+        close()
+        moveTo(21.1f, 12f)
+        curveTo(21.1f, 13.15f, 20.15f, 14.1f, 19f, 14.1f)
+        curveTo(17.85f, 14.1f, 16.9f, 13.15f, 16.9f, 12f)
+        curveTo(16.9f, 10.85f, 17.85f, 9.9f, 19f, 9.9f)
+        curveTo(20.15f, 9.9f, 21.1f, 10.85f, 21.1f, 12f)
+        close()
     }
+
 }

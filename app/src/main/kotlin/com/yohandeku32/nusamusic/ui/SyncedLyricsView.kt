@@ -34,6 +34,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.first
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -43,17 +45,26 @@ internal fun SyncedLyricsView(
     lyrics: SyncedLyrics, position: State<Long>, visible: Boolean,
     listState: LazyListState, motionState: LyricsMotionState,
     onSeek: (ISyncedLine) -> Unit, fontSize: Float, credits: SongCredits = SongCredits(), modifier: Modifier = Modifier,
-    inferredEnds: Set<LyricsUnitKey> = emptySet()
+    inferredEnds: Set<LyricsUnitKey> = emptySet(),
+    duetRightLines: Set<Int> = emptySet()
 ) {
     val clock = remember { LyricsPlaybackClock(position, visible) }
     SideEffect { clock.update(position, visible) }
     val display = remember(lyrics) { LyricsDisplayRows(lyrics.lines) }
     val firstVocalRow = remember(display) { display.rows.indexOfFirst { it.main != null }.coerceAtLeast(0) }
-    val expressions = remember(display, inferredEnds) {
-        buildMap {
-            putAll(lyricsAdaptiveLineExpressions(display.rows.mapNotNull { it.main as? KaraokeLine }, inferredEnds))
-            display.rows.flatMap { it.backing }.forEach {
-                putAll(lyricsAdaptiveLineExpressions(listOf(it.value), inferredEnds))
+    // Analyze all timed syllables on Default, not during the first Compose
+    // frame of the Lyrics panel. Pure CPU results are published once.
+    val expressions by produceState<Map<KaraokeLine, List<LyricsAdaptiveExpression>>>(
+        initialValue = emptyMap(), display, inferredEnds
+    ) {
+        value = withContext(Dispatchers.Default) {
+            buildMap {
+                putAll(lyricsAdaptiveLineExpressions(
+                    display.rows.mapNotNull { it.main as? KaraokeLine }, inferredEnds
+                ))
+                display.rows.flatMap { it.backing }.forEach {
+                    putAll(lyricsAdaptiveLineExpressions(listOf(it.value), inferredEnds))
+                }
             }
         }
     }
@@ -78,21 +89,20 @@ internal fun SyncedLyricsView(
         }
     }
     val seekLine = remember(onSeek, interaction) { { line: ISyncedLine -> interaction.seek(); onSeek(line) } }
-    val normalStyle = remember(fontSize) { TextStyle(color = Color.White, fontSize = fontSize.sp, lineHeight = (fontSize * 1.25f).sp, fontWeight = FontWeight.Bold) }
-    val backgroundStyle = remember(fontSize) { TextStyle(color = Color.White, fontSize = (fontSize * 0.625f).sp, lineHeight = (fontSize * 0.875f).sp, fontWeight = FontWeight.SemiBold) }
+    val normalStyle = remember(fontSize) { TextStyle(color = Color.White, fontSize = fontSize.sp, lineHeight = (fontSize * 1.25f).sp, fontWeight = FontWeight.ExtraBold) }
+    val backgroundStyle = remember(fontSize) { TextStyle(color = Color.White, fontSize = (fontSize * 0.625f).sp, lineHeight = (fontSize * 0.875f).sp, fontWeight = FontWeight.Bold) }
     BoxWithConstraints(modifier) {
         val density = androidx.compose.ui.platform.LocalDensity.current.density
         val gapHeight = with(androidx.compose.ui.platform.LocalDensity.current) { lyricsGapRowHeight.toPx() }
 
-        // Prebuild all supported blur radii ONCE per display density. No new
-        // shader, RenderEffect or graphics layer allocation on playback ticks.
-        // Android 10–11 keep the same opacity gradient without hardware blur.
+        // Half as many cached GPU blur effects (0.2dp steps across the
+        // same 0..5.4dp range). No shader allocation on playback ticks.
         val blurEffects = remember(density) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                Array<BlurEffect?>(56) { step ->
+                Array<BlurEffect?>(28) { step ->
                     if (step == 0) null else BlurEffect(
-                        radiusX = step * 0.1f * density,
-                        radiusY = step * 0.1f * density,
+                        radiusX = step * 0.2f * density,
+                        radiusY = step * 0.2f * density,
                         edgeTreatment = TileMode.Decal
                     )
                 }
@@ -239,29 +249,40 @@ internal fun SyncedLyricsView(
                         return if (item != null) (item.offset + item.size / 2f - centre) / density else 0f
                     }
                     val main = row.main
+                    // The second explicitly tagged TTML singer is drawn on
+                    // the right. Other/untagged lines retain the old layout.
+                    val duetRight = row.sourceIndex in duetRightLines
                     if (main != null) Column(Modifier.fillMaxWidth().graphicsLayer {
                         val now = clock.read()
                         val focus = lyricsMainFocusDepth(visualDistanceDp(), main.start, main.end, now,
                             visualFocus.focusAmount(row.sourceIndex, now))
                         alpha = focus.opacity
+                        // Let upcoming lines rise gently into focus rather than appearing
+                        // as a rigid scrolling list. This is a GPU-only transform:
+                        // no text remeasurement, extra coroutine, or per-frame allocation.
+                        translationY = if (visualDistanceDp() > 0f) {
+                            (1f - focus.opacity).coerceIn(0f, 1f) * 14f * density
+                        } else 0f
                         renderEffect = if (blurEffects.isNotEmpty()) {
-                            blurEffects[(focus.blurDp * 10f).roundToInt().coerceIn(0, blurEffects.lastIndex)]
+                            blurEffects[(focus.blurDp * 5f).roundToInt().coerceIn(0, blurEffects.lastIndex)]
                         } else null
                         // Existing 16dp horizontal / 8dp vertical text padding
                         // exceeds the maximum 5.5dp blur; no clipping or resizing.
                         clip = false
                     }) {
                         if (main is KaraokeLine) CenteredKaraokeLine(main, clock.read, motionState,
-                            normalStyle, seekLine, onMainHeight = { mainHeights[index] = it }, expressions = expressions[main])
+                            normalStyle, seekLine, onMainHeight = { mainHeights[index] = it },
+                            expressions = expressions[main], alignEnd = duetRight)
                         else if (main is SyncedLine) LineSyncedLyricsRow(main, clock.read, motionState,
-                            normalStyle, onMainHeight = { mainHeights[index] = it }) { seekLine(main) }
+                            normalStyle, onMainHeight = { mainHeights[index] = it },
+                            alignEnd = duetRight) { seekLine(main) }
                     }
                     // Preserve the original backing-vocal blur and opacity.
                     if (row.backing.isNotEmpty()) Column(Modifier.fillMaxWidth().graphicsLayer {
                         val focus = lyricsFocusDepth(visualDistanceDp())
                         alpha = focus.opacity
                         renderEffect = if (blurEffects.isNotEmpty()) {
-                            blurEffects[(focus.blurDp * 10f).roundToInt().coerceIn(0, blurEffects.lastIndex)]
+                            blurEffects[(focus.blurDp * 5f).roundToInt().coerceIn(0, blurEffects.lastIndex)]
                         } else null
                         clip = false
                     }) {
