@@ -284,7 +284,7 @@ internal fun PlayerSettingsContent(
                         Box {
                             SettingAction(
                                 title = settingsText("Sumber animasi", "Animation source"),
-                                description = sourceOptions.firstOrNull { it.first == artworkSourceOrder }?.second
+                                subtitle = sourceOptions.firstOrNull { it.first == artworkSourceOrder }?.second
                                     ?: sourceOptions.first().second,
                                 icon = Icons.Default.AutoAwesome,
                                 onClick = { sourceMenuOpen = true }
