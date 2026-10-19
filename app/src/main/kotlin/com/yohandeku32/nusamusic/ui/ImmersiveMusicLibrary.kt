@@ -13,6 +13,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
@@ -41,6 +43,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -49,6 +52,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -134,6 +139,8 @@ internal fun ImmersiveMusicLibrary(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
     val prefs = remember(context) {
         context.getSharedPreferences("ui_preferences", Context.MODE_PRIVATE)
     }
@@ -146,6 +153,16 @@ internal fun ImmersiveMusicLibrary(
     }
     var sortOpen by remember { mutableStateOf(false) }
     var searchFocused by remember { mutableStateOf(false) }
+    val dismissKeyboard: () -> Unit = {
+        keyboard?.hide()
+        focusManager.clearFocus(force = true)
+        searchFocused = false
+    }
+    // Avoid stale capture inside long-lived pointer gesture coroutine.
+    val dismissOnGesture by rememberUpdatedState(dismissKeyboard)
+    LaunchedEffect(isVisible) {
+        if (!isVisible) dismissKeyboard()
+    }
     var visibleSongs by remember(songs) { mutableStateOf(songs) }
     val listState = rememberLazyListState()
     val density = LocalDensity.current
@@ -205,8 +222,43 @@ internal fun ImmersiveMusicLibrary(
     Box(
         modifier = modifier.fillMaxSize().background(libraryBlack)
             .windowInsetsPadding(WindowInsets.safeDrawing)
+            // Observe initial horizontal movement without consuming events.
+            // The pager continues to receive the same swipe immediately;
+            // hiding IME at finger-down movement avoids a stranded keyboard
+            // during fast left/right page transitions.
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(
+                        requireUnconsumed = false, pass = PointerEventPass.Initial
+                    )
+                    val slop = viewConfiguration.touchSlop
+                    var dx = 0f
+                    var dy = 0f
+                    var pointerId = down.id
+                    while (true) {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        val change = event.changes.firstOrNull { it.id == pointerId }
+                            ?: event.changes.firstOrNull { it.pressed }
+                            ?: break
+                        if (!change.pressed) break
+                        val delta = change.position - change.previousPosition
+                        dx += delta.x
+                        dy += delta.y
+                        if (kotlin.math.abs(dx) > slop &&
+                            kotlin.math.abs(dx) > kotlin.math.abs(dy) * 1.15f
+                        ) {
+                            dismissOnGesture()
+                            break
+                        }
+                        pointerId = change.id
+                    }
+                }
+            }
     ) {
-        Column(Modifier.fillMaxSize().imePadding()) {
+        // Fixed layout height: Android IME overlays the lower song rows,
+        // rather than forcing the entire animated player/pager to relayout
+        // on every keyboard-animation frame. Search stays near the top.
+        Column(Modifier.fillMaxSize()) {
             Row(
                 Modifier.fillMaxWidth().height(58.dp).padding(horizontal = 14.dp),
                 verticalAlignment = Alignment.CenterVertically
