@@ -4243,8 +4243,13 @@ private fun AnimatedArtworkVideoBackground(
                 MediaItem.Builder()
                     .setUri(url)
                     .setMimeType(
-                        if (url.substringBefore('?').endsWith(".mp4", ignoreCase = true))
-                            androidx.media3.common.MimeTypes.VIDEO_MP4
+                        // Spotycovs delivers Canvas as an MP4 stream from
+                        // /api/canvas?id=...&stream=1 (no .mp4 suffix).
+                        // Classifying it as HLS caused Media3 to parse
+                        // progressive video bytes as an m3u8 playlist.
+                        if (SpotifyCanvasArtworkLoader.isSpotifyCanvasVideo(url) ||
+                            url.substringBefore('?').endsWith(".mp4", ignoreCase = true)
+                        ) androidx.media3.common.MimeTypes.VIDEO_MP4
                         else androidx.media3.common.MimeTypes.APPLICATION_M3U8
                     )
                     .build()
