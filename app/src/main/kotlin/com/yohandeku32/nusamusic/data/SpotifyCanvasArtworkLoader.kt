@@ -9,6 +9,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.yield
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -93,7 +94,18 @@ internal object SpotifyCanvasArtworkLoader {
                 leader = true
             }
         }
-        if (!leader) return@withContext request.await()
+        if (!leader) {
+            try {
+                return@withContext request.await()
+            } catch (cancelled: CancellationException) {
+                // A prefetch can be cancelled exactly as this track starts.
+                // If our own coroutine is still active, retry the lookup
+                // instead of cancelling the visible player's artwork.
+                currentCoroutineContext().ensureActive()
+                yield()
+                return@withContext findCanvasUrl(context, song)
+            }
+        }
 
         try {
             // Request matching metadata and Canvas URL in a single call.
