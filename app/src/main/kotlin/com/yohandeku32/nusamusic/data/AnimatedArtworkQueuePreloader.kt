@@ -134,7 +134,7 @@ internal object AnimatedArtworkQueuePreloader {
                     Provider.APPLE_TALL ->
                         AppleTallVideoCache.warm(context, candidate.url, firstInQueue = priority == 0)
                     Provider.SPOTIFY_CANVAS ->
-                        SpotifyCanvasVideoCache.prefetchNext(context, candidate.url)
+                        SpotifyCanvasVideoCache.prefetchNext(context, candidate.url, immediateNext = priority == 0)
                 }
             }
         }
@@ -155,9 +155,17 @@ internal object AnimatedArtworkQueuePreloader {
         }
     }
 
-    fun choose(apple: String?, spotify: String?): Result? = when {
-        apple != null -> Result(Provider.APPLE_TALL, apple)
-        spotify != null -> Result(Provider.SPOTIFY_CANVAS, spotify)
-        else -> null
+    fun choose(
+        apple: String?, spotify: String?,
+        order: ArtworkSourceOrder = ArtworkSourceOrder.APPLE_FIRST
+    ): Result? = when (order) {
+        ArtworkSourceOrder.APPLE_FIRST ->
+            apple?.let { Result(Provider.APPLE_TALL, it) }
+                ?: spotify?.let { Result(Provider.SPOTIFY_CANVAS, it) }
+        ArtworkSourceOrder.SPOTIFY_FIRST ->
+            spotify?.let { Result(Provider.SPOTIFY_CANVAS, it) }
+                ?: apple?.let { Result(Provider.APPLE_TALL, it) }
+        ArtworkSourceOrder.APPLE_ONLY -> apple?.let { Result(Provider.APPLE_TALL, it) }
+        ArtworkSourceOrder.SPOTIFY_ONLY -> spotify?.let { Result(Provider.SPOTIFY_CANVAS, it) }
     }
 }
