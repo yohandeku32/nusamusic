@@ -26,6 +26,31 @@ class SpotifyCanvasArtworkLoaderTest {
         ))
     }
 
+    @Test fun acceptsOnlyCanonicalSpotycovsCanvasStreams() {
+        val trackId = "4iZ4pt7kvcaH6Yo8UoZ4s2"
+        assertTrue(SpotifyCanvasArtworkLoader.isSpotifyCanvasVideo(
+            "https://www.spotycovs.lol/api/canvas?id=$trackId&stream=1"
+        ))
+        assertTrue(SpotifyCanvasArtworkLoader.isSpotifyCanvasVideo(
+            "https://spotycovs.lol/api/canvas?stream=1&id=$trackId"
+        ))
+        assertFalse(SpotifyCanvasArtworkLoader.isSpotifyCanvasVideo(
+            "https://www.spotycovs.lol/api/canvas?id=$trackId"
+        ))
+        assertFalse(SpotifyCanvasArtworkLoader.isSpotifyCanvasVideo(
+            "https://www.spotycovs.lol/api/canvas?id=$trackId&stream=1&url=https://evil.example"
+        ))
+        assertFalse(SpotifyCanvasArtworkLoader.isSpotifyCanvasVideo(
+            "https://www.spotycovs.lol.evil.example/api/canvas?id=$trackId&stream=1"
+        ))
+        assertFalse(SpotifyCanvasArtworkLoader.isSpotifyCanvasVideo(
+            "https://www.spotycovs.lol/api/canvas?id=invalid&stream=1"
+        ))
+        assertFalse(SpotifyCanvasArtworkLoader.isSpotifyCanvasVideo(
+            "http://www.spotycovs.lol/api/canvas?id=$trackId&stream=1"
+        ))
+    }
+
     @Test fun matchesSameTitleAfterRemovingVersionSuffixesButNotUnrelatedSongs() {
         assertTrue(SpotifyCanvasArtworkLoader.similarTitle(
             "Snooze", "Snooze (Original Version)"
