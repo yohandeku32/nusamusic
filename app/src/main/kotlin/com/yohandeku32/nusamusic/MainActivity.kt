@@ -147,6 +147,7 @@ import com.yohandeku32.nusamusic.data.ImmersiveArtworkCache
 import com.yohandeku32.nusamusic.data.ImmersiveArtworkSnapshot
 import com.yohandeku32.nusamusic.data.AppleMusicAnimatedArtworkLoader
 import com.yohandeku32.nusamusic.data.AnimatedArtworkQueuePreloader
+import com.yohandeku32.nusamusic.data.ArtworkSourceOrder
 import com.yohandeku32.nusamusic.data.AppleTallVideoCache
 import com.yohandeku32.nusamusic.data.upcomingPlaybackIndices
 import com.yohandeku32.nusamusic.data.SpotifyCanvasArtworkLoader
@@ -1280,6 +1281,9 @@ class MainActivity : ComponentActivity() {
     private fun scheduleArtworkLookahead(player: MediaController) {
         if (restoringPlaybackQueue) return
         val preferences = uiPrefsForFonts()
+        val sourceOrder = ArtworkSourceOrder.fromPreference(
+            preferences.getString("animated_artwork_source_order", null)
+        )
         val enabled = preferences.getBoolean("animated_artwork_enabled", true) &&
             PlayerPresentationMode.fromPreference(
                 preferences.getString("player_presentation_mode", null)
@@ -1326,14 +1330,15 @@ class MainActivity : ComponentActivity() {
                     async {
                         delay(offset * 90L)
                         AnimatedArtworkQueuePreloader.resolve(
-                            this@MainActivity, song
+                            this@MainActivity, song, sourceOrder
                         )
                     }
                 }
                 for ((offset, song) in ordered.withIndex()) {
                     lookups[offset].await()
                     AnimatedArtworkQueuePreloader.preload(
-                        this@MainActivity, song, priority = offset
+                        this@MainActivity, song, priority = offset,
+                        order = sourceOrder
                     )
                 }
             }
@@ -1342,7 +1347,8 @@ class MainActivity : ComponentActivity() {
 
     // Re-evaluate after a library scan, mode switch or animated-artwork
     // setting change; controller timeline may have existed before songs loaded.
-    internal fun refreshArtworkLookahead() {
+    internal fun refreshArtworkLookahead(reset: Boolean = false) {
+        if (reset) nextArtworkLookaheadIds = emptyList()
         controller?.let(::scheduleArtworkLookahead)
     }
 
@@ -1739,6 +1745,11 @@ private fun NusaMusicApp(
     var animatedArtworkEnabled by remember {
         mutableStateOf(uiPrefs.getBoolean("animated_artwork_enabled", true))
     }
+    var artworkSourceOrder by remember {
+        mutableStateOf(ArtworkSourceOrder.fromPreference(
+            uiPrefs.getString("animated_artwork_source_order", null)
+        ))
+    }
     var roundedCarouselCorners by remember {
         mutableStateOf(uiPrefs.getBoolean("rounded_carousel_corners", true))
     }
@@ -1939,7 +1950,7 @@ private fun NusaMusicApp(
     }
 
     // Opening the library must not change the user's manually chosen scroll position.
-    LaunchedEffect(songs, playerPresentationMode, animatedArtworkEnabled) {
+    LaunchedEffect(songs, playerPresentationMode, animatedArtworkEnabled, artworkSourceOrder) {
         (context as? MainActivity)?.refreshArtworkLookahead()
     }
 
@@ -2073,6 +2084,17 @@ private fun NusaMusicApp(
                 onAnimatedArtworkChange = { enabled ->
                     animatedArtworkEnabled = enabled
                     uiPrefs.edit().putBoolean("animated_artwork_enabled", enabled).apply()
+                },
+                artworkSourceOrder = artworkSourceOrder.name,
+                onArtworkSourceOrderChange = { preference ->
+                    val chosen = ArtworkSourceOrder.fromPreference(preference)
+                    if (chosen != artworkSourceOrder) {
+                        artworkSourceOrder = chosen
+                        uiPrefs.edit()
+                            .putString("animated_artwork_source_order", chosen.name)
+                            .apply()
+                        (context as? MainActivity)?.refreshArtworkLookahead(reset = true)
+                    }
                 },
                 realisticControls = realisticControls,
                 onRealisticControlsChange = { realistic ->
@@ -2215,6 +2237,7 @@ private fun NusaMusicApp(
                                         currentSong, animatedArtworkEnabled, heroHeight, heroWidth,
                                         artworkModifier, lyricsMode = lyricsRequested,
                                         lightMode = immersiveLightMode,
+                                        sourceOrder = artworkSourceOrder,
                                         playerPageVisible = pagerState.settledPage == playerPage
                                     )
                                 },
@@ -4252,6 +4275,7 @@ private fun ImmersiveArtwork(
     modifier: Modifier = Modifier,
     lyricsMode: Boolean = false,
     lightMode: Boolean = false,
+    sourceOrder: ArtworkSourceOrder = ArtworkSourceOrder.APPLE_FIRST,
     playerPageVisible: Boolean = true
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -4361,7 +4385,8 @@ private fun ImmersiveArtwork(
     }
 
     LaunchedEffect(
-        song?.id, song?.title, song?.artist, song?.album, animatedArtworkEnabled, spotifyFallbackRequested
+        song?.id, song?.title, song?.artist, song?.album,
+        animatedArtworkEnabled, spotifyFallbackRequested, sourceOrder
     ) {
         if (!animatedArtworkEnabled || song == null) {
             animatedArtworkUrl = null
@@ -4372,8 +4397,8 @@ private fun ImmersiveArtwork(
         // confirmed Apple miss allows Spotify. No provider races or late
         // switching can tear down the TextureView mid-song.
         if (!spotifyFallbackRequested) {
-            val candidate = AnimatedArtworkQueuePreloader.ready(song)
-                ?: AnimatedArtworkQueuePreloader.resolve(context, song)
+            val candidate = AnimatedArtworkQueuePreloader.ready(song, sourceOrder)
+                ?: AnimatedArtworkQueuePreloader.resolve(context, song, sourceOrder)
             if (candidate != null) {
                 artworkProvider = when (candidate.provider) {
                     AnimatedArtworkQueuePreloader.Provider.APPLE_TALL ->
@@ -4384,10 +4409,16 @@ private fun ImmersiveArtwork(
                 animatedArtworkUrl = candidate.url
             } else {
                 animatedArtworkUrl = null
-            }        } else {
-            // All Apple playback candidates failed. Never repeat its lookup.
-            artworkProvider = AnimatedArtworkProvider.SPOTIFY_CANVAS
-            animatedArtworkUrl = SpotifyCanvasArtworkLoader.findCanvasUrl(context, song)
+            }
+        } else {
+            // A genuine Apple Tall stream failed to play. Spotify remains
+            // an alternate only when selected in settings.
+            if (sourceOrder == ArtworkSourceOrder.APPLE_ONLY) {
+                animatedArtworkUrl = null
+            } else {
+                artworkProvider = AnimatedArtworkProvider.SPOTIFY_CANVAS
+                animatedArtworkUrl = SpotifyCanvasArtworkLoader.findCanvasUrl(context, song)
+            }
         }
     }
 
@@ -4460,10 +4491,11 @@ private fun ImmersiveArtwork(
                                     }
                                 }
                                 AnimatedArtworkProvider.SPOTIFY_CANVAS -> {
-                                    // Evict a stale cached URL so replay
-                                    // requests a new Canvas instead of looping.
-                                    SpotifyCanvasArtworkLoader.invalidate(context, activeUrl)
-                                    AnimatedArtworkQueuePreloader.invalidate(song, activeUrl)
+                                    // A CDN stall is not evidence the Canvas
+                                    // URL disappeared. Retain the verified
+                                    // lookup across Next -> Previous, so the
+                                    // song can play again with a fresh player.
+                                    // Only hide this exhausted player instance.
                                     animatedArtworkUrl = null
                                 }
                             }
