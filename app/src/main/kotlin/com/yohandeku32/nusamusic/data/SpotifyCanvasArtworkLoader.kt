@@ -5,11 +5,15 @@ import android.net.Uri
 import com.yohandeku32.nusamusic.model.Song
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.yield
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -48,6 +52,10 @@ internal object SpotifyCanvasArtworkLoader {
     // Share a network lookup between the player and predictive prefetch for
     // the same track. Each distinct track can still resolve independently.
     private val inFlight = HashMap<String, CompletableDeferred<String?>>()
+    // Resolution outlives a speculative prefetch: when the same song starts
+    // playing, the visible lookup must never inherit a cancelled request.
+    private val resolverScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val resolverPermits = Semaphore(3)
 
     private data class CacheEntry(val url: String?, val expires: Long)
     private data class LookupResult(val videoUrl: String?, val temporaryFailure: Boolean)
@@ -78,9 +86,9 @@ internal object SpotifyCanvasArtworkLoader {
         }
 
         currentCoroutineContext().ensureActive()
-        // A track switch can race predictive prefetch with the on-screen lookup.
-        // Only the first caller contacts the resolver; followers await its
-        // result without running a duplicate HTTP request.
+        // Coalesce all lookups for this track in a bounded background scope.
+        // Cancelling an offscreen prefetch only cancels its await, not the
+        // resolver needed by a player that became visible a moment later.
         val request: CompletableDeferred<String?>
         val leader: Boolean
         synchronized(inFlight) {
@@ -94,47 +102,37 @@ internal object SpotifyCanvasArtworkLoader {
                 leader = true
             }
         }
-        if (!leader) {
-            try {
-                return@withContext request.await()
-            } catch (cancelled: CancellationException) {
-                // A prefetch can be cancelled exactly as this track starts.
-                // If our own coroutine is still active, retry the lookup
-                // instead of cancelling the visible player's artwork.
-                currentCoroutineContext().ensureActive()
-                yield()
-                return@withContext findCanvasUrl(context, song)
+        if (leader) {
+            val app = context.applicationContext
+            resolverScope.launch {
+                try {
+                    val result = resolverPermits.withPermit {
+                        val query = Uri.encode("$artist - $title")
+                        fetchAndValidate("$API_ORIGIN/api/canvas?track=$query&results=1", title, artist)
+                    }
+                    val ttl = when {
+                        result.videoUrl != null -> POSITIVE_TTL
+                        result.temporaryFailure -> FAILURE_TTL
+                        else -> NEGATIVE_TTL
+                    }
+                    synchronized(cache) {
+                        cache[key] = CacheEntry(result.videoUrl, System.currentTimeMillis() + ttl)
+                        while (cache.size > MAX_ITEMS) cache.remove(cache.entries.first().key)
+                    }
+                    if (result.videoUrl != null) saveUrl(app, key, result.videoUrl)
+                    request.complete(result.videoUrl)
+                } catch (_: Exception) {
+                    // Never strand a foreground waiter if an unexpected
+                    // resolver or cache error interrupts the lookup.
+                    request.complete(null)
+                } finally {
+                    synchronized(inFlight) {
+                        if (inFlight[key] === request) inFlight.remove(key)
+                    }
+                }
             }
         }
-
-        try {
-            // Request matching metadata and Canvas URL in a single call.
-            val query = Uri.encode("$artist - $title")
-            val result = fetchAndValidate(
-                "$API_ORIGIN/api/canvas?track=$query&results=1", title, artist
-            )
-            currentCoroutineContext().ensureActive()
-            val ttl = when {
-                result.videoUrl != null -> POSITIVE_TTL
-                result.temporaryFailure -> FAILURE_TTL
-                else -> NEGATIVE_TTL
-            }
-            synchronized(cache) {
-                cache[key] = CacheEntry(result.videoUrl, System.currentTimeMillis() + ttl)
-                while (cache.size > MAX_ITEMS) cache.remove(cache.entries.first().key)
-            }
-            if (result.videoUrl != null) saveUrl(context, key, result.videoUrl)
-            request.complete(result.videoUrl)
-            result.videoUrl
-        } catch (cancelled: CancellationException) {
-            // Never leave other callers waiting for a cancelled lookup.
-            request.cancel(cancelled)
-            throw cancelled
-        } finally {
-            synchronized(inFlight) {
-                if (inFlight[key] === request) inFlight.remove(key)
-            }
-        }
+        request.await()
     }
 
     private fun diskKey(key: String): String = MessageDigest.getInstance("SHA-256")
