@@ -74,6 +74,8 @@ internal fun PlayerSettingsContent(
     roundedCarouselCorners: Boolean,
     onRoundedCarouselCornersChange: (Boolean) -> Unit,
     onAnimatedArtworkChange: (Boolean) -> Unit,
+    artworkSourceOrder: String,
+    onArtworkSourceOrderChange: (String) -> Unit,
     realisticControls: Boolean,
     onRealisticControlsChange: (Boolean) -> Unit,
     crossfadeEnabled: Boolean,
@@ -268,6 +270,45 @@ internal fun PlayerSettingsContent(
                         animatedArtworkEnabled, onAnimatedArtworkChange,
                         icon = Icons.Default.AutoAwesome
                     )
+                    if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK &&
+                        animatedArtworkEnabled
+                    ) {
+                        SettingsDivider()
+                        var sourceMenuOpen by remember { mutableStateOf(false) }
+                        val sourceOptions = listOf(
+                            "APPLE_FIRST" to settingsText("Apple Music dahulu", "Apple Music first"),
+                            "SPOTIFY_FIRST" to settingsText("Spotify Canvas dahulu", "Spotify Canvas first"),
+                            "APPLE_ONLY" to settingsText("Apple Music saja", "Apple Music only"),
+                            "SPOTIFY_ONLY" to settingsText("Spotify Canvas saja", "Spotify Canvas only")
+                        )
+                        Box {
+                            SettingAction(
+                                title = settingsText("Sumber animasi", "Animation source"),
+                                description = sourceOptions.firstOrNull { it.first == artworkSourceOrder }?.second
+                                    ?: sourceOptions.first().second,
+                                icon = Icons.Default.AutoAwesome,
+                                onClick = { sourceMenuOpen = true }
+                            )
+                            DropdownMenu(
+                                expanded = sourceMenuOpen,
+                                onDismissRequest = { sourceMenuOpen = false }
+                            ) {
+                                sourceOptions.forEach { (value, title) ->
+                                    DropdownMenuItem(
+                                        text = { Text(title) },
+                                        onClick = {
+                                            sourceMenuOpen = false
+                                            onArtworkSourceOrderChange(value)
+                                        },
+                                        trailingIcon = {
+                                            if (artworkSourceOrder == value)
+                                                Icon(Icons.Default.Check, null)
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
             if (LYRICS_ENABLED && playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) item(key = "lyrics") {
