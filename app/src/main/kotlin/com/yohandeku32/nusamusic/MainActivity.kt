@@ -3988,7 +3988,6 @@ private fun immersiveScrimOpacity(bitmap: Bitmap?): Float {
     return (0.06f + brightness * 0.50f).coerceIn(0.08f, 0.56f)
 }
 
-@Composable
 private enum class AnimatedArtworkProvider { APPLE_MUSIC, SPOTIFY_CANVAS }
 
 @Composable
