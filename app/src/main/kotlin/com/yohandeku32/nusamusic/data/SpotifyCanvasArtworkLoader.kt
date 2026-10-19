@@ -156,9 +156,10 @@ internal object SpotifyCanvasArtworkLoader {
     }
 
     private fun canvasVideoUrl(root: JSONObject): String? {
-        // Spotify's public media CDN is the only permitted playback origin.
-        // This avoids accidentally treating resolver thumbnails as videos or
-        // playing arbitrary URLs supplied by a third-party JSON response.
+        // Spotycovs returns a proxied /api/canvas?id=...&stream=1 MP4,
+        // not a canvaz.scdn.co CDN link. Accept ONLY that exact trusted
+        // streaming route or a genuine Spotify CDN MP4; unrelated URLs
+        // from third-party JSON must never reach the Android video player.
         fun direct(obj: JSONObject): String? {
             for (name in listOf("canvasUrl", "videoUrl", "video_url", "mediaUrl", "url")) {
                 val value = obj.optString(name)
@@ -188,8 +189,28 @@ internal object SpotifyCanvasArtworkLoader {
 
     internal fun isSpotifyCanvasVideo(value: String): Boolean = runCatching {
         val url = URL(value)
-        url.protocol.equals("https", true) &&
-            url.host.equals("canvaz.scdn.co", true) &&
-            url.path.endsWith(".mp4", true)
+        if (!url.protocol.equals("https", true) || url.userInfo != null ||
+            (url.port != -1 && url.port != 443) || url.ref != null
+        ) return@runCatching false
+
+        when (url.host.lowercase(Locale.ROOT)) {
+            "canvaz.scdn.co" -> url.path.endsWith(".mp4", true)
+            "www.spotycovs.lol", "spotycovs.lol" -> {
+                // Service response example:
+                // https://www.spotycovs.lol/api/canvas?id=<22-char>&stream=1
+                // Never allow arbitrary proxy paths, URLs, or open-redirect
+                // parameters from a JSON response.
+                if (url.path != "/api/canvas") return@runCatching false
+                val parameters = url.query?.split('&')
+                    ?.map { it.split('=', limit = 2) } ?: return@runCatching false
+                if (parameters.size != 2 || parameters.any { it.size != 2 }) {
+                    return@runCatching false
+                }
+                val pairs = parameters.associate { it[0] to it[1] }
+                pairs.size == 2 && pairs["stream"] == "1" &&
+                    pairs["id"]?.matches(Regex("[A-Za-z0-9]{22}")) == true
+            }
+            else -> false
+        }
     }.getOrDefault(false)
 }
