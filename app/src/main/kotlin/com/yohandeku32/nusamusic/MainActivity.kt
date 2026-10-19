@@ -174,6 +174,7 @@ import com.yohandeku32.nusamusic.ui.TurntablePlayer
 import com.yohandeku32.nusamusic.ui.TurntableLabels
 import com.yohandeku32.nusamusic.ui.VinylSongList
 import com.yohandeku32.nusamusic.ui.ImmersiveMusicLibrary
+import com.yohandeku32.nusamusic.ui.immersiveColors
 import com.yohandeku32.nusamusic.ui.ImmersiveArtworkPlayer
 import com.yohandeku32.nusamusic.ui.immersiveGlassPill
 import com.yohandeku32.nusamusic.ui.ImmersiveArtworkScene
@@ -1732,6 +1733,9 @@ private fun NusaMusicApp(
         )
     }
     val showArtistBiography = playerPresentationMode != PlayerPresentationMode.CD
+    var immersiveLightMode by remember {
+        mutableStateOf(uiPrefs.getBoolean("immersive_light_mode", false))
+    }
     var animatedArtworkEnabled by remember {
         mutableStateOf(uiPrefs.getBoolean("animated_artwork_enabled", true))
     }
@@ -2049,6 +2053,11 @@ private fun NusaMusicApp(
                 onChooseCustomTitleFont = onChooseCustomTitleFont,
                 onResetCustomTitleFont = onResetCustomTitleFont,
                 playerPresentationMode = playerPresentationMode,
+                immersiveLightMode = immersiveLightMode,
+                onImmersiveLightModeChange = { light ->
+                    immersiveLightMode = light
+                    uiPrefs.edit().putBoolean("immersive_light_mode", light).apply()
+                },
                 onPresentationSelected = { mode ->
                     if (mode.isAvailable) {
                         playerPresentationMode = mode
@@ -2094,7 +2103,8 @@ private fun NusaMusicApp(
 
     val pageBackdrop = when (playerPresentationMode) {
         PlayerPresentationMode.CD -> Color(0xFF111111)
-        PlayerPresentationMode.IMMERSIVE_ARTWORK -> Color.Black
+        PlayerPresentationMode.IMMERSIVE_ARTWORK ->
+            immersiveColors(immersiveLightMode).background
         else -> MaterialTheme.colorScheme.background
     }
     // Lyrics is an in-page focus mode, no modal dialog or slide-up sheet.
@@ -2164,6 +2174,7 @@ private fun NusaMusicApp(
                         biography = artistBiography,
                         biographyLoading = biographyLoading,
                         isVisible = pagerState.settledPage == 0,
+                        lightMode = immersiveLightMode,
                         state = artistPageState,
                         onVisible = { artistPageState.loadPortrait(context, scope) },
                         onBack = { scope.launch { pagerState.animateMiuixScrollToPage(playerPage) } },
@@ -2178,6 +2189,7 @@ private fun NusaMusicApp(
                         if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
                             ImmersiveArtworkPlayer(
                                 title = currentSong?.title ?: nusaText("Pilih lagu", "Choose a song"),
+                                lightMode = immersiveLightMode,
                                 composerNames = currentSong?.let { lyricsState.forSong(it).data?.stored?.credits?.composers?.joinToString(", ") } ?: "",
                                 artist = currentSong?.artist ?: nusaText("Perpustakaan musik lokal Anda", "Your local music library"),
                                 titleFontFamily = if (uiPrefs.contains("title_font_family")) titleFontFamily else FontFamily.SansSerif,
@@ -2202,14 +2214,16 @@ private fun NusaMusicApp(
                                     ImmersiveArtwork(
                                         currentSong, animatedArtworkEnabled, heroHeight, heroWidth,
                                         artworkModifier, lyricsMode = lyricsRequested,
+                                        lightMode = immersiveLightMode,
                                         playerPageVisible = pagerState.settledPage == playerPage
                                     )
                                 },
                                 progress = { progressModifier ->
                                     PlaybackProgress(positionMsState, durationMs, currentSong != null && durationMs > 0,
-                                        onSeek, immersive = true, modifier = progressModifier)
+                                        onSeek, immersive = true, immersiveLightMode = immersiveLightMode,
+                                        modifier = progressModifier)
                                 },
-                                quality = { AudioQualityPill(song = currentSong, immersive = true) },
+                                quality = { AudioQualityPill(song = currentSong, immersive = true, immersiveLightMode = immersiveLightMode) },
                                 lyrics = { lyricsModifier ->
                                     ImmersiveLyricsPanel(
                                         song = currentSong,
@@ -2427,6 +2441,7 @@ private fun NusaMusicApp(
                                 currentSong = currentSong,
                                 isPlaying = isPlaying,
                                 isVisible = pagerState.currentPage == libraryPage,
+                                lightMode = immersiveLightMode,
                                 hasMusicAccess = hasMusicAccess,
                                 isScanning = isScanningMusic,
                                 emptyMessage = emptyLibraryMessage,
@@ -3630,7 +3645,7 @@ private fun SimpleProgressBar(
             }
     ) {
         val y = size.height / 2f
-        val stroke = (if (immersive) 3.25.dp else 5.dp).toPx()
+        val stroke = (if (immersive) 4.25.dp else 5.dp).toPx()
         val startX = stroke / 2f
         val endX = (size.width - startX).coerceAtLeast(startX)
 
@@ -4224,6 +4239,7 @@ private fun ImmersiveArtwork(
     heroWidthFraction: Float = 1f,
     modifier: Modifier = Modifier,
     lyricsMode: Boolean = false,
+    lightMode: Boolean = false,
     playerPageVisible: Boolean = true
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -4392,6 +4408,7 @@ private fun ImmersiveArtwork(
         artwork = artwork,
         blur = activeBlur,
         backdrop = animatedBackdrop,
+        lightMode = lightMode,
         heroHeight = heroHeight,
         heroWidthFraction = heroWidthFraction,
         heroOpacity = heroOpacity,
