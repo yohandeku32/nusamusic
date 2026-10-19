@@ -4447,7 +4447,8 @@ private fun AnimatedArtworkVideoBackground(
                 .build()
         }
         val builder = androidx.media3.exoplayer.ExoPlayer.Builder(context)
-        if (SpotifyCanvasArtworkLoader.isSpotifyCanvasVideo(url)) {
+        val isSpotifyCanvas = SpotifyCanvasArtworkLoader.isSpotifyCanvasVideo(url)
+        if (isSpotifyCanvas) {
             // Fast repeat playback: reuse disk-backed MP4 bytes if available.
             // Apple Music HLS must keep its original MediaSource factory.
             SpotifyCanvasVideoCache.mediaSourceFactory(context)?.let {
@@ -4456,12 +4457,17 @@ private fun AnimatedArtworkVideoBackground(
         }
         builder
             .setTrackSelector(trackSelector)
-            // Canvas is a short muted background loop, not the audio player.
-            // Begin when roughly half a second is buffered instead of the
-            // default 1 s, while keeping a larger reserve for rebuffering.
+            // The external Spotify proxy can briefly throttle between
+            // repeat loops. Give Canvas a larger background buffer than
+            // Apple's HLS stream, but still reveal the first frame quickly.
             .setLoadControl(
                 androidx.media3.exoplayer.DefaultLoadControl.Builder()
-                    .setBufferDurationsMs(2_500, 15_000, 350, 1_250)
+                    .setBufferDurationsMs(
+                        if (isSpotifyCanvas) 5_000 else 2_500,
+                        if (isSpotifyCanvas) 22_000 else 15_000,
+                        if (isSpotifyCanvas) 450 else 350,
+                        if (isSpotifyCanvas) 1_500 else 1_250
+                    )
                     .build()
             )
             .setAudioAttributes(
