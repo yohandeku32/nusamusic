@@ -4526,8 +4526,9 @@ private fun ImmersiveArtwork(
                                             // Spotify-first must not return to
                                             // the same failed Canvas repeatedly.
                                             animatedArtworkUrl = null
-                                            if (!(sourceOrder == ArtworkSourceOrder.SPOTIFY_FIRST &&
-                                                    spotifyPlaybackFailed)) {
+                                            if (AnimatedArtworkQueuePreloader.spotifyAfterAppleFailure(
+                                                    sourceOrder, spotifyPlaybackFailed
+                                                )) {
                                                 spotifyFallbackRequested = true
                                             }
                                         }
