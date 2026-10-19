@@ -4300,6 +4300,10 @@ private fun ImmersiveArtwork(
     }
     var artwork by remember { mutableStateOf(initialCover) }
     var staticBlur by remember { mutableStateOf(initialSnapshot?.blur) }
+    // Do not swap to the plain cover or a black placeholder between Next
+    // presses. Hold whichever real ambient was last visible until the next
+    // cover / animated frame has finished preparing its own blur.
+    var retainedAmbientBlur by remember { mutableStateOf(initialSnapshot?.blur) }
     var backdrop by remember { mutableStateOf(initialSnapshot?.let { Color(it.backdrop) } ?: Color(0xFF141414)) }
     var hasPresentedArtwork by remember { mutableStateOf(initialCover != null) }
     LaunchedEffect(artwork) {
@@ -4320,9 +4324,8 @@ private fun ImmersiveArtwork(
     LaunchedEffect(song?.uri, song?.albumId) {
         val targetSong = song
         if (targetSong == null) {
-            artwork = null
-            staticBlur = null
-            backdrop = Color(0xFF141414)
+            // Keep the previous artwork through transient Media3 null items.
+            // Clearing it exposes the page background for one frame.
             return@LaunchedEffect
         }
 
@@ -4331,11 +4334,15 @@ private fun ImmersiveArtwork(
             ?.toString()
 
         suspend fun publish(bitmap: Bitmap?) {
-            val prepared = bitmap?.let { prepareImmersiveArtwork(it) }
+            // Never replace a visible image with null during a slow lookup.
+            if (bitmap == null) return
+            val prepared = prepareImmersiveArtwork(bitmap)
+            // Publish the actual cover + its blur in the same snapshot.
             artwork = bitmap
-            staticBlur = prepared?.first
-            backdrop = prepared?.second ?: Color(0xFF141414)
-            if (bitmap != null && prepared != null) {
+            staticBlur = prepared.first
+            retainedAmbientBlur = prepared.first
+            backdrop = prepared.second
+            if (true) {
                 ImmersiveArtworkCache.save(context, targetSong,
                     ImmersiveArtworkSnapshot(bitmap, prepared.first, prepared.second.toArgb()))
             }
@@ -4347,6 +4354,7 @@ private fun ImmersiveArtwork(
         if (restored != null) {
             artwork = restored.cover
             staticBlur = restored.blur
+            retainedAmbientBlur = restored.blur
             backdrop = Color(restored.backdrop)
         }
 
@@ -4422,9 +4430,7 @@ private fun ImmersiveArtwork(
         }
     }
 
-    val activeBlur = if (animatedArtworkEnabled && animatedArtworkUrl != null) {
-        frozenAnimatedBlur ?: staticBlur
-    } else staticBlur
+    val activeBlur = retainedAmbientBlur ?: staticBlur
     val targetScrimOpacity = remember(activeBlur) { immersiveScrimOpacity(activeBlur) }
     val scrimOpacity by animateFloatAsState(
         targetValue = targetScrimOpacity,
@@ -4469,6 +4475,7 @@ private fun ImmersiveArtwork(
                     onBackdropReady = { blurredFrame, frameColor ->
                         if (animatedArtworkUrl == activeUrl && frozenAnimatedBlur == null) {
                             frozenAnimatedBlur = blurredFrame
+                            retainedAmbientBlur = blurredFrame
                             frozenAnimatedBackdrop = frameColor
                         }
                     },
