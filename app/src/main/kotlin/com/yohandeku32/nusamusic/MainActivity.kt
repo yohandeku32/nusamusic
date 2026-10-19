@@ -4224,10 +4224,11 @@ private fun ImmersiveArtwork(
     // Reuses one cache for all Canvas players; no disk work on a draw frame.
     LaunchedEffect(animatedArtworkEnabled) {
         if (animatedArtworkEnabled) {
-            coroutineScope {
-                launch { SpotifyCanvasVideoCache.prepare(context) }
-                launch { AppleTallVideoCache.prepare(context) }
-            }
+            // Both caches share Android's database provider. Initialize them
+            // sequentially on IO (inside prepare) to avoid startup DB lock
+            // contention while the artwork screen is first composed.
+            AppleTallVideoCache.prepare(context)
+            SpotifyCanvasVideoCache.prepare(context)
         }
     }
     // Retain the current frame while the next song's artwork is decoded. Resetting
