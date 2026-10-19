@@ -123,6 +123,7 @@ internal fun ImmersiveMusicLibrary(
     onPlay: (Song, List<Song>) -> Unit,
     onPlayNext: (Song) -> Unit,
     onShare: (Song) -> Unit,
+    onDeleteSong: (Song) -> Unit,
     onTogglePlay: () -> Unit,
     onScanMusic: () -> Unit,
     onRequestPermission: () -> Unit,
@@ -145,6 +146,7 @@ internal fun ImmersiveMusicLibrary(
     }
     var sortOpen by remember { mutableStateOf(false) }
     var searchDialogOpen by remember { mutableStateOf(false) }
+    var deleteCandidate by remember { mutableStateOf<Song?>(null) }
     val dismissKeyboard: () -> Unit = {
         keyboard?.hide()
         focusManager.clearFocus(force = true)
@@ -211,6 +213,27 @@ internal fun ImmersiveMusicLibrary(
                 search = query
             },
             onPlay = onPlay
+        )
+    }
+
+    deleteCandidate?.let { candidate ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { deleteCandidate = null },
+            title = { Text("Delete song permanently?") },
+            text = {
+                Text("“${candidate.title}” will be deleted from device storage, not just removed from NusaMusic. This cannot be undone.")
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    deleteCandidate = null
+                    onDeleteSong(candidate)
+                }) { Text("Delete permanently", color = Color(0xFFD54A4A)) }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { deleteCandidate = null }) {
+                    Text("Cancel")
+                }
+            }
         )
     }
 
@@ -403,6 +426,7 @@ internal fun ImmersiveMusicLibrary(
                                 onPlay = { onPlay(song, visibleSongs) },
                                 onPlayNext = { onPlayNext(song) },
                                 onShare = { onShare(song) },
+                                onDelete = { deleteCandidate = song },
                                 onAlbum = {
                                     if (song.album.isNotBlank()) {
                                         focus = LibraryFocus(FocusType.ALBUM, song.album)
@@ -442,6 +466,7 @@ private fun ImmersiveTrackRow(
     hiResPainter: Painter,
     artwork: @Composable (Song, Modifier) -> Unit,
     onPlay: () -> Unit, onPlayNext: () -> Unit, onShare: () -> Unit,
+    onDelete: () -> Unit,
     onAlbum: () -> Unit, onArtist: () -> Unit
 ) {
     val palette = immersiveColors(lightMode)
@@ -517,6 +542,11 @@ private fun ImmersiveTrackRow(
                 DropdownMenuItem(text = { Text("Share") }, onClick = {
                     menuOpen = false; onShare()
                 })
+                androidx.compose.material3.HorizontalDivider()
+                DropdownMenuItem(
+                    text = { Text("Delete permanently", color = Color(0xFFD54A4A)) },
+                    onClick = { menuOpen = false; onDelete() }
+                )
             }
         }
     }
