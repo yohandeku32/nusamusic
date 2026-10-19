@@ -1741,8 +1741,13 @@ private fun NusaMusicApp(
         )
     }
     val showArtistBiography = playerPresentationMode != PlayerPresentationMode.CD
-    var immersiveLightMode by remember {
-        mutableStateOf(uiPrefs.getBoolean("immersive_light_mode", false))
+    // This option themes ONLY the Immersive song library and its search.
+    // Reuse the existing preference on upgrade so the chosen color persists.
+    var libraryLightMode by remember {
+        mutableStateOf(
+            uiPrefs.getBoolean("immersive_library_light_mode",
+                uiPrefs.getBoolean("immersive_light_mode", false))
+        )
     }
     var animatedArtworkEnabled by remember {
         mutableStateOf(uiPrefs.getBoolean("animated_artwork_enabled", true))
@@ -1989,19 +1994,6 @@ private fun NusaMusicApp(
     }
 
     if (showSettings) {
-        val settingsPalette = immersiveColors(immersiveLightMode)
-        val lightImmersiveSettings =
-            immersiveLightMode && playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
-        val settingsColorScheme = if (lightImmersiveSettings) lightColorScheme(
-            background = settingsPalette.background,
-            surface = settingsPalette.surface,
-            surfaceVariant = settingsPalette.surfaceVariant,
-            onBackground = settingsPalette.primaryText,
-            onSurface = settingsPalette.primaryText,
-            onSurfaceVariant = settingsPalette.secondaryText,
-            primary = Color(0xFF315A96),
-            onPrimary = Color.White
-        ) else MaterialTheme.colorScheme
         val settingsSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         var settingsClosing by remember { mutableStateOf(false) }
         val closeSettings: () -> Unit = {
@@ -2027,8 +2019,8 @@ private fun NusaMusicApp(
             // inside Settings cannot make the entire panel jitter.
             sheetGesturesEnabled = false,
             dragHandle = null,
-            containerColor = settingsColorScheme.background,
-            contentColor = settingsColorScheme.onBackground
+            containerColor = MaterialTheme.colorScheme.background,
+            contentColor = MaterialTheme.colorScheme.onBackground
         ) {
             // ModalBottomSheet owns a separate dialog window. Configure its
             // fullscreen flags ONCE when that window is attached, instead of
@@ -2049,7 +2041,6 @@ private fun NusaMusicApp(
                 onDispose { /* Dialog window is destroyed on dismiss. */ }
             }
 
-            MaterialTheme(colorScheme = settingsColorScheme) {
             PlayerSettingsContent(
                 lyricsFontSize = lyricsFontSize,
                 onLyricsFontSizeChange = { lyricsFontSize = it },
@@ -2080,10 +2071,12 @@ private fun NusaMusicApp(
                 onChooseCustomTitleFont = onChooseCustomTitleFont,
                 onResetCustomTitleFont = onResetCustomTitleFont,
                 playerPresentationMode = playerPresentationMode,
-                immersiveLightMode = immersiveLightMode,
-                onImmersiveLightModeChange = { light ->
-                    immersiveLightMode = light
-                    uiPrefs.edit().putBoolean("immersive_light_mode", light).apply()
+                libraryLightMode = libraryLightMode,
+                onLibraryLightModeChange = { light ->
+                    libraryLightMode = light
+                    uiPrefs.edit()
+                        .putBoolean("immersive_library_light_mode", light)
+                        .apply()
                 },
                 onPresentationSelected = { mode ->
                     if (mode.isAvailable) {
@@ -2136,14 +2129,12 @@ private fun NusaMusicApp(
                 onScanMusic = onScanMusic,
                 onDismiss = closeSettings
             )
-            }
         }
     }
 
     val pageBackdrop = when (playerPresentationMode) {
         PlayerPresentationMode.CD -> Color(0xFF111111)
-        PlayerPresentationMode.IMMERSIVE_ARTWORK ->
-            immersiveColors(immersiveLightMode).background
+        PlayerPresentationMode.IMMERSIVE_ARTWORK -> Color.Black
         else -> MaterialTheme.colorScheme.background
     }
     // Lyrics is an in-page focus mode, no modal dialog or slide-up sheet.
@@ -2213,7 +2204,6 @@ private fun NusaMusicApp(
                         biography = artistBiography,
                         biographyLoading = biographyLoading,
                         isVisible = pagerState.settledPage == 0,
-                        lightMode = immersiveLightMode,
                         state = artistPageState,
                         onVisible = { artistPageState.loadPortrait(context, scope) },
                         onBack = { scope.launch { pagerState.animateMiuixScrollToPage(playerPage) } },
@@ -2228,7 +2218,6 @@ private fun NusaMusicApp(
                         if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
                             ImmersiveArtworkPlayer(
                                 title = currentSong?.title ?: nusaText("Pilih lagu", "Choose a song"),
-                                lightMode = immersiveLightMode,
                                 composerNames = currentSong?.let { lyricsState.forSong(it).data?.stored?.credits?.composers?.joinToString(", ") } ?: "",
                                 artist = currentSong?.artist ?: nusaText("Perpustakaan musik lokal Anda", "Your local music library"),
                                 titleFontFamily = if (uiPrefs.contains("title_font_family")) titleFontFamily else FontFamily.SansSerif,
@@ -2253,17 +2242,15 @@ private fun NusaMusicApp(
                                     ImmersiveArtwork(
                                         currentSong, animatedArtworkEnabled, heroHeight, heroWidth,
                                         artworkModifier, lyricsMode = lyricsRequested,
-                                        lightMode = immersiveLightMode,
                                         sourceOrder = artworkSourceOrder,
                                         playerPageVisible = pagerState.settledPage == playerPage
                                     )
                                 },
                                 progress = { progressModifier ->
                                     PlaybackProgress(positionMsState, durationMs, currentSong != null && durationMs > 0,
-                                        onSeek, immersive = true, immersiveLightMode = immersiveLightMode,
-                                        modifier = progressModifier)
+                                        onSeek, immersive = true, modifier = progressModifier)
                                 },
-                                quality = { AudioQualityPill(song = currentSong, immersive = true, immersiveLightMode = immersiveLightMode) },
+                                quality = { AudioQualityPill(song = currentSong, immersive = true) },
                                 lyrics = { lyricsModifier ->
                                     ImmersiveLyricsPanel(
                                         song = currentSong,
@@ -2481,7 +2468,7 @@ private fun NusaMusicApp(
                                 currentSong = currentSong,
                                 isPlaying = isPlaying,
                                 isVisible = pagerState.currentPage == libraryPage,
-                                lightMode = immersiveLightMode,
+                                lightMode = libraryLightMode,
                                 hasMusicAccess = hasMusicAccess,
                                 isScanning = isScanningMusic,
                                 emptyMessage = emptyLibraryMessage,
