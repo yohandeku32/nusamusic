@@ -47,7 +47,13 @@ class MiuixPagerTouchTest {
             pager = rememberPagerState(initialPage = 1, pageCount = { 3 })
             scope = rememberCoroutineScope()
             MiuixHorizontalPager(
-                pager, Color.Black, Modifier.fillMaxSize().testTag("pager")
+                pager, Color.Black, Modifier.fillMaxSize().testTag("pager"),
+                pageSurface = { page ->
+                    if (page == 2) Color(0xFFF8F9FB) else Color.Black
+                },
+                pageCornerBacking = { page ->
+                    if (page == 2) Color(0xFFE9EDF3) else Color.Black
+                }
             ) { page ->
                 Box(Modifier.fillMaxSize()) {
                     // Neighbour pages have a full-page target, like Artist or
@@ -98,6 +104,21 @@ class MiuixPagerTouchTest {
         compose.onNodeWithTag("player-next").performTouchInput { click(center) }
         compose.runOnIdle {
             assertEquals(2, nextTaps)
+            assertEquals(listOf(0, 0, 0), plays.toList())
+        }
+    }
+
+    @Test fun lightLibraryCardStillReturnsToCorrectPlayerControls() {
+        showPager()
+        compose.onNodeWithTag("pager").performTouchInput { swipeLeft() }
+        compose.waitForIdle()
+        compose.runOnIdle { assertEquals(2, pager.settledPage) }
+        compose.onNodeWithTag("pager").performTouchInput { swipeRight() }
+        compose.waitForIdle()
+        compose.runOnIdle { assertEquals(1, pager.settledPage) }
+        compose.onNodeWithTag("player-next").performTouchInput { click(center) }
+        compose.runOnIdle {
+            assertEquals(1, nextTaps)
             assertEquals(listOf(0, 0, 0), plays.toList())
         }
     }

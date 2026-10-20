@@ -10,8 +10,9 @@ import kotlin.math.round
  * from Compose hit targets and can send a Now Playing tap to an Artist page.
  *
  * Pages use their native physical X positions, remain fully opaque, and never
- * scale. Only the front card gets rounded leading corners and a subtle shadow
- * as it slides over the previous page.
+ * scale. The front card has a 28dp leading curve and a layered shadow as it
+ * slides over the previous page. Its backing matches the light/dark page so
+ * black pager pixels cannot show through rounded Library corners.
  */
 internal data class MiuixCardVisuals(
     val cornerRadiusDp: Float,
@@ -44,9 +45,9 @@ internal fun miuixCardVisuals(
     val fraction = (distanceFromRest / 0.09f).coerceIn(0f, 1f)
     val eased = fraction * fraction * (3f - 2f * fraction)
     return MiuixCardVisuals(
-        cornerRadiusDp = 16f,
-        shadowElevationDp = 9f * eased,
-        edgeShadeAlpha = 0.19f * eased
+        cornerRadiusDp = 28f,
+        shadowElevationDp = 16f * eased,
+        edgeShadeAlpha = 0.25f * eased
     )
 }
 

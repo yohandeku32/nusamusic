@@ -44,11 +44,17 @@ internal fun MiuixHorizontalPager(
     modifier: Modifier = Modifier,
     userScrollEnabled: Boolean = true,
     onHorizontalSwipeStarted: () -> Unit = {},
+    // The actual page surface and the subtly contrasting outer corner
+    // backing are provided separately. A light Library must never inherit
+    // the player pager's black background at its rounded corners.
+    pageSurface: (Int) -> Color = { backgroundColor },
+    pageCornerBacking: (Int) -> Color = pageSurface,
     content: @Composable (Int) -> Unit
 ) {
     val swipeAction by rememberUpdatedState(onHorizontalSwipeStarted)
-    // One fixed shape per pager instance; never allocate a shape per frame.
-    val cardShape = remember { RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp) }
+    // Single reusable outline. A 28dp leading curve makes the card edge
+    // recognizable without rounding the right edge or distorting content.
+    val cardShape = remember { RoundedCornerShape(topStart = 28.dp, bottomStart = 28.dp) }
     HorizontalPager(
         state = state,
         modifier = modifier.background(backgroundColor).clipToBounds()
@@ -103,14 +109,22 @@ internal fun MiuixHorizontalPager(
                 )
             }
         }
+        val surface = pageSurface(page)
+        val backing = pageCornerBacking(page)
         Box(
             Modifier.fillMaxSize()
+                // Paint a full-rectangle *theme-aware* backing OUTSIDE the
+                // rounded graphics layer. Otherwise the light Library reveals
+                // the pager's black base through the top-left cutout.
+                // The quiet cool-grey backing is visible only in the curve.
+                .background(backing)
                 // Fixed iOS-style navigation order (Artist, Player, Library).
                 // No z-index flips in the middle of a gesture.
                 .zIndex(miuixPageZIndex(page))
                 // No custom X translation, alpha or scale: the native pager
                 // keeps every visual at its true hit-test coordinate.
                 // Clip only the leading corners of the moving front card.
+                // The backing is above this modifier, so it stays un-clipped.
                 .graphicsLayer {
                     val position = state.currentPage + state.currentPageOffsetFraction
                     val card = miuixCardVisuals(page, position, state.isScrollInProgress)
@@ -122,9 +136,11 @@ internal fun MiuixHorizontalPager(
                 // visible even if the pager clips real elevation outside
                 // the page bounds. The brush is cached; only alpha changes.
                 .drawWithCache {
-                    val band = 22.dp.toPx()
+                    val band = 36.dp.toPx()
                     val brush = Brush.horizontalGradient(
-                        0f to Color.Black, 1f to Color.Transparent,
+                        0f to Color.Black,
+                        0.22f to Color.Black.copy(alpha = 0.54f),
+                        1f to Color.Transparent,
                         startX = 0f, endX = band
                     )
                     onDrawWithContent {
@@ -139,7 +155,9 @@ internal fun MiuixHorizontalPager(
                 }
                 .pagerPageInput { interactive }
                 .then(if (interactive) Modifier else Modifier.clearAndSetSemantics { })
-                .background(backgroundColor)
+                // Use the correct *per-page* surface even in its status bar
+                // and empty layout areas; never fill Library gaps with black.
+                .background(surface)
         ) {
             content(page)
         }
