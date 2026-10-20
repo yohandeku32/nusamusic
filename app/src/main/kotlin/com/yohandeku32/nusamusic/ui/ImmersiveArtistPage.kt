@@ -11,8 +11,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Shuffle
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Shuffle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -220,14 +220,14 @@ fun ImmersiveArtistPage(
                     ) {
                         ArtistActionButton(
                             label = artistText("Putar", "Play"),
-                            icon = Icons.Default.PlayArrow,
+                            icon = NusaPlayerIcons.Play,
                             primary = true,
                             modifier = Modifier.weight(1f),
                             onClick = { onPlay(playable.first(), playable) }
                         )
                         ArtistActionButton(
                             label = artistText("Acak", "Shuffle"),
-                            icon = Icons.Default.Shuffle,
+                            icon = Lucide.Shuffle,
                             primary = false,
                             modifier = Modifier.weight(1f),
                             onClick = {
@@ -466,7 +466,7 @@ private fun ArtistMusicRow(
             )
         }
         Icon(
-            if (selected) Icons.Default.MusicNote else Icons.Default.PlayArrow,
+            if (selected) Icons.Default.MusicNote else NusaPlayerIcons.Play,
             contentDescription = artistText("Putar lagu", "Play song"),
             tint = if (selected) artistInk else artistMuted,
             modifier = Modifier.size(21.dp)
