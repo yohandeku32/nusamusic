@@ -500,33 +500,44 @@ internal fun ImmersiveArtworkPlayer(
                 ) {
                     Box(
                         Modifier.size(56.dp)
+                            // Keep the measured anchor fixed; only the child
+                            // layer moves with the other Library control.
                             .onGloballyPositioned { coordinates ->
                                 val bounds = coordinates.boundsInRoot()
                                 if (artistButtonBounds != bounds) artistButtonBounds = bounds
-                            }
-                            .graphicsLayer {
-                                alpha = (1f - shownProgress()).coerceIn(0f, 1f)
                             },
                         contentAlignment = Alignment.Center
                     ) {
-                        // Home's independent Artist circle is already Liquid
-                        // Glass, so entering Library never swaps materials.
-                        ContinuousLiquidGlassSurface(
-                            radius = 50.dp,
-                            lightMode = lightMode,
-                            liquidGlassEnabled = liquidGlassEnabled,
-                            hazeState = liveBackdrop,
-                            hazeAlpha = liveGlassAlpha,
-            artworkTint = glassArtworkColor,
-                            modifier = Modifier.matchParentSize()
-                        )
-                        ImmersiveAction(lightMode, Lucide.UserRound,
-                            immersiveText("Buka halaman artis", "Open artist page"),
-                            onArtist, hasSong && !artistOpen && !libraryOpen,
-                            iconSize = 23.dp,
-                            iconTint = if (liquidGlassEnabled) Color.White else null,
-                            liquidMotion = liquidGlassEnabled,
-                            inactiveAlpha = 1f)
+                        Box(
+                            Modifier.matchParentSize().graphicsLayer {
+                                alpha = (1f - shownProgress()).coerceIn(0f, 1f)
+                                translationX = if (presentingLibrary) {
+                                    -with(density) {
+                                        (expandedPillWidth - actionPillWidth).toPx()
+                                    } * 0.5f
+                                } else 0f
+                            },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            ContinuousLiquidGlassSurface(
+                                radius = 50.dp,
+                                lightMode = lightMode,
+                                liquidGlassEnabled = liquidGlassEnabled,
+                                hazeState = liveBackdrop,
+                                hazeAlpha = liveGlassAlpha,
+                                artworkTint = glassArtworkColor,
+                                modifier = Modifier.matchParentSize()
+                            )
+                            ImmersiveAction(
+                                lightMode, Lucide.UserRound,
+                                immersiveText("Buka halaman artis", "Open artist page"),
+                                onArtist, hasSong && !artistOpen && !libraryOpen,
+                                iconSize = 23.dp,
+                                iconTint = if (liquidGlassEnabled) Color.White else null,
+                                liquidMotion = liquidGlassEnabled,
+                                inactiveAlpha = 1f
+                            )
+                        }
                     }
                     // Reserve its space to keep the player geometry stable.
                     // The actual pill and hit targets live in the top overlay.
@@ -606,10 +617,10 @@ internal fun ImmersiveArtworkPlayer(
                 Box(
                     Modifier.offset {
                         IntOffset(
-                            // Begin at the exact Home anchor and drift
-                            // continuously only as the sheet reveals.
+                            // Match Home's translated child exactly. Maintain
+                            // the fixed 10dp gap to the widening action pill.
                             libraryArtistCircleLeftPx(
-                                circleX, extraWidthPx * shownProgress().coerceIn(0f, 1f)
+                                circleX, extraWidthPx
                             ).roundToInt(),
                             circleY.roundToInt()
                         )
