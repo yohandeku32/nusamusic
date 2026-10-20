@@ -1839,6 +1839,7 @@ private fun NusaMusicApp(
 ) {
     var isFavorite by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
+    var artistOverlayOpen by remember { mutableStateOf(false) }
     var deleteFromLibrary by remember { mutableStateOf<Song?>(null) }
     val artistKey = ArtistNameUtils.cacheKey(currentSong?.artist)
 
@@ -1864,14 +1865,30 @@ private fun NusaMusicApp(
             ArtistNameUtils.firstArtist(currentSong?.artist)
         ).also { artistPageStates.put(artistKey, it) }
     }
-    // The Artist hero reuses the exact decoded current cover. No second
-    // thumbnail decode/placeholder/crossfade while the user is swiping.
+    // The Artist portal reuses the current cover and its prepared ambient blur.
+    // No network artist request is made while the icon lifts upward.
     var artistTransitionCover by remember(currentSong?.uri) {
         mutableStateOf(currentSong?.let { song ->
             ImmersiveArtworkCache.cached(song)?.cover ?: ArtworkLoader.cached(
                 song.uri, 1_600, song.albumId.takeIf { it > 0L }?.toString()
             )
         })
+    }
+    var artistAmbientBitmap by remember(currentSong?.uri) {
+        mutableStateOf(currentSong?.let { ImmersiveArtworkCache.cached(it)?.blur })
+    }
+    LaunchedEffect(currentSong?.uri, artistTransitionCover) {
+        val cached = currentSong?.let { ImmersiveArtworkCache.cached(it)?.blur }
+        if (cached != null) {
+            artistAmbientBitmap = cached
+        } else {
+            val cover = artistTransitionCover
+            if (cover != null) {
+                artistAmbientBitmap = withContext(Dispatchers.Default) {
+                    ArtworkBlur.create(cover)
+                }
+            }
+        }
     }
     val uiPrefs = remember(context) {
         context.getSharedPreferences("ui_preferences", android.content.Context.MODE_PRIVATE)
@@ -2049,16 +2066,18 @@ private fun NusaMusicApp(
         listOf('#') + ('A'..'Z')
     }
 
-    // The artist sits to the left, so a rightward swipe from the player opens it.
+    // Artist is a rising in-player overlay; only Now Playing and Library
+    // participate in horizontal pager gestures.
     val artistPageEnabled = playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
-    val playerPage = if (artistPageEnabled) 1 else 0
-    val libraryPage = playerPage + 1
+    val playerPage = 0
+    val libraryPage = 1
     var libraryWasVisible by remember { mutableStateOf(false) }
-    val pagerState = androidx.compose.runtime.key(artistPageEnabled) {
-        androidx.compose.foundation.pager.rememberPagerState(
-            initialPage = if (libraryWasVisible) libraryPage else playerPage,
-            pageCount = { if (artistPageEnabled) 3 else 2 }
-        )
+    val pagerState = androidx.compose.foundation.pager.rememberPagerState(
+        initialPage = if (libraryWasVisible) libraryPage else playerPage,
+        pageCount = { 2 }
+    )
+    LaunchedEffect(playerPresentationMode) {
+        if (!artistPageEnabled) artistOverlayOpen = false
     }
     val playerScrollState =
         androidx.compose.foundation.lazy.rememberLazyListState()
@@ -2316,13 +2335,8 @@ private fun NusaMusicApp(
     LaunchedEffect(pagerState.settledPage) {
         if (pagerState.settledPage != playerPage) lyricsRequested = false
     }
-    // Returning from Now Playing opens the current artist's overview with the
-    // current song's cover, rather than a retained album deep-link below it.
-    LaunchedEffect(pagerState.settledPage, artistPageState, artistPageEnabled) {
-        if (artistPageEnabled && pagerState.settledPage == playerPage) {
-            artistPageState.selectedAlbumKey = null
-            artistPageState.listState.scrollToItem(0)
-        }
+    LaunchedEffect(pagerState.settledPage) {
+        if (pagerState.settledPage != playerPage) artistOverlayOpen = false
     }
 
     val keyboardForPager = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
@@ -2370,6 +2384,7 @@ private fun NusaMusicApp(
                 state = pagerState,
                 backgroundColor = pageBackdrop,
                 modifier = Modifier.fillMaxSize(),
+                userScrollEnabled = !artistOverlayOpen,
                 // The library has its own surface, but NO artificial backing
                 // patch. The previous overlapping page now supplies the real
                 // corner pixels while swiping in either direction.
@@ -2388,32 +2403,6 @@ private fun NusaMusicApp(
                 }
             ) { page ->
                 when {
-                    artistPageEnabled && page == 0 -> ImmersiveArtistPage(
-                        artistName = currentSong?.artist,
-                        songs = songs,
-                        currentSong = currentSong,
-                        isVisible = pagerState.settledPage == 0,
-                        state = artistPageState,
-                        onBack = { scope.launch { pagerState.animateMiuixScrollToPage(playerPage) } },
-                        onPlay = onPlay,
-                        artwork = { song, modifier ->
-                            ArtworkView(song = song, maxSizePx = 512, modifier = modifier, grainOverlay = false)
-                        },
-                        heroArtwork = { song, modifier ->
-                            val sharedCover = artistTransitionCover
-                            if (song.uri == currentSong?.uri && sharedCover != null) {
-                                Image(
-                                    bitmap = sharedCover.asImageBitmap(),
-                                    contentDescription = song.title,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = modifier
-                                )
-                            } else {
-                                ArtworkView(song, maxSizePx = 1_600,
-                                    modifier = modifier, grainOverlay = false)
-                            }
-                        }
-                    )
                     page == playerPage -> {
                         BoxWithConstraints(Modifier.fillMaxSize()) {
                         val playerViewportHeight = maxHeight
@@ -2435,17 +2424,67 @@ private fun NusaMusicApp(
                                 onPrevious = onPrevious, onNext = onNext,
                                 onShuffle = onToggleShuffle, onRepeat = onToggleRepeat,
                                 onFavorite = { isFavorite = !isFavorite },
-                                onLyrics = { lyricsRequested = !lyricsRequested },
-                                onArtist = { scope.launch { pagerState.animateMiuixScrollToPage(0); lyricsRequested = false } },
-                                onLibrary = { scope.launch { pagerState.animateMiuixScrollToPage(libraryPage) } },
+                                onLyrics = {
+                                    artistOverlayOpen = false
+                                    lyricsRequested = !lyricsRequested
+                                },
+                                onArtist = {
+                                    if (!artistOverlayOpen && currentSong != null) {
+                                        lyricsRequested = false
+                                        artistPageState.selectedAlbumKey = null
+                                        scope.launch { artistPageState.listState.scrollToItem(0) }
+                                        artistOverlayOpen = true
+                                    }
+                                },
+                                artistOpen = artistOverlayOpen,
+                                onArtistClose = { artistOverlayOpen = false },
+                                artistProfile = {
+                                    ImmersiveArtistPage(
+                                        artistName = currentSong?.artist,
+                                        songs = songs,
+                                        currentSong = currentSong,
+                                        isVisible = artistOverlayOpen,
+                                        state = artistPageState,
+                                        onBack = { artistOverlayOpen = false },
+                                        onPlay = { selected, queue ->
+                                            artistOverlayOpen = false
+                                            onPlay(selected, queue)
+                                        },
+                                        artwork = { song, modifier ->
+                                            ArtworkView(song, maxSizePx = 512, modifier = modifier,
+                                                grainOverlay = false)
+                                        },
+                                        heroArtwork = { song, modifier ->
+                                            val cover = artistTransitionCover
+                                            if (song.uri == currentSong?.uri && cover != null) {
+                                                Image(bitmap = cover.asImageBitmap(),
+                                                    contentDescription = song.title,
+                                                    contentScale = ContentScale.Crop,
+                                                    modifier = modifier)
+                                            } else {
+                                                ArtworkView(song, maxSizePx = 512,
+                                                    modifier = modifier, grainOverlay = false)
+                                            }
+                                        },
+                                        overlayMode = true,
+                                        ambientArtwork = artistAmbientBitmap
+                                    )
+                                },
+                                onLibrary = {
+                                    artistOverlayOpen = false
+                                    scope.launch { pagerState.animateMiuixScrollToPage(libraryPage) }
+                                },
                                 onShare = { onShare(currentSong) },
-                                onSettings = { showSettings = true },
+                                onSettings = {
+                                    artistOverlayOpen = false
+                                    showSettings = true
+                                },
                                 artwork = { artworkModifier, heroHeight, heroWidth ->
                                     ImmersiveArtwork(
                                         currentSong, animatedArtworkEnabled, heroHeight, heroWidth,
                                         artworkModifier, lyricsMode = lyricsRequested,
                                         sourceOrder = artworkSourceOrder,
-                                        playerPageVisible = pagerState.settledPage == playerPage,
+                                        playerPageVisible = pagerState.settledPage == playerPage && !artistOverlayOpen,
                                         pageReveal = {
                                             // Renderer reads the changing pager
                                             // offset only inside graphicsLayer.

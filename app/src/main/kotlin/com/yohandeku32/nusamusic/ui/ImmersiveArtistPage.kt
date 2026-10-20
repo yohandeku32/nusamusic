@@ -19,6 +19,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.foundation.Image
+import androidx.compose.ui.layout.ContentScale
+import android.graphics.Bitmap
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -55,7 +59,9 @@ fun ImmersiveArtistPage(
     onBack: () -> Unit,
     onPlay: (Song, List<Song>) -> Unit,
     artwork: @Composable (Song, Modifier) -> Unit,
-    heroArtwork: @Composable (Song, Modifier) -> Unit = artwork
+    heroArtwork: @Composable (Song, Modifier) -> Unit = artwork,
+    overlayMode: Boolean = false,
+    ambientArtwork: Bitmap? = null
 ) {
     val artist = ArtistNameUtils.firstArtist(artistName)
     val displayName = artist.ifBlank { artistText("Artis", "Artist") }
@@ -105,19 +111,35 @@ fun ImmersiveArtistPage(
         )
     }
     MaterialTheme(colorScheme = artistScheme) {
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize().background(artistBase),
-            contentPadding = PaddingValues(bottom = 54.dp)
-        ) {
+        Box(Modifier.fillMaxSize().background(artistBase)) {
+            if (overlayMode && ambientArtwork != null) {
+                Image(
+                    bitmap = ambientArtwork.asImageBitmap(),
+                    contentDescription = null,
+                    contentScale = ContentScale.FillBounds,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+            if (overlayMode) {
+                Box(Modifier.matchParentSize().background(
+                    Brush.verticalGradient(
+                        listOf(Color(0xB8090B11), Color(0xE60A0B10), artistBase)
+                    )
+                ))
+            }
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 54.dp)
+            ) {
             item(key = "artist-hero") {
                 Box(
-                    Modifier.fillMaxWidth().height(450.dp)
-                        .background(artistSurface)
+                    Modifier.fillMaxWidth().height(if (overlayMode) 316.dp else 450.dp)
+                        .background(if (overlayMode) Color.Transparent else artistSurface)
                 ) {
-                    if (heroSong != null) {
+                    if (heroSong != null && !overlayMode) {
                         heroArtwork(heroSong, Modifier.fillMaxSize())
-                    } else {
+                    } else if (!overlayMode) {
                         Box(
                             Modifier.fillMaxSize().background(
                                 Brush.linearGradient(
@@ -133,7 +155,7 @@ fun ImmersiveArtistPage(
                             )
                         }
                     }
-                    Box(
+                    if (!overlayMode) Box(
                         Modifier.matchParentSize().background(
                             Brush.verticalGradient(
                                 0f to Color.Black.copy(alpha = 0.22f),
@@ -144,7 +166,7 @@ fun ImmersiveArtistPage(
                             )
                         )
                     )
-                    IconButton(
+                    if (!overlayMode) IconButton(
                         onClick = { navigateBack() },
                         modifier = Modifier.statusBarsPadding()
                             .padding(start = 16.dp, top = 10.dp)
@@ -160,6 +182,12 @@ fun ImmersiveArtistPage(
                         Modifier.align(Alignment.BottomStart).fillMaxWidth()
                             .padding(horizontal = 24.dp).padding(bottom = 22.dp)
                     ) {
+                        if (overlayMode && heroSong != null) {
+                            Box(Modifier.size(92.dp).clip(RoundedCornerShape(21.dp))) {
+                                heroArtwork(heroSong, Modifier.fillMaxSize())
+                            }
+                            Spacer(Modifier.height(16.dp))
+                        }
                         Text(
                             if (selectedAlbum == null)
                                 artistText("ARTIS • KOLEKSI LOKAL", "ARTIST • YOUR LIBRARY")
@@ -355,6 +383,7 @@ fun ImmersiveArtistPage(
                         )
                     }
                 }
+            }
             }
         }
     }

@@ -25,6 +25,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.selected
@@ -66,6 +69,9 @@ internal fun ImmersiveArtworkPlayer(
     onFavorite: () -> Unit,
     onLyrics: () -> Unit,
     onArtist: () -> Unit,
+    artistOpen: Boolean = false,
+    onArtistClose: () -> Unit = {},
+    artistProfile: @Composable () -> Unit = {},
     onLibrary: () -> Unit,
     onShare: () -> Unit,
     onSettings: () -> Unit,
@@ -76,7 +82,19 @@ internal fun ImmersiveArtworkPlayer(
     modifier: Modifier = Modifier,
     contentInsets: WindowInsets = WindowInsets.safeDrawing
 ) {
-    BoxWithConstraints(modifier) {
+    var playerBounds by remember { mutableStateOf<Rect?>(null) }
+    var artistButtonBounds by remember { mutableStateOf<Rect?>(null) }
+    BoxWithConstraints(modifier.onGloballyPositioned { coordinates ->
+        val bounds = coordinates.boundsInRoot()
+        if (playerBounds != bounds) playerBounds = bounds
+    }) {
+        val artistPortalProgress by animateFloatAsState(
+            targetValue = if (artistOpen) 1f else 0f,
+            animationSpec = androidx.compose.animation.core.spring(
+                dampingRatio = 0.90f, stiffness = 340f
+            ),
+            label = "artistCircleToProfile"
+        )
         val primaryInk = if (lightMode) Color(0xFF171A20) else Color.White
         val mutedInk = primaryInk.copy(alpha = 0.72f)
         val density = LocalDensity.current
@@ -342,12 +360,20 @@ internal fun ImmersiveArtworkPlayer(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Box(
-                        Modifier.size(56.dp).immersiveGlassPill(50.dp, lightMode),
+                        Modifier.size(56.dp)
+                            .onGloballyPositioned { coordinates ->
+                                val bounds = coordinates.boundsInRoot()
+                                if (artistButtonBounds != bounds) artistButtonBounds = bounds
+                            }
+                            .graphicsLayer {
+                                alpha = (1f - artistPortalProgress * 1.8f).coerceIn(0f, 1f)
+                            }
+                            .immersiveGlassPill(50.dp, lightMode),
                         contentAlignment = Alignment.Center
                     ) {
                         ImmersiveAction(lightMode, NusaPlayerIcons.Artist,
                             immersiveText("Buka halaman artis", "Open artist page"),
-                            onArtist, hasSong, iconSize = 23.dp)
+                            onArtist, hasSong && !artistOpen, iconSize = 23.dp)
                     }
                     Row(
                         Modifier.width(actionPillWidth)
@@ -388,6 +414,16 @@ internal fun ImmersiveArtworkPlayer(
             Box(Modifier.align(Alignment.BottomCenter)) { foreground() }
         }
 
+        ImmersiveArtistPortal(
+            open = artistOpen,
+            progress = artistPortalProgress,
+            source = artistButtonBounds,
+            host = playerBounds,
+            topInsetPx = with(density) { topInset.toPx() },
+            onClose = onArtistClose,
+            profile = artistProfile,
+            modifier = Modifier.fillMaxSize()
+        )
     }
 }
 
