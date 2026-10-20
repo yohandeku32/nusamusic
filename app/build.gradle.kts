@@ -103,10 +103,6 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     // Actual Lucide ImageVector pack, loaded lazily per used icon.
     implementation("com.composables:icons-lucide-cmp:2.2.1")
-    // Hardware-backed, source-aware backdrop blur for the floating
-    // Immersive control pills. Pin Haze 1.6.x for Kotlin 2.2.10 compatibility;
-    // Haze 2.x requires a newer Kotlin/Compose toolchain.
-    implementation("dev.chrisbanes.haze:haze:1.6.10")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.4")
     implementation("androidx.media3:media3-exoplayer:1.9.3")
     // Persistent, bounded video cache for Spotify Canvas (Media3 SimpleCache).
