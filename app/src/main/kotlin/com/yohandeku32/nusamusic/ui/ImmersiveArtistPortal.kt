@@ -3,10 +3,7 @@ package com.yohandeku32.nusamusic.ui
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
@@ -28,8 +25,8 @@ import kotlin.math.roundToInt
  * full-width artwork begins below that toolbar so the icon never covers it.
  *
  * No blur, layout-frame animation, whole-page scaling, bounce or overlaid
- * artwork leaks. The independently sliding pill is still the REAL pill,
- * with the real touch targets moved by an offset placement modifier.
+ * artwork leaks. The profile always fills the viewport; the real four-action
+ * pill is composed after this portal so it floats above the Artist content.
  */
 @Composable
 internal fun ImmersiveArtistPortal(
@@ -49,24 +46,21 @@ internal fun ImmersiveArtistPortal(
     val sourceY = anchor.top - root.top
     val destX = with(density) { 20.dp.toPx() }
     val destY = topInsetPx + with(density) { 10.dp.toPx() }
-    val pillTop = (sourceY - with(density) { 10.dp.toPx() })
-        .coerceIn(0f, root.height)
-    val toolbarHeight = topInsetPx + with(density) { 78.dp.toPx() }
-    val panelHeight = pillTop.coerceAtLeast(toolbarHeight)
-
     Box(modifier) {
-        // The entire underlying screen transitions to opaque black; the
-        // profile stays fully clipped above the four-button pill.
+        // Full-screen profile from the very TOP to the very BOTTOM.
+        // Previously it was restricted to pillTop and padded down by
+        // toolbarHeight, exposing black cut-off bands above and below.
+        // Only the presentation transform moves; final measured size is
+        // always the full viewport and neither artist rows nor album artwork
+        // are cropped to make space for the four-button pill.
         Box(
-            Modifier.fillMaxWidth()
-                .height(with(density) { panelHeight.toDp() })
+            Modifier.fillMaxSize()
                 .graphicsLayer {
                     val p = progress().coerceIn(0f, 1f)
                     translationY = (1f - p) * size.height * 0.32f
                     alpha = ((p - 0.06f) / 0.88f).coerceIn(0f, 1f)
                     clip = true
                 }
-                .padding(top = with(density) { toolbarHeight.toDp() })
         ) {
             profile()
         }
@@ -95,4 +89,13 @@ internal fun ImmersiveArtistPortal(
             )
         }
     }
+}
+
+// Use actual placement coordinates rather than graphics translation:
+// tap targets track the pill precisely when it shifts to center.
+internal fun artistPillLeftPx(
+    artistLeftPx: Float, circlePx: Float, gapPx: Float, progress: Float
+): Float {
+    val shift = (circlePx + gapPx) * 0.5f * progress.coerceIn(0f, 1f)
+    return artistLeftPx + circlePx + gapPx - shift
 }

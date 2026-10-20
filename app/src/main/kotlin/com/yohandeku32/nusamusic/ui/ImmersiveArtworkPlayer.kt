@@ -246,6 +246,8 @@ internal fun ImmersiveArtworkPlayer(
             }
         }
 
+        val actionPillWidth = if (lyricsEnabled) 224.dp else 176.dp
+
         // On compact/large-text screens the foreground can scroll rather than
         // clipping transport buttons. The artwork remains a full-screen canvas.
         val foreground: @Composable () -> Unit = {
@@ -374,9 +376,9 @@ internal fun ImmersiveArtworkPlayer(
                 // keeping the bottom artist button and action pill anchored.
                 // Extra spacing is inserted ABOVE the pill, not below it.
                 Spacer(Modifier.height(transportToPillGap + if (wide) 0.dp else 12.dp))
-                // Keep Artist in its own circular glass target. The remaining
-                // actions share a compact pill, with 48dp minimum tap targets.
-                val actionPillWidth = if (lyricsEnabled) 224.dp else 176.dp
+                // Only the circle is here. The 4-action pill is mounted
+                // separately in the viewport overlay, ABOVE Artist content,
+                // so the profile can fill every pixel behind it.
                 Row(
                     Modifier.align(Alignment.CenterHorizontally),
                     verticalAlignment = Alignment.CenterVertically,
@@ -398,35 +400,9 @@ internal fun ImmersiveArtworkPlayer(
                             immersiveText("Buka halaman artis", "Open artist page"),
                             onArtist, hasSong && !artistOpen, iconSize = 23.dp)
                     }
-                    Row(
-                        Modifier.width(actionPillWidth)
-                            // The pill's original center is 33dp right of the
-                            // screen center because Artist takes 56dp + 10dp.
-                            // Move the actual layout/hit target, not only pixels.
-                            .offset {
-                                IntOffset(
-                                    x = (-33.dp.toPx() * artistLift.value).roundToInt(),
-                                    y = 0
-                                )
-                            }
-                            .height(56.dp)
-                            .immersiveGlassPill(100.dp, lightMode),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceEvenly
-                    ) {
-                    if (lyricsEnabled) ImmersiveAction(lightMode, NusaPlayerIcons.Lyrics,
-                        if (lyricsOpen) immersiveText("Tutup lirik", "Close lyrics") else immersiveText("Buka lirik", "Open lyrics"),
-                        onLyrics, hasSong, active = lyricsOpen, iconSize = 23.dp)
-                    ImmersiveAction(lightMode, NusaPlayerIcons.Library,
-                        immersiveText("Perpustakaan", "Library"),
-                        onLibrary, iconSize = 23.dp)
-                    ImmersiveAction(lightMode, NusaPlayerIcons.Share,
-                        immersiveText("Bagikan lagu", "Share song"),
-                        onShare, hasSong, iconSize = 23.dp)
-                    ImmersiveAction(lightMode, NusaPlayerIcons.More,
-                        immersiveText("Pengaturan", "Settings"),
-                        onSettings, iconSize = 23.dp)
-                    }
+                    // Reserve its space to keep the player geometry stable.
+                    // The actual pill and hit targets live in the top overlay.
+                    Spacer(Modifier.width(actionPillWidth).height(56.dp))
                 }
                 }
             }
@@ -456,6 +432,57 @@ internal fun ImmersiveArtworkPlayer(
             profile = artistProfile,
             modifier = Modifier.fillMaxSize()
         )
+
+        // This is the REAL Lyrics/Library/Share/Settings pill, not a copy.
+        // Draw it after the Artist portal so it belongs visually and
+        // interactively to the full-screen profile whenever that is open.
+        // Its placement is derived from the measured original circular
+        // button, with zero replacement layout or hit-test offsets.
+        val bubble = artistButtonBounds
+        val root = playerBounds
+        if (bubble != null && root != null) {
+            val bubbleX = bubble.left - root.left
+            val bubbleY = bubble.top - root.top
+            val diameter = with(density) { 56.dp.toPx() }
+            val gap = with(density) { 10.dp.toPx() }
+            Row(
+                Modifier.offset {
+                    IntOffset(
+                        artistPillLeftPx(
+                            bubbleX, diameter, gap, artistLift.value
+                        ).roundToInt(),
+                        bubbleY.roundToInt()
+                    )
+                }
+                    .width(actionPillWidth)
+                    .height(56.dp)
+                    .immersiveGlassPill(100.dp, lightMode),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                if (lyricsEnabled) ImmersiveAction(
+                    lightMode, NusaPlayerIcons.Lyrics,
+                    if (lyricsOpen) immersiveText("Tutup lirik", "Close lyrics")
+                    else immersiveText("Buka lirik", "Open lyrics"),
+                    onLyrics, hasSong, active = lyricsOpen, iconSize = 23.dp
+                )
+                ImmersiveAction(
+                    lightMode, NusaPlayerIcons.Library,
+                    immersiveText("Perpustakaan", "Library"),
+                    onLibrary, iconSize = 23.dp
+                )
+                ImmersiveAction(
+                    lightMode, NusaPlayerIcons.Share,
+                    immersiveText("Bagikan lagu", "Share song"),
+                    onShare, hasSong, iconSize = 23.dp
+                )
+                ImmersiveAction(
+                    lightMode, NusaPlayerIcons.More,
+                    immersiveText("Pengaturan", "Settings"),
+                    onSettings, iconSize = 23.dp
+                )
+            }
+        }
     }
 }
 

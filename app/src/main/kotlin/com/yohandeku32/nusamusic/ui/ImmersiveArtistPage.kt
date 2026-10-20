@@ -112,7 +112,12 @@ fun ImmersiveArtistPage(
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 54.dp)
+                // The Artist profile now reaches behind the integrated pill.
+                // Extra scroll clearance keeps the final album/song row above
+                // the pill rather than obscured by its glass hit targets.
+                contentPadding = PaddingValues(
+                    bottom = if (overlayMode) 152.dp else 54.dp
+                )
             ) {
             item(key = "artist-hero") {
                 Box(
