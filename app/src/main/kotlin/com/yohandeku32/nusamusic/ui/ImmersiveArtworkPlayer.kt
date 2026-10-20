@@ -294,7 +294,9 @@ internal fun ImmersiveArtworkPlayer(
             }
         }
 
-        val actionPillWidth = if (lyricsEnabled) 224.dp else 176.dp
+        // Share is intentionally absent; keep measured player geometry,
+        // the moving pill, and touch targets symmetrical with 3/2 controls.
+        val actionPillWidth = if (lyricsEnabled) 176.dp else 128.dp
 
         // On compact/large-text screens the foreground can scroll rather than
         // clipping transport buttons. The artwork remains a full-screen canvas.
@@ -533,7 +535,6 @@ internal fun ImmersiveArtworkPlayer(
                 onArtist = onArtist,
                 onLibrary = onLibrary,
                 onHome = onHome,
-                onShare = onShare,
                 onSettings = onSettings
             )
         }
@@ -544,7 +545,8 @@ internal fun ImmersiveArtworkPlayer(
  * Animate only the bottom row size and placement. Unlike resizing the whole
  * player or using graphics translation, the pill's hit boxes move with it.
  * Artist replaces Library in its existing slot when the Library portal
- * opens. All four actions remain visible, evenly spaced and hit-testable.
+ * opens. Only Lyrics (when enabled), Artist/Library, and Settings are shown
+ * at rest; Home joins them while a portal is open. No Share control here.
  */
 @Composable
 private fun ImmersiveOverlayActionPill(
@@ -564,7 +566,6 @@ private fun ImmersiveOverlayActionPill(
     onArtist: () -> Unit,
     onLibrary: () -> Unit,
     onHome: () -> Unit,
-    onShare: () -> Unit,
     onSettings: () -> Unit
 ) {
     val density = LocalDensity.current
@@ -622,11 +623,6 @@ private fun ImmersiveOverlayActionPill(
                 )
             }
         }
-        ImmersiveAction(
-            lightMode, NusaPlayerIcons.Share,
-            immersiveText("Bagikan lagu", "Share song"),
-            onShare, hasSong, iconSize = 23.dp
-        )
         ImmersiveAction(
             lightMode, NusaPlayerIcons.More,
             immersiveText("Pengaturan", "Settings"),

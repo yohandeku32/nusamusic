@@ -38,10 +38,12 @@ internal fun Modifier.immersiveGlassPill(
         // backdrop; a translucent colored rectangle is not a blur.
         val style = HazeStyle(
             backgroundColor = Color(0xFF131720),
-            tints = listOf(HazeTint(Color(0x981B202C))),
-            blurRadius = 24.dp,
-            noiseFactor = 0.045f,
-            fallbackTint = HazeTint(Color(0xE9232833))
+            // Less diffusion lets artwork colors and scrolling rows remain
+            // perceptible, while the glass is still a real backdrop blur.
+            tints = listOf(HazeTint(Color(0x781B202C))),
+            blurRadius = 20.dp,
+            noiseFactor = 0.035f,
+            fallbackTint = HazeTint(Color(0xCD232833))
         )
         return this
             .clip(shape)
@@ -49,13 +51,15 @@ internal fun Modifier.immersiveGlassPill(
             .background(
                 Brush.verticalGradient(
                     listOf(
-                        Color.White.copy(alpha = 0.115f),
-                        Color.White.copy(alpha = 0.028f),
-                        Color.Black.copy(alpha = 0.10f)
+                        Color.White.copy(alpha = 0.075f),
+                        Color.White.copy(alpha = 0.017f),
+                        Color.Black.copy(alpha = 0.055f)
                     )
                 )
             )
-            .border(1.dp, Color.White.copy(alpha = 0.22f), shape)
+            // Keep only a hairline glint: a bright outline looks like an
+            // old bordered capsule rather than floating frosted glass.
+            .border(0.6.dp, Color.White.copy(alpha = 0.085f), shape)
     }
 
     // The original lighter Now Playing control and quality badges remain as
