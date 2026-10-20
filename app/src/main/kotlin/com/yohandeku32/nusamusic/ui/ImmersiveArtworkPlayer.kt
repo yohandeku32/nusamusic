@@ -489,6 +489,7 @@ internal fun ImmersiveArtworkPlayer(
                 lightMode = if (lastOverlayIsLibrary && portalMounted)
                     libraryLightMode else lightMode,
                 libraryOpen = libraryOpen,
+                emphasized = portalMounted,
                 hasSong = hasSong,
                 onLyrics = onLyrics,
                 onArtist = onArtist,
@@ -516,6 +517,7 @@ private fun ImmersiveOverlayActionPill(
     lyricsOpen: Boolean,
     lightMode: Boolean,
     libraryOpen: Boolean,
+    emphasized: Boolean,
     hasSong: Boolean,
     onLyrics: () -> Unit,
     onArtist: () -> Unit,
@@ -539,7 +541,7 @@ private fun ImmersiveOverlayActionPill(
         }
             .width(width)
             .height(56.dp)
-            .immersiveGlassPill(100.dp, lightMode, emphasized = true),
+            .immersiveGlassPill(100.dp, lightMode, emphasized = emphasized),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceEvenly
     ) {
