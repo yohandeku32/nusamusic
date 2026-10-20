@@ -10,6 +10,8 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.animateColorAsState
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.*
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.Animatable
 import androidx.compose.ui.unit.IntOffset
@@ -92,6 +94,7 @@ internal fun ImmersiveArtworkPlayer(
     libraryOpen: Boolean = false,
     libraryLightMode: Boolean = false,
     liquidGlassEnabled: Boolean = true,
+    glassArtworkColor: Color = Color(0xFF29303B),
     onLibraryClose: () -> Unit = {},
     onHome: () -> Unit = {},
     libraryContent: @Composable (Boolean) -> Unit = {},
@@ -424,11 +427,11 @@ internal fun ImmersiveArtworkPlayer(
                 Spacer(Modifier.height(progressToTransportGap))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween) {
-                    ImmersiveAction(lightMode, NusaPlayerIcons.Shuffle,
+                    ImmersiveAction(lightMode, Lucide.Shuffle,
                         if (shuffleEnabled) immersiveText("Acak aktif", "Shuffle on") else immersiveText("Acak nonaktif", "Shuffle off"),
                         onShuffle, hasSong, active = shuffleEnabled, iconSize = 26.dp)
                     IconButton(onClick = onPrevious, enabled = hasSong, modifier = Modifier.size(56.dp)) {
-                        Icon(NusaPlayerIcons.Previous, immersiveText("Sebelumnya", "Previous"),
+                        Icon(Lucide.SkipBack, immersiveText("Sebelumnya", "Previous"),
                             tint = primaryInk.copy(alpha = if (hasSong) 0.94f else 0.3f),
                             modifier = Modifier.size(38.dp))
                     }
@@ -440,18 +443,18 @@ internal fun ImmersiveArtworkPlayer(
                         modifier = Modifier.size(if (compact) 72.dp else 76.dp)
                     ) {
                         Icon(
-                            if (isPlaying) NusaPlayerIcons.Pause else NusaPlayerIcons.Play,
+                            if (isPlaying) Lucide.Pause else Lucide.Play,
                             if (isPlaying) immersiveText("Jeda", "Pause") else immersiveText("Putar", "Play"),
                             tint = primaryInk,
                             modifier = Modifier.size(if (compact) 44.dp else 47.dp)
                         )
                     }
                     IconButton(onClick = onNext, enabled = hasSong, modifier = Modifier.size(56.dp)) {
-                        Icon(NusaPlayerIcons.Next, immersiveText("Berikutnya", "Next"),
+                        Icon(Lucide.SkipForward, immersiveText("Berikutnya", "Next"),
                             tint = primaryInk.copy(alpha = if (hasSong) 0.94f else 0.3f),
                             modifier = Modifier.size(38.dp))
                     }
-                    ImmersiveAction(lightMode, if (repeatMode == 1) NusaPlayerIcons.RepeatOne else NusaPlayerIcons.Repeat,
+                    ImmersiveAction(lightMode, if (repeatMode == 1) Lucide.Repeat1 else Lucide.Repeat,
                         when (repeatMode) {
                             1 -> immersiveText("Ulangi satu lagu", "Repeat one")
                             2 -> immersiveText("Ulangi semua", "Repeat all")
@@ -489,9 +492,10 @@ internal fun ImmersiveArtworkPlayer(
                             liquidGlassEnabled = liquidGlassEnabled,
                             hazeState = liveBackdrop,
                             hazeAlpha = liveGlassAlpha,
+            artworkTint = glassArtworkColor,
                             modifier = Modifier.matchParentSize()
                         )
-                        ImmersiveAction(lightMode, NusaPlayerIcons.Artist,
+                        ImmersiveAction(lightMode, Lucide.UserRound,
                             immersiveText("Buka halaman artis", "Open artist page"),
                             onArtist, hasSong && !artistOpen && !libraryOpen,
                             iconSize = 23.dp,
@@ -552,6 +556,7 @@ internal fun ImmersiveArtworkPlayer(
             hazeState = liveBackdrop,
             liquidGlassEnabled = liquidGlassEnabled,
             hazeAlpha = liveGlassAlpha,
+            artworkTint = glassArtworkColor,
             profile = {
                 if (presentingLibrary) libraryContent(portalSettled)
                 else artistProfile()
@@ -592,6 +597,7 @@ internal fun ImmersiveArtworkPlayer(
                         liquidGlassEnabled = liquidGlassEnabled,
                         hazeState = liveBackdrop,
                         hazeAlpha = liveGlassAlpha,
+            artworkTint = glassArtworkColor,
                         modifier = Modifier.matchParentSize()
                             .graphicsLayer {
                                 alpha = libraryArtistCircleOpacity(shownProgress())
@@ -610,7 +616,7 @@ internal fun ImmersiveArtworkPlayer(
                             }
                     ) {
                         Icon(
-                            NusaPlayerIcons.Artist,
+                            Lucide.UserRound,
                             immersiveText("Buka profil artis", "Open artist profile"),
                             tint = Color.White,
                             modifier = Modifier.size(23.dp)
@@ -633,6 +639,7 @@ internal fun ImmersiveArtworkPlayer(
                 hazeState = liveBackdrop,
                 liquidGlassEnabled = liquidGlassEnabled,
                 hazeAlpha = liveGlassAlpha,
+            artworkTint = glassArtworkColor,
                 hasSong = hasSong,
                 onLyrics = onLyrics,
                 onLibrary = onLibrary,
@@ -664,6 +671,7 @@ private fun ImmersiveOverlayActionPill(
     hazeState: HazeState?,
     liquidGlassEnabled: Boolean,
     hazeAlpha: Float,
+    artworkTint: Color,
     hasSong: Boolean,
     onLyrics: () -> Unit,
     onLibrary: () -> Unit,
@@ -704,6 +712,7 @@ private fun ImmersiveOverlayActionPill(
             liquidGlassEnabled = liquidGlassEnabled,
             hazeState = hazeState,
             hazeAlpha = hazeAlpha,
+            artworkTint = artworkTint,
             modifier = Modifier.matchParentSize()
         )
         Row(
@@ -712,7 +721,7 @@ private fun ImmersiveOverlayActionPill(
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
             if (lyricsEnabled) ImmersiveAction(
-                lightMode, NusaPlayerIcons.Lyrics,
+                lightMode, Lucide.MessageSquareText,
                 if (lyricsOpen) immersiveText("Tutup lirik", "Close lyrics")
                 else immersiveText("Buka lirik", "Open lyrics"),
                 onLyrics, hasSong, active = lyricsOpen, iconSize = 23.dp,
@@ -730,14 +739,14 @@ private fun ImmersiveOverlayActionPill(
                 ) + fadeOut(tween(220))
             ) {
                 ImmersiveAction(
-                    lightMode, NusaPlayerIcons.Library,
+                    lightMode, Lucide.ListMusic,
                     immersiveText("Perpustakaan", "Library"),
                     onLibrary, iconSize = 23.dp, iconTint = iconColor,
                     liquidMotion = liquidGlassEnabled
                 )
             }
             ImmersiveAction(
-                lightMode, NusaPlayerIcons.Settings,
+                lightMode, Lucide.Settings2,
                 immersiveText("Pengaturan", "Settings"),
                 onSettings, iconSize = 23.dp, iconTint = iconColor,
                 liquidMotion = liquidGlassEnabled
@@ -752,7 +761,7 @@ private fun ImmersiveOverlayActionPill(
                 ) + fadeOut(tween(220))
             ) {
                 ImmersiveAction(
-                    lightMode, NusaPlayerIcons.Home,
+                    lightMode, Lucide.House,
                     immersiveText("Kembali ke pemutar", "Back to Now Playing"),
                     onHome, iconSize = 23.dp, iconTint = iconColor,
                     liquidMotion = liquidGlassEnabled

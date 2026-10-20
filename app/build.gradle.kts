@@ -101,6 +101,8 @@ dependencies {
     implementation("androidx.compose.ui:ui-text-google-fonts")
     implementation("androidx.compose.material3:material3:1.4.0")
     implementation("androidx.compose.material:material-icons-extended")
+    // Actual Lucide ImageVector pack, loaded lazily per used icon.
+    implementation("com.composables:icons-lucide-cmp:2.2.1")
     // Hardware-backed, source-aware backdrop blur for the floating
     // Immersive control pills. Pin Haze 1.6.x for Kotlin 2.2.10 compatibility;
     // Haze 2.x requires a newer Kotlin/Compose toolchain.

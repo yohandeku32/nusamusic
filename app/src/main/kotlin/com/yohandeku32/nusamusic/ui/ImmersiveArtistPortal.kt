@@ -25,6 +25,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 import dev.chrisbanes.haze.HazeState
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.UserRound
 import dev.chrisbanes.haze.hazeSource
 
 /**
@@ -54,6 +56,7 @@ internal fun ImmersiveArtistPortal(
     hazeState: HazeState?,
     liquidGlassEnabled: Boolean = true,
     hazeAlpha: Float = 0f,
+    artworkTint: Color = Color(0xFF29303B),
     profile: @Composable () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -185,10 +188,11 @@ internal fun ImmersiveArtistPortal(
                 liquidGlassEnabled = liquidGlassEnabled,
                 hazeState = hazeState,
                 hazeAlpha = hazeAlpha,
+                artworkTint = artworkTint,
                 modifier = Modifier.matchParentSize()
             )
             Icon(
-                imageVector = NusaPlayerIcons.Artist,
+                imageVector = Lucide.UserRound,
                 contentDescription = null,
                 tint = Color.White,
                 modifier = Modifier.size(23.dp)
