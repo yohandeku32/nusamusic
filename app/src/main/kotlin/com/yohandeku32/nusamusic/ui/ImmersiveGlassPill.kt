@@ -11,9 +11,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
- * The emphasized variant provides a calmer frosted appearance for the two
- * in-player overlays, without an extra live RenderEffect/blur render pass on
- * every animation frame. Existing badges retain the original subtle finish.
+ * On Artist/Library overlays, use a near-opaque satin-glass surface so
+ * background artwork doesn't show through the controls. This is opacity
+ * tuning rather than expensive live backdrop blurring; other badges keep
+ * their existing lightweight finish.
  */
 internal fun Modifier.immersiveGlassPill(
     radius: Dp = 100.dp,
@@ -23,10 +24,16 @@ internal fun Modifier.immersiveGlassPill(
     val shape = RoundedCornerShape(radius)
     val fill = when {
         emphasized && lightMode -> Brush.verticalGradient(
-            listOf(Color.Black.copy(alpha = 0.13f), Color.Black.copy(alpha = 0.095f))
+            listOf(
+                Color(0xFFF5F6F9).copy(alpha = 0.96f),
+                Color(0xFFE9ECF2).copy(alpha = 0.94f)
+            )
         )
         emphasized -> Brush.verticalGradient(
-            listOf(Color.White.copy(alpha = 0.20f), Color.White.copy(alpha = 0.145f))
+            listOf(
+                Color(0xFF383B46).copy(alpha = 0.94f),
+                Color(0xFF252832).copy(alpha = 0.93f)
+            )
         )
         lightMode -> Brush.verticalGradient(
             listOf(Color.Black.copy(alpha = 0.055f), Color.Black.copy(alpha = 0.055f))
@@ -36,8 +43,8 @@ internal fun Modifier.immersiveGlassPill(
         )
     }
     val outline = when {
-        emphasized && lightMode -> Color.Black.copy(alpha = 0.15f)
-        emphasized -> Color.White.copy(alpha = 0.16f)
+        emphasized && lightMode -> Color.Black.copy(alpha = 0.12f)
+        emphasized -> Color.White.copy(alpha = 0.18f)
         lightMode -> Color.Black.copy(alpha = 0.09f)
         else -> Color.White.copy(alpha = 0.08f)
     }

@@ -721,6 +721,7 @@ class MainActivity : ComponentActivity() {
                     selectedMusicFolders = selectedMusicFolders,
                     onPlaybackPageVisibilityChanged = ::setPlaybackPageVisible,
                     onScanMusic = ::scanMusic,
+                    onQuickRefreshMusic = ::quickRefreshMusic,
                     onSelectMusicFolder = ::openMusicFolderPicker,
                     onRemoveMusicFolder = ::removeMusicFolder,
                     onRequestPermission = { permissionLauncher.launch(permission) }
@@ -1166,9 +1167,19 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun scanMusic() {
-        // Pull-to-refresh reconciles the user-selected folders as well.
+        // Explicit settings/manual scan: reconcile selected SAF folders too.
         automaticMusicScanJob?.cancel()
         startMusicScan(scanSelectedFolders = true, showToast = true)
+    }
+
+    private fun quickRefreshMusic() {
+        // Pull-to-refresh should NOT re-enumerate entire SAF directory trees
+        // or parse thousands of unchanged tags. MusicRepository reuses the
+        // MediaStore generation checkpoint, plus cached SAF tracks, and only
+        // queries changed Android-indexed audio. Full folder reconciliation
+        // is still available from the settings/manual Scan Music control.
+        automaticMusicScanJob?.cancel()
+        startMusicScan(scanSelectedFolders = false, showToast = false)
     }
 
     private fun startMusicScan(scanSelectedFolders: Boolean, showToast: Boolean) {
@@ -1833,6 +1844,7 @@ private fun NusaMusicApp(
     selectedMusicFolders: List<String>,
     onPlaybackPageVisibilityChanged: (Boolean, Boolean) -> Unit,
     onScanMusic: () -> Unit,
+    onQuickRefreshMusic: () -> Unit,
     onSelectMusicFolder: () -> Unit,
     onRemoveMusicFolder: (String) -> Unit,
     onRequestPermission: () -> Unit
@@ -2489,6 +2501,10 @@ private fun NusaMusicApp(
                                 libraryOpen = libraryOverlayOpen,
                                 libraryLightMode = libraryLightMode,
                                 onLibraryClose = { libraryOverlayOpen = false },
+                                onHome = {
+                                    artistOverlayOpen = false
+                                    libraryOverlayOpen = false
+                                },
                                 libraryContent = { settled ->
                                     ImmersiveMusicLibrary(
                                         songs = songs,
@@ -2508,7 +2524,7 @@ private fun NusaMusicApp(
                                         onDeleteSong = onDeleteSong,
                                         onShare = { onShare(it) },
                                         onTogglePlay = onTogglePlay,
-                                        onScanMusic = onScanMusic,
+                                        onScanMusic = onQuickRefreshMusic,
                                         onRequestPermission = onRequestPermission,
                                         artwork = { track, tileModifier ->
                                             ArtworkView(

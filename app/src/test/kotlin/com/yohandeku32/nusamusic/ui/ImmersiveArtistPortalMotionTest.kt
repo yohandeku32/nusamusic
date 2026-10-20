@@ -22,10 +22,11 @@ class ImmersiveArtistPortalMotionTest {
     }
 
     @Test fun slowDownwardSwipeDismissesButNormalScrollAndHorizontalGesturesDoNot() {
-        assertTrue(shouldDismissOverlaySwipe(8f, 140f, 96f))
-        assertEquals(false, shouldDismissOverlaySwipe(8f, 40f, 96f))
-        assertEquals(false, shouldDismissOverlaySwipe(120f, 140f, 96f))
-        assertEquals(false, shouldDismissOverlaySwipe(0f, -130f, 96f))
+        assertTrue(shouldDismissOverlaySwipe(8f, 64f, 64f))
+        assertTrue(shouldDismissOverlaySwipe(8f, 140f, 64f))
+        assertEquals(false, shouldDismissOverlaySwipe(8f, 40f, 64f))
+        assertEquals(false, shouldDismissOverlaySwipe(120f, 140f, 64f))
+        assertEquals(false, shouldDismissOverlaySwipe(0f, -130f, 64f))
     }
 
     @Test fun pillStartsToTheRightOfArtistCircleAndCentersWhenOpen() {

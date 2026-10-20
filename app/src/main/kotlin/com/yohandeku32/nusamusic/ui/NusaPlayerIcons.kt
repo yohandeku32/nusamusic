@@ -199,6 +199,22 @@ internal object NusaPlayerIcons {
         moveTo(7.7f, 11.15f); lineTo(15.15f, 11.15f)
         moveTo(7.7f, 15.05f); lineTo(12.85f, 15.05f)
     }
+    val Home = outline("home") {
+        // Soft, rounded roof and a clean doorway; coherent with the pill
+        // icon family's 2dp stroke and rounded joins.
+        moveTo(3.5f, 10.3f); lineTo(12f, 3.5f)
+        lineTo(20.5f, 10.3f)
+        moveTo(5.65f, 9.4f); lineTo(5.65f, 18.15f)
+        quadTo(5.65f, 20.2f, 7.7f, 20.2f)
+        lineTo(16.3f, 20.2f)
+        quadTo(18.35f, 20.2f, 18.35f, 18.15f)
+        lineTo(18.35f, 9.4f)
+        moveTo(10f, 20.2f); lineTo(10f, 14.8f)
+        quadTo(10f, 13.85f, 11f, 13.85f)
+        lineTo(13f, 13.85f)
+        quadTo(14f, 13.85f, 14f, 14.8f)
+        lineTo(14f, 20.2f)
+    }
     val Artist = outline("artist") {
         moveTo(12f, 12.2f)
         curveTo(14.25f, 12.2f, 15.7f, 10.7f, 15.7f, 8.5f)

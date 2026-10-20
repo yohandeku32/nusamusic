@@ -2,6 +2,8 @@ package com.yohandeku32.nusamusic.ui
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -82,6 +84,7 @@ internal fun ImmersiveArtworkPlayer(
     libraryOpen: Boolean = false,
     libraryLightMode: Boolean = false,
     onLibraryClose: () -> Unit = {},
+    onHome: () -> Unit = {},
     libraryContent: @Composable (Boolean) -> Unit = {},
     onLibrary: () -> Unit,
     onShare: () -> Unit,
@@ -129,8 +132,10 @@ internal fun ImmersiveArtworkPlayer(
                 artistLift.snapTo(dragFraction)
                 dragActive = false
             }
-            val remainingMs = (620f * artistLift.value)
-                .toInt().coerceIn(130, 620)
+            // Touch-down dismiss should not leave a 600ms tail after the
+            // sheet has already followed the finger most of the way.
+            val remainingMs = (390f * artistLift.value)
+                .toInt().coerceIn(105, 390)
             artistLift.animateTo(
                 0f, animationSpec = tween(remainingMs, easing = FastOutSlowInEasing)
             )
@@ -510,11 +515,13 @@ internal fun ImmersiveArtworkPlayer(
                 lightMode = if (lastOverlayIsLibrary && portalMounted)
                     libraryLightMode else lightMode,
                 libraryOpen = libraryOpen,
+                overlayOpen = overlayOpen,
                 emphasized = portalMounted,
                 hasSong = hasSong,
                 onLyrics = onLyrics,
                 onArtist = onArtist,
                 onLibrary = onLibrary,
+                onHome = onHome,
                 onShare = onShare,
                 onSettings = onSettings
             )
@@ -538,11 +545,13 @@ private fun ImmersiveOverlayActionPill(
     lyricsOpen: Boolean,
     lightMode: Boolean,
     libraryOpen: Boolean,
+    overlayOpen: Boolean,
     emphasized: Boolean,
     hasSong: Boolean,
     onLyrics: () -> Unit,
     onArtist: () -> Unit,
     onLibrary: () -> Unit,
+    onHome: () -> Unit,
     onShare: () -> Unit,
     onSettings: () -> Unit
 ) {
@@ -550,13 +559,21 @@ private fun ImmersiveOverlayActionPill(
     // Keep four equal touch slots, one morphing between Library and Artist.
     // Resizing the whole pill while switching icons caused small layout
     // jolts and pushed hit targets away from the visual center.
-    val width = fullWidth
+    val width by animateDpAsState(
+        targetValue = if (overlayOpen) fullWidth + 48.dp else fullWidth,
+        animationSpec = tween(430, easing = FastOutSlowInEasing),
+        label = "overlayHomePillWidth"
+    )
     Row(
         Modifier.offset {
             val circle = with(density) { 56.dp.toPx() }
             val gap = with(density) { 10.dp.toPx() }
+            val widthIncrease = with(density) { (width - fullWidth).toPx() }
+            // The extra Home action grows symmetrically from the center of
+            // the existing pill; never push it into the edge of the screen.
             IntOffset(
-                artistPillLeftPx(anchorX, circle, gap, progress()).roundToInt(),
+                (artistPillLeftPx(anchorX, circle, gap, progress()) -
+                    widthIncrease * 0.5f).roundToInt(),
                 anchorY.roundToInt()
             )
         }
@@ -601,6 +618,21 @@ private fun ImmersiveOverlayActionPill(
             immersiveText("Pengaturan", "Settings"),
             onSettings, iconSize = 23.dp
         )
+        AnimatedVisibility(
+            visible = overlayOpen,
+            enter = expandHorizontally(
+                animationSpec = tween(390, easing = FastOutSlowInEasing)
+            ) + fadeIn(tween(290)),
+            exit = shrinkHorizontally(
+                animationSpec = tween(330, easing = FastOutSlowInEasing)
+            ) + fadeOut(tween(220))
+        ) {
+            ImmersiveAction(
+                lightMode, NusaPlayerIcons.Home,
+                immersiveText("Kembali ke pemutar", "Back to Now Playing"),
+                onHome, iconSize = 23.dp
+            )
+        }
     }
 }
 

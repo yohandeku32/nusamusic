@@ -59,7 +59,10 @@ internal fun ImmersiveArtistPortal(
     val sourceY = anchor.top - root.top
     val destX = with(density) { 20.dp.toPx() }
     val destY = topInsetPx + with(density) { 10.dp.toPx() }
-    val minSwipe = with(density) { 96.dp.toPx() }
+    // Do not wait for finger-up after a long drag. A deliberate 64dp
+    // downward movement starts closing instantly, while the touch slop
+    // and directional check prevent accidental dismissal.
+    val minSwipe = with(density) { 64.dp.toPx() }
     val maxHeaderY = topInsetPx + with(density) { 118.dp.toPx() }
     // Audio progress can recompose the player frequently. Keep the pointer
     // detector alive across callback changes so a slow gesture is never lost.
@@ -79,6 +82,7 @@ internal fun ImmersiveArtistPortal(
             var deltaX = 0f
             var deltaY = 0f
             var dragCaptured = false
+            var dismissRequested = false
             var pointer = down.id
             while (true) {
                 val event = awaitPointerEvent(PointerEventPass.Initial)
@@ -91,8 +95,8 @@ internal fun ImmersiveArtistPortal(
                 if (!change.pressed) {
                     if (dragCaptured) {
                         if (shouldDismissOverlaySwipe(deltaX, deltaY, minSwipe)) {
-                            // The parent continues its close animation from
-                            // the actual gesture progress, with no jump.
+                            // For very short sampling (touch-up before
+                            // another move) the close still happens instantly.
                             closeCallback()
                         } else {
                             // An incomplete gesture springs gently back.
@@ -114,9 +118,15 @@ internal fun ImmersiveArtistPortal(
                     val fraction = overlayDragRevealFraction(
                         deltaY - touchSlop, size.height.toFloat()
                     )
-                    // Read-only draw/placement state handles each pointer
-                    // update; settling animations belong to the parent scope.
                     updateDrag(fraction)
+                    // Trigger the exit WHILE the finger is dragging, not
+                    // after ACTION_UP. Prevent double-close on pointer release.
+                    if (!dismissRequested &&
+                        shouldDismissOverlaySwipe(deltaX, deltaY, minSwipe)) {
+                        dismissRequested = true
+                        closeCallback()
+                        break
+                    }
                 }
                 pointer = change.id
             }
