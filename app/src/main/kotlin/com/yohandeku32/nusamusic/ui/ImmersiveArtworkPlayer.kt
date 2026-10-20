@@ -37,6 +37,7 @@ import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
@@ -182,6 +183,14 @@ internal fun ImmersiveArtworkPlayer(
         if (playerBounds != bounds) playerBounds = bounds
     }) {
         val primaryInk = if (lightMode) Color(0xFF171A20) else Color.White
+        // A restrained album-responsive ink: preserve Apple Music-style high
+        // contrast rather than painting transport controls in dark cover colors.
+        val transportInk by animateColorAsState(
+            targetValue = if (lightMode) primaryInk
+                else lerp(Color.White, glassArtworkColor.copy(alpha = 1f), 0.20f),
+            animationSpec = tween(520, easing = FastOutSlowInEasing),
+            label = "albumResponsiveTransportInk"
+        )
         val mutedInk = primaryInk.copy(alpha = 0.72f)
         val density = LocalDensity.current
         val viewportHeight = maxHeight
@@ -425,41 +434,49 @@ internal fun ImmersiveArtworkPlayer(
                     .onSizeChanged { transportHeightPx = it.height }) {
                 progress(Modifier.fillMaxWidth().padding(top = if (wide) 4.dp else if (compact) 10.dp else 14.dp))
                 Spacer(Modifier.height(progressToTransportGap))
+                // Apple Music-inspired hierarchy: filled transport glyphs,
+                // lighter outline modes and generous, stable touch targets.
+                // Compact sizing avoids horizontal clipping on narrow devices.
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween) {
-                    ImmersiveAction(lightMode, Lucide.Shuffle,
+                    ImmersiveAction(
+                        lightMode, Lucide.Shuffle,
                         if (shuffleEnabled) immersiveText("Acak aktif", "Shuffle on") else immersiveText("Acak nonaktif", "Shuffle off"),
-                        onShuffle, hasSong, active = shuffleEnabled, iconSize = 26.dp)
-                    IconButton(onClick = onPrevious, enabled = hasSong, modifier = Modifier.size(56.dp)) {
-                        Icon(Lucide.SkipBack, immersiveText("Sebelumnya", "Previous"),
-                            tint = primaryInk.copy(alpha = if (hasSong) 0.94f else 0.3f),
-                            modifier = Modifier.size(38.dp))
-                    }
-                    // Clean, background-free Play/Pause control.
-                    // The larger white glyph stays centred without glass,
-                    // a filled circle, border or drop shadow.
-                    IconButton(
-                        onClick = onPlayPause,
-                        modifier = Modifier.size(if (compact) 72.dp else 76.dp)
-                    ) {
-                        Icon(
-                            if (isPlaying) Lucide.Pause else Lucide.Play,
-                            if (isPlaying) immersiveText("Jeda", "Pause") else immersiveText("Putar", "Play"),
-                            tint = primaryInk,
-                            modifier = Modifier.size(if (compact) 44.dp else 47.dp)
-                        )
-                    }
-                    IconButton(onClick = onNext, enabled = hasSong, modifier = Modifier.size(56.dp)) {
-                        Icon(Lucide.SkipForward, immersiveText("Berikutnya", "Next"),
-                            tint = primaryInk.copy(alpha = if (hasSong) 0.94f else 0.3f),
-                            modifier = Modifier.size(38.dp))
-                    }
-                    ImmersiveAction(lightMode, if (repeatMode == 1) Lucide.Repeat1 else Lucide.Repeat,
+                        onShuffle, hasSong, active = shuffleEnabled, iconSize = 23.dp,
+                        iconTint = transportInk, touchSize = if (compact) 48.dp else 50.dp
+                    )
+                    TransportGlyphButton(
+                        icon = NusaPlayerIcons.Previous,
+                        label = immersiveText("Sebelumnya", "Previous"),
+                        onClick = onPrevious, enabled = hasSong, tint = transportInk,
+                        touchSize = if (compact) 50.dp else 54.dp, iconSize = if (compact) 31.dp else 33.dp
+                    )
+                    // Only the central glyph is prominent; the button has no
+                    // circular plate, shadow or new backdrop blur.
+                    TransportGlyphButton(
+                        icon = if (isPlaying) NusaPlayerIcons.Pause else NusaPlayerIcons.Play,
+                        label = if (isPlaying) immersiveText("Jeda", "Pause") else immersiveText("Putar", "Play"),
+                        onClick = onPlayPause, enabled = true, tint = transportInk,
+                        touchSize = if (compact) 68.dp else 74.dp,
+                        iconSize = if (compact) 42.dp else 46.dp,
+                        crossfadeGlyph = true
+                    )
+                    TransportGlyphButton(
+                        icon = NusaPlayerIcons.Next,
+                        label = immersiveText("Berikutnya", "Next"),
+                        onClick = onNext, enabled = hasSong, tint = transportInk,
+                        touchSize = if (compact) 50.dp else 54.dp, iconSize = if (compact) 31.dp else 33.dp
+                    )
+                    ImmersiveAction(
+                        lightMode, if (repeatMode == 1) Lucide.Repeat1 else Lucide.Repeat,
                         when (repeatMode) {
                             1 -> immersiveText("Ulangi satu lagu", "Repeat one")
                             2 -> immersiveText("Ulangi semua", "Repeat all")
                             else -> immersiveText("Ulangi nonaktif", "Repeat off")
-                        }, onRepeat, hasSong, active = repeatMode != 0, iconSize = 26.dp)
+                        }, onRepeat, hasSong, active = repeatMode != 0,
+                        iconSize = 23.dp, iconTint = transportInk,
+                        touchSize = if (compact) 48.dp else 50.dp
+                    )
                 }
                 // Raise title, seek bar and transport together by 12dp while
                 // keeping the bottom artist button and action pill anchored.
@@ -773,13 +790,64 @@ private fun ImmersiveOverlayActionPill(
 }
 
 
+/**
+ * Filled SF-inspired transport silhouettes built into NusaMusic. This keeps
+ * the design familiar on Android without bundling Apple's licensed SF assets.
+ * Press animations transform only the icon layer, never the row or touch area.
+ */
+@Composable
+private fun TransportGlyphButton(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    enabled: Boolean,
+    tint: Color,
+    touchSize: Dp,
+    iconSize: Dp,
+    crossfadeGlyph: Boolean = false
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val iconScale by animateFloatAsState(
+        targetValue = if (pressed && enabled) 0.91f else 1f,
+        animationSpec = spring(dampingRatio = 0.87f, stiffness = 760f),
+        label = "transportGlyphPress"
+    )
+    IconButton(
+        onClick = onClick,
+        enabled = enabled,
+        interactionSource = interactionSource,
+        modifier = Modifier.size(touchSize)
+    ) {
+        val glyph: @Composable (ImageVector) -> Unit = { vector ->
+            Icon(
+                imageVector = vector,
+                contentDescription = label,
+                tint = tint.copy(alpha = if (enabled) 1f else 0.30f),
+                modifier = Modifier.size(iconSize).graphicsLayer {
+                    scaleX = iconScale
+                    scaleY = iconScale
+                }
+            )
+        }
+        if (crossfadeGlyph) {
+            Crossfade(targetState = icon, animationSpec = tween(135),
+                label = "immersivePlayPauseGlyph") { vector -> glyph(vector) }
+        } else {
+            glyph(icon)
+        }
+    }
+}
+
+
 @Composable
 private fun ImmersiveAction(
     lightMode: Boolean,
     icon: ImageVector, label: String, onClick: () -> Unit, enabled: Boolean = true,
     active: Boolean = false, iconSize: Dp = 22.dp,
     iconTint: Color? = null,
-    liquidMotion: Boolean = false
+    liquidMotion: Boolean = false,
+    touchSize: Dp = 50.dp
 ) {
     // iOS-inspired liquid press response is a restrained native Compose
     // spring, not a screen-wide transform or heavy shader animation.
@@ -802,7 +870,7 @@ private fun ImmersiveAction(
         onClick = onClick,
         enabled = enabled,
         interactionSource = interactionSource,
-        modifier = Modifier.size(50.dp)
+        modifier = Modifier.size(touchSize)
             .graphicsLayer {
                 scaleX = touchScale
                 scaleY = touchScale
