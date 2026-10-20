@@ -135,7 +135,11 @@ internal fun ImmersiveArtworkPlayer(
     // of waiting for LaunchedEffect to mount the portal a frame later.
     val portalVisible = overlayOpen || portalMounted
     val presentingLibrary = if (overlayOpen) libraryOpen else lastOverlayIsLibrary
-    val liveGlassReady = liquidGlassEnabled && (!portalVisible || portalSettled)
+    // In Library the two lower navigation controls are fully black and
+    // the Artist portal bubble is absent; do not capture that full-screen
+    // list as a Haze source. Artist's elevated bubble keeps its glass.
+    val liveGlassReady = liquidGlassEnabled &&
+        (!portalVisible || (portalSettled && !presentingLibrary))
     val liveBackdrop = if (liveGlassReady) glassBackdrop else null
     // Crossfade ONLY the real blur layer. The same refractive satin surface
     // remains underneath on Home and both portals at every animation frame.
@@ -754,7 +758,8 @@ private fun ImmersiveOverlayActionPill(
             radius = 100.dp,
             lightMode = lightMode,
             liquidGlassEnabled = liquidGlassEnabled,
-            hazeState = hazeState,
+            // Never render live blur underneath an opaque portal pill.
+            hazeState = if (showSolidPill) null else hazeState,
             hazeAlpha = hazeAlpha,
             artworkTint = artworkTint,
             modifier = Modifier.matchParentSize()
