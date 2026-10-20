@@ -1,58 +1,66 @@
 package com.yohandeku32.nusamusic.ui
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.*
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.launch
-import com.yohandeku32.nusamusic.data.*
+import com.yohandeku32.nusamusic.data.ArtistLibrary
+import com.yohandeku32.nusamusic.data.ArtistNameUtils
+import com.yohandeku32.nusamusic.data.PlaybackHistory
 import com.yohandeku32.nusamusic.model.Song
 import java.util.Locale
+import kotlinx.coroutines.launch
 
-private fun artistText(id: String, en: String) = if (Locale.getDefault().language == "id") id else en
+private val artistBase = Color(0xFF090A0D)
+private val artistSurface = Color(0xFF17191F)
+private val artistInk = Color(0xFFF7F8FA)
+private val artistMuted = Color(0xFF999EAA)
 
+private fun artistText(id: String, en: String): String =
+    if (Locale.getDefault().language == "id") id else en
+
+/**
+ * Apple Music-inspired artist profile using only the local user's songs.
+ * It never downloads Deezer portraits or waits for Last.fm biographies.
+ * Local album artwork is deliberately not labeled an official artist portrait.
+ */
 @Composable
 fun ImmersiveArtistPage(
     artistName: String?,
     songs: List<Song>,
     currentSong: Song?,
-    biography: ArtistBiography?,
-    biographyLoading: Boolean,
     isVisible: Boolean,
-    lightMode: Boolean = false,
     state: ImmersiveArtistPageState,
-    onVisible: () -> Unit,
     onBack: () -> Unit,
     onPlay: (Song, List<Song>) -> Unit,
     artwork: @Composable (Song, Modifier) -> Unit
 ) {
-    val palette = immersiveColors(lightMode)
-    val context = LocalContext.current
     val artist = ArtistNameUtils.firstArtist(artistName)
+    val displayName = artist.ifBlank { artistText("Artis", "Artist") }
     val tracks = remember(songs, artist) { ArtistLibrary.tracks(songs, artist) }
     val albums = remember(tracks) { ArtistLibrary.albums(tracks) }
+    val context = androidx.compose.ui.platform.LocalContext.current
     val prefs = remember(context) { PlaybackHistory.preferences(context) }
     var counts by remember(prefs) { mutableStateOf(PlaybackHistory.counts(prefs)) }
     DisposableEffect(prefs) {
@@ -62,166 +70,287 @@ fun ImmersiveArtistPage(
         prefs.registerOnSharedPreferenceChangeListener(listener)
         onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }
-    val popular = remember(tracks, counts) { ArtistLibrary.mostPlayed(tracks, counts) }
-    val portrait = state.portrait
-    val portraitLoading = state.portraitLoading
-    LaunchedEffect(state, isVisible) {
-        if (isVisible) onVisible()
+
+    val played = remember(tracks, counts) { ArtistLibrary.mostPlayed(tracks, counts) }
+    val popular = remember(tracks, played) {
+        (played + tracks.filterNot { s -> played.any { it.uri == s.uri } }).take(5)
     }
     var selectedAlbumKey by state::selectedAlbumKey
-    var bioExpanded by state::bioExpanded
     val selectedAlbum = albums.firstOrNull { it.key == selectedAlbumKey }
     val listState = state.listState
     val scope = rememberCoroutineScope()
-    fun selectAlbum(key: String?) {
+    val heroSong = selectedAlbum?.tracks?.firstOrNull()
+        ?: currentSong?.takeIf {
+            ArtistNameUtils.cacheKey(it.artist) == ArtistNameUtils.cacheKey(artist)
+        } ?: popular.firstOrNull() ?: tracks.firstOrNull()
+
+    fun showAlbum(key: String?) {
         selectedAlbumKey = key
         scope.launch { listState.scrollToItem(0) }
     }
-    fun back() { if (selectedAlbumKey != null) selectAlbum(null) else onBack() }
-    BackHandler(enabled = isVisible) { back() }
+    fun navigateBack() {
+        if (selectedAlbumKey != null) showAlbum(null) else onBack()
+    }
+    BackHandler(enabled = isVisible) { navigateBack() }
 
-    MaterialTheme(colorScheme = if (lightMode) lightColorScheme(
-        background = palette.background,
-        surface = palette.surface,
-        primary = palette.primaryText,
-        onBackground = palette.primaryText,
-        onSurface = palette.primaryText
-    ) else darkColorScheme(
-        background = palette.background,
-        surface = palette.surface,
-        primary = palette.primaryText,
-        onBackground = palette.primaryText,
-        onSurface = palette.primaryText
-    )) {
+    // The library Light switch must not recolor the main player or Artist.
+    MaterialTheme(
+        colorScheme = darkColorScheme(
+            background = artistBase, surface = artistSurface,
+            surfaceVariant = Color(0xFF22242B), primary = artistInk,
+            onPrimary = artistBase, onBackground = artistInk,
+            onSurface = artistInk, onSurfaceVariant = artistMuted
+        )
+    ) {
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize().background(palette.background),
-            contentPadding = PaddingValues(bottom = 40.dp)
+            modifier = Modifier.fillMaxSize().background(artistBase),
+            contentPadding = PaddingValues(bottom = 54.dp)
         ) {
-            item(key = "hero") {
-                Box(Modifier.fillMaxWidth().height(410.dp)) {
-                    if (selectedAlbum != null) {
-                        artwork(selectedAlbum.tracks.first(), Modifier.fillMaxSize())
-                    } else if (portrait != null) {
-                        Image(
-                            bitmap = portrait!!.asImageBitmap(),
-                            contentDescription = artistText("Foto $artist dari Deezer", "$artist portrait from Deezer"),
-                            contentScale = ContentScale.Crop,
-                            colorFilter = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }),
-                            modifier = Modifier.fillMaxSize()
-                        )
+            item(key = "artist-hero") {
+                Box(
+                    Modifier.fillMaxWidth().height(450.dp)
+                        .background(artistSurface)
+                ) {
+                    if (heroSong != null) {
+                        artwork(heroSong, Modifier.fillMaxSize())
                     } else {
-                        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF555555), Color(0xFF151515)))), contentAlignment = Alignment.Center) {
-                            Icon(Icons.Default.Person, null, tint = Color.White.copy(alpha = 0.2f), modifier = Modifier.size(160.dp))
+                        Box(
+                            Modifier.fillMaxSize().background(
+                                Brush.linearGradient(
+                                    listOf(Color(0xFF343C4C), Color(0xFF151720), artistBase)
+                                )
+                            ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.MusicNote, null,
+                                tint = Color.White.copy(alpha = 0.12f),
+                                modifier = Modifier.size(130.dp)
+                            )
                         }
                     }
-                    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
-                        0f to Color.Black.copy(alpha = 0.18f), 0.4f to Color.Transparent,
-                        0.7f to Color.Black.copy(alpha = 0.4f), 1f to Color.Black
-                    )))
+                    Box(
+                        Modifier.matchParentSize().background(
+                            Brush.verticalGradient(
+                                0f to Color.Black.copy(alpha = 0.22f),
+                                0.30f to Color.Transparent,
+                                0.59f to Color.Black.copy(alpha = 0.28f),
+                                0.86f to artistBase.copy(alpha = 0.86f),
+                                1f to artistBase
+                            )
+                        )
+                    )
                     IconButton(
-                        onClick = { back() },
-                        modifier = Modifier.padding(16.dp).statusBarsPadding().clip(CircleShape).background(Color.Black.copy(alpha = 0.35f))
+                        onClick = { navigateBack() },
+                        modifier = Modifier.statusBarsPadding()
+                            .padding(start = 16.dp, top = 10.dp)
+                            .size(46.dp).immersiveGlassPill(100.dp)
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, artistText("Kembali", "Back"), tint = Color.White)
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = artistText("Kembali", "Back"),
+                            tint = Color.White
+                        )
                     }
-                    Column(Modifier.align(Alignment.BottomStart).padding(horizontal = 24.dp, vertical = 16.dp)) {
-                        Text(if (selectedAlbum == null) artistText("ARTIS • KOLEKSI ANDA", "ARTIST • YOUR LIBRARY") else artist,
-                            color = Color(0xFFCCCCCC), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.5.sp)
+                    Column(
+                        Modifier.align(Alignment.BottomStart).fillMaxWidth()
+                            .padding(horizontal = 24.dp).padding(bottom = 22.dp)
+                    ) {
+                        Text(
+                            if (selectedAlbum == null)
+                                artistText("ARTIS • KOLEKSI LOKAL", "ARTIST • YOUR LIBRARY")
+                            else artistText("ALBUM • KOLEKSI LOKAL", "ALBUM • YOUR LIBRARY"),
+                            color = Color.White.copy(alpha = 0.8f),
+                            fontSize = 11.sp, letterSpacing = 1.4.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
                         Spacer(Modifier.height(10.dp))
-                        Text(selectedAlbum?.title?.ifBlank { artistText("Album tanpa judul", "Untitled album") }
-                            ?: artist.ifBlank { artistText("Belum ada artis", "No artist selected") },
-                            color = Color.White, fontSize = 38.sp, lineHeight = 42.sp, fontWeight = FontWeight.Bold,
-                            maxLines = 3, overflow = TextOverflow.Ellipsis)
+                        Text(
+                            selectedAlbum?.title?.ifBlank {
+                                artistText("Album tanpa judul", "Untitled album")
+                            } ?: displayName,
+                            color = artistInk,
+                            fontSize = if (selectedAlbum == null) 42.sp else 37.sp,
+                            lineHeight = if (selectedAlbum == null) 46.sp else 41.sp,
+                            fontWeight = FontWeight.Bold, maxLines = 3,
+                            overflow = TextOverflow.Ellipsis
+                        )
                         Spacer(Modifier.height(10.dp))
-                        Text(if (selectedAlbum != null) artistText("${selectedAlbum.tracks.size} lagu lokal", "${selectedAlbum.tracks.size} local tracks")
-                            else artistText("${tracks.size} lagu • ${albums.size} album lokal", "${tracks.size} tracks • ${albums.size} local albums"),
-                            color = Color(0xFFAAAAAA), fontSize = 13.sp)
+                        Text(
+                            if (selectedAlbum == null)
+                                artistText(
+                                    tracks.size.toString() + " lagu  ·  " + albums.size + " album",
+                                    tracks.size.toString() + " songs  ·  " + albums.size + " albums"
+                                )
+                            else artistText(
+                                displayName + "  ·  " + selectedAlbum.tracks.size + " lagu",
+                                displayName + "  ·  " + selectedAlbum.tracks.size + " songs"
+                            ),
+                            color = Color.White.copy(alpha = 0.73f),
+                            fontSize = 13.sp, fontWeight = FontWeight.Medium,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis
+                        )
                     }
                 }
             }
+
+            if (tracks.isNotEmpty()) {
+                item(key = "artist-actions") {
+                    val playable = selectedAlbum?.tracks ?: tracks
+                    Row(
+                        Modifier.fillMaxWidth()
+                            .padding(horizontal = 24.dp)
+                            .padding(top = 8.dp, bottom = 26.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        ArtistActionButton(
+                            label = artistText("Putar", "Play"),
+                            icon = Icons.Default.PlayArrow,
+                            primary = true,
+                            modifier = Modifier.weight(1f),
+                            onClick = { onPlay(playable.first(), playable) }
+                        )
+                        ArtistActionButton(
+                            label = artistText("Acak", "Shuffle"),
+                            icon = Icons.Default.Shuffle,
+                            primary = false,
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                val shuffled = playable.shuffled()
+                                if (shuffled.isNotEmpty()) onPlay(shuffled.first(), shuffled)
+                            }
+                        )
+                    }
+                }
+            }
+
             if (selectedAlbum != null) {
-                items(selectedAlbum.tracks, key = { it.uri }) { song ->
-                    ArtistTrackRow(song, currentSong, null, { onPlay(song, selectedAlbum.tracks) }, artwork)
+                item(key = "album-title") {
+                    ArtistSectionHeader(
+                        artistText("Daftar Lagu", "Tracklist"),
+                        artistText(
+                            selectedAlbum.tracks.size.toString() + " lagu",
+                            selectedAlbum.tracks.size.toString() + " tracks"
+                        )
+                    )
+                }
+                items(selectedAlbum.tracks, key = { "track:" + it.uri }) { song ->
+                    ArtistMusicRow(song, currentSong, song.album, artwork) {
+                        onPlay(song, selectedAlbum.tracks)
+                    }
                 }
             } else {
-                if (tracks.isNotEmpty()) {
-                    item(key = "play") {
-                        Button(
-                            onClick = { onPlay(tracks.first(), tracks) },
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp).heightIn(min = 48.dp)
-                        ) {
-                            Icon(Icons.Default.PlayArrow, null)
-                            Spacer(Modifier.width(6.dp))
-                            Text(artistText("Putar koleksi artis", "Play artist library"), fontWeight = FontWeight.SemiBold)
+                if (popular.isNotEmpty()) {
+                    item(key = "popular-heading") {
+                        ArtistSectionHeader(
+                            artistText("Lagu Populer", "Top Songs"),
+                            if (played.isNotEmpty())
+                                artistText("Sering kamu putar", "From your listening history")
+                            else artistText("Dari koleksimu", "From your library")
+                        )
+                    }
+                    items(popular, key = { "popular:" + it.uri }) { song ->
+                        ArtistMusicRow(song, currentSong, song.album, artwork) {
+                            onPlay(song, tracks)
                         }
                     }
                 }
-                item(key = "about") {
-                    Column(Modifier.padding(24.dp)) {
-                        ArtistSectionTitle(artistText("Tentang artis", "About the artist"))
-                        Spacer(Modifier.height(12.dp))
-                        Text(
-                            when {
-                                biographyLoading -> artistText("Memuat biografi…", "Loading biography…")
-                                biography != null -> biography.text
-                                else -> artistText("Biografi belum tersedia untuk artis ini.", "A biography is not available for this artist yet.")
-                            },
-                            color = palette.secondaryText, fontSize = 14.sp, lineHeight = 22.sp,
-                            maxLines = if (bioExpanded) Int.MAX_VALUE else 4, overflow = TextOverflow.Ellipsis
+
+                if (albums.isNotEmpty()) {
+                    item(key = "albums-title") {
+                        Spacer(Modifier.height(18.dp))
+                        ArtistSectionHeader(
+                            artistText("Album", "Albums"),
+                            artistText("Di perpustakaanmu", "In your library")
                         )
-                        if (biography != null) {
-                            TextButton(onClick = { bioExpanded = !bioExpanded }, contentPadding = PaddingValues(0.dp)) {
-                                Text(if (bioExpanded) artistText("Lebih sedikit", "Show less") else artistText("Selengkapnya", "Read more"))
+                    }
+                    items(albums.chunked(2), key = { "albums:" + it.first().key }) { row ->
+                        Row(
+                            Modifier.fillMaxWidth()
+                                .padding(horizontal = 24.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(15.dp)
+                        ) {
+                            row.forEach { album ->
+                                Column(
+                                    Modifier.weight(1f)
+                                        .clickable { showAlbum(album.key) }
+                                        .padding(bottom = 8.dp)
+                                ) {
+                                    Box(
+                                        Modifier.fillMaxWidth().aspectRatio(1f)
+                                            .clip(RoundedCornerShape(14.dp))
+                                            .background(artistSurface)
+                                    ) {
+                                        artwork(album.tracks.first(), Modifier.fillMaxSize())
+                                    }
+                                    Spacer(Modifier.height(10.dp))
+                                    Text(
+                                        album.title.ifBlank {
+                                            artistText("Album tanpa judul", "Untitled album")
+                                        },
+                                        color = artistInk, fontWeight = FontWeight.SemiBold,
+                                        fontSize = 14.sp, maxLines = 2,
+                                        lineHeight = 18.sp, overflow = TextOverflow.Ellipsis
+                                    )
+                                    Spacer(Modifier.height(3.dp))
+                                    Text(
+                                        artistText(
+                                            album.tracks.size.toString() + " lagu",
+                                            album.tracks.size.toString() + " tracks"
+                                        ),
+                                        color = artistMuted, fontSize = 12.sp
+                                    )
+                                }
                             }
-                            // Attribution is intentionally not a tap target.
-                            // A dragged/partially visible neighboring Artist
-                            // page must never launch Chrome over Now Playing.
+                            if (row.size == 1) Spacer(Modifier.weight(1f))
+                        }
+                    }
+                }
+
+                if (tracks.isNotEmpty()) {
+                    item(key = "footer") {
+                        Column(
+                            Modifier.fillMaxWidth()
+                                .padding(horizontal = 24.dp)
+                                .padding(top = 20.dp, bottom = 24.dp)
+                        ) {
+                            HorizontalDivider(
+                                color = Color.White.copy(alpha = 0.08f),
+                                thickness = 1.dp
+                            )
+                            Spacer(Modifier.height(18.dp))
                             Text(
-                                "Source: Last.fm • ${biography.sourceLanguage.uppercase(Locale.ROOT)}",
-                                color = palette.secondaryText,
-                                fontSize = 11.sp,
-                                modifier = Modifier.padding(top = 7.dp, bottom = 10.dp)
+                                artistText(
+                                    "Musik dari koleksi perangkatmu",
+                                    "Music from your device library"
+                                ),
+                                color = artistMuted, fontSize = 12.sp
                             )
                         }
-                        if (portrait != null) Text(artistText("Foto artis: Deezer", "Artist portrait: Deezer"), color = Color(0xFF777777), fontSize = 11.sp)
-                        else if (portraitLoading) Text(artistText("Memuat foto artis…", "Loading artist portrait…"), color = Color(0xFF777777), fontSize = 11.sp)
                     }
                 }
-                item(key = "popular-title") {
-                    Column(Modifier.padding(horizontal = 24.dp)) {
-                        ArtistSectionTitle(artistText("Sering diputar", "Most played"))
-                        Text(artistText("Dari riwayat putar Anda", "From your listening history"), color = palette.secondaryText, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp, bottom = 12.dp))
-                        if (popular.isEmpty()) Text(artistText("Lagu yang sering Anda dengarkan akan muncul di sini.", "Your most listened-to tracks will appear here."),
-                            color = palette.secondaryText, fontSize = 14.sp, modifier = Modifier.padding(bottom = 16.dp))
+            }
+            if (tracks.isEmpty()) {
+                item(key = "empty") {
+                    Column(
+                        Modifier.fillMaxWidth()
+                            .padding(horizontal = 24.dp, vertical = 26.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            Icons.Default.Album, null,
+                            modifier = Modifier.size(35.dp), tint = artistMuted
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            artistText(
+                                "Lagu artis ini belum ada di koleksimu.",
+                                "This artist has no songs in your library."
+                            ),
+                            color = artistMuted, fontSize = 14.sp
+                        )
                     }
-                }
-                items(popular, key = { "popular:${it.uri}" }) { song ->
-                    ArtistTrackRow(song, currentSong, counts[song.uri], { onPlay(song, popular) }, artwork)
-                }
-                item(key = "albums-title") {
-                    Text(artistText("Album di koleksi Anda", "Albums in your library"), color = palette.primaryText,
-                        fontWeight = FontWeight.Bold, fontSize = 22.sp, modifier = Modifier.padding(24.dp))
-                }
-                items(albums.chunked(2), key = { "albums:${it.first().key}" }) { row ->
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        row.forEach { album ->
-                            Column(Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).clickable { selectAlbum(album.key) }.padding(bottom = 8.dp)) {
-                                artwork(album.tracks.first(), Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(10.dp)))
-                                Text(album.title.ifBlank { artistText("Album tanpa judul", "Untitled album") }, color = palette.primaryText,
-                                    fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.padding(top = 10.dp))
-                                Text(artistText("${album.tracks.size} lagu", "${album.tracks.size} tracks"), color = palette.secondaryText, fontSize = 12.sp)
-                            }
-                        }
-                        if (row.size == 1) Spacer(Modifier.weight(1f))
-                    }
-                }
-                if (tracks.isEmpty()) item(key = "empty") {
-                    Text(artistText("Putar lagu dari koleksi lokal untuk melihat halaman artisnya.", "Play a song from your local library to see its artist page."),
-                        color = palette.secondaryText, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 24.dp))
                 }
             }
         }
@@ -229,20 +358,104 @@ fun ImmersiveArtistPage(
 }
 
 @Composable
-private fun ArtistSectionTitle(title: String) {
-    Text(title, color = MaterialTheme.colorScheme.onBackground, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+private fun ArtistActionButton(
+    label: String,
+    icon: ImageVector,
+    primary: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier.height(50.dp),
+        shape = RoundedCornerShape(17.dp),
+        color = if (primary) artistInk else Color.White.copy(alpha = 0.09f),
+        border = if (primary) null else androidx.compose.foundation.BorderStroke(
+            1.dp, Color.White.copy(alpha = 0.10f)
+        )
+    ) {
+        Row(
+            Modifier.fillMaxSize(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                icon, null,
+                tint = if (primary) artistBase else artistInk,
+                modifier = Modifier.size(22.dp)
+            )
+            Spacer(Modifier.width(7.dp))
+            Text(
+                label,
+                color = if (primary) artistBase else artistInk,
+                fontWeight = FontWeight.SemiBold, fontSize = 15.sp
+            )
+        }
+    }
 }
 
 @Composable
-private fun ArtistTrackRow(song: Song, currentSong: Song?, count: Long?, onClick: () -> Unit, artwork: @Composable (Song, Modifier) -> Unit) {
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 24.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
-        artwork(song, Modifier.size(48.dp).clip(RoundedCornerShape(7.dp)))
-        Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-            Text(song.title, color = MaterialTheme.colorScheme.onBackground, fontSize = 15.sp, fontWeight = if (song.uri == currentSong?.uri) FontWeight.Bold else FontWeight.Medium,
-                maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(count?.let { artistText("$it kali diputar", "$it plays") } ?: song.album, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+private fun ArtistSectionHeader(title: String, subtitle: String) {
+    Column(
+        Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 13.dp)
+    ) {
+        Text(
+            title, fontWeight = FontWeight.Bold, color = artistInk,
+            fontSize = 23.sp, letterSpacing = (-0.4).sp
+        )
+        Spacer(Modifier.height(3.dp))
+        Text(subtitle, fontSize = 12.sp, color = artistMuted)
+    }
+}
+
+@Composable
+private fun ArtistMusicRow(
+    song: Song,
+    currentSong: Song?,
+    detail: String,
+    artwork: @Composable (Song, Modifier) -> Unit,
+    onClick: () -> Unit
+) {
+    val selected = song.uri == currentSong?.uri
+    Row(
+        Modifier.fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 2.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(
+                if (selected) Color.White.copy(alpha = 0.065f) else Color.Transparent
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            Modifier.size(54.dp)
+                .clip(RoundedCornerShape(9.dp))
+                .background(artistSurface)
+        ) { artwork(song, Modifier.fillMaxSize()) }
+        Column(
+            Modifier.weight(1f).padding(start = 13.dp, end = 8.dp)
+        ) {
+            Text(
+                song.title,
+                color = artistInk,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                fontSize = 14.5.sp, maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                detail.ifBlank { artistText("Lagu lokal", "Local track") },
+                color = artistMuted, fontSize = 12.sp,
+                maxLines = 1, overflow = TextOverflow.Ellipsis
+            )
         }
-        Icon(if (song.uri == currentSong?.uri) Icons.Default.MusicNote else Icons.Default.PlayArrow,
-            contentDescription = artistText("Putar ${song.title}", "Play ${song.title}"), tint = Color(0xFFCCCCCC), modifier = Modifier.size(20.dp))
+        Icon(
+            if (selected) Icons.Default.MusicNote else Icons.Default.PlayArrow,
+            contentDescription = artistText("Putar lagu", "Play song"),
+            tint = if (selected) artistInk else artistMuted,
+            modifier = Modifier.size(21.dp)
+        )
+        Spacer(Modifier.width(7.dp))
     }
 }
