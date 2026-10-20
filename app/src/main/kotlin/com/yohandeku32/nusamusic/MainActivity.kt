@@ -1929,6 +1929,11 @@ private fun NusaMusicApp(
                 uiPrefs.getBoolean("immersive_light_mode", false))
         )
     }
+    // Existing frosted-glass users keep the appearance by default; the
+    // preference can disable costly live backdrop capture immediately.
+    var liquidGlassEnabled by remember {
+        mutableStateOf(uiPrefs.getBoolean("immersive_liquid_glass_enabled", true))
+    }
     var animatedArtworkEnabled by remember {
         mutableStateOf(uiPrefs.getBoolean("animated_artwork_enabled", true))
     }
@@ -2276,6 +2281,11 @@ private fun NusaMusicApp(
                 onResetCustomTitleFont = onResetCustomTitleFont,
                 playerPresentationMode = playerPresentationMode,
                 libraryLightMode = libraryLightMode,
+                liquidGlassEnabled = liquidGlassEnabled,
+                onLiquidGlassChange = { enabled ->
+                    liquidGlassEnabled = enabled
+                    uiPrefs.edit().putBoolean("immersive_liquid_glass_enabled", enabled).apply()
+                },
                 onLibraryLightModeChange = { light ->
                     libraryLightMode = light
                     uiPrefs.edit()
@@ -2500,6 +2510,7 @@ private fun NusaMusicApp(
                                 },
                                 libraryOpen = libraryOverlayOpen,
                                 libraryLightMode = libraryLightMode,
+                                liquidGlassEnabled = liquidGlassEnabled,
                                 onLibraryClose = { libraryOverlayOpen = false },
                                 onHome = {
                                     artistOverlayOpen = false

@@ -30,10 +30,11 @@ internal fun Modifier.immersiveGlassPill(
     radius: Dp = 100.dp,
     lightMode: Boolean = false,
     emphasized: Boolean = false,
+    liquidGlass: Boolean = true,
     hazeState: HazeState? = null
 ): Modifier {
     val shape = RoundedCornerShape(radius)
-    if (emphasized && hazeState != null) {
+    if (emphasized && liquidGlass && hazeState != null) {
         // Dark, tinted material with light passing through from the live
         // backdrop; a translucent colored rectangle is not a blur.
         val style = HazeStyle(
@@ -61,6 +62,17 @@ internal fun Modifier.immersiveGlassPill(
             // old bordered capsule rather than floating frosted glass.
             .border(0.6.dp, Color.White.copy(alpha = 0.085f), shape)
     }
+
+    // The lightweight fallback avoids backdrop recording entirely during
+    // entrance/exit gestures and whenever Liquid Glass is disabled.
+    // Its restrained specular gradient keeps the floating-controls feeling.
+    if (emphasized) return this.clip(shape)
+        .background(
+            Brush.verticalGradient(
+                listOf(Color(0xC82B303C), Color(0xAF1D222D))
+            )
+        )
+        .border(0.5.dp, Color.White.copy(alpha = 0.075f), shape)
 
     // The original lighter Now Playing control and quality badges remain as
     // they were before the new Artist/Library glass treatments.

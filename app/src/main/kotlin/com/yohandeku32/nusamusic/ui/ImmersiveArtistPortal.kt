@@ -51,7 +51,8 @@ internal fun ImmersiveArtistPortal(
     canSwipeDown: () -> Boolean = { true },
     swipeFromHeaderOnly: Boolean = false,
     showArtistCircle: Boolean = true,
-    hazeState: HazeState,
+    hazeState: HazeState?,
+    liquidGlassEnabled: Boolean = true,
     profile: @Composable () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -152,7 +153,10 @@ internal fun ImmersiveArtistPortal(
                     alpha = ((p - 0.04f) / 0.94f).coerceIn(0f, 1f)
                     clip = false
                 }
-                .hazeSource(hazeState)
+                .then(
+                    if (hazeState != null) Modifier.hazeSource(hazeState)
+                    else Modifier
+                )
         ) {
             profile()
         }
@@ -169,7 +173,10 @@ internal fun ImmersiveArtistPortal(
                     alpha = p
                 }
                 .immersiveGlassPill(
-                    50.dp, emphasized = true, hazeState = hazeState
+                    50.dp,
+                    emphasized = true,
+                    liquidGlass = liquidGlassEnabled,
+                    hazeState = hazeState
                 )
                 .clickable(enabled = open, onClick = onClose)
                 .semantics { contentDescription = "Close artist profile" },

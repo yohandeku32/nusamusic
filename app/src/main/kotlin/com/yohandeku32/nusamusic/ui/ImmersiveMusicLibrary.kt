@@ -172,17 +172,10 @@ internal fun ImmersiveMusicLibrary(
     // Single decoded painter reused by every row (the logo is an 89 KB PNG).
     val hiResPainter = painterResource(id = R.drawable.hi_res_audio_logo)
 
-    // Progressively index all tracks only while the library is displayed.
-    // Suspend native metadata extraction during keyboard use and flings.
-    LaunchedEffect(songs, isVisible, searchDialogOpen) {
-        if (!isVisible || searchDialogOpen) return@LaunchedEffect
-        delay(260L)
-        for (track in songs) {
-            while (imeVisible || listState.isScrollInProgress) delay(100L)
-            AudioCodecLoader.load(context, track.uri)
-            delay(65L)
-        }
-    }
+    // No all-tracks MediaExtractor sweep when Library opens. Native decoding
+    // thousands of files competes with drawing the first frames and the live
+    // blur. Each idle, visible row below requests only its own badge.
+    // Verified Hi-Res badges stay cached by AudioCodecLoader.
 
     // Debounce text locally in the input composable; sort only settled queries
     // off-main to avoid competing with system keyboard animation.
@@ -478,7 +471,8 @@ private fun ImmersiveTrackRow(
 
     LaunchedEffect(song.uri, loadMetadata) {
         if (loadMetadata && !isHiRes) {
-            delay(35L)
+            // Allow the entrance/scroll to settle before native file I/O.
+            delay(180L)
             AudioCodecLoader.load(context, song.uri)
         }
     }

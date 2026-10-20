@@ -23,6 +23,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -85,6 +90,7 @@ internal fun ImmersiveArtworkPlayer(
     artistProfile: @Composable () -> Unit = {},
     libraryOpen: Boolean = false,
     libraryLightMode: Boolean = false,
+    liquidGlassEnabled: Boolean = true,
     onLibraryClose: () -> Unit = {},
     onHome: () -> Unit = {},
     libraryContent: @Composable (Boolean) -> Unit = {},
@@ -107,6 +113,12 @@ internal fun ImmersiveArtworkPlayer(
     // Both content sources are recorded beneath the same small glass
     // controls: current-player artwork and the currently visible portal.
     val glassBackdrop = remember { HazeState() }
+    // 1.6.x Haze re-records the entire moving source during transitions.
+    // Only attach the live source after the 580/710ms portal entry settles.
+    // Until then, use the small composited satin-glass surfaces.
+    var portalSettled by remember { mutableStateOf(false) }
+    val liveGlassReady = liquidGlassEnabled && portalSettled
+    val liveBackdrop = if (liveGlassReady) glassBackdrop else null
     val dragScope = rememberCoroutineScope()
     var dragActive by remember { mutableStateOf(false) }
     var dragFraction by remember { mutableFloatStateOf(1f) }
@@ -114,7 +126,6 @@ internal fun ImmersiveArtworkPlayer(
         if (dragActive) dragFraction else artistLift.value
     }
     var portalMounted by remember { mutableStateOf(false) }
-    var portalSettled by remember { mutableStateOf(false) }
     var lastOverlayIsLibrary by remember { mutableStateOf(false) }
     val overlayOpen = artistOpen || libraryOpen
     // Make the first overlay frame part of the tap recomposition, instead
@@ -234,7 +245,9 @@ internal fun ImmersiveArtworkPlayer(
                 .coerceIn(maxHeight * 0.45f, maxHeight * 0.80f)
         val heroHeight by animateDpAsState(requestedHero, tween(220), label = "immersiveHeroHeight")
         artwork(
-            Modifier.matchParentSize().hazeSource(glassBackdrop),
+            Modifier.matchParentSize().then(
+                if (liveGlassReady) Modifier.hazeSource(glassBackdrop) else Modifier
+            ),
             heroHeight, if (wide) (1f - controlsFraction + 0.06f) else 1f
         )
         if (portalVisible) {
@@ -517,7 +530,8 @@ internal fun ImmersiveArtworkPlayer(
             },
             swipeFromHeaderOnly = presentingLibrary,
             showArtistCircle = !presentingLibrary,
-            hazeState = glassBackdrop,
+            hazeState = liveBackdrop,
+            liquidGlassEnabled = liquidGlassEnabled,
             profile = {
                 if (presentingLibrary) libraryContent(portalSettled)
                 else artistProfile()
@@ -560,7 +574,10 @@ internal fun ImmersiveArtworkPlayer(
                         Modifier.matchParentSize().graphicsLayer {
                             alpha = shownProgress().coerceIn(0f, 1f)
                         }.immersiveGlassPill(
-                            50.dp, emphasized = true, hazeState = glassBackdrop
+                            50.dp,
+                            emphasized = true,
+                            liquidGlass = liquidGlassEnabled,
+                            hazeState = liveBackdrop
                         )
                     )
                     IconButton(
@@ -589,7 +606,8 @@ internal fun ImmersiveArtworkPlayer(
                 libraryOpen = libraryOpen,
                 presentingLibrary = presentingLibrary && portalVisible,
                 overlayOpen = overlayOpen,
-                hazeState = glassBackdrop,
+                hazeState = liveBackdrop,
+                liquidGlassEnabled = liquidGlassEnabled,
                 hasSong = hasSong,
                 onLyrics = onLyrics,
                 onLibrary = onLibrary,
@@ -618,7 +636,8 @@ private fun ImmersiveOverlayActionPill(
     libraryOpen: Boolean,
     presentingLibrary: Boolean,
     overlayOpen: Boolean,
-    hazeState: HazeState,
+    hazeState: HazeState?,
+    liquidGlassEnabled: Boolean,
     hasSong: Boolean,
     onLyrics: () -> Unit,
     onLibrary: () -> Unit,
@@ -663,7 +682,10 @@ private fun ImmersiveOverlayActionPill(
             Modifier.matchParentSize()
                 .graphicsLayer { alpha = progress().coerceIn(0f, 1f) }
                 .immersiveGlassPill(
-                    100.dp, emphasized = true, hazeState = hazeState
+                    100.dp,
+                    emphasized = true,
+                    liquidGlass = liquidGlassEnabled,
+                    hazeState = hazeState
                 )
         )
         Row(
@@ -696,9 +718,10 @@ private fun ImmersiveOverlayActionPill(
                 )
             }
             ImmersiveAction(
-                lightMode, NusaPlayerIcons.More,
+                lightMode, Icons.Rounded.Settings,
                 immersiveText("Pengaturan", "Settings"),
-                onSettings, iconSize = 23.dp, iconTint = iconColor
+                onSettings, iconSize = 23.dp, iconTint = iconColor,
+                liquidMotion = liquidGlassEnabled
             )
             AnimatedVisibility(
                 visible = overlayOpen,
