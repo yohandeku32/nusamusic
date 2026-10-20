@@ -155,8 +155,6 @@ import com.yohandeku32.nusamusic.data.SpotifyCanvasArtworkLoader
 import com.yohandeku32.nusamusic.data.SpotifyCanvasVideoCache
 import com.yohandeku32.nusamusic.data.AudioCodecInfo
 import com.yohandeku32.nusamusic.data.AudioCodecLoader
-import com.yohandeku32.nusamusic.data.ArtistImageLoader
-import com.yohandeku32.nusamusic.data.ArtistBiographyLoader
 import com.yohandeku32.nusamusic.data.ArtistNameUtils
 import com.yohandeku32.nusamusic.data.MusicRepository
 import com.yohandeku32.nusamusic.data.MediaStoreCheckpoint
@@ -1842,14 +1840,7 @@ private fun NusaMusicApp(
     var isFavorite by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var deleteFromLibrary by remember { mutableStateOf<Song?>(null) }
-    var biographyExpanded by remember { mutableStateOf(false) }
     val artistKey = ArtistNameUtils.cacheKey(currentSong?.artist)
-    var artistBiography by remember(artistKey) {
-        mutableStateOf(ArtistBiographyLoader.cached(currentSong?.artist))
-    }
-    var biographyLoading by remember(artistKey) {
-        mutableStateOf(false)
-    }
 
     val context = androidx.compose.ui.platform.LocalContext.current
     // Restore verified Hi-Res badges as soon as the library becomes available,
@@ -1896,7 +1887,6 @@ private fun NusaMusicApp(
             )
         )
     }
-    val showArtistBiography = playerPresentationMode != PlayerPresentationMode.CD
     // This option themes ONLY the Immersive song library and its search.
     // Reuse the existing preference on upgrade so the chosen color persists.
     var libraryLightMode by remember {
@@ -2137,18 +2127,6 @@ private fun NusaMusicApp(
         }
     }
 
-    LaunchedEffect(artistKey, showArtistBiography) {
-        biographyLoading = false
-        if (!showArtistBiography) return@LaunchedEffect
-        if (artistBiography != null) return@LaunchedEffect
-        biographyLoading =
-            ArtistNameUtils.firstArtist(currentSong?.artist).isNotBlank()
-        artistBiography = currentSong?.let {
-            ArtistBiographyLoader.load(context, it)
-        }
-        biographyLoading = false
-    }
-
     deleteFromLibrary?.let { candidate ->
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { deleteFromLibrary = null },
@@ -2385,11 +2363,8 @@ private fun NusaMusicApp(
                         artistName = currentSong?.artist,
                         songs = songs,
                         currentSong = currentSong,
-                        biography = artistBiography,
-                        biographyLoading = biographyLoading,
                         isVisible = pagerState.settledPage == 0,
                         state = artistPageState,
-                        onVisible = { artistPageState.loadPortrait(context, scope) },
                         onBack = { scope.launch { pagerState.animateMiuixScrollToPage(playerPage) } },
                         onPlay = onPlay,
                         artwork = { song, modifier ->
@@ -2636,15 +2611,6 @@ private fun NusaMusicApp(
                                 }
                             }
 
-                            if (showArtistBiography && !artistPageEnabled) {
-                                item {
-                                    ArtistBiographySection(
-                                        artistName = currentSong?.artist,
-                                        biography = artistBiography,
-                                        loading = biographyLoading
-                                    )
-                                }
-                            }
                         }
                         }
                     }
@@ -3299,114 +3265,6 @@ private fun PrototypeAlbumRecordCard(
     }
 }
 
-@Composable
-private fun ArtistBiographySection(
-    artistName: String?,
-    biography: com.yohandeku32.nusamusic.data.ArtistBiography?,
-    loading: Boolean
-) {
-    val displayArtist = ArtistNameUtils.firstArtist(artistName).ifBlank { "Unknown artist" }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Color.Black)
-            .padding(horizontal = 28.dp, vertical = 24.dp)
-    ) {
-        if (loading) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(180.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    nusaText("Memuat biografi artis…", "Loading artist biography…"),
-                    color = Color(0xFF9A9A9A),
-                    fontSize = 14.sp
-                )
-            }
-        } else if (biography == null) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 72.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = displayArtist,
-                    color = Color.White,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center
-                )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    if (ArtistBiographyLoader.isConfigured()) {
-                        nusaText("Biografi tidak tersedia", "Biography not available")
-                    } else {
-                        nusaText(
-                            "Atur LASTFM_API_KEY di local.properties atau environment",
-                            "Set LASTFM_API_KEY in local.properties or the environment"
-                        )
-                    },
-                    color = Color(0xFF8A8A8A),
-                    fontSize = 14.sp,
-                    textAlign = TextAlign.Center
-                )
-            }
-        } else {
-            Text(
-                nusaText("TENTANG ARTIS", "ABOUT THE ARTIST"),
-                color = Color(0xFF8E8E8E),
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.6.sp
-            )
-            Spacer(Modifier.height(7.dp))
-            Text(
-                text = biography.artistName,
-                color = Color.White,
-                fontSize = 24.sp,
-                lineHeight = 28.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 2,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-            )
-            Spacer(Modifier.height(16.dp))
-            val biographyScrollState =
-                androidx.compose.foundation.rememberScrollState()
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(178.dp)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(Color(0xFF111111))
-                    .padding(horizontal = 18.dp, vertical = 16.dp)
-                    .verticalScroll(biographyScrollState)
-            ) {
-                Text(
-                    text = biography.text,
-                    color = Color(0xFFE7E7E7),
-                    fontSize = 15.sp,
-                    lineHeight = 23.sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-            Text(
-                text = nusaText(
-                    "Sumber: Last.fm (" + biography.sourceLanguage.uppercase() + ")",
-                    "Source: Last.fm (" + biography.sourceLanguage.uppercase() + ")"
-                ),
-                color = Color(0xFF777777),
-                fontSize = 11.sp,
-                modifier = Modifier.padding(start = 4.dp, top = 8.dp)
-            )
-        }
-    }
-}
-
 private enum class AudioQualityBadge {
     LOSSLESS,
     HI_RES,
@@ -3757,41 +3615,15 @@ private fun MetadataDivider(hiRes: Boolean = false) {
 
 @Composable
 private fun ArtistAvatar(song: Song?, modifier: Modifier = Modifier) {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    var artistBitmap by remember(song?.artist) { mutableStateOf<Bitmap?>(null) }
-    val grayscaleMatrix = remember {
-        ColorMatrix().apply { setToSaturation(0f) }
-    }
-    val grayscaleFilter = remember(grayscaleMatrix) {
-        ColorFilter.colorMatrix(grayscaleMatrix)
-    }
-
-    LaunchedEffect(song?.artist) {
-        artistBitmap = ArtistImageLoader.load(
-            context = context,
-            artistName = ArtistNameUtils.firstArtist(song?.artist),
-            maxSize = 256
-        )
-    }
-
-    if (artistBitmap != null) {
-        androidx.compose.foundation.Image(
-            bitmap = artistBitmap!!.asImageBitmap(),
-            contentDescription = ArtistNameUtils.firstArtist(song?.artist),
-            contentScale = ContentScale.Crop,
-            colorFilter = grayscaleFilter,
-            modifier = modifier
-        )
-    } else {
-        // Keep the avatar monochrome even while the artist portrait is being
-        // resolved and when album art is used as the fallback.
-        ArtworkView(
-            song = song,
-            maxSizePx = 96,
-            modifier = modifier,
-            monochrome = true
-        )
-    }
+    // Local art is available immediately; never start a Deezer request for a
+    // small control that needs to respond at 90/120Hz.
+    ArtworkView(
+        song = song,
+        maxSizePx = 128,
+        modifier = modifier,
+        monochrome = true,
+        grainOverlay = false
+    )
 }
 
 @Composable
