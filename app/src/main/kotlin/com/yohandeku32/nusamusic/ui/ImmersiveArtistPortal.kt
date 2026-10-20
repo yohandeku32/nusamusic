@@ -246,3 +246,12 @@ internal fun libraryActionPillLeftPx(
  * fade progress, including finger-driven partial dismissal. */
 internal fun libraryArtistCircleOpacity(openProgress: Float): Float =
     if (openProgress.isFinite()) openProgress.coerceIn(0f, 1f) else 0f
+
+/**
+ * The exact opacity of the black navigation material. Driven by the same
+ * reversible Animatable as the Artist/Library portal, not by a page boolean.
+ * This guarantees the last closing frame has zero black overlay before the
+ * portal unmounts and restores full-strength Now Playing Liquid Glass.
+ */
+internal fun solidNavigationReveal(openProgress: Float): Float =
+    if (openProgress.isFinite()) openProgress.coerceIn(0f, 1f) else 0f
