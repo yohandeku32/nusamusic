@@ -9,9 +9,9 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.Animatable
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.unit.IntOffset
 import kotlin.math.roundToInt
 import androidx.compose.foundation.background
@@ -117,17 +117,25 @@ internal fun ImmersiveArtworkPlayer(
     var portalSettled by remember { mutableStateOf(false) }
     var lastOverlayIsLibrary by remember { mutableStateOf(false) }
     val overlayOpen = artistOpen || libraryOpen
+    // Make the first overlay frame part of the tap recomposition, instead
+    // of waiting for LaunchedEffect to mount the portal a frame later.
+    val portalVisible = overlayOpen || portalMounted
+    val presentingLibrary = if (overlayOpen) libraryOpen else lastOverlayIsLibrary
     LaunchedEffect(artistOpen, libraryOpen) {
         if (overlayOpen) {
             dragActive = false
             lastOverlayIsLibrary = libraryOpen
             portalMounted = true
             portalSettled = false
-            // First compose the image/list so the first gesture frames
-            // aren't spent allocating their initial LazyColumn layout.
-            withFrameNanos { }
+            // Start the animation immediately. Previously awaiting the next
+            // frame added noticeable latency on Library taps; its expensive
+            // metadata indexing is still deferred until the sheet settles.
             artistLift.animateTo(
-                1f, animationSpec = tween(710, easing = FastOutSlowInEasing)
+                1f,
+                animationSpec = tween(
+                    if (libraryOpen) 580 else 710,
+                    easing = FastOutSlowInEasing
+                )
             )
             portalSettled = true
         } else {
@@ -229,14 +237,14 @@ internal fun ImmersiveArtworkPlayer(
             Modifier.matchParentSize().hazeSource(glassBackdrop),
             heroHeight, if (wide) (1f - controlsFraction + 0.06f) else 1f
         )
-        if (portalMounted) {
+        if (portalVisible) {
             // Opaque full-screen black underlay, including BELOW the profile.
             // No blurred cover or colored artwork can leak around the pill.
             // The actual floating sheet is rendered over the playback controls.
             Box(Modifier.matchParentSize()
                 .graphicsLayer { alpha = shownProgress() }
                 .background(
-                    if (lastOverlayIsLibrary) immersiveColors(libraryLightMode).background
+                    if (presentingLibrary) immersiveColors(libraryLightMode).background
                     else Color.Black
                 ))
         }
@@ -297,6 +305,13 @@ internal fun ImmersiveArtworkPlayer(
         // Share is intentionally absent; keep measured player geometry,
         // the moving pill, and touch targets symmetrical with 3/2 controls.
         val actionPillWidth = if (lyricsEnabled) 176.dp else 128.dp
+        // Both the right-hand pill and the separate Library Artist circle
+        // use one width animation, so neither jumps or overlaps the other.
+        val expandedPillWidth by animateDpAsState(
+            targetValue = if (overlayOpen) actionPillWidth + 48.dp else actionPillWidth,
+            animationSpec = tween(430, easing = FastOutSlowInEasing),
+            label = "overlayHomePillWidth"
+        )
 
         // On compact/large-text screens the foreground can scroll rather than
         // clipping transport buttons. The artwork remains a full-screen canvas.
@@ -448,7 +463,7 @@ internal fun ImmersiveArtworkPlayer(
                     ) {
                         ImmersiveAction(lightMode, NusaPlayerIcons.Artist,
                             immersiveText("Buka halaman artis", "Open artist page"),
-                            onArtist, hasSong && !artistOpen, iconSize = 23.dp)
+                            onArtist, hasSong && !artistOpen && !libraryOpen, iconSize = 23.dp)
                     }
                     // Reserve its space to keep the player geometry stable.
                     // The actual pill and hit targets live in the top overlay.
@@ -472,13 +487,13 @@ internal fun ImmersiveArtworkPlayer(
             Box(Modifier.align(Alignment.BottomCenter)) { foreground() }
         }
 
-        if (portalMounted) ImmersiveArtistPortal(
+        if (portalVisible) ImmersiveArtistPortal(
             open = overlayOpen,
             progress = shownProgress,
             source = artistButtonBounds,
             host = playerBounds,
             topInsetPx = with(density) { topInset.toPx() },
-            onClose = if (lastOverlayIsLibrary) onLibraryClose else onArtistClose,
+            onClose = if (presentingLibrary) onLibraryClose else onArtistClose,
             onDragFraction = { fraction ->
                 // No suspend call or coroutine per touch movement.
                 dragFraction = fraction
@@ -498,41 +513,83 @@ internal fun ImmersiveArtworkPlayer(
                 // Do not interrupt the still-opening 710ms Animatable with a
                 // drag snapTo; allow gestures once the sheet has settled.
                 portalSettled &&
-                    (lastOverlayIsLibrary || canCloseArtistBySwipe())
+                    (presentingLibrary || canCloseArtistBySwipe())
             },
-            swipeFromHeaderOnly = lastOverlayIsLibrary,
-            showArtistCircle = !lastOverlayIsLibrary,
+            swipeFromHeaderOnly = presentingLibrary,
+            showArtistCircle = !presentingLibrary,
             hazeState = glassBackdrop,
             profile = {
-                if (lastOverlayIsLibrary) libraryContent(portalSettled)
+                if (presentingLibrary) libraryContent(portalSettled)
                 else artistProfile()
             },
             modifier = Modifier.fillMaxSize()
         )
 
-        // The same interactive pill is drawn OVER either profile. When Library
-        // opens, its own icon shrinks away and the three surviving controls
-        // recenter as a single surface rather than jumping individually.
+        // The REAL bottom pill sits above the portal. In Library, Artist
+        // remains a separate round control on its left (as on Now Playing).
+        // A width expansion is distributed equally across the group.
         val bubble = artistButtonBounds
         val root = playerBounds
         if (bubble != null && root != null) {
+            val circleX = bubble.left - root.left
+            val circleY = bubble.top - root.top
+            val groupShiftPx = with(density) {
+                (expandedPillWidth - actionPillWidth).toPx() * 0.5f
+            }
+            if (portalVisible && presentingLibrary) {
+                Box(
+                    Modifier.offset {
+                        IntOffset(
+                            (circleX - groupShiftPx).roundToInt(),
+                            circleY.roundToInt()
+                        )
+                    }
+                        .size(56.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    // The original circle fades away as this separate
+                    // frosted version fades in. Neither becomes a pill item.
+                    Box(
+                        Modifier.matchParentSize().graphicsLayer {
+                            alpha = (1f - shownProgress()).coerceIn(0f, 1f)
+                        }.immersiveGlassPill(50.dp, lightMode)
+                    )
+                    Box(
+                        Modifier.matchParentSize().graphicsLayer {
+                            alpha = shownProgress().coerceIn(0f, 1f)
+                        }.immersiveGlassPill(
+                            50.dp, emphasized = true, hazeState = glassBackdrop
+                        )
+                    )
+                    IconButton(
+                        onClick = onArtist,
+                        enabled = hasSong && libraryOpen,
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        Icon(
+                            NusaPlayerIcons.Artist,
+                            immersiveText("Buka profil artis", "Open artist profile"),
+                            tint = Color.White,
+                            modifier = Modifier.size(23.dp)
+                        )
+                    }
+                }
+            }
             ImmersiveOverlayActionPill(
-                anchorX = bubble.left - root.left,
-                anchorY = bubble.top - root.top,
+                anchorX = circleX,
+                anchorY = circleY,
                 progress = shownProgress,
                 fullWidth = actionPillWidth,
+                width = expandedPillWidth,
                 lyricsEnabled = lyricsEnabled,
                 lyricsOpen = lyricsOpen,
-                // In white Library mode the list stays white, but its pill
-                // deliberately uses dark frosted glass and white glyphs.
-                lightMode = if (portalMounted) false else lightMode,
+                lightMode = lightMode,
                 libraryOpen = libraryOpen,
+                presentingLibrary = presentingLibrary && portalVisible,
                 overlayOpen = overlayOpen,
-                emphasized = portalMounted,
                 hazeState = glassBackdrop,
                 hasSong = hasSong,
                 onLyrics = onLyrics,
-                onArtist = onArtist,
                 onLibrary = onLibrary,
                 onHome = onHome,
                 onSettings = onSettings
@@ -542,11 +599,9 @@ internal fun ImmersiveArtworkPlayer(
 }
 
 /**
- * Animate only the bottom row size and placement. Unlike resizing the whole
- * player or using graphics translation, the pill's hit boxes move with it.
- * Artist replaces Library in its existing slot when the Library portal
- * opens. Only Lyrics (when enabled), Artist/Library, and Settings are shown
- * at rest; Home joins them while a portal is open. No Share control here.
+ * One measured navigation row on every screen. The backdrop layers fade
+ * smoothly between the Now Playing capsule and Haze's live frosted glass
+ * while the portal settles. This avoids abrupt style swaps on Home.
  */
 @Composable
 private fun ImmersiveOverlayActionPill(
@@ -554,94 +609,100 @@ private fun ImmersiveOverlayActionPill(
     anchorY: Float,
     progress: () -> Float,
     fullWidth: Dp,
+    width: Dp,
     lyricsEnabled: Boolean,
     lyricsOpen: Boolean,
     lightMode: Boolean,
     libraryOpen: Boolean,
+    presentingLibrary: Boolean,
     overlayOpen: Boolean,
-    emphasized: Boolean,
     hazeState: HazeState,
     hasSong: Boolean,
     onLyrics: () -> Unit,
-    onArtist: () -> Unit,
     onLibrary: () -> Unit,
     onHome: () -> Unit,
     onSettings: () -> Unit
 ) {
     val density = LocalDensity.current
-    // Keep four equal touch slots, one morphing between Library and Artist.
-    // Resizing the whole pill while switching icons caused small layout
-    // jolts and pushed hit targets away from the visual center.
-    val width by animateDpAsState(
-        targetValue = if (overlayOpen) fullWidth + 48.dp else fullWidth,
-        animationSpec = tween(430, easing = FastOutSlowInEasing),
-        label = "overlayHomePillWidth"
+    val iconColor by animateColorAsState(
+        targetValue = if (overlayOpen) Color.White
+            else if (lightMode) Color(0xFF171A20) else Color.White,
+        animationSpec = tween(390, easing = FastOutSlowInEasing),
+        label = "frostedPillIconColor"
     )
-    Row(
+    Box(
         Modifier.offset {
-            val circle = with(density) { 56.dp.toPx() }
-            val gap = with(density) { 10.dp.toPx() }
+            val diameterPx = with(density) { 56.dp.toPx() }
+            val gapPx = with(density) { 10.dp.toPx() }
             val widthIncrease = with(density) { (width - fullWidth).toPx() }
-            // The extra Home action grows symmetrically from the center of
-            // the existing pill; never push it into the edge of the screen.
-            IntOffset(
-                (artistPillLeftPx(anchorX, circle, gap, progress()) -
-                    widthIncrease * 0.5f).roundToInt(),
-                anchorY.roundToInt()
-            )
-        }
-            .width(width)
-            .height(56.dp)
-            .immersiveGlassPill(
-                100.dp, lightMode, emphasized = emphasized, hazeState = hazeState
-            ),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceEvenly
-    ) {
-        if (lyricsEnabled) ImmersiveAction(
-            lightMode, NusaPlayerIcons.Lyrics,
-            if (lyricsOpen) immersiveText("Tutup lirik", "Close lyrics")
-            else immersiveText("Buka lirik", "Open lyrics"),
-            onLyrics, hasSong, active = lyricsOpen, iconSize = 23.dp
-        )
-        Crossfade(
-            targetState = libraryOpen,
-            animationSpec = tween(420, easing = FastOutSlowInEasing),
-            label = "libraryArtistPillMorph"
-        ) { showingLibrary ->
-            if (showingLibrary) {
-                ImmersiveAction(
-                    lightMode, NusaPlayerIcons.Artist,
-                    immersiveText("Buka profil artis", "Open artist profile"),
-                    onArtist, hasSong, iconSize = 23.dp
-                )
+            val left = if (presentingLibrary) {
+                // Keep the separate Artist circle and right-hand pill in
+                // exactly the same positions as the Now Playing row.
+                anchorX + diameterPx + gapPx - widthIncrease * 0.5f
             } else {
+                artistPillLeftPx(anchorX, diameterPx, gapPx, progress()) -
+                    widthIncrease * 0.5f
+            }
+            IntOffset(left.roundToInt(), anchorY.roundToInt())
+        }.width(width).height(56.dp)
+    ) {
+        // Keep the two surfaces composed during the full transition. Their
+        // draw-phase alpha is driven by the SAME progress as the moving
+        // circle, including a cancelled swipe. Never switch the material
+        // only when portalMounted finally becomes false.
+        Box(
+            Modifier.matchParentSize()
+                .graphicsLayer { alpha = (1f - progress()).coerceIn(0f, 1f) }
+                .immersiveGlassPill(100.dp, lightMode)
+        )
+        Box(
+            Modifier.matchParentSize()
+                .graphicsLayer { alpha = progress().coerceIn(0f, 1f) }
+                .immersiveGlassPill(
+                    100.dp, emphasized = true, hazeState = hazeState
+                )
+        )
+        Row(
+            Modifier.fillMaxSize(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            if (lyricsEnabled) ImmersiveAction(
+                lightMode, NusaPlayerIcons.Lyrics,
+                if (lyricsOpen) immersiveText("Tutup lirik", "Close lyrics")
+                else immersiveText("Buka lirik", "Open lyrics"),
+                onLyrics, hasSong, active = lyricsOpen, iconSize = 23.dp,
+                iconTint = iconColor
+            )
+            // Library now swaps with Artist at the separate circle position,
+            // not inside the action pill.
+            if (!presentingLibrary) {
                 ImmersiveAction(
                     lightMode, NusaPlayerIcons.Library,
                     immersiveText("Perpustakaan", "Library"),
-                    onLibrary, iconSize = 23.dp
+                    onLibrary, iconSize = 23.dp, iconTint = iconColor
                 )
             }
-        }
-        ImmersiveAction(
-            lightMode, NusaPlayerIcons.More,
-            immersiveText("Pengaturan", "Settings"),
-            onSettings, iconSize = 23.dp
-        )
-        AnimatedVisibility(
-            visible = overlayOpen,
-            enter = expandHorizontally(
-                animationSpec = tween(390, easing = FastOutSlowInEasing)
-            ) + fadeIn(tween(290)),
-            exit = shrinkHorizontally(
-                animationSpec = tween(330, easing = FastOutSlowInEasing)
-            ) + fadeOut(tween(220))
-        ) {
             ImmersiveAction(
-                lightMode, NusaPlayerIcons.Home,
-                immersiveText("Kembali ke pemutar", "Back to Now Playing"),
-                onHome, iconSize = 23.dp
+                lightMode, NusaPlayerIcons.More,
+                immersiveText("Pengaturan", "Settings"),
+                onSettings, iconSize = 23.dp, iconTint = iconColor
             )
+            AnimatedVisibility(
+                visible = overlayOpen,
+                enter = expandHorizontally(
+                    animationSpec = tween(390, easing = FastOutSlowInEasing)
+                ) + fadeIn(tween(290)),
+                exit = shrinkHorizontally(
+                    animationSpec = tween(330, easing = FastOutSlowInEasing)
+                ) + fadeOut(tween(220))
+            ) {
+                ImmersiveAction(
+                    lightMode, NusaPlayerIcons.Home,
+                    immersiveText("Kembali ke pemutar", "Back to Now Playing"),
+                    onHome, iconSize = 23.dp, iconTint = iconColor
+                )
+            }
         }
     }
 }
@@ -650,11 +711,13 @@ private fun ImmersiveOverlayActionPill(
 private fun ImmersiveAction(
     lightMode: Boolean,
     icon: ImageVector, label: String, onClick: () -> Unit, enabled: Boolean = true,
-    active: Boolean = false, iconSize: Dp = 22.dp
+    active: Boolean = false, iconSize: Dp = 22.dp,
+    iconTint: Color? = null
 ) {
     IconButton(onClick = onClick, enabled = enabled,
         modifier = Modifier.size(50.dp).semantics { selected = active }) {
-        Icon(icon, label, tint = (if (lightMode) Color(0xFF171A20) else Color.White).copy(alpha = if (!enabled) 0.26f else if (active) 1f else 0.68f),
+        Icon(icon, label, tint = (iconTint ?: if (lightMode) Color(0xFF171A20) else Color.White)
+            .copy(alpha = if (!enabled) 0.26f else if (active) 1f else 0.68f),
             modifier = Modifier.size(iconSize))
     }
 }
