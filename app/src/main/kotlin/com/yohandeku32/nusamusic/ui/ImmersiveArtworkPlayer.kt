@@ -698,7 +698,7 @@ private fun ImmersiveOverlayActionPill(
                 if (lyricsOpen) immersiveText("Tutup lirik", "Close lyrics")
                 else immersiveText("Buka lirik", "Open lyrics"),
                 onLyrics, hasSong, active = lyricsOpen, iconSize = 23.dp,
-                iconTint = iconColor
+                iconTint = iconColor, liquidMotion = liquidGlassEnabled
             )
             // Library now swaps with Artist at the separate circle position,
             // not inside the action pill.
@@ -714,7 +714,8 @@ private fun ImmersiveOverlayActionPill(
                 ImmersiveAction(
                     lightMode, NusaPlayerIcons.Library,
                     immersiveText("Perpustakaan", "Library"),
-                    onLibrary, iconSize = 23.dp, iconTint = iconColor
+                    onLibrary, iconSize = 23.dp, iconTint = iconColor,
+                    liquidMotion = liquidGlassEnabled
                 )
             }
             ImmersiveAction(
@@ -735,7 +736,8 @@ private fun ImmersiveOverlayActionPill(
                 ImmersiveAction(
                     lightMode, NusaPlayerIcons.Home,
                     immersiveText("Kembali ke pemutar", "Back to Now Playing"),
-                    onHome, iconSize = 23.dp, iconTint = iconColor
+                    onHome, iconSize = 23.dp, iconTint = iconColor,
+                    liquidMotion = liquidGlassEnabled
                 )
             }
         }
@@ -747,10 +749,31 @@ private fun ImmersiveAction(
     lightMode: Boolean,
     icon: ImageVector, label: String, onClick: () -> Unit, enabled: Boolean = true,
     active: Boolean = false, iconSize: Dp = 22.dp,
-    iconTint: Color? = null
+    iconTint: Color? = null,
+    liquidMotion: Boolean = false
 ) {
-    IconButton(onClick = onClick, enabled = enabled,
-        modifier = Modifier.size(50.dp).semantics { selected = active }) {
+    // iOS-inspired liquid press response is a restrained native Compose
+    // spring, not a screen-wide transform or heavy shader animation.
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val touchScale by animateFloatAsState(
+        targetValue = if (liquidMotion && pressed) 0.94f else 1f,
+        animationSpec = spring(
+            dampingRatio = 0.86f,
+            stiffness = 680f
+        ),
+        label = "liquidNavigationPress"
+    )
+    IconButton(
+        onClick = onClick,
+        enabled = enabled,
+        interactionSource = interactionSource,
+        modifier = Modifier.size(50.dp)
+            .graphicsLayer {
+                scaleX = touchScale
+                scaleY = touchScale
+            }.semantics { selected = active }
+    ) {
         Icon(icon, label, tint = (iconTint ?: if (lightMode) Color(0xFF171A20) else Color.White)
             .copy(alpha = if (!enabled) 0.26f else if (active) 1f else 0.68f),
             modifier = Modifier.size(iconSize))
