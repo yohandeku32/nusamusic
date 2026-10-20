@@ -42,6 +42,8 @@ internal fun ImmersiveArtistPortal(
     host: Rect?,
     topInsetPx: Float,
     onClose: () -> Unit,
+    onDragFraction: suspend (Float) -> Unit = {},
+    onSwipeCancelled: suspend () -> Unit = {},
     canSwipeDown: () -> Boolean = { true },
     swipeFromHeaderOnly: Boolean = false,
     showArtistCircle: Boolean = true,
@@ -61,30 +63,59 @@ internal fun ImmersiveArtistPortal(
     // detector alive across callback changes so a slow gesture is never lost.
     val closeCallback by rememberUpdatedState(onClose)
     val swipeAllowed by rememberUpdatedState(canSwipeDown)
+    val updateDrag by rememberUpdatedState(onDragFraction)
+    val restoreAfterDrag by rememberUpdatedState(onSwipeCancelled)
     Box(modifier.pointerInput(open, swipeFromHeaderOnly) {
         awaitEachGesture {
             val down = awaitFirstDown(
                 requireUnconsumed = false, pass = PointerEventPass.Initial
             )
-            val acceptsStart = (!swipeFromHeaderOnly ||
-                down.position.y <= maxHeaderY) && swipeAllowed()
+            val acceptsStart = open &&
+                (!swipeFromHeaderOnly || down.position.y <= maxHeaderY) &&
+                swipeAllowed()
+            val touchSlop = viewConfiguration.touchSlop
             var deltaX = 0f
             var deltaY = 0f
+            var dragCaptured = false
             var pointer = down.id
             while (true) {
                 val event = awaitPointerEvent(PointerEventPass.Initial)
                 val change = event.changes.firstOrNull { it.id == pointer }
-                    ?: event.changes.firstOrNull { it.pressed } ?: break
+                    ?: event.changes.firstOrNull { it.pressed }
+                if (change == null) {
+                    if (dragCaptured) restoreAfterDrag()
+                    break
+                }
                 if (!change.pressed) {
-                    if (open && acceptsStart &&
-                        shouldDismissOverlaySwipe(deltaX, deltaY, minSwipe)) {
-                        closeCallback()
+                    if (dragCaptured) {
+                        if (shouldDismissOverlaySwipe(deltaX, deltaY, minSwipe)) {
+                            // The parent continues its close animation from
+                            // the actual gesture progress, with no jump.
+                            closeCallback()
+                        } else {
+                            // An incomplete gesture springs gently back.
+                            restoreAfterDrag()
+                        }
                     }
                     break
                 }
                 val diff = change.position - change.previousPosition
                 deltaX += diff.x
                 deltaY += diff.y
+                if (acceptsStart && !dragCaptured &&
+                    deltaY > touchSlop &&
+                    deltaY > kotlin.math.abs(deltaX) * 1.25f) {
+                    dragCaptured = true
+                }
+                if (dragCaptured) {
+                    change.consume()
+                    val fraction = overlayDragRevealFraction(
+                        deltaY - touchSlop, size.height.toFloat()
+                    )
+                    // Animatable.snapTo updates the compositor and pill
+                    // placement without remeasuring Artist/Library content.
+                    updateDrag(fraction)
+                }
                 pointer = change.id
             }
         }
@@ -121,7 +152,7 @@ internal fun ImmersiveArtistPortal(
                     translationY = (destY - sourceY) * p
                     alpha = p
                 }
-                .immersiveGlassPill(50.dp)
+                .immersiveGlassPill(50.dp, emphasized = true)
                 .clickable(enabled = open, onClick = onClose)
                 .semantics { contentDescription = "Close artist profile" },
             contentAlignment = Alignment.Center
@@ -143,6 +174,17 @@ internal fun artistPillLeftPx(
 ): Float {
     val shift = (circlePx + gapPx) * 0.5f * progress.coerceIn(0f, 1f)
     return artistLeftPx + circlePx + gapPx - shift
+}
+
+/** Fraction of the open panel remaining while the finger drags down.
+ * A 72% screen travel reveals the underlying player completely, while the
+ * first frames remain smooth and reversible without a sudden jump. */
+internal fun overlayDragRevealFraction(
+    distancePx: Float, heightPx: Float
+): Float {
+    if (!distancePx.isFinite() || !heightPx.isFinite() || heightPx <= 0f) return 1f
+    return (1f - distancePx.coerceAtLeast(0f) / (heightPx * 0.72f))
+        .coerceIn(0f, 1f)
 }
 
 /** Directional, thresholded release avoids interpreting a small list scroll

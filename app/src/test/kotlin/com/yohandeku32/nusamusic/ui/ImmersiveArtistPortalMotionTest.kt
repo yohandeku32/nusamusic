@@ -5,6 +5,22 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ImmersiveArtistPortalMotionTest {
+    @Test fun downwardDragProgressFollowsFingerAndReversesSmoothly() {
+        val fullHeight = 1000f
+        assertEquals(1f, overlayDragRevealFraction(0f, fullHeight), 0.001f)
+        assertEquals(0.5f, overlayDragRevealFraction(360f, fullHeight), 0.001f)
+        assertEquals(0f, overlayDragRevealFraction(720f, fullHeight), 0.001f)
+        assertEquals(0f, overlayDragRevealFraction(1000f, fullHeight), 0.001f)
+        assertEquals(1f, overlayDragRevealFraction(Float.NaN, fullHeight), 0.001f)
+        assertEquals(1f, overlayDragRevealFraction(80f, 0f), 0.001f)
+        var previous = 1f
+        for (distance in 0..720 step 12) {
+            val fraction = overlayDragRevealFraction(distance.toFloat(), fullHeight)
+            assertTrue(fraction <= previous)
+            previous = fraction
+        }
+    }
+
     @Test fun slowDownwardSwipeDismissesButNormalScrollAndHorizontalGesturesDoNot() {
         assertTrue(shouldDismissOverlaySwipe(8f, 140f, 96f))
         assertEquals(false, shouldDismissOverlaySwipe(8f, 40f, 96f))

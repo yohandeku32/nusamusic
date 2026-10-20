@@ -1,10 +1,9 @@
 package com.yohandeku32.nusamusic.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.expandHorizontally
-import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateDpAsState
@@ -117,8 +116,12 @@ internal fun ImmersiveArtworkPlayer(
             portalSettled = true
         } else {
             portalSettled = false
+            // A finger-driven dismiss may already have lowered progress.
+            // Scale remaining time to distance so the close never stalls.
+            val remainingMs = (620f * artistLift.value)
+                .toInt().coerceIn(130, 620)
             artistLift.animateTo(
-                0f, animationSpec = tween(630, easing = FastOutSlowInEasing)
+                0f, animationSpec = tween(remainingMs, easing = FastOutSlowInEasing)
             )
             portalMounted = false
         }
@@ -450,6 +453,14 @@ internal fun ImmersiveArtworkPlayer(
             host = playerBounds,
             topInsetPx = with(density) { topInset.toPx() },
             onClose = if (lastOverlayIsLibrary) onLibraryClose else onArtistClose,
+            onDragFraction = { fraction ->
+                artistLift.snapTo(fraction)
+            },
+            onSwipeCancelled = {
+                artistLift.animateTo(
+                    1f, animationSpec = tween(300, easing = FastOutSlowInEasing)
+                )
+            },
             canSwipeDown = {
                 lastOverlayIsLibrary || canCloseArtistBySwipe()
             },
@@ -480,6 +491,7 @@ internal fun ImmersiveArtworkPlayer(
                 libraryOpen = libraryOpen,
                 hasSong = hasSong,
                 onLyrics = onLyrics,
+                onArtist = onArtist,
                 onLibrary = onLibrary,
                 onShare = onShare,
                 onSettings = onSettings
@@ -491,7 +503,8 @@ internal fun ImmersiveArtworkPlayer(
 /**
  * Animate only the bottom row size and placement. Unlike resizing the whole
  * player or using graphics translation, the pill's hit boxes move with it.
- * Remaining Lyrics/Share/Settings actions stay live above Library.
+ * Artist replaces Library in its existing slot when the Library portal
+ * opens. All four actions remain visible, evenly spaced and hit-testable.
  */
 @Composable
 private fun ImmersiveOverlayActionPill(
@@ -505,30 +518,28 @@ private fun ImmersiveOverlayActionPill(
     libraryOpen: Boolean,
     hasSong: Boolean,
     onLyrics: () -> Unit,
+    onArtist: () -> Unit,
     onLibrary: () -> Unit,
     onShare: () -> Unit,
     onSettings: () -> Unit
 ) {
     val density = LocalDensity.current
-    val width by animateDpAsState(
-        targetValue = if (libraryOpen) fullWidth - 56.dp else fullWidth,
-        animationSpec = tween(630, easing = FastOutSlowInEasing),
-        label = "libraryPillWidth"
-    )
+    // Keep four equal touch slots, one morphing between Library and Artist.
+    // Resizing the whole pill while switching icons caused small layout
+    // jolts and pushed hit targets away from the visual center.
+    val width = fullWidth
     Row(
         Modifier.offset {
             val circle = with(density) { 56.dp.toPx() }
             val gap = with(density) { 10.dp.toPx() }
-            val compensate = with(density) { (fullWidth - width).toPx() } * 0.5f
             IntOffset(
-                (artistPillLeftPx(anchorX, circle, gap, progress()) +
-                    compensate).roundToInt(),
+                artistPillLeftPx(anchorX, circle, gap, progress()).roundToInt(),
                 anchorY.roundToInt()
             )
         }
             .width(width)
             .height(56.dp)
-            .immersiveGlassPill(100.dp, lightMode),
+            .immersiveGlassPill(100.dp, lightMode, emphasized = true),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceEvenly
     ) {
@@ -538,20 +549,24 @@ private fun ImmersiveOverlayActionPill(
             else immersiveText("Buka lirik", "Open lyrics"),
             onLyrics, hasSong, active = lyricsOpen, iconSize = 23.dp
         )
-        AnimatedVisibility(
-            visible = !libraryOpen,
-            enter = expandHorizontally(
-                animationSpec = tween(580, easing = FastOutSlowInEasing)
-            ) + fadeIn(tween(350)),
-            exit = shrinkHorizontally(
-                animationSpec = tween(580, easing = FastOutSlowInEasing)
-            ) + fadeOut(tween(260))
-        ) {
-            ImmersiveAction(
-                lightMode, NusaPlayerIcons.Library,
-                immersiveText("Perpustakaan", "Library"),
-                onLibrary, iconSize = 23.dp
-            )
+        Crossfade(
+            targetState = libraryOpen,
+            animationSpec = tween(420, easing = FastOutSlowInEasing),
+            label = "libraryArtistPillMorph"
+        ) { showingLibrary ->
+            if (showingLibrary) {
+                ImmersiveAction(
+                    lightMode, NusaPlayerIcons.Artist,
+                    immersiveText("Buka profil artis", "Open artist profile"),
+                    onArtist, hasSong, iconSize = 23.dp
+                )
+            } else {
+                ImmersiveAction(
+                    lightMode, NusaPlayerIcons.Library,
+                    immersiveText("Perpustakaan", "Library"),
+                    onLibrary, iconSize = 23.dp
+                )
+            }
         }
         ImmersiveAction(
             lightMode, NusaPlayerIcons.Share,
