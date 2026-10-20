@@ -211,3 +211,17 @@ internal fun shouldDismissOverlaySwipe(
     deltaX: Float, deltaY: Float, thresholdPx: Float
 ): Boolean = deltaY.isFinite() && deltaX.isFinite() &&
     deltaY >= thresholdPx && deltaY > kotlin.math.abs(deltaX) * 1.35f
+
+/** Keep the separate circular Artist button and Library action pill one
+ * constant 10dp apart while Home increases the width symmetrically. */
+internal fun libraryArtistCircleLeftPx(
+    artistStartPx: Float, pillExtraWidthPx: Float
+): Float = artistStartPx - pillExtraWidthPx.coerceAtLeast(0f) * 0.5f
+
+internal fun libraryActionPillLeftPx(
+    artistStartPx: Float,
+    circleWidthPx: Float,
+    gapPx: Float,
+    pillExtraWidthPx: Float
+): Float = libraryArtistCircleLeftPx(artistStartPx, pillExtraWidthPx) +
+    circleWidthPx + gapPx

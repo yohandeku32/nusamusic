@@ -29,6 +29,20 @@ class ImmersiveArtistPortalMotionTest {
         assertEquals(false, shouldDismissOverlaySwipe(0f, -130f, 64f))
     }
 
+    @Test fun libraryKeepsArtistCircleOutsidePillWithFixedGap() {
+        // The 48dp Home expansion shifts the whole group by 24dp left,
+        // without ever moving Artist into the right-hand pill.
+        val baseCircle = libraryArtistCircleLeftPx(34f, 0f)
+        val basePill = libraryActionPillLeftPx(34f, 56f, 10f, 0f)
+        val expandedCircle = libraryArtistCircleLeftPx(34f, 48f)
+        val expandedPill = libraryActionPillLeftPx(34f, 56f, 10f, 48f)
+        assertEquals(34f, baseCircle, 0.001f)
+        assertEquals(100f, basePill, 0.001f)
+        assertEquals(10f, expandedCircle, 0.001f)
+        assertEquals(76f, expandedPill, 0.001f)
+        assertEquals(10f, expandedPill - expandedCircle - 56f, 0.001f)
+    }
+
     @Test fun pillStartsToTheRightOfArtistCircleAndCentersWhenOpen() {
         val circleLeft = 34f
         val diameter = 56f

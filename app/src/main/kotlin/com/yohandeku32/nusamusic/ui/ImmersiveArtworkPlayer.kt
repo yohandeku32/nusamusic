@@ -533,14 +533,16 @@ internal fun ImmersiveArtworkPlayer(
         if (bubble != null && root != null) {
             val circleX = bubble.left - root.left
             val circleY = bubble.top - root.top
-            val groupShiftPx = with(density) {
-                (expandedPillWidth - actionPillWidth).toPx() * 0.5f
+            val extraWidthPx = with(density) {
+                (expandedPillWidth - actionPillWidth).toPx()
             }
             if (portalVisible && presentingLibrary) {
                 Box(
                     Modifier.offset {
                         IntOffset(
-                            (circleX - groupShiftPx).roundToInt(),
+                            libraryArtistCircleLeftPx(
+                                circleX, extraWidthPx
+                            ).roundToInt(),
                             circleY.roundToInt()
                         )
                     }
@@ -638,7 +640,9 @@ private fun ImmersiveOverlayActionPill(
             val left = if (presentingLibrary) {
                 // Keep the separate Artist circle and right-hand pill in
                 // exactly the same positions as the Now Playing row.
-                anchorX + diameterPx + gapPx - widthIncrease * 0.5f
+                libraryActionPillLeftPx(
+                    anchorX, diameterPx, gapPx, widthIncrease
+                )
             } else {
                 artistPillLeftPx(anchorX, diameterPx, gapPx, progress()) -
                     widthIncrease * 0.5f
@@ -676,7 +680,15 @@ private fun ImmersiveOverlayActionPill(
             )
             // Library now swaps with Artist at the separate circle position,
             // not inside the action pill.
-            if (!presentingLibrary) {
+            AnimatedVisibility(
+                visible = !libraryOpen,
+                enter = expandHorizontally(
+                    animationSpec = tween(350, easing = FastOutSlowInEasing)
+                ) + fadeIn(tween(260)),
+                exit = shrinkHorizontally(
+                    animationSpec = tween(300, easing = FastOutSlowInEasing)
+                ) + fadeOut(tween(220))
+            ) {
                 ImmersiveAction(
                     lightMode, NusaPlayerIcons.Library,
                     immersiveText("Perpustakaan", "Library"),
