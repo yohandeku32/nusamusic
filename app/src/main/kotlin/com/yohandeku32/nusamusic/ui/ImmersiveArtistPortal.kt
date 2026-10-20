@@ -53,6 +53,7 @@ internal fun ImmersiveArtistPortal(
     showArtistCircle: Boolean = true,
     hazeState: HazeState?,
     liquidGlassEnabled: Boolean = true,
+    hazeAlpha: Float = 0f,
     profile: @Composable () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -172,16 +173,20 @@ internal fun ImmersiveArtistPortal(
                     translationY = (destY - sourceY) * p
                     alpha = p
                 }
-                .immersiveGlassPill(
-                    50.dp,
-                    emphasized = true,
-                    liquidGlass = liquidGlassEnabled,
-                    hazeState = hazeState
-                )
                 .clickable(enabled = open, onClick = onClose)
                 .semantics { contentDescription = "Close artist profile" },
             contentAlignment = Alignment.Center
         ) {
+            // Identical glass as the Home and Library Artist circles.
+            // The live blurred reflection fades over the same lens fallback.
+            ContinuousLiquidGlassSurface(
+                radius = 50.dp,
+                lightMode = false,
+                liquidGlassEnabled = liquidGlassEnabled,
+                hazeState = hazeState,
+                hazeAlpha = hazeAlpha,
+                modifier = Modifier.matchParentSize()
+            )
             Icon(
                 imageVector = NusaPlayerIcons.Artist,
                 contentDescription = null,

@@ -1,6 +1,10 @@
 package com.yohandeku32.nusamusic.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.matchParentSize
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Modifier
@@ -142,3 +146,50 @@ private fun Modifier.liquidGlassOptics(): Modifier = this.drawWithCache {
         )
     }
 }
+
+/**
+ * A single navigation material used by both Now Playing controls and the
+ * floating Artist/Library controls. When enabled the optical fallback remains
+ * visible during gestures and GPU Haze is added only after the content settles.
+ * When disabled the pre-existing simple pill is used on every page.
+ *
+ * The backdrop fades independently of position, so there is no sudden
+ * opaque-to-glass switch at the last frame of a portal transition.
+ */
+@Composable
+internal fun ContinuousLiquidGlassSurface(
+    radius: Dp,
+    lightMode: Boolean,
+    liquidGlassEnabled: Boolean,
+    hazeState: HazeState?,
+    hazeAlpha: Float,
+    modifier: Modifier = Modifier
+) {
+    Box(modifier) {
+        Box(
+            Modifier.matchParentSize().immersiveGlassPill(
+                radius = radius,
+                lightMode = lightMode,
+                emphasized = liquidGlassEnabled,
+                liquidGlass = liquidGlassEnabled,
+                hazeState = null
+            )
+        )
+        if (liquidGlassEnabled && hazeState != null) {
+            Box(
+                Modifier.matchParentSize()
+                    .graphicsLayer {
+                        alpha = hazeAlpha.coerceIn(0f, 1f)
+                    }
+                    .immersiveGlassPill(
+                        radius = radius,
+                        lightMode = lightMode,
+                        emphasized = true,
+                        liquidGlass = true,
+                        hazeState = hazeState
+                    )
+            )
+        }
+    }
+}
+
