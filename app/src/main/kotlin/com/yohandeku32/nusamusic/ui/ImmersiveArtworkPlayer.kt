@@ -342,7 +342,11 @@ internal fun ImmersiveArtworkPlayer(
         // use one width animation, so neither jumps or overlaps the other.
         val expandedPillWidth by animateDpAsState(
             targetValue = if (overlayOpen) actionPillWidth + 48.dp else actionPillWidth,
-            animationSpec = tween(430, easing = FastOutSlowInEasing),
+            // Synchronize pill width with the actual portal open/close.
+            animationSpec = tween(
+                if (overlayOpen) { if (libraryOpen) 580 else 710 } else 390,
+                easing = FastOutSlowInEasing
+            ),
             label = "overlayHomePillWidth"
         )
 
@@ -517,7 +521,8 @@ internal fun ImmersiveArtworkPlayer(
                             onArtist, hasSong && !artistOpen && !libraryOpen,
                             iconSize = 23.dp,
                             iconTint = if (liquidGlassEnabled) Color.White else null,
-                            liquidMotion = liquidGlassEnabled)
+                            liquidMotion = liquidGlassEnabled,
+                            inactiveAlpha = 1f)
                     }
                     // Reserve its space to keep the player geometry stable.
                     // The actual pill and hit targets live in the top overlay.
@@ -597,8 +602,10 @@ internal fun ImmersiveArtworkPlayer(
                 Box(
                     Modifier.offset {
                         IntOffset(
+                            // Begin at the exact Home anchor and drift
+                            // continuously only as the sheet reveals.
                             libraryArtistCircleLeftPx(
-                                circleX, extraWidthPx
+                                circleX, extraWidthPx * shownProgress().coerceIn(0f, 1f)
                             ).roundToInt(),
                             circleY.roundToInt()
                         )
@@ -606,39 +613,40 @@ internal fun ImmersiveArtworkPlayer(
                         .size(56.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    // The Library Artist bubble uses the EXACT same material
-                    // as its real counterpart on Home. Only its draw-phase
-                    // opacity changes with the transition.
-                    ContinuousLiquidGlassSurface(
-                        radius = 50.dp,
-                        lightMode = lightMode,
-                        liquidGlassEnabled = liquidGlassEnabled,
-                        hazeState = liveBackdrop,
-                        hazeAlpha = liveGlassAlpha,
-            artworkTint = glassArtworkColor,
-                        modifier = Modifier.matchParentSize()
-                            .graphicsLayer {
-                                alpha = libraryArtistCircleOpacity(shownProgress())
-                            }
-                    )
-                    // The circle ICON fades on the exact same progress as
-                    // its frosted layers and the navigation pill's materials.
-                    // The original player Artist icon fades in below it while
-                    // this one moves back into the same physical position.
-                    IconButton(
-                        onClick = onArtist,
-                        enabled = hasSong && libraryOpen,
-                        modifier = Modifier.fillMaxSize()
-                            .graphicsLayer {
-                                alpha = libraryArtistCircleOpacity(shownProgress())
-                            }
+                    // Match the Home 56dp button and 23dp Lucide glyph.
+                    // Crossfade the entire control as a single layer.
+                    Box(
+                        Modifier.matchParentSize().graphicsLayer {
+                            alpha = libraryArtistCircleOpacity(shownProgress())
+                        },
+                        contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            Lucide.UserRound,
-                            immersiveText("Buka profil artis", "Open artist profile"),
-                            tint = Color.White,
-                            modifier = Modifier.size(23.dp)
+                        ContinuousLiquidGlassSurface(
+                            radius = 50.dp,
+                            lightMode = lightMode,
+                            liquidGlassEnabled = liquidGlassEnabled,
+                            hazeState = liveBackdrop,
+                            hazeAlpha = liveGlassAlpha,
+                            artworkTint = glassArtworkColor,
+                            modifier = Modifier.matchParentSize()
                         )
+                        SolidNavigationOverlay(
+                            radius = 50.dp,
+                            progress = shownProgress,
+                            modifier = Modifier.matchParentSize()
+                        )
+                        IconButton(
+                            onClick = onArtist,
+                            enabled = hasSong && libraryOpen,
+                            modifier = Modifier.matchParentSize()
+                        ) {
+                            Icon(
+                                Lucide.UserRound,
+                                immersiveText("Buka profil artis", "Open artist profile"),
+                                tint = Color.White,
+                                modifier = Modifier.size(23.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -674,6 +682,23 @@ internal fun ImmersiveArtworkPlayer(
  * smoothly between the Now Playing capsule and Haze's live frosted glass
  * while the portal settles. This avoids abrupt style swaps on Home.
  */
+/**
+ * Solid only at full portal reveal; transparency is draw-layer only,
+ * preserving the compositional layout and Home's source-backed glass.
+ */
+@Composable
+private fun SolidNavigationOverlay(
+    radius: Dp,
+    progress: () -> Float,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier.graphicsLayer { alpha = solidNavigationReveal(progress()) }
+            .clip(RoundedCornerShape(radius))
+            .background(Color.Black)
+    )
+}
+
 @Composable
 private fun ImmersiveOverlayActionPill(
     anchorX: Float,
@@ -723,22 +748,21 @@ private fun ImmersiveOverlayActionPill(
             IntOffset(left.roundToInt(), anchorY.roundToInt())
         }.width(width).height(56.dp)
     ) {
-        // Black solid only for the bottom pill in Library and Artist.
-        // The Now Playing bottom pill retains its original Liquid Glass.
+        // The original Home glass remains mounted as black fades out,
+        // preventing the last-frame material swap on return.
+        ContinuousLiquidGlassSurface(
+            radius = 100.dp,
+            lightMode = lightMode,
+            liquidGlassEnabled = liquidGlassEnabled,
+            hazeState = hazeState,
+            hazeAlpha = hazeAlpha,
+            artworkTint = artworkTint,
+            modifier = Modifier.matchParentSize()
+        )
         if (showSolidPill) {
-            Box(
-                Modifier.matchParentSize()
-                    .clip(RoundedCornerShape(100.dp))
-                    .background(Color.Black)
-            )
-        } else {
-            ContinuousLiquidGlassSurface(
+            SolidNavigationOverlay(
                 radius = 100.dp,
-                lightMode = lightMode,
-                liquidGlassEnabled = liquidGlassEnabled,
-                hazeState = hazeState,
-                hazeAlpha = hazeAlpha,
-                artworkTint = artworkTint,
+                progress = progress,
                 modifier = Modifier.matchParentSize()
             )
         }
@@ -856,7 +880,8 @@ private fun ImmersiveAction(
     active: Boolean = false, iconSize: Dp = 22.dp,
     iconTint: Color? = null,
     liquidMotion: Boolean = false,
-    touchSize: Dp = 50.dp
+    touchSize: Dp = 50.dp,
+    inactiveAlpha: Float = 0.68f
 ) {
     // iOS-inspired liquid press response is a restrained native Compose
     // spring, not a screen-wide transform or heavy shader animation.
@@ -910,7 +935,7 @@ private fun ImmersiveAction(
             .semantics { selected = active }
     ) {
         Icon(icon, label, tint = (iconTint ?: if (lightMode) Color(0xFF171A20) else Color.White)
-            .copy(alpha = if (!enabled) 0.26f else if (active) 1f else 0.68f),
+            .copy(alpha = if (!enabled) 0.26f else if (active) 1f else inactiveAlpha),
             modifier = Modifier.size(iconSize))
     }
 }
