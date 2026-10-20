@@ -98,12 +98,19 @@ internal fun ImmersiveArtworkPlayer(
     // the four-action pill. Read Animatable only in draw/placement modifiers;
     // do not recompose the expensive artwork/player on every animation frame.
     val artistLift = remember { Animatable(0f) }
+    val dragScope = rememberCoroutineScope()
+    var dragActive by remember { mutableStateOf(false) }
+    var dragFraction by remember { mutableFloatStateOf(1f) }
+    val shownProgress: () -> Float = {
+        if (dragActive) dragFraction else artistLift.value
+    }
     var portalMounted by remember { mutableStateOf(false) }
     var portalSettled by remember { mutableStateOf(false) }
     var lastOverlayIsLibrary by remember { mutableStateOf(false) }
     val overlayOpen = artistOpen || libraryOpen
     LaunchedEffect(artistOpen, libraryOpen) {
         if (overlayOpen) {
+            dragActive = false
             lastOverlayIsLibrary = libraryOpen
             portalMounted = true
             portalSettled = false
@@ -116,8 +123,11 @@ internal fun ImmersiveArtworkPlayer(
             portalSettled = true
         } else {
             portalSettled = false
-            // A finger-driven dismiss may already have lowered progress.
-            // Scale remaining time to distance so the close never stalls.
+            // Continue closing from the actual finger position, not 100%.
+            if (dragActive) {
+                artistLift.snapTo(dragFraction)
+                dragActive = false
+            }
             val remainingMs = (620f * artistLift.value)
                 .toInt().coerceIn(130, 620)
             artistLift.animateTo(
@@ -210,7 +220,7 @@ internal fun ImmersiveArtworkPlayer(
             // No blurred cover or colored artwork can leak around the pill.
             // The actual floating sheet is rendered over the playback controls.
             Box(Modifier.matchParentSize()
-                .graphicsLayer { alpha = artistLift.value }
+                .graphicsLayer { alpha = shownProgress() }
                 .background(
                     if (lastOverlayIsLibrary) immersiveColors(libraryLightMode).background
                     else Color.Black
@@ -223,7 +233,7 @@ internal fun ImmersiveArtworkPlayer(
             Modifier.align(Alignment.TopStart)
                 .padding(start = horizontal, end = horizontal, top = targetHeaderTop)
                 .graphicsLayer {
-                    alpha = lyricsTransition * (1f - artistLift.value)
+                    alpha = lyricsTransition * (1f - shownProgress())
                     translationY = (1f - lyricsTransition) * 8.dp.toPx()
                 }
         ) {
@@ -285,7 +295,7 @@ internal fun ImmersiveArtworkPlayer(
                 Column(
                     Modifier.fillMaxWidth()
                         .graphicsLayer {
-                            alpha = (1f - lyricsTransition) * (1f - artistLift.value)
+                            alpha = (1f - lyricsTransition) * (1f - shownProgress())
                             translationY = -8.dp.toPx() * lyricsTransition
                         }
                 ) {
@@ -356,7 +366,7 @@ internal fun ImmersiveArtworkPlayer(
                 }
                 }
                 Column(Modifier.fillMaxWidth()
-                    .graphicsLayer { alpha = 1f - artistLift.value }
+                    .graphicsLayer { alpha = 1f - shownProgress() }
                     .onSizeChanged { transportHeightPx = it.height }) {
                 progress(Modifier.fillMaxWidth().padding(top = if (wide) 4.dp else if (compact) 10.dp else 14.dp))
                 Spacer(Modifier.height(progressToTransportGap))
@@ -415,7 +425,7 @@ internal fun ImmersiveArtworkPlayer(
                                 if (artistButtonBounds != bounds) artistButtonBounds = bounds
                             }
                             .graphicsLayer {
-                                alpha = (1f - artistLift.value).coerceIn(0f, 1f)
+                                alpha = (1f - shownProgress()).coerceIn(0f, 1f)
                             }
                             .immersiveGlassPill(50.dp, lightMode),
                         contentAlignment = Alignment.Center
@@ -448,18 +458,25 @@ internal fun ImmersiveArtworkPlayer(
 
         if (portalMounted) ImmersiveArtistPortal(
             open = overlayOpen,
-            progress = { artistLift.value },
+            progress = shownProgress,
             source = artistButtonBounds,
             host = playerBounds,
             topInsetPx = with(density) { topInset.toPx() },
             onClose = if (lastOverlayIsLibrary) onLibraryClose else onArtistClose,
             onDragFraction = { fraction ->
-                artistLift.snapTo(fraction)
+                // No suspend call or coroutine per touch movement.
+                dragFraction = fraction
+                dragActive = true
             },
             onSwipeCancelled = {
-                artistLift.animateTo(
-                    1f, animationSpec = tween(300, easing = FastOutSlowInEasing)
-                )
+                val releasedAt = dragFraction
+                dragScope.launch {
+                    artistLift.snapTo(releasedAt)
+                    dragActive = false
+                    artistLift.animateTo(
+                        1f, animationSpec = tween(300, easing = FastOutSlowInEasing)
+                    )
+                }
             },
             canSwipeDown = {
                 // Do not interrupt the still-opening 710ms Animatable with a
@@ -485,7 +502,7 @@ internal fun ImmersiveArtworkPlayer(
             ImmersiveOverlayActionPill(
                 anchorX = bubble.left - root.left,
                 anchorY = bubble.top - root.top,
-                progress = { artistLift.value },
+                progress = shownProgress,
                 fullWidth = actionPillWidth,
                 lyricsEnabled = lyricsEnabled,
                 lyricsOpen = lyricsOpen,

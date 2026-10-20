@@ -42,8 +42,10 @@ internal fun ImmersiveArtistPortal(
     host: Rect?,
     topInsetPx: Float,
     onClose: () -> Unit,
-    onDragFraction: suspend (Float) -> Unit = {},
-    onSwipeCancelled: suspend () -> Unit = {},
+    // Keep external callbacks non-suspending inside awaitEachGesture's
+    // restricted gesture coroutine.
+    onDragFraction: (Float) -> Unit = {},
+    onSwipeCancelled: () -> Unit = {},
     canSwipeDown: () -> Boolean = { true },
     swipeFromHeaderOnly: Boolean = false,
     showArtistCircle: Boolean = true,
@@ -112,8 +114,8 @@ internal fun ImmersiveArtistPortal(
                     val fraction = overlayDragRevealFraction(
                         deltaY - touchSlop, size.height.toFloat()
                     )
-                    // Animatable.snapTo updates the compositor and pill
-                    // placement without remeasuring Artist/Library content.
+                    // Read-only draw/placement state handles each pointer
+                    // update; settling animations belong to the parent scope.
                     updateDrag(fraction)
                 }
                 pointer = change.id
