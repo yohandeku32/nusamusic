@@ -114,12 +114,10 @@ internal fun ImmersiveArtworkPlayer(
     // Both content sources are recorded beneath the same small glass
     // controls: current-player artwork and the currently visible portal.
     val glassBackdrop = remember { HazeState() }
-    // 1.6.x Haze re-records the entire moving source during transitions.
-    // Only attach the live source after the 580/710ms portal entry settles.
-    // Until then, use the small composited satin-glass surfaces.
+    // One liquid material is shared by Home, Artist and Library. Keep live
+    // Haze on the idle Now Playing screen as well, but never re-record a
+    // moving full-screen source while entering or leaving a portal.
     var portalSettled by remember { mutableStateOf(false) }
-    val liveGlassReady = liquidGlassEnabled && portalSettled
-    val liveBackdrop = if (liveGlassReady) glassBackdrop else null
     val dragScope = rememberCoroutineScope()
     var dragActive by remember { mutableStateOf(false) }
     var dragFraction by remember { mutableFloatStateOf(1f) }
@@ -133,6 +131,15 @@ internal fun ImmersiveArtworkPlayer(
     // of waiting for LaunchedEffect to mount the portal a frame later.
     val portalVisible = overlayOpen || portalMounted
     val presentingLibrary = if (overlayOpen) libraryOpen else lastOverlayIsLibrary
+    val liveGlassReady = liquidGlassEnabled && (!portalVisible || portalSettled)
+    val liveBackdrop = if (liveGlassReady) glassBackdrop else null
+    // Crossfade ONLY the real blur layer. The same refractive satin surface
+    // remains underneath on Home and both portals at every animation frame.
+    val liveGlassAlpha by animateFloatAsState(
+        targetValue = if (liveGlassReady) 1f else 0f,
+        animationSpec = tween(320, easing = FastOutSlowInEasing),
+        label = "continuousLiquidGlassBackdrop"
+    )
     LaunchedEffect(artistOpen, libraryOpen) {
         if (overlayOpen) {
             dragActive = false
@@ -471,13 +478,24 @@ internal fun ImmersiveArtworkPlayer(
                             }
                             .graphicsLayer {
                                 alpha = (1f - shownProgress()).coerceIn(0f, 1f)
-                            }
-                            .immersiveGlassPill(50.dp, lightMode),
+                            },
                         contentAlignment = Alignment.Center
                     ) {
+                        // Home's independent Artist circle is already Liquid
+                        // Glass, so entering Library never swaps materials.
+                        ContinuousLiquidGlassSurface(
+                            radius = 50.dp,
+                            lightMode = lightMode,
+                            liquidGlassEnabled = liquidGlassEnabled,
+                            hazeState = liveBackdrop,
+                            hazeAlpha = liveGlassAlpha,
+                            modifier = Modifier.matchParentSize()
+                        )
                         ImmersiveAction(lightMode, NusaPlayerIcons.Artist,
                             immersiveText("Buka halaman artis", "Open artist page"),
-                            onArtist, hasSong && !artistOpen && !libraryOpen, iconSize = 23.dp)
+                            onArtist, hasSong && !artistOpen && !libraryOpen,
+                            iconSize = 23.dp,
+                            liquidMotion = liquidGlassEnabled)
                     }
                     // Reserve its space to keep the player geometry stable.
                     // The actual pill and hit targets live in the top overlay.
@@ -564,22 +582,19 @@ internal fun ImmersiveArtworkPlayer(
                         .size(56.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    // The original circle fades away as this separate
-                    // frosted version fades in. Neither becomes a pill item.
-                    Box(
-                        Modifier.matchParentSize().graphicsLayer {
-                            alpha = 1f - libraryArtistCircleOpacity(shownProgress())
-                        }.immersiveGlassPill(50.dp, lightMode)
-                    )
-                    Box(
-                        Modifier.matchParentSize().graphicsLayer {
-                            alpha = libraryArtistCircleOpacity(shownProgress())
-                        }.immersiveGlassPill(
-                            50.dp,
-                            emphasized = true,
-                            liquidGlass = liquidGlassEnabled,
-                            hazeState = liveBackdrop
-                        )
+                    // The Library Artist bubble uses the EXACT same material
+                    // as its real counterpart on Home. Only its draw-phase
+                    // opacity changes with the transition.
+                    ContinuousLiquidGlassSurface(
+                        radius = 50.dp,
+                        lightMode = lightMode,
+                        liquidGlassEnabled = liquidGlassEnabled,
+                        hazeState = liveBackdrop,
+                        hazeAlpha = liveGlassAlpha,
+                        modifier = Modifier.matchParentSize()
+                            .graphicsLayer {
+                                alpha = libraryArtistCircleOpacity(shownProgress())
+                            }
                     )
                     // The circle ICON fades on the exact same progress as
                     // its frosted layers and the navigation pill's materials.
@@ -616,6 +631,7 @@ internal fun ImmersiveArtworkPlayer(
                 overlayOpen = overlayOpen,
                 hazeState = liveBackdrop,
                 liquidGlassEnabled = liquidGlassEnabled,
+                hazeAlpha = liveGlassAlpha,
                 hasSong = hasSong,
                 onLyrics = onLyrics,
                 onLibrary = onLibrary,
@@ -646,6 +662,7 @@ private fun ImmersiveOverlayActionPill(
     overlayOpen: Boolean,
     hazeState: HazeState?,
     liquidGlassEnabled: Boolean,
+    hazeAlpha: Float,
     hasSong: Boolean,
     onLyrics: () -> Unit,
     onLibrary: () -> Unit,
@@ -677,24 +694,16 @@ private fun ImmersiveOverlayActionPill(
             IntOffset(left.roundToInt(), anchorY.roundToInt())
         }.width(width).height(56.dp)
     ) {
-        // Keep the two surfaces composed during the full transition. Their
-        // draw-phase alpha is driven by the SAME progress as the moving
-        // circle, including a cancelled swipe. Never switch the material
-        // only when portalMounted finally becomes false.
-        Box(
-            Modifier.matchParentSize()
-                .graphicsLayer { alpha = (1f - progress()).coerceIn(0f, 1f) }
-                .immersiveGlassPill(100.dp, lightMode)
-        )
-        Box(
-            Modifier.matchParentSize()
-                .graphicsLayer { alpha = progress().coerceIn(0f, 1f) }
-                .immersiveGlassPill(
-                    100.dp,
-                    emphasized = true,
-                    liquidGlass = liquidGlassEnabled,
-                    hazeState = hazeState
-                )
+        // One continuous material on every page: the fallback lens never
+        // disappears and the actual Haze layer fades over it only when the
+        // content source is idle. No old->new material crossfade on Home.
+        ContinuousLiquidGlassSurface(
+            radius = 100.dp,
+            lightMode = lightMode,
+            liquidGlassEnabled = liquidGlassEnabled,
+            hazeState = hazeState,
+            hazeAlpha = hazeAlpha,
+            modifier = Modifier.matchParentSize()
         )
         Row(
             Modifier.fillMaxSize(),
@@ -748,6 +757,53 @@ private fun ImmersiveOverlayActionPill(
                     liquidMotion = liquidGlassEnabled
                 )
             }
+        }
+    }
+}
+
+
+/**
+ * A single navigation material used by both Now Playing controls and the
+ * floating Artist/Library controls. When enabled the optical fallback remains
+ * visible during gestures and GPU Haze is added only after the content settles.
+ * When disabled the pre-existing simple pill is used on every page.
+ *
+ * The backdrop fades independently of position, so there is no sudden
+ * opaque-to-glass switch at the last frame of a portal transition.
+ */
+@Composable
+private fun ContinuousLiquidGlassSurface(
+    radius: Dp,
+    lightMode: Boolean,
+    liquidGlassEnabled: Boolean,
+    hazeState: HazeState?,
+    hazeAlpha: Float,
+    modifier: Modifier = Modifier
+) {
+    Box(modifier) {
+        Box(
+            Modifier.matchParentSize().immersiveGlassPill(
+                radius = radius,
+                lightMode = lightMode,
+                emphasized = liquidGlassEnabled,
+                liquidGlass = liquidGlassEnabled,
+                hazeState = null
+            )
+        )
+        if (liquidGlassEnabled && hazeState != null) {
+            Box(
+                Modifier.matchParentSize()
+                    .graphicsLayer {
+                        alpha = hazeAlpha.coerceIn(0f, 1f)
+                    }
+                    .immersiveGlassPill(
+                        radius = radius,
+                        lightMode = lightMode,
+                        emphasized = true,
+                        liquidGlass = true,
+                        hazeState = hazeState
+                    )
+            )
         }
     }
 }
