@@ -14,11 +14,12 @@ class MiuixPagerMotionTest {
         assertEquals(0f, v.scrimAlpha, 0.001f)
     }
 
-    @Test fun nextPageRevealsWithOnlyThreePercentPhysicalDrift() {
+    @Test fun adjacentPageGlidesTwentyFourPercentWithRestrainedDepth() {
         val v = miuixPagerVisuals(1f, 1080f, false)
-        // Native pager would move 1080px; transform counters 97% of it.
-        assertEquals(1047.6f, v.translationX, 0.1f)
-        assertEquals(1f, v.scale, 0.001f)
+        // Native 1080px travel minus 76% compensation leaves 259.2px.
+        assertEquals(820.8f, v.translationX, 0.1f)
+        assertEquals(259.2f, 1080f - v.translationX, 0.1f)
+        assertEquals(0.984f, v.scale, 0.001f)
         assertEquals(0f, v.scrimAlpha, 0.001f)
         assertEquals(0f, v.alpha, 0.001f)
     }
@@ -39,8 +40,8 @@ class MiuixPagerMotionTest {
         val left = miuixPagerVisuals(-0.4f, 1080f, false)
         assertEquals(-right.translationX, left.translationX, 0.001f)
         assertEquals(right.alpha, left.alpha, 0.001f)
-        assertEquals(1f, right.scale, 0.001f)
-        assertEquals(1f, left.scale, 0.001f)
+        assertEquals(right.scale, left.scale, 0.001f)
+        assertTrue(right.scale < 1f)
     }
 
     @Test fun rtlMirrorsMotionWithoutChangingFade() {
@@ -54,11 +55,33 @@ class MiuixPagerMotionTest {
         for (depth in listOf(-1f, -0.8f, -0.4f, 0f, 0.4f, 0.8f, 1f)) {
             val v = miuixPagerVisuals(depth, 1080f, false)
             assertTrue(v.alpha in 0f..1f)
-            assertEquals(1f, v.scale, 0.001f)
+            assertTrue(v.scale in 0.984f..1f)
             assertEquals(0f, v.scrimAlpha, 0.001f)
         }
         assertEquals(1f, miuixPagerVisuals(0f, 1080f, false).alpha, 0.001f)
         assertEquals(0f, miuixPagerVisuals(1f, 1080f, false).alpha, 0.001f)
+    }
+
+    @Test fun physicalGlideIsMonotonicOnEveryReversibleSwipe() {
+        for (sign in listOf(-1f, 1f)) {
+            var lastTravel = -1f
+            for (step in 0..100) {
+                val fraction = step / 100f
+                val visuals = miuixPagerVisuals(sign * fraction, 1080f, false)
+                val physicalTravel = kotlin.math.abs(sign * fraction * 1080f - visuals.translationX)
+                assertTrue(physicalTravel + 0.01f >= lastTravel)
+                assertTrue(physicalTravel <= 259.3f)
+                lastTravel = physicalTravel
+            }
+        }
+    }
+
+    @Test fun incomingPageLeadsOnlyDuringMotion() {
+        assertEquals(1f, miuixPageZIndex(1, 1, false), 0f)
+        assertEquals(0f, miuixPageZIndex(0, 1, false), 0f)
+        assertEquals(0f, miuixPageZIndex(1, 1, true), 0f)
+        assertEquals(1f, miuixPageZIndex(0, 1, true), 0f)
+        assertEquals(1f, miuixPageZIndex(2, 1, true), 0f)
     }
 
     @Test fun invalidInputsNeverProduceNaN() {

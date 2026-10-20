@@ -27,7 +27,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.zIndex
 
 // Critically damped: natural response to a release, no rubber-band overshoot.
-internal val miuixPageSpring = spring<Float>(dampingRatio = 1f, stiffness = 240f, visibilityThreshold = 1f)
+internal val miuixPageSpring = spring<Float>(dampingRatio = 1f, stiffness = 275f, visibilityThreshold = 1f)
 
 internal suspend fun PagerState.animateMiuixScrollToPage(page: Int) {
     animateScrollToPage(page = page, animationSpec = miuixPageSpring)
@@ -100,20 +100,20 @@ internal fun MiuixHorizontalPager(
         }
         Box(
             Modifier.fillMaxSize()
-                // A graphicsLayer with alpha=0 still participates in hit testing.
-                // Keep the settled page above its overlapping neighbours, and
-                // give even its empty background a pointer target. Otherwise a
-                // transparent Library row can steal taps on Now Playing.
-                .zIndex(if (page == state.settledPage) 1f else 0f)
-                // Hold pages almost in place as one gently reveals the next.
-                // The layer transform runs on the render path, not in Compose
-                // layout or expensive per-frame bitmap blur calculations.
+                // Place the incoming MIUIX layer above the outgoing page while
+                // swiping, then return ownership to the settled page at rest.
+                // Hidden neighbours still cannot intercept player button taps.
+                .zIndex(miuixPageZIndex(page, state.settledPage, state.isScrollInProgress))
+                // Preserve a perceptible 24% glide with subtle layer depth.
+                // Pure GPU transforms: no layout remeasure or new blur decoding.
                 .graphicsLayer {
                     val depth = state.currentPage +
                         state.currentPageOffsetFraction - page
                     val visuals = miuixPagerVisuals(depth, size.width, isRtl)
                     translationX = visuals.translationX
                     alpha = visuals.alpha
+                    scaleX = visuals.scale
+                    scaleY = visuals.scale
                     clip = true
                 }
                 .pagerPageInput { interactive }

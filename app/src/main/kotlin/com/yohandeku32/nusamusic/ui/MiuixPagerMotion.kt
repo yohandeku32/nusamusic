@@ -11,15 +11,15 @@ internal data class MiuixPagerVisuals(
 )
 
 /**
- * Soft reveal instead of a horizontal slide.
+ * MIUIX-style layered glide, not a stationary cross-fade or a full-page slide.
  *
- * HorizontalPager still owns touch handling and accessibility, but we cancel
- * 97% of its automatic page translation. Pages then drift only ~3% of the
- * screen width as their content softly dissolves into each other.
+ * The underlying HorizontalPager still owns drag/fling physics and accessibility.
+ * Cancel 76% of its native translation, leaving 24% real physical movement
+ * under the finger. A restrained 1.6% depth scale makes each page feel layered.
+ * Incoming content draws above the departing page while the gesture is active.
  *
- * Eased distance-squared opacity keeps the combined layers bright at the midpoint,
- * preventing the noticeable dim flash of a conventional two-way 50% fade.
- * No overshoot, zoom, corner morph, scrims or extra per-frame blur work.
+ * The eased opacity keeps the midpoint bright and both endpoints gentle;
+ * no black scrim, corner morph, overshoot or additional artwork blur work.
  */
 internal fun miuixPagerVisuals(
     relativeDepth: Float, widthPx: Float, isRtl: Boolean
@@ -33,11 +33,11 @@ internal fun miuixPagerVisuals(
     val easedDistance = distance * distance * (3f - 2f * distance)
     val opacity = (1f - easedDistance * easedDistance).coerceIn(0f, 1f)
     return MiuixPagerVisuals(
-        translationX = normalizedDepth * width * 0.97f * if (isRtl) -1f else 1f,
+        translationX = normalizedDepth * width * 0.76f * if (isRtl) -1f else 1f,
         alpha = opacity,
         scrimAlpha = 0f,
         leadingCornerFraction = 0f,
-        scale = 1f
+        scale = 1f - 0.016f * easedDistance
     )
 }
 
@@ -46,3 +46,12 @@ internal fun miuixPageAcceptsInput(
     offsetFraction: Float, scrolling: Boolean
 ): Boolean = !scrolling && page == settledPage && page == currentPage &&
     offsetFraction.isFinite() && kotlin.math.abs(offsetFraction) < 0.001f
+
+/** During a swipe the incoming layer is on top; at rest the settled page owns
+ * the visible surface. Hit testing is separately guarded by pagerPageInput. */
+internal fun miuixPageZIndex(page: Int, settledPage: Int, scrolling: Boolean): Float =
+    if (scrolling) {
+        if (page == settledPage) 0f else 1f
+    } else {
+        if (page == settledPage) 1f else 0f
+    }
