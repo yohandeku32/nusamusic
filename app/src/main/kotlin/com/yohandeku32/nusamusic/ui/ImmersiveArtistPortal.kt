@@ -232,3 +232,8 @@ internal fun libraryActionPillLeftPx(
     pillExtraWidthPx: Float
 ): Float = libraryArtistCircleLeftPx(artistStartPx, pillExtraWidthPx) +
     circleWidthPx + gapPx
+
+/** Library's independent Artist circle and the pill must share identical
+ * fade progress, including finger-driven partial dismissal. */
+internal fun libraryArtistCircleOpacity(openProgress: Float): Float =
+    if (openProgress.isFinite()) openProgress.coerceIn(0f, 1f) else 0f

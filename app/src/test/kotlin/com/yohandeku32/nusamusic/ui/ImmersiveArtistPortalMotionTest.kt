@@ -29,6 +29,18 @@ class ImmersiveArtistPortalMotionTest {
         assertEquals(false, shouldDismissOverlaySwipe(0f, -130f, 64f))
     }
 
+    @Test fun libraryArtistCircleAndPillUseTheSameFadeProgress() {
+        for (progress in 0..100) {
+            val open = progress / 100f
+            val circle = libraryArtistCircleOpacity(open)
+            assertEquals(open, circle, 0.001f)
+            assertEquals(1f, circle + (1f - circle), 0.001f)
+        }
+        assertEquals(0f, libraryArtistCircleOpacity(-1f), 0.001f)
+        assertEquals(1f, libraryArtistCircleOpacity(2f), 0.001f)
+        assertEquals(0f, libraryArtistCircleOpacity(Float.NaN), 0.001f)
+    }
+
     @Test fun libraryKeepsArtistCircleOutsidePillWithFixedGap() {
         // The 48dp Home expansion shifts the whole group by 24dp left,
         // without ever moving Artist into the right-hand pill.

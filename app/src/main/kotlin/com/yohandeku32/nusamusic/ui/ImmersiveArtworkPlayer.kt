@@ -23,8 +23,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.animation.core.spring
@@ -33,6 +31,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -567,12 +567,12 @@ internal fun ImmersiveArtworkPlayer(
                     // frosted version fades in. Neither becomes a pill item.
                     Box(
                         Modifier.matchParentSize().graphicsLayer {
-                            alpha = (1f - shownProgress()).coerceIn(0f, 1f)
+                            alpha = 1f - libraryArtistCircleOpacity(shownProgress())
                         }.immersiveGlassPill(50.dp, lightMode)
                     )
                     Box(
                         Modifier.matchParentSize().graphicsLayer {
-                            alpha = shownProgress().coerceIn(0f, 1f)
+                            alpha = libraryArtistCircleOpacity(shownProgress())
                         }.immersiveGlassPill(
                             50.dp,
                             emphasized = true,
@@ -580,10 +580,17 @@ internal fun ImmersiveArtworkPlayer(
                             hazeState = liveBackdrop
                         )
                     )
+                    // The circle ICON fades on the exact same progress as
+                    // its frosted layers and the navigation pill's materials.
+                    // The original player Artist icon fades in below it while
+                    // this one moves back into the same physical position.
                     IconButton(
                         onClick = onArtist,
                         enabled = hasSong && libraryOpen,
                         modifier = Modifier.fillMaxSize()
+                            .graphicsLayer {
+                                alpha = libraryArtistCircleOpacity(shownProgress())
+                            }
                     ) {
                         Icon(
                             NusaPlayerIcons.Artist,
@@ -719,7 +726,7 @@ private fun ImmersiveOverlayActionPill(
                 )
             }
             ImmersiveAction(
-                lightMode, Icons.Rounded.Settings,
+                lightMode, NusaPlayerIcons.Settings,
                 immersiveText("Pengaturan", "Settings"),
                 onSettings, iconSize = 23.dp, iconTint = iconColor,
                 liquidMotion = liquidGlassEnabled
@@ -757,12 +764,17 @@ private fun ImmersiveAction(
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
     val touchScale by animateFloatAsState(
-        targetValue = if (liquidMotion && pressed) 0.94f else 1f,
+        targetValue = if (liquidMotion && pressed) 0.945f else 1f,
         animationSpec = spring(
             dampingRatio = 0.86f,
             stiffness = 680f
         ),
         label = "liquidNavigationPress"
+    )
+    val pressLight by animateFloatAsState(
+        targetValue = if (liquidMotion && pressed && enabled) 1f else 0f,
+        animationSpec = spring(dampingRatio = 0.87f, stiffness = 750f),
+        label = "liquidPressReflection"
     )
     IconButton(
         onClick = onClick,
@@ -772,7 +784,31 @@ private fun ImmersiveAction(
             .graphicsLayer {
                 scaleX = touchScale
                 scaleY = touchScale
-            }.semantics { selected = active }
+            }
+            // A tiny caustic glint blooms under the finger on touch, then
+            // recedes. Unlike a ripple it stays within the round tap target.
+            .drawWithCache {
+                val highlight = Brush.radialGradient(
+                    listOf(
+                        Color.White.copy(alpha = 0.16f * pressLight),
+                        Color.White.copy(alpha = 0.045f * pressLight),
+                        Color.Transparent
+                    ),
+                    center = Offset(size.width * 0.34f, size.height * 0.26f),
+                    radius = size.width * 0.63f
+                )
+                onDrawWithContent {
+                    drawContent()
+                    if (liquidMotion && pressLight > 0.001f) {
+                        drawCircle(
+                            brush = highlight,
+                            radius = size.width * 0.49f,
+                            center = center
+                        )
+                    }
+                }
+            }
+            .semantics { selected = active }
     ) {
         Icon(icon, label, tint = (iconTint ?: if (lightMode) Color(0xFF171A20) else Color.White)
             .copy(alpha = if (!enabled) 0.26f else if (active) 1f else 0.68f),

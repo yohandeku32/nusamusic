@@ -5,6 +5,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
@@ -52,15 +56,18 @@ internal fun Modifier.immersiveGlassPill(
             .background(
                 Brush.verticalGradient(
                     listOf(
-                        Color.White.copy(alpha = 0.075f),
-                        Color.White.copy(alpha = 0.017f),
-                        Color.Black.copy(alpha = 0.055f)
+                        Color.White.copy(alpha = 0.072f),
+                        Color.White.copy(alpha = 0.010f),
+                        Color.Black.copy(alpha = 0.058f)
                     )
                 )
             )
-            // Keep only a hairline glint: a bright outline looks like an
-            // old bordered capsule rather than floating frosted glass.
-            .border(0.6.dp, Color.White.copy(alpha = 0.085f), shape)
+            // Refractive-looking meniscus: the thin curved edge catches light
+            // while soft radial light pools make the capsule read as wet
+            // optical glass rather than a flat translucent grey rectangle.
+            // It is draw-cache only; no shader, video capture or heavy blur.
+            .liquidGlassOptics()
+            .border(0.45.dp, Color.White.copy(alpha = 0.045f), shape)
     }
 
     // The lightweight fallback avoids backdrop recording entirely during
@@ -72,7 +79,10 @@ internal fun Modifier.immersiveGlassPill(
                 listOf(Color(0xC82B303C), Color(0xAF1D222D))
             )
         )
-        .border(0.5.dp, Color.White.copy(alpha = 0.075f), shape)
+        // During a swipe the inexpensive fallback still has the same
+        // rounded lens silhouette so switching into live Haze is unobtrusive.
+        .then(if (liquidGlass) Modifier.liquidGlassOptics() else Modifier)
+        .border(0.45.dp, Color.White.copy(alpha = 0.045f), shape)
 
     // The original lighter Now Playing control and quality badges remain as
     // they were before the new Artist/Library glass treatments.
@@ -87,4 +97,48 @@ internal fun Modifier.immersiveGlassPill(
             else Color.White.copy(alpha = 0.08f),
             shape
         )
+}
+
+/**
+ * Cached micro-highlights for the navigation layer. Water droplets have
+ * a brighter outer meniscus and broad, faint internal reflections, unlike
+ * a uniformly white stroke. Keep these deliberately restrained so moving
+ * song covers remain legible behind the Haze source.
+ */
+private fun Modifier.liquidGlassOptics(): Modifier = this.drawWithCache {
+    val radius = CornerRadius(size.height * 0.5f, size.height * 0.5f)
+    val topPool = Brush.radialGradient(
+        colors = listOf(
+            Color.White.copy(alpha = 0.105f),
+            Color.White.copy(alpha = 0.027f),
+            Color.Transparent
+        ),
+        center = Offset(size.width * 0.18f, size.height * 0.02f),
+        radius = size.width.coerceAtLeast(size.height) * 0.60f
+    )
+    val bottomPool = Brush.radialGradient(
+        colors = listOf(
+            Color(0xFFBDD9FF).copy(alpha = 0.060f),
+            Color.Transparent
+        ),
+        center = Offset(size.width * 0.89f, size.height * 0.99f),
+        radius = size.width.coerceAtLeast(size.height) * 0.47f
+    )
+    val meniscus = Brush.verticalGradient(
+        0f to Color.White.copy(alpha = 0.20f),
+        0.26f to Color.White.copy(alpha = 0.065f),
+        0.55f to Color.Transparent,
+        1f to Color.White.copy(alpha = 0.045f)
+    )
+    val meniscusWidth = 1.05.dp.toPx()
+    onDrawWithContent {
+        drawContent()
+        drawRoundRect(brush = topPool, cornerRadius = radius)
+        drawRoundRect(brush = bottomPool, cornerRadius = radius)
+        drawRoundRect(
+            brush = meniscus,
+            cornerRadius = radius,
+            style = Stroke(width = meniscusWidth)
+        )
+    }
 }
