@@ -5,6 +5,13 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ImmersiveArtistPortalMotionTest {
+    @Test fun slowDownwardSwipeDismissesButNormalScrollAndHorizontalGesturesDoNot() {
+        assertTrue(shouldDismissOverlaySwipe(8f, 140f, 96f))
+        assertEquals(false, shouldDismissOverlaySwipe(8f, 40f, 96f))
+        assertEquals(false, shouldDismissOverlaySwipe(120f, 140f, 96f))
+        assertEquals(false, shouldDismissOverlaySwipe(0f, -130f, 96f))
+    }
+
     @Test fun pillStartsToTheRightOfArtistCircleAndCentersWhenOpen() {
         val circleLeft = 34f
         val diameter = 56f

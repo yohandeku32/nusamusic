@@ -3,11 +3,14 @@ package com.yohandeku32.nusamusic.ui
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.Animatable
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.unit.IntOffset
 import kotlin.math.roundToInt
 import androidx.compose.foundation.background
@@ -75,6 +78,10 @@ internal fun ImmersiveArtworkPlayer(
     artistOpen: Boolean = false,
     onArtistClose: () -> Unit = {},
     artistProfile: @Composable () -> Unit = {},
+    libraryOpen: Boolean = false,
+    libraryLightMode: Boolean = false,
+    onLibraryClose: () -> Unit = {},
+    libraryContent: @Composable (Boolean) -> Unit = {},
     onLibrary: () -> Unit,
     onShare: () -> Unit,
     onSettings: () -> Unit,
@@ -92,15 +99,25 @@ internal fun ImmersiveArtworkPlayer(
     // do not recompose the expensive artwork/player on every animation frame.
     val artistLift = remember { Animatable(0f) }
     var portalMounted by remember { mutableStateOf(false) }
-    LaunchedEffect(artistOpen) {
-        if (artistOpen) {
+    var portalSettled by remember { mutableStateOf(false) }
+    var lastOverlayIsLibrary by remember { mutableStateOf(false) }
+    val overlayOpen = artistOpen || libraryOpen
+    LaunchedEffect(artistOpen, libraryOpen) {
+        if (overlayOpen) {
+            lastOverlayIsLibrary = libraryOpen
             portalMounted = true
+            portalSettled = false
+            // First compose the image/list so the first gesture frames
+            // aren't spent allocating their initial LazyColumn layout.
+            withFrameNanos { }
             artistLift.animateTo(
-                1f, animationSpec = tween(660, easing = FastOutSlowInEasing)
+                1f, animationSpec = tween(710, easing = FastOutSlowInEasing)
             )
+            portalSettled = true
         } else {
+            portalSettled = false
             artistLift.animateTo(
-                0f, animationSpec = tween(590, easing = FastOutSlowInEasing)
+                0f, animationSpec = tween(630, easing = FastOutSlowInEasing)
             )
             portalMounted = false
         }
@@ -190,7 +207,10 @@ internal fun ImmersiveArtworkPlayer(
             // The actual floating sheet is rendered over the playback controls.
             Box(Modifier.matchParentSize()
                 .graphicsLayer { alpha = artistLift.value }
-                .background(Color.Black))
+                .background(
+                    if (lastOverlayIsLibrary) immersiveColors(libraryLightMode).background
+                    else Color.Black
+                ))
         }
 
         // Dedicated top composer instead of reflowing the large Now Playing
@@ -423,66 +443,125 @@ internal fun ImmersiveArtworkPlayer(
         }
 
         if (portalMounted) ImmersiveArtistPortal(
-            open = artistOpen,
+            open = overlayOpen,
             progress = { artistLift.value },
             source = artistButtonBounds,
             host = playerBounds,
             topInsetPx = with(density) { topInset.toPx() },
-            onClose = onArtistClose,
-            profile = artistProfile,
+            onClose = if (lastOverlayIsLibrary) onLibraryClose else onArtistClose,
+            canSwipeDown = {
+                if (lastOverlayIsLibrary) true else true
+            },
+            swipeFromHeaderOnly = lastOverlayIsLibrary,
+            showArtistCircle = !lastOverlayIsLibrary,
+            profile = {
+                if (lastOverlayIsLibrary) libraryContent(portalSettled)
+                else artistProfile()
+            },
             modifier = Modifier.fillMaxSize()
         )
 
-        // This is the REAL Lyrics/Library/Share/Settings pill, not a copy.
-        // Draw it after the Artist portal so it belongs visually and
-        // interactively to the full-screen profile whenever that is open.
-        // Its placement is derived from the measured original circular
-        // button, with zero replacement layout or hit-test offsets.
+        // The same interactive pill is drawn OVER either profile. When Library
+        // opens, its own icon shrinks away and the three surviving controls
+        // recenter as a single surface rather than jumping individually.
         val bubble = artistButtonBounds
         val root = playerBounds
         if (bubble != null && root != null) {
-            val bubbleX = bubble.left - root.left
-            val bubbleY = bubble.top - root.top
-            val diameter = with(density) { 56.dp.toPx() }
-            val gap = with(density) { 10.dp.toPx() }
-            Row(
-                Modifier.offset {
-                    IntOffset(
-                        artistPillLeftPx(
-                            bubbleX, diameter, gap, artistLift.value
-                        ).roundToInt(),
-                        bubbleY.roundToInt()
-                    )
-                }
-                    .width(actionPillWidth)
-                    .height(56.dp)
-                    .immersiveGlassPill(100.dp, lightMode),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                if (lyricsEnabled) ImmersiveAction(
-                    lightMode, NusaPlayerIcons.Lyrics,
-                    if (lyricsOpen) immersiveText("Tutup lirik", "Close lyrics")
-                    else immersiveText("Buka lirik", "Open lyrics"),
-                    onLyrics, hasSong, active = lyricsOpen, iconSize = 23.dp
-                )
-                ImmersiveAction(
-                    lightMode, NusaPlayerIcons.Library,
-                    immersiveText("Perpustakaan", "Library"),
-                    onLibrary, iconSize = 23.dp
-                )
-                ImmersiveAction(
-                    lightMode, NusaPlayerIcons.Share,
-                    immersiveText("Bagikan lagu", "Share song"),
-                    onShare, hasSong, iconSize = 23.dp
-                )
-                ImmersiveAction(
-                    lightMode, NusaPlayerIcons.More,
-                    immersiveText("Pengaturan", "Settings"),
-                    onSettings, iconSize = 23.dp
-                )
-            }
+            ImmersiveOverlayActionPill(
+                anchorX = bubble.left - root.left,
+                anchorY = bubble.top - root.top,
+                progress = { artistLift.value },
+                fullWidth = actionPillWidth,
+                lyricsEnabled = lyricsEnabled,
+                lyricsOpen = lyricsOpen,
+                lightMode = if (lastOverlayIsLibrary && portalMounted)
+                    libraryLightMode else lightMode,
+                libraryOpen = libraryOpen,
+                hasSong = hasSong,
+                onLyrics = onLyrics,
+                onLibrary = onLibrary,
+                onShare = onShare,
+                onSettings = onSettings
+            )
         }
+    }
+}
+
+/**
+ * Animate only the bottom row size and placement. Unlike resizing the whole
+ * player or using graphics translation, the pill's hit boxes move with it.
+ * Remaining Lyrics/Share/Settings actions stay live above Library.
+ */
+@Composable
+private fun ImmersiveOverlayActionPill(
+    anchorX: Float,
+    anchorY: Float,
+    progress: () -> Float,
+    fullWidth: Dp,
+    lyricsEnabled: Boolean,
+    lyricsOpen: Boolean,
+    lightMode: Boolean,
+    libraryOpen: Boolean,
+    hasSong: Boolean,
+    onLyrics: () -> Unit,
+    onLibrary: () -> Unit,
+    onShare: () -> Unit,
+    onSettings: () -> Unit
+) {
+    val density = LocalDensity.current
+    val width by animateDpAsState(
+        targetValue = if (libraryOpen) fullWidth - 56.dp else fullWidth,
+        animationSpec = tween(630, easing = FastOutSlowInEasing),
+        label = "libraryPillWidth"
+    )
+    Row(
+        Modifier.offset {
+            val circle = with(density) { 56.dp.toPx() }
+            val gap = with(density) { 10.dp.toPx() }
+            val compensate = with(density) { (fullWidth - width).toPx() } * 0.5f
+            IntOffset(
+                (artistPillLeftPx(anchorX, circle, gap, progress()) +
+                    compensate).roundToInt(),
+                anchorY.roundToInt()
+            )
+        }
+            .width(width)
+            .height(56.dp)
+            .immersiveGlassPill(100.dp, lightMode),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceEvenly
+    ) {
+        if (lyricsEnabled) ImmersiveAction(
+            lightMode, NusaPlayerIcons.Lyrics,
+            if (lyricsOpen) immersiveText("Tutup lirik", "Close lyrics")
+            else immersiveText("Buka lirik", "Open lyrics"),
+            onLyrics, hasSong, active = lyricsOpen, iconSize = 23.dp
+        )
+        AnimatedVisibility(
+            visible = !libraryOpen,
+            enter = expandHorizontally(
+                animationSpec = tween(580, easing = FastOutSlowInEasing)
+            ) + fadeIn(tween(350)),
+            exit = shrinkHorizontally(
+                animationSpec = tween(580, easing = FastOutSlowInEasing)
+            ) + fadeOut(tween(260))
+        ) {
+            ImmersiveAction(
+                lightMode, NusaPlayerIcons.Library,
+                immersiveText("Perpustakaan", "Library"),
+                onLibrary, iconSize = 23.dp
+            )
+        }
+        ImmersiveAction(
+            lightMode, NusaPlayerIcons.Share,
+            immersiveText("Bagikan lagu", "Share song"),
+            onShare, hasSong, iconSize = 23.dp
+        )
+        ImmersiveAction(
+            lightMode, NusaPlayerIcons.More,
+            immersiveText("Pengaturan", "Settings"),
+            onSettings, iconSize = 23.dp
+        )
     }
 }
 

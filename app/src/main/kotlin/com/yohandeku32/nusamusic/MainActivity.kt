@@ -1840,16 +1840,16 @@ private fun NusaMusicApp(
     var isFavorite by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var artistOverlayOpen by remember { mutableStateOf(false) }
-    // Resume Media3 animated artwork only AFTER the circle has returned to
-    // the bottom pill. Decoder wake-up should not compete with the 590ms
-    // close animation or create a hitch on its final frames.
-    var artistVideoSuspended by remember { mutableStateOf(false) }
-    LaunchedEffect(artistOverlayOpen) {
-        if (artistOverlayOpen) {
-            artistVideoSuspended = true
-        } else if (artistVideoSuspended) {
+    var libraryOverlayOpen by remember { mutableStateOf(false) }
+    // Decode animated artwork only after either immersive overlay has fully
+    // closed; restarting Media3 while the pill is moving causes a brief hitch.
+    var immersiveVideoSuspended by remember { mutableStateOf(false) }
+    LaunchedEffect(artistOverlayOpen, libraryOverlayOpen) {
+        if (artistOverlayOpen || libraryOverlayOpen) {
+            immersiveVideoSuspended = true
+        } else if (immersiveVideoSuspended) {
             delay(630L)
-            artistVideoSuspended = false
+            immersiveVideoSuspended = false
         }
     }
     var deleteFromLibrary by remember { mutableStateOf<Song?>(null) }
@@ -2068,12 +2068,18 @@ private fun NusaMusicApp(
     val playerPage = 0
     val libraryPage = 1
     var libraryWasVisible by remember { mutableStateOf(false) }
-    val pagerState = androidx.compose.foundation.pager.rememberPagerState(
-        initialPage = if (libraryWasVisible) libraryPage else playerPage,
-        pageCount = { 2 }
-    )
+    val pagerState = androidx.compose.runtime.key(artistPageEnabled) {
+        androidx.compose.foundation.pager.rememberPagerState(
+            initialPage = if (!artistPageEnabled && libraryWasVisible)
+                libraryPage else playerPage,
+            pageCount = { if (artistPageEnabled) 1 else 2 }
+        )
+    }
     LaunchedEffect(playerPresentationMode) {
-        if (!artistPageEnabled) artistOverlayOpen = false
+        if (!artistPageEnabled) {
+            artistOverlayOpen = false
+            libraryOverlayOpen = false
+        }
     }
     val playerScrollState =
         androidx.compose.foundation.lazy.rememberLazyListState()
@@ -2332,7 +2338,10 @@ private fun NusaMusicApp(
         if (pagerState.settledPage != playerPage) lyricsRequested = false
     }
     LaunchedEffect(pagerState.settledPage) {
-        if (pagerState.settledPage != playerPage) artistOverlayOpen = false
+        if (pagerState.settledPage != playerPage) {
+            artistOverlayOpen = false
+            libraryOverlayOpen = false
+        }
     }
 
     val keyboardForPager = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
@@ -2380,7 +2389,8 @@ private fun NusaMusicApp(
                 state = pagerState,
                 backgroundColor = pageBackdrop,
                 modifier = Modifier.fillMaxSize(),
-                userScrollEnabled = !artistOverlayOpen,
+                userScrollEnabled = !artistPageEnabled &&
+                    !artistOverlayOpen && !libraryOverlayOpen,
                 // The library has its own surface, but NO artificial backing
                 // patch. The previous overlapping page now supplies the real
                 // corner pixels while swiping in either direction.
@@ -2422,6 +2432,7 @@ private fun NusaMusicApp(
                                 onFavorite = { isFavorite = !isFavorite },
                                 onLyrics = {
                                     artistOverlayOpen = false
+                                    libraryOverlayOpen = false
                                     lyricsRequested = !lyricsRequested
                                 },
                                 onArtist = {
@@ -2429,6 +2440,7 @@ private fun NusaMusicApp(
                                         lyricsRequested = false
                                         artistPageState.selectedAlbumKey = null
                                         scope.launch { artistPageState.listState.scrollToItem(0) }
+                                        libraryOverlayOpen = false
                                         artistOverlayOpen = true
                                     }
                                 },
@@ -2465,13 +2477,48 @@ private fun NusaMusicApp(
                                         overlayMode = true
                                     )
                                 },
+                                libraryOpen = libraryOverlayOpen,
+                                libraryLightMode = libraryLightMode,
+                                onLibraryClose = { libraryOverlayOpen = false },
+                                libraryContent = { settled ->
+                                    ImmersiveMusicLibrary(
+                                        songs = songs,
+                                        currentSong = currentSong,
+                                        isPlaying = isPlaying,
+                                        isVisible = libraryOverlayOpen && settled,
+                                        lightMode = libraryLightMode,
+                                        hasMusicAccess = hasMusicAccess,
+                                        isScanning = isScanningMusic,
+                                        emptyMessage = emptyLibraryMessage,
+                                        onReturnToPlayer = { libraryOverlayOpen = false },
+                                        onPlay = { selected, queue ->
+                                            libraryOverlayOpen = false
+                                            onPlay(selected, queue)
+                                        },
+                                        onPlayNext = onPlayNext,
+                                        onDeleteSong = onDeleteSong,
+                                        onShare = { onShare(it) },
+                                        onTogglePlay = onTogglePlay,
+                                        onScanMusic = onScanMusic,
+                                        onRequestPermission = onRequestPermission,
+                                        artwork = { track, tileModifier ->
+                                            ArtworkView(
+                                                song = track, maxSizePx = 144,
+                                                loadDelayMs = 32L, grainOverlay = false,
+                                                modifier = tileModifier
+                                            )
+                                        }
+                                    )
+                                },
                                 onLibrary = {
                                     artistOverlayOpen = false
-                                    scope.launch { pagerState.animateMiuixScrollToPage(libraryPage) }
+                                    lyricsRequested = false
+                                    libraryOverlayOpen = true
                                 },
                                 onShare = { onShare(currentSong) },
                                 onSettings = {
                                     artistOverlayOpen = false
+                                    libraryOverlayOpen = false
                                     showSettings = true
                                 },
                                 artwork = { artworkModifier, heroHeight, heroWidth ->
@@ -2480,7 +2527,8 @@ private fun NusaMusicApp(
                                         artworkModifier, lyricsMode = lyricsRequested,
                                         sourceOrder = artworkSourceOrder,
                                         playerPageVisible = pagerState.settledPage == playerPage &&
-                                            !artistOverlayOpen && !artistVideoSuspended,
+                                            !artistOverlayOpen && !libraryOverlayOpen &&
+                                            !immersiveVideoSuspended,
                                         pageReveal = {
                                             // Renderer reads the changing pager
                                             // offset only inside graphicsLayer.

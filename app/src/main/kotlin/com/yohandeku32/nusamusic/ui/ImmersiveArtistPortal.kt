@@ -1,6 +1,10 @@
 package com.yohandeku32.nusamusic.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
@@ -36,6 +40,9 @@ internal fun ImmersiveArtistPortal(
     host: Rect?,
     topInsetPx: Float,
     onClose: () -> Unit,
+    canSwipeDown: () -> Boolean = { true },
+    swipeFromHeaderOnly: Boolean = false,
+    showArtistCircle: Boolean = true,
     profile: @Composable () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -46,7 +53,36 @@ internal fun ImmersiveArtistPortal(
     val sourceY = anchor.top - root.top
     val destX = with(density) { 20.dp.toPx() }
     val destY = topInsetPx + with(density) { 10.dp.toPx() }
-    Box(modifier) {
+    val minSwipe = with(density) { 96.dp.toPx() }
+    val maxHeaderY = topInsetPx + with(density) { 118.dp.toPx() }
+    Box(modifier.pointerInput(open, swipeFromHeaderOnly, onClose) {
+        awaitEachGesture {
+            val down = awaitFirstDown(
+                requireUnconsumed = false, pass = PointerEventPass.Initial
+            )
+            val acceptsStart = !swipeFromHeaderOnly ||
+                down.position.y <= maxHeaderY
+            var deltaX = 0f
+            var deltaY = 0f
+            var pointer = down.id
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                val change = event.changes.firstOrNull { it.id == pointer }
+                    ?: event.changes.firstOrNull { it.pressed } ?: break
+                if (!change.pressed) {
+                    if (open && acceptsStart && canSwipeDown() &&
+                        shouldDismissOverlaySwipe(deltaX, deltaY, minSwipe)) {
+                        onClose()
+                    }
+                    break
+                }
+                val diff = change.position - change.previousPosition
+                deltaX += diff.x
+                deltaY += diff.y
+                pointer = change.id
+            }
+        }
+    }) {
         // Full-screen profile from the very TOP to the very BOTTOM.
         // Previously it was restricted to pillTop and padded down by
         // toolbarHeight, exposing black cut-off bands above and below.
@@ -57,15 +93,18 @@ internal fun ImmersiveArtistPortal(
             Modifier.fillMaxSize()
                 .graphicsLayer {
                     val p = progress().coerceIn(0f, 1f)
-                    translationY = (1f - p) * size.height * 0.32f
-                    alpha = ((p - 0.06f) / 0.88f).coerceIn(0f, 1f)
-                    clip = true
+                    // Keep the hero artwork fully measured. Only a restrained
+                    // 14dp lift + gradual reveal; large clipped translations
+                    // made the cover look severed as it entered the viewport.
+                    translationY = (1f - p) * 14.dp.toPx()
+                    alpha = ((p - 0.04f) / 0.94f).coerceIn(0f, 1f)
+                    clip = false
                 }
         ) {
             profile()
         }
 
-        Box(
+        if (showArtistCircle) Box(
             Modifier.offset {
                 IntOffset(sourceX.roundToInt(), sourceY.roundToInt())
             }
@@ -99,3 +138,10 @@ internal fun artistPillLeftPx(
     val shift = (circlePx + gapPx) * 0.5f * progress.coerceIn(0f, 1f)
     return artistLeftPx + circlePx + gapPx - shift
 }
+
+/** Directional, thresholded release avoids interpreting a small list scroll
+ * or horizontal finger wobble as a request to close the profile. */
+internal fun shouldDismissOverlaySwipe(
+    deltaX: Float, deltaY: Float, thresholdPx: Float
+): Boolean = deltaY.isFinite() && deltaX.isFinite() &&
+    deltaY >= thresholdPx && deltaY > kotlin.math.abs(deltaX) * 1.35f
