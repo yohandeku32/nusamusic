@@ -80,4 +80,37 @@ class ImmersiveArtistPortalMotionTest {
         val midpoint = artistPillLeftPx(34f, 56f, 10f, 0.5f)
         assertEquals(83.5f, midpoint, 0.001f)
     }
+
+    @Test fun blackPillBlendsIntoHomeGlassWithoutAClosingFrameJump() {
+        assertEquals(0f, solidNavigationReveal(0f), 0.001f)
+        assertEquals(1f, solidNavigationReveal(1f), 0.001f)
+        assertEquals(0.5f, solidNavigationReveal(0.5f), 0.001f)
+        assertEquals(0f, solidNavigationReveal(Float.NaN), 0.001f)
+        assertEquals(0f, solidNavigationReveal(Float.NEGATIVE_INFINITY), 0.001f)
+        assertEquals(0f, solidNavigationReveal(-0.25f), 0.001f)
+        assertEquals(1f, solidNavigationReveal(1.25f), 0.001f)
+        var previous = 1f
+        for (step in 1..100) {
+            val fraction = solidNavigationReveal(1f - step / 100f)
+            assertTrue(fraction <= previous)
+            assertEquals(fraction, libraryArtistCircleOpacity(fraction), 0.001f)
+            previous = fraction
+        }
+        assertEquals(0f, previous, 0.001f)
+    }
+
+    @Test fun libraryArtistGlyphStartsAtHomeXAndShiftsContinuously() {
+        val anchor = 34f
+        val increase = 48f
+        assertEquals(anchor, libraryArtistCircleLeftPx(anchor, increase * 0f), 0.001f)
+        assertEquals(10f, libraryArtistCircleLeftPx(anchor, increase), 0.001f)
+        var previous = anchor
+        for (step in 1..100) {
+            val fraction = step / 100f
+            val x = libraryArtistCircleLeftPx(anchor, increase * fraction)
+            assertTrue(x <= previous)
+            assertTrue(kotlin.math.abs(x - previous) <= 0.25f)
+            previous = x
+        }
+    }
 }
