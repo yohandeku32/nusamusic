@@ -2,6 +2,7 @@ package com.yohandeku32.nusamusic.ui
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
 import org.junit.Test
 
 class MiuixPagerMotionTest {
@@ -66,5 +67,45 @@ class MiuixPagerMotionTest {
         assertTrue(v.alpha.isFinite())
         assertTrue(v.scale.isFinite())
         assertTrue(v.scrimAlpha.isFinite())
+    }
+
+    @Test fun transparentNeighboursCannotAcceptTapsOnSettledPlayer() {
+        for (page in 0..2) {
+            assertEquals(page == 1, miuixPageAcceptsInput(page, 1, 1, 0f, false))
+        }
+    }
+
+    @Test fun noPageAcceptsPlaybackTapsWhileDraggingOrSettlingInEitherDirection() {
+        for (settled in 0..2) {
+            for (current in 0..2) {
+                for (page in 0..2) {
+                    for (offset in listOf(-0.49f, 0f, 0.49f)) {
+                        assertFalse(miuixPageAcceptsInput(page, settled, current, offset, true))
+                    }
+                }
+            }
+        }
+        // Midpoint currentPage change must not activate the incoming page.
+        assertFalse(miuixPageAcceptsInput(0, 1, 0, 0f, false))
+        assertFalse(miuixPageAcceptsInput(1, 1, 1, 0.1f, false))
+        assertFalse(miuixPageAcceptsInput(1, 1, 1, Float.NaN, false))
+    }
+
+    @Test fun destinationAndCancelledSwipeRestoreOnlyTheirOwnControls() {
+        assertTrue(miuixPageAcceptsInput(0, 0, 0, 0f, false))
+        assertFalse(miuixPageAcceptsInput(1, 0, 0, 0f, false))
+        assertTrue(miuixPageAcceptsInput(1, 1, 1, 0f, false))
+        assertFalse(miuixPageAcceptsInput(0, 1, 1, 0f, false))
+    }
+
+    @Test fun revealHasSoftEndpointsAndMonotonicOpacity() {
+        assertTrue(miuixPagerVisuals(0.01f, 1080f, false).alpha > 0.999f)
+        assertTrue(miuixPagerVisuals(0.99f, 1080f, false).alpha < 0.001f)
+        var last = 1f
+        for (step in 0..100) {
+            val alpha = miuixPagerVisuals(step / 100f, 1080f, false).alpha
+            assertTrue(alpha <= last)
+            last = alpha
+        }
     }
 }

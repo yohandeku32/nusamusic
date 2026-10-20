@@ -12,6 +12,8 @@ import androidx.compose.foundation.pager.PagerSnapDistance
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -20,10 +22,12 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.zIndex
 
 // Critically damped: natural response to a release, no rubber-band overshoot.
-internal val miuixPageSpring = spring<Float>(dampingRatio = 1f, stiffness = 300f, visibilityThreshold = 1f)
+internal val miuixPageSpring = spring<Float>(dampingRatio = 1f, stiffness = 240f, visibilityThreshold = 1f)
 
 internal suspend fun PagerState.animateMiuixScrollToPage(page: Int) {
     animateScrollToPage(page = page, animationSpec = miuixPageSpring)
@@ -86,8 +90,21 @@ internal fun MiuixHorizontalPager(
             snapAnimationSpec = miuixPageSpring
         )
     ) { page ->
+        val interactive by remember(state, page) {
+            derivedStateOf {
+                miuixPageAcceptsInput(
+                    page, state.settledPage, state.currentPage,
+                    state.currentPageOffsetFraction, state.isScrollInProgress
+                )
+            }
+        }
         Box(
             Modifier.fillMaxSize()
+                // A graphicsLayer with alpha=0 still participates in hit testing.
+                // Keep the settled page above its overlapping neighbours, and
+                // give even its empty background a pointer target. Otherwise a
+                // transparent Library row can steal taps on Now Playing.
+                .zIndex(if (page == state.settledPage) 1f else 0f)
                 // Hold pages almost in place as one gently reveals the next.
                 // The layer transform runs on the render path, not in Compose
                 // layout or expensive per-frame bitmap blur calculations.
@@ -97,10 +114,45 @@ internal fun MiuixHorizontalPager(
                     val visuals = miuixPagerVisuals(depth, size.width, isRtl)
                     translationX = visuals.translationX
                     alpha = visuals.alpha
+                    clip = true
                 }
+                .pagerPageInput { interactive }
+                .then(if (interactive) Modifier else Modifier.clearAndSetSemantics { })
                 .background(backgroundColor)
         ) {
             content(page)
         }
     }
 }
+
+/**
+ * Cancel taps begun on a hidden/moving page, including a second finger during
+ * settling. Never consume movement: the ancestor Pager must still own swipes.
+ * Once blocked, a gesture stays blocked even if settling ends before finger-up.
+ */
+internal fun Modifier.pagerPageInput(acceptsInput: () -> Boolean): Modifier =
+    pointerInput(Unit) {
+        awaitEachGesture {
+            val down = awaitFirstDown(false, PointerEventPass.Initial)
+            var blocked = !acceptsInput()
+            var dragged = false
+            if (blocked) down.consume()
+            do {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                event.changes.firstOrNull { it.id == down.id }?.let { change ->
+                    dragged = dragged ||
+                        (change.position - down.position).getDistance() > viewConfiguration.touchSlop
+                }
+                blocked = blocked || !acceptsInput()
+                if (blocked) {
+                    event.changes.forEach { change ->
+                        val newDown = change.pressed && !change.previousPressed
+                        val tapUp = !change.pressed && change.previousPressed && !dragged
+                        // Leave a drag's UP intact so Pager can calculate fling
+                        // velocity and settle. Its drag already cancelled clicks.
+                        if (newDown || tapUp) change.consume()
+                    }
+                }
+            } while (event.changes.any { it.pressed })
+        }
+    }

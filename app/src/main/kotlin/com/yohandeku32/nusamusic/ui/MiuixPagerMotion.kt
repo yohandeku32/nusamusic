@@ -17,7 +17,7 @@ internal data class MiuixPagerVisuals(
  * 97% of its automatic page translation. Pages then drift only ~3% of the
  * screen width as their content softly dissolves into each other.
  *
- * Distance-squared opacity keeps the combined layers bright at the midpoint,
+ * Eased distance-squared opacity keeps the combined layers bright at the midpoint,
  * preventing the noticeable dim flash of a conventional two-way 50% fade.
  * No overshoot, zoom, corner morph, scrims or extra per-frame blur work.
  */
@@ -28,7 +28,10 @@ internal fun miuixPagerVisuals(
     val width = widthPx.takeIf { it.isFinite() && it > 0f } ?: 0f
     val normalizedDepth = depth.coerceIn(-1f, 1f)
     val distance = abs(normalizedDepth)
-    val opacity = (1f - distance * distance).coerceIn(0f, 1f)
+    // Zero slope at both ends avoids a sudden appearance/disappearance when
+    // the gesture starts or the settling spring reaches its destination.
+    val easedDistance = distance * distance * (3f - 2f * distance)
+    val opacity = (1f - easedDistance * easedDistance).coerceIn(0f, 1f)
     return MiuixPagerVisuals(
         translationX = normalizedDepth * width * 0.97f * if (isRtl) -1f else 1f,
         alpha = opacity,
@@ -37,3 +40,9 @@ internal fun miuixPagerVisuals(
         scale = 1f
     )
 }
+
+internal fun miuixPageAcceptsInput(
+    page: Int, settledPage: Int, currentPage: Int,
+    offsetFraction: Float, scrolling: Boolean
+): Boolean = !scrolling && page == settledPage && page == currentPage &&
+    offsetFraction.isFinite() && kotlin.math.abs(offsetFraction) < 0.001f

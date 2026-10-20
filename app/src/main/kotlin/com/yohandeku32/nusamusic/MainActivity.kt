@@ -1864,6 +1864,15 @@ private fun NusaMusicApp(
             ArtistNameUtils.firstArtist(currentSong?.artist)
         ).also { artistPageStates.put(artistKey, it) }
     }
+    // The Artist hero reuses the exact decoded current cover. No second
+    // thumbnail decode/placeholder/crossfade while the user is swiping.
+    var artistTransitionCover by remember(currentSong?.uri) {
+        mutableStateOf(currentSong?.let { song ->
+            ImmersiveArtworkCache.cached(song)?.cover ?: ArtworkLoader.cached(
+                song.uri, 1_600, song.albumId.takeIf { it > 0L }?.toString()
+            )
+        })
+    }
     val uiPrefs = remember(context) {
         context.getSharedPreferences("ui_preferences", android.content.Context.MODE_PRIVATE)
     }
@@ -2307,6 +2316,14 @@ private fun NusaMusicApp(
     LaunchedEffect(pagerState.settledPage) {
         if (pagerState.settledPage != playerPage) lyricsRequested = false
     }
+    // Returning from Now Playing opens the current artist's overview with the
+    // current song's cover, rather than a retained album deep-link below it.
+    LaunchedEffect(pagerState.settledPage, artistPageState, artistPageEnabled) {
+        if (artistPageEnabled && pagerState.settledPage == playerPage) {
+            artistPageState.selectedAlbumKey = null
+            artistPageState.listState.scrollToItem(0)
+        }
+    }
 
     val keyboardForPager = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val focusForPager = androidx.compose.ui.platform.LocalFocusManager.current
@@ -2369,6 +2386,20 @@ private fun NusaMusicApp(
                         onPlay = onPlay,
                         artwork = { song, modifier ->
                             ArtworkView(song = song, maxSizePx = 512, modifier = modifier, grainOverlay = false)
+                        },
+                        heroArtwork = { song, modifier ->
+                            val sharedCover = artistTransitionCover
+                            if (song.uri == currentSong?.uri && sharedCover != null) {
+                                Image(
+                                    bitmap = sharedCover.asImageBitmap(),
+                                    contentDescription = song.title,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = modifier
+                                )
+                            } else {
+                                ArtworkView(song, maxSizePx = 1_600,
+                                    modifier = modifier, grainOverlay = false)
+                            }
                         }
                     )
                     page == playerPage -> {
@@ -2402,7 +2433,16 @@ private fun NusaMusicApp(
                                         currentSong, animatedArtworkEnabled, heroHeight, heroWidth,
                                         artworkModifier, lyricsMode = lyricsRequested,
                                         sourceOrder = artworkSourceOrder,
-                                        playerPageVisible = pagerState.settledPage == playerPage
+                                        playerPageVisible = pagerState.settledPage == playerPage,
+                                        artistReveal = {
+                                            if (artistPageEnabled)
+                                                (playerPage - pagerState.currentPage -
+                                                    pagerState.currentPageOffsetFraction).coerceIn(0f, 1f)
+                                            else 0f
+                                        },
+                                        onCoverReady = { uri, cover ->
+                                            if (uri == currentSong?.uri) artistTransitionCover = cover
+                                        }
                                     )
                                 },
                                 progress = { progressModifier ->
@@ -4309,7 +4349,9 @@ private fun ImmersiveArtwork(
     lyricsMode: Boolean = false,
     lightMode: Boolean = false,
     sourceOrder: ArtworkSourceOrder = ArtworkSourceOrder.APPLE_FIRST,
-    playerPageVisible: Boolean = true
+    playerPageVisible: Boolean = true,
+    artistReveal: () -> Float = { 0f },
+    onCoverReady: (String, Bitmap) -> Unit = { _, _ -> }
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     // Open the persistent MP4 cache off the UI thread while Apple is searched.
@@ -4332,6 +4374,15 @@ private fun ImmersiveArtwork(
         }
     }
     var artwork by remember { mutableStateOf(initialCover) }
+    var artworkSongUri by remember {
+        mutableStateOf(song?.uri.takeIf { initialCover != null })
+    }
+    val latestCoverReady by rememberUpdatedState(onCoverReady)
+    LaunchedEffect(artwork, artworkSongUri) {
+        val cover = artwork
+        val uri = artworkSongUri
+        if (cover != null && uri != null) latestCoverReady(uri, cover)
+    }
     var staticBlur by remember { mutableStateOf(initialSnapshot?.blur) }
     // Do not swap to the plain cover or a black placeholder between Next
     // presses. Hold whichever real ambient was last visible until the next
@@ -4373,6 +4424,7 @@ private fun ImmersiveArtwork(
             val prepared = prepareImmersiveArtwork(bitmap)
             // Publish the actual cover + its blur in the same snapshot.
             artwork = bitmap
+            artworkSongUri = targetSong.uri
             staticBlur = prepared.first
             retainedAmbientBlur = prepared.first
             backdrop = prepared.second
@@ -4385,6 +4437,7 @@ private fun ImmersiveArtwork(
         val restored = ImmersiveArtworkCache.restore(context, targetSong)
         if (restored != null) {
             artwork = restored.cover
+            artworkSongUri = targetSong.uri
             staticBlur = restored.blur
             retainedAmbientBlur = restored.blur
             backdrop = Color(restored.backdrop)
@@ -4402,6 +4455,7 @@ private fun ImmersiveArtwork(
                 // regenerating it and restarting a full-screen crossfade on
                 // every Next -> Previous revisit.
                 artwork = cachedFullArtwork
+                artworkSongUri = targetSong.uri
             } else if (cachedFullArtwork !== artwork || staticBlur == null) {
                 publish(cachedFullArtwork)
             }
@@ -4420,6 +4474,7 @@ private fun ImmersiveArtwork(
         )
         if (restored == null && cachedPreview != null && cachedPreview !== artwork) {
             artwork = cachedPreview
+            artworkSongUri = targetSong.uri
         }
 
         val loaded = ArtworkLoader.load(
@@ -4434,6 +4489,7 @@ private fun ImmersiveArtwork(
             // Existing disk-restored ambient is valid for this track; the
             // higher-resolution hero can change without a second blur fade.
             artwork = loaded
+            artworkSongUri = targetSong.uri
         } else if (loaded == null && restored == null && cachedPreview != null) {
             // Full-size extraction can fail for some formats; settle on the
             // thumbnail's blur rather than keeping another song's ambience.
@@ -4530,7 +4586,13 @@ private fun ImmersiveArtwork(
                     AnimatedArtworkVideoBackground(
                         url = activeUrl,
                         playbackVisible = !lyricsMode && playerPageVisible,
-                        modifier = Modifier.fillMaxSize(),
+                        // Reveal the same still cover used by Artist as the
+                        // gesture progresses. Reversing the swipe restores the
+                        // existing video; no new decoder or URL lookup.
+                        modifier = Modifier.fillMaxSize().graphicsLayer {
+                            val reveal = artistReveal()
+                            alpha = 1f - reveal * reveal * (3f - 2f * reveal)
+                        },
                         captureBackdrop = frozenAnimatedBlur == null,
                         onBackdropReady = { blurredFrame, frameColor ->
                             if (animatedArtworkUrl == activeUrl && frozenAnimatedBlur == null) {

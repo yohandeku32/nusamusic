@@ -54,7 +54,8 @@ fun ImmersiveArtistPage(
     state: ImmersiveArtistPageState,
     onBack: () -> Unit,
     onPlay: (Song, List<Song>) -> Unit,
-    artwork: @Composable (Song, Modifier) -> Unit
+    artwork: @Composable (Song, Modifier) -> Unit,
+    heroArtwork: @Composable (Song, Modifier) -> Unit = artwork
 ) {
     val artist = ArtistNameUtils.firstArtist(artistName)
     val displayName = artist.ifBlank { artistText("Artis", "Artist") }
@@ -113,7 +114,7 @@ fun ImmersiveArtistPage(
                         .background(artistSurface)
                 ) {
                     if (heroSong != null) {
-                        artwork(heroSong, Modifier.fillMaxSize())
+                        heroArtwork(heroSong, Modifier.fillMaxSize())
                     } else {
                         Box(
                             Modifier.fillMaxSize().background(
