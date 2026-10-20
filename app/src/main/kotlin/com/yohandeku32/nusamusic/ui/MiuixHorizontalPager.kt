@@ -2,18 +2,23 @@ package com.yohandeku32.nusamusic.ui
 
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PageSize
 import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.pager.PagerSnapDistance
 import androidx.compose.foundation.pager.PagerState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -21,17 +26,22 @@ import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 
-// Critically damped settle, with no rubber-band overshoot. Native pager
-// scrolling carries the full page so both the image and touch area line up.
-internal val miuixPageSpring = spring<Float>(dampingRatio = 1f, stiffness = 330f, visibilityThreshold = 1f)
+// One physics engine for gestures, button navigation and cancellation. The
+// moving page and its touch targets stay under native HorizontalPager layout.
+internal val miuixPageSpring = spring<Float>(
+    dampingRatio = 1f, stiffness = 330f, visibilityThreshold = 1f
+)
 
 internal suspend fun PagerState.animateMiuixScrollToPage(page: Int) {
     animateScrollToPage(page = page, animationSpec = miuixPageSpring)
@@ -44,130 +54,158 @@ internal fun MiuixHorizontalPager(
     modifier: Modifier = Modifier,
     userScrollEnabled: Boolean = true,
     onHorizontalSwipeStarted: () -> Unit = {},
-    // The actual page surface and the subtly contrasting outer corner
-    // backing are provided separately. A light Library must never inherit
-    // the player pager's black background at its rounded corners.
     pageSurface: (Int) -> Color = { backgroundColor },
-    pageCornerBacking: (Int) -> Color = pageSurface,
     content: @Composable (Int) -> Unit
 ) {
     val swipeAction by rememberUpdatedState(onHorizontalSwipeStarted)
-    // Single reusable outline. A 28dp leading curve makes the card edge
-    // recognizable without rounding the right edge or distorting content.
-    val cardShape = remember { RoundedCornerShape(topStart = 28.dp, bottomStart = 28.dp) }
-    HorizontalPager(
-        state = state,
-        modifier = modifier.background(backgroundColor).clipToBounds()
-            // Observe the swipe at Initial pass without consuming it. Pager
-            // retains full control over the gesture; the keyboard is dismissed
-            // at touch-slop crossing, not when the page settles.
-            .pointerInput(userScrollEnabled) {
-                if (!userScrollEnabled) return@pointerInput
-                awaitEachGesture {
-                    val down = awaitFirstDown(
-                        requireUnconsumed = false,
-                        pass = PointerEventPass.Initial
-                    )
-                    val touchSlop = viewConfiguration.touchSlop
-                    var horizontal = 0f
-                    var vertical = 0f
-                    var pointer = down.id
-                    while (true) {
-                        val event = awaitPointerEvent(PointerEventPass.Initial)
-                        val change = event.changes.firstOrNull { it.id == pointer }
-                            ?: event.changes.firstOrNull { it.pressed }
-                            ?: break
-                        if (!change.pressed) break
-                        val delta = change.position - change.previousPosition
-                        horizontal += delta.x
-                        vertical += delta.y
-                        if (kotlin.math.abs(horizontal) > touchSlop &&
-                            kotlin.math.abs(horizontal) > kotlin.math.abs(vertical) * 1.15f
-                        ) {
-                            swipeAction()
-                            break
-                        }
-                        pointer = change.id
-                    }
-                }
-            },
-        beyondViewportPageCount = 1,
-        userScrollEnabled = userScrollEnabled,
-        // Android's stretch overscroll reads as jelly at the first/last page.
-        overscrollEffect = null,
-        flingBehavior = PagerDefaults.flingBehavior(
-            state = state,
-            pagerSnapDistance = PagerSnapDistance.atMost(1),
-            snapAnimationSpec = miuixPageSpring
-        )
-    ) { page ->
-        val interactive by remember(state, page) {
-            derivedStateOf {
-                miuixPageAcceptsInput(
-                    page, state.settledPage, state.currentPage,
-                    state.currentPageOffsetFraction, state.isScrollInProgress
-                )
-            }
+    val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+
+    // The page is 36dp wider than the viewport, with a matching negative
+    // spacing. The scroll stride therefore stays EXACTLY one screen wide.
+    // Every page owns a real 36dp underlay behind the next card's cut-out.
+    // No screenshot, fake translation, transparent filler, or page-coordinate
+    // mismatch is needed, even on a very slow or reversed swipe.
+    val underlap = 36.dp
+    val overlappingPageSize = remember {
+        object : PageSize {
+            override fun Density.calculateMainAxisPageSize(
+                availableSpace: Int, pageSpacing: Int
+            ): Int = (availableSpace - pageSpacing).coerceAtLeast(1)
         }
-        val surface = pageSurface(page)
-        val backing = pageCornerBacking(page)
-        Box(
-            Modifier.fillMaxSize()
-                // Paint a full-rectangle *theme-aware* backing OUTSIDE the
-                // rounded graphics layer. Otherwise the light Library reveals
-                // the pager's black base through the top-left cutout.
-                // The quiet cool-grey backing is visible only in the curve.
-                .background(backing)
-                // Fixed iOS-style navigation order (Artist, Player, Library).
-                // No z-index flips in the middle of a gesture.
-                .zIndex(miuixPageZIndex(page))
-                // No custom X translation, alpha or scale: the native pager
-                // keeps every visual at its true hit-test coordinate.
-                // Clip only the leading corners of the moving front card.
-                // The backing is above this modifier, so it stays un-clipped.
-                .graphicsLayer {
-                    val position = state.currentPage + state.currentPageOffsetFraction
-                    val card = miuixCardVisuals(page, position, state.isScrollInProgress)
-                    shape = cardShape
-                    clip = card.shadowElevationDp > 0f
-                    shadowElevation = card.shadowElevationDp.dp.toPx()
-                }
-                // Cheap internal edge shadow makes the card separation
-                // visible even if the pager clips real elevation outside
-                // the page bounds. The brush is cached; only alpha changes.
-                .drawWithCache {
-                    val band = 36.dp.toPx()
-                    val brush = Brush.horizontalGradient(
-                        0f to Color.Black,
-                        0.22f to Color.Black.copy(alpha = 0.54f),
-                        1f to Color.Transparent,
-                        startX = 0f, endX = band
-                    )
-                    onDrawWithContent {
-                        drawContent()
-                        val position = state.currentPage + state.currentPageOffsetFraction
-                        val card = miuixCardVisuals(page, position, state.isScrollInProgress)
-                        if (card.edgeShadeAlpha > 0f) {
-                            drawRect(brush = brush, alpha = card.edgeShadeAlpha,
-                                size = Size(band, size.height))
+    }
+    val cardShape = remember(isRtl) {
+        if (isRtl) RoundedCornerShape(topEnd = 26.dp, bottomEnd = 26.dp)
+        else RoundedCornerShape(topStart = 26.dp, bottomStart = 26.dp)
+    }
+
+    BoxWithConstraints(modifier.background(backgroundColor).clipToBounds()) {
+        // Content is constrained to the *actual screen*, not the slightly
+        // wider pager cell. Artist, controls, and Library retain their original
+        // measured positions and touch-target coordinates.
+        val viewportWidth = maxWidth
+
+        HorizontalPager(
+            state = state,
+            modifier = Modifier.fillMaxSize()
+                .pointerInput(userScrollEnabled) {
+                    if (!userScrollEnabled) return@pointerInput
+                    awaitEachGesture {
+                        val down = awaitFirstDown(
+                            requireUnconsumed = false,
+                            pass = PointerEventPass.Initial
+                        )
+                        val touchSlop = viewConfiguration.touchSlop
+                        var horizontal = 0f
+                        var vertical = 0f
+                        var pointer = down.id
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            val change = event.changes.firstOrNull { it.id == pointer }
+                                ?: event.changes.firstOrNull { it.pressed }
+                                ?: break
+                            if (!change.pressed) break
+                            val delta = change.position - change.previousPosition
+                            horizontal += delta.x
+                            vertical += delta.y
+                            if (kotlin.math.abs(horizontal) > touchSlop &&
+                                kotlin.math.abs(horizontal) > kotlin.math.abs(vertical) * 1.15f
+                            ) {
+                                swipeAction()
+                                break
+                            }
+                            pointer = change.id
                         }
                     }
+                },
+            pageSize = overlappingPageSize,
+            pageSpacing = -underlap,
+            beyondViewportPageCount = 1,
+            userScrollEnabled = userScrollEnabled,
+            overscrollEffect = null,
+            flingBehavior = PagerDefaults.flingBehavior(
+                state = state,
+                pagerSnapDistance = PagerSnapDistance.atMost(1),
+                snapAnimationSpec = miuixPageSpring
+            )
+        ) { page ->
+            val surface = pageSurface(page)
+            val interactive by remember(state, page) {
+                derivedStateOf {
+                    miuixPageAcceptsInput(
+                        page, state.settledPage, state.currentPage,
+                        state.currentPageOffsetFraction, state.isScrollInProgress
+                    )
                 }
-                .pagerPageInput { interactive }
-                .then(if (interactive) Modifier else Modifier.clearAndSetSemantics { })
-                // Use the correct *per-page* surface even in its status bar
-                // and empty layout areas; never fill Library gaps with black.
-                .background(surface)
-        ) {
-            content(page)
+            }
+            Box(
+                Modifier.fillMaxSize()
+                    // The higher page rests IN FRONT of the previous page
+                    // even when reversing a gesture. Never flip z-index mid-swipe.
+                    .zIndex(miuixPageZIndex(page))
+                    // Only the entering/front card is masked; because the
+                    // previous page actually overlaps for 36dp underneath,
+                    // its real pixels fill the curved corner with no black/gray
+                    // fake patch. Clipping is disabled completely at rest.
+                    .graphicsLayer {
+                        val position = state.currentPage +
+                            state.currentPageOffsetFraction
+                        val card = miuixCardVisuals(
+                            page, position, state.isScrollInProgress
+                        )
+                        val active = card.shadowElevationDp > 0f
+                        shape = if (active) cardShape else RectangleShape
+                        clip = active
+                        shadowElevation = card.shadowElevationDp.dp.toPx()
+                        ambientShadowColor = Color.Black.copy(alpha = 0.28f)
+                        spotShadowColor = Color.Black.copy(alpha = 0.32f)
+                    }
+                    // Drawing stays inside the same card clip. Use a cached
+                    // soft directional seam rather than a second blur layer.
+                    .drawWithCache {
+                        val band = 30.dp.toPx()
+                        val brush = Brush.horizontalGradient(
+                            0f to Color.Black.copy(alpha = 0.7f),
+                            1f to Color.Transparent,
+                            startX = if (isRtl) size.width - band else 0f,
+                            endX = if (isRtl) size.width else band
+                        )
+                        onDrawWithContent {
+                            drawContent()
+                            val position = state.currentPage +
+                                state.currentPageOffsetFraction
+                            val card = miuixCardVisuals(
+                                page, position, state.isScrollInProgress
+                            )
+                            if (card.edgeShadeAlpha > 0f) {
+                                drawRect(
+                                    brush = brush, alpha = card.edgeShadeAlpha,
+                                    topLeft = androidx.compose.ui.geometry.Offset(
+                                        if (isRtl) size.width - band else 0f, 0f
+                                    ),
+                                    size = Size(band, size.height)
+                                )
+                            }
+                        }
+                    }
+                    .pagerPageInput { interactive }
+                    .then(if (interactive) Modifier else Modifier.clearAndSetSemantics { })
+                    // Paint the entire 36dp extension using the real theme.
+                    .background(surface)
+            ) {
+                Box(
+                    Modifier.width(viewportWidth).fillMaxHeight()
+                        .background(surface)
+                ) {
+                    content(page)
+                }
+            }
         }
     }
 }
 
 /**
- * Cancel taps begun on a hidden/moving page, including a second finger during
- * settling. Never consume movement: the ancestor Pager must still own swipes.
- * Once blocked, a gesture stays blocked even if settling ends before finger-up.
+ * Reject a tap that began on a hidden or moving page. Leave drag movement
+ * untouched so HorizontalPager handles velocity, settling and cancellations.
  */
 internal fun Modifier.pagerPageInput(acceptsInput: () -> Boolean): Modifier =
     pointerInput(Unit) {
@@ -180,15 +218,15 @@ internal fun Modifier.pagerPageInput(acceptsInput: () -> Boolean): Modifier =
                 val event = awaitPointerEvent(PointerEventPass.Initial)
                 event.changes.firstOrNull { it.id == down.id }?.let { change ->
                     dragged = dragged ||
-                        (change.position - down.position).getDistance() > viewConfiguration.touchSlop
+                        (change.position - down.position).getDistance() >
+                            viewConfiguration.touchSlop
                 }
                 blocked = blocked || !acceptsInput()
                 if (blocked) {
                     event.changes.forEach { change ->
                         val newDown = change.pressed && !change.previousPressed
-                        val tapUp = !change.pressed && change.previousPressed && !dragged
-                        // Leave a drag's UP intact so Pager can calculate fling
-                        // velocity and settle. Its drag already cancelled clicks.
+                        val tapUp = !change.pressed &&
+                            change.previousPressed && !dragged
                         if (newDown || tapUp) change.consume()
                     }
                 }

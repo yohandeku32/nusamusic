@@ -23,7 +23,7 @@ class MiuixPagerMotionTest {
     @Test fun rightSwipeRevealsArtistBehindTheExistingPlayerCard() {
         val player = miuixCardVisuals(1, 0.5f, true)
         val artist = miuixCardVisuals(0, 0.5f, true)
-        assertEquals(28f, player.cornerRadiusDp, 0f)
+        assertEquals(26f, player.cornerRadiusDp, 0f)
         assertTrue(player.shadowElevationDp > 0f)
         assertTrue(player.edgeShadeAlpha > 0f)
         assertEquals(0f, artist.shadowElevationDp, 0f)
@@ -32,7 +32,7 @@ class MiuixPagerMotionTest {
     @Test fun leftSwipeSlidesLibraryCardOverPlayer() {
         val library = miuixCardVisuals(2, 1.5f, true)
         val player = miuixCardVisuals(1, 1.5f, true)
-        assertEquals(28f, library.cornerRadiusDp, 0f)
+        assertEquals(26f, library.cornerRadiusDp, 0f)
         assertTrue(library.shadowElevationDp > 0f)
         assertEquals(0f, player.shadowElevationDp, 0f)
     }
@@ -55,8 +55,8 @@ class MiuixPagerMotionTest {
         assertEquals(one.edgeShadeAlpha, two.edgeShadeAlpha, 0.001f)
         for (step in 0..100) {
             val v = miuixCardVisuals(1, step / 100f, true)
-            assertTrue(v.shadowElevationDp in 0f..16f)
-            assertTrue(v.edgeShadeAlpha in 0f..0.25f)
+            assertTrue(v.shadowElevationDp in 0f..10f)
+            assertTrue(v.edgeShadeAlpha in 0f..0.16f)
         }
     }
 
@@ -65,11 +65,11 @@ class MiuixPagerMotionTest {
         for (step in 1..9) {
             val position = 1f + step / 100f
             val v = miuixCardVisuals(2, position, true)
-            assertEquals(28f, v.cornerRadiusDp, 0f)
+            assertEquals(26f, v.cornerRadiusDp, 0f)
             assertTrue(v.shadowElevationDp >= lastElevation)
             lastElevation = v.shadowElevationDp
         }
-        assertEquals(16f, lastElevation, 0.001f)
+        assertEquals(10f, lastElevation, 0.001f)
     }
 
     @Test fun returnedToRestHasNoCardEffectAndInvalidInputsAreSafe() {

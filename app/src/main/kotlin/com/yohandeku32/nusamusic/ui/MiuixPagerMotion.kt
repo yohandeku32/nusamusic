@@ -5,14 +5,9 @@ import kotlin.math.ceil
 import kotlin.math.round
 
 /**
- * Navigation-card parameters only. The real page movement MUST remain owned
- * by HorizontalPager; compensating its translation detaches visual positions
- * from Compose hit targets and can send a Now Playing tap to an Artist page.
- *
- * Pages use their native physical X positions, remain fully opaque, and never
- * scale. The front card has a 28dp leading curve and a layered shadow as it
- * slides over the previous page. Its backing matches the light/dark page so
- * black pager pixels cannot show through rounded Library corners.
+ * The pager itself provides the 36dp overlap and native movement, while this
+ * model controls only the front card's clip/shadow. Nothing moves hit regions
+ * with a graphicsLayer translation, crossfade or scaling transform.
  */
 internal data class MiuixCardVisuals(
     val cornerRadiusDp: Float,
@@ -22,32 +17,27 @@ internal data class MiuixCardVisuals(
 
 private val idleCardVisuals = MiuixCardVisuals(0f, 0f, 0f)
 
-/** Increasing page indices form the navigation stack (Artist < Player < Library).
- * The higher page always sits above the lower page, on either swipe direction.
- * Keeping this order constant avoids input-layer swaps during slow dragging.
- */
+// Artist = 0, Now Playing = 1, Library = 2.
+// Fixed stack order works for both swipes and gesture reversals.
 internal fun miuixPageZIndex(page: Int): Float = page.toFloat()
 
 internal fun miuixCardVisuals(
     page: Int, pagerPosition: Float, scrolling: Boolean
 ): MiuixCardVisuals {
-    if (!scrolling || !pagerPosition.isFinite() || page <= 0) return idleCardVisuals
+    if (!scrolling || !pagerPosition.isFinite() || page <= 0)
+        return idleCardVisuals
 
-    // For 0 < position < 1, Player (1) is the front card. For
-    // 1 < position < 2, Library (2) is the front card, both directions.
     val frontPage = ceil(pagerPosition.toDouble()).toInt().coerceAtLeast(1)
     if (page != frontPage) return idleCardVisuals
 
     val distanceFromRest = abs(pagerPosition - round(pagerPosition))
         .coerceIn(0f, 0.5f)
-    // Ramp the visual accent only during the first 9% of travel; a drag
-    // reversed before touch-slop returns to an undisturbed flat screen.
-    val fraction = (distanceFromRest / 0.09f).coerceIn(0f, 1f)
-    val eased = fraction * fraction * (3f - 2f * fraction)
+    val progress = (distanceFromRest / 0.085f).coerceIn(0f, 1f)
+    val eased = progress * progress * (3f - 2f * progress)
     return MiuixCardVisuals(
-        cornerRadiusDp = 28f,
-        shadowElevationDp = 16f * eased,
-        edgeShadeAlpha = 0.25f * eased
+        cornerRadiusDp = 26f,
+        shadowElevationDp = 10f * eased,
+        edgeShadeAlpha = 0.16f * eased
     )
 }
 
@@ -55,4 +45,4 @@ internal fun miuixPageAcceptsInput(
     page: Int, settledPage: Int, currentPage: Int,
     offsetFraction: Float, scrolling: Boolean
 ): Boolean = !scrolling && page == settledPage && page == currentPage &&
-    offsetFraction.isFinite() && kotlin.math.abs(offsetFraction) < 0.001f
+    offsetFraction.isFinite() && abs(offsetFraction) < 0.001f

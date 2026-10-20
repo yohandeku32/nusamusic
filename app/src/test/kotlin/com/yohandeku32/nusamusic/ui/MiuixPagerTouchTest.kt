@@ -50,9 +50,6 @@ class MiuixPagerTouchTest {
                 pager, Color.Black, Modifier.fillMaxSize().testTag("pager"),
                 pageSurface = { page ->
                     if (page == 2) Color(0xFFF8F9FB) else Color.Black
-                },
-                pageCornerBacking = { page ->
-                    if (page == 2) Color(0xFFE9EDF3) else Color.Black
                 }
             ) { page ->
                 Box(Modifier.fillMaxSize()) {
@@ -108,12 +105,31 @@ class MiuixPagerTouchTest {
         }
     }
 
-    @Test fun lightLibraryCardStillReturnsToCorrectPlayerControls() {
+    @Test fun overlappingLightLibraryCardStillReturnsToCorrectPlayerControls() {
         showPager()
         compose.onNodeWithTag("pager").performTouchInput { swipeLeft() }
         compose.waitForIdle()
         compose.runOnIdle { assertEquals(2, pager.settledPage) }
         compose.onNodeWithTag("pager").performTouchInput { swipeRight() }
+        compose.waitForIdle()
+        compose.runOnIdle { assertEquals(1, pager.settledPage) }
+        compose.onNodeWithTag("player-next").performTouchInput { click(center) }
+        compose.runOnIdle {
+            assertEquals(1, nextTaps)
+            assertEquals(listOf(0, 0, 0), plays.toList())
+        }
+    }
+
+    @Test fun slowBackAndForthKeepsNowPlayingNextTargetAligned() {
+        showPager()
+        // Halfway swipes must never redirect a Now Playing button to the
+        // Artist/Library content composed in the actual 36dp underlap.
+        compose.onNodeWithTag("pager").performTouchInput {
+            down(center)
+            moveBy(Offset(width * 0.10f, 0f))
+            moveBy(Offset(-width * 0.10f, 0f))
+            up()
+        }
         compose.waitForIdle()
         compose.runOnIdle { assertEquals(1, pager.settledPage) }
         compose.onNodeWithTag("player-next").performTouchInput { click(center) }

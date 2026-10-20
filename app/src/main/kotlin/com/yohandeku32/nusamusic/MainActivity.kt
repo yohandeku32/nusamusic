@@ -2370,20 +2370,12 @@ private fun NusaMusicApp(
                 state = pagerState,
                 backgroundColor = pageBackdrop,
                 modifier = Modifier.fillMaxSize(),
-                // The light Library has its own near-white page surface.
-                // Keep a slightly contrasting soft-gray sheet *under* its
-                // rounded corners; black from the Now Playing host must not
-                // bleed into the curve when swiping in either direction.
+                // The library has its own surface, but NO artificial backing
+                // patch. The previous overlapping page now supplies the real
+                // corner pixels while swiping in either direction.
                 pageSurface = { page ->
                     if (artistPageEnabled && page == libraryPage) {
                         immersiveColors(libraryLightMode).background
-                    } else pageBackdrop
-                },
-                pageCornerBacking = { page ->
-                    if (artistPageEnabled && page == libraryPage && libraryLightMode) {
-                        Color(0xFFE9EDF3)
-                    } else if (artistPageEnabled && page == libraryPage) {
-                        immersiveColors(false).background
                     } else pageBackdrop
                 },
                 onHorizontalSwipeStarted = {
