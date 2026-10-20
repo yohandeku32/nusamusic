@@ -1865,30 +1865,14 @@ private fun NusaMusicApp(
             ArtistNameUtils.firstArtist(currentSong?.artist)
         ).also { artistPageStates.put(artistKey, it) }
     }
-    // The Artist portal reuses the current cover and its prepared ambient blur.
-    // No network artist request is made while the icon lifts upward.
+    // Artist opens on a true-black surface. Reuse only the existing cover,
+    // avoiding backdrop bitmap decoding and blur work during this animation.
     var artistTransitionCover by remember(currentSong?.uri) {
         mutableStateOf(currentSong?.let { song ->
             ImmersiveArtworkCache.cached(song)?.cover ?: ArtworkLoader.cached(
                 song.uri, 1_600, song.albumId.takeIf { it > 0L }?.toString()
             )
         })
-    }
-    var artistAmbientBitmap by remember(currentSong?.uri) {
-        mutableStateOf(currentSong?.let { ImmersiveArtworkCache.cached(it)?.blur })
-    }
-    LaunchedEffect(currentSong?.uri, artistTransitionCover) {
-        val cached = currentSong?.let { ImmersiveArtworkCache.cached(it)?.blur }
-        if (cached != null) {
-            artistAmbientBitmap = cached
-        } else {
-            val cover = artistTransitionCover
-            if (cover != null) {
-                artistAmbientBitmap = withContext(Dispatchers.Default) {
-                    ArtworkBlur.create(cover)
-                }
-            }
-        }
     }
     val uiPrefs = remember(context) {
         context.getSharedPreferences("ui_preferences", android.content.Context.MODE_PRIVATE)
@@ -2466,8 +2450,7 @@ private fun NusaMusicApp(
                                                     modifier = modifier, grainOverlay = false)
                                             }
                                         },
-                                        overlayMode = true,
-                                        ambientArtwork = artistAmbientBitmap
+                                        overlayMode = true
                                     )
                                 },
                                 onLibrary = {

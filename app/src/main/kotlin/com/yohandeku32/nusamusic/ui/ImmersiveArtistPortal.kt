@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
@@ -22,14 +23,18 @@ import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 
 /**
- * Artist expands vertically from the measured 56dp circular player action.
- * The four other actions remain in their original bottom pill; the profile
- * panel terminates immediately above that pill.
+ * One 660ms compositor-only timeline. The artist circle rises smoothly from
+ * its measured bottom pill coordinate into its own black 76dp toolbar; the
+ * full-width artwork begins below that toolbar so the icon never covers it.
+ *
+ * No blur, layout-frame animation, whole-page scaling, bounce or overlaid
+ * artwork leaks. The independently sliding pill is still the REAL pill,
+ * with the real touch targets moved by an offset placement modifier.
  */
 @Composable
 internal fun ImmersiveArtistPortal(
     open: Boolean,
-    progress: Float,
+    progress: () -> Float,
     source: Rect?,
     host: Rect?,
     topInsetPx: Float,
@@ -37,41 +42,45 @@ internal fun ImmersiveArtistPortal(
     profile: @Composable () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    if (!open && progress <= 0.001f) return
     val anchor = source ?: return
     val root = host ?: return
     val density = LocalDensity.current
-    val fraction = progress.coerceIn(0f, 1f)
-    val startX = anchor.left - root.left
-    val startY = anchor.top - root.top
-    val destinationY = topInsetPx + with(density) { 12.dp.toPx() }
-    val currentY = startY + (destinationY - startY) * fraction
-    val diameter = with(density) { 56.dp.toPx() }
-    val panelBottom = (startY - with(density) { 8.dp.toPx() })
-        .coerceIn(diameter * 2f, root.height)
-    val panelAlpha = ((fraction - 0.18f) / 0.72f).coerceIn(0f, 1f)
-    val lift = with(density) { 16.dp.toPx() }
+    val sourceX = anchor.left - root.left
+    val sourceY = anchor.top - root.top
+    val destX = with(density) { 20.dp.toPx() }
+    val destY = topInsetPx + with(density) { 10.dp.toPx() }
+    val pillTop = (sourceY - with(density) { 10.dp.toPx() })
+        .coerceIn(0f, root.height)
+    val toolbarHeight = topInsetPx + with(density) { 78.dp.toPx() }
+    val panelHeight = pillTop.coerceAtLeast(toolbarHeight)
 
     Box(modifier) {
-        if (panelAlpha > 0.001f) {
-            Box(
-                Modifier.fillMaxWidth()
-                    .height(with(density) { panelBottom.toDp() })
-                    .graphicsLayer {
-                        alpha = panelAlpha
-                        translationY = (1f - fraction) * lift
-                    }
-            ) {
-                profile()
-            }
+        // The entire underlying screen transitions to opaque black; the
+        // profile stays fully clipped above the four-button pill.
+        Box(
+            Modifier.fillMaxWidth()
+                .height(with(density) { panelHeight.toDp() })
+                .graphicsLayer {
+                    val p = progress().coerceIn(0f, 1f)
+                    translationY = (1f - p) * size.height * 0.32f
+                    alpha = ((p - 0.06f) / 0.88f).coerceIn(0f, 1f)
+                    clip = true
+                }
+                .padding(top = with(density) { toolbarHeight.toDp() })
+        ) {
+            profile()
         }
+
         Box(
             Modifier.offset {
-                IntOffset(startX.roundToInt(), currentY.roundToInt())
+                IntOffset(sourceX.roundToInt(), sourceY.roundToInt())
             }
                 .size(56.dp)
                 .graphicsLayer {
-                    alpha = (fraction * 2f).coerceIn(0f, 1f)
+                    val p = progress().coerceIn(0f, 1f)
+                    translationX = (destX - sourceX) * p
+                    translationY = (destY - sourceY) * p
+                    alpha = p
                 }
                 .immersiveGlassPill(50.dp)
                 .clickable(enabled = open, onClick = onClose)

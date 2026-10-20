@@ -19,10 +19,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.foundation.Image
-import androidx.compose.ui.layout.ContentScale
-import android.graphics.Bitmap
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -60,8 +56,7 @@ fun ImmersiveArtistPage(
     onPlay: (Song, List<Song>) -> Unit,
     artwork: @Composable (Song, Modifier) -> Unit,
     heroArtwork: @Composable (Song, Modifier) -> Unit = artwork,
-    overlayMode: Boolean = false,
-    ambientArtwork: Bitmap? = null
+    overlayMode: Boolean = false
 ) {
     val artist = ArtistNameUtils.firstArtist(artistName)
     val displayName = artist.ifBlank { artistText("Artis", "Artist") }
@@ -111,22 +106,9 @@ fun ImmersiveArtistPage(
         )
     }
     MaterialTheme(colorScheme = artistScheme) {
-        Box(Modifier.fillMaxSize().background(artistBase)) {
-            if (overlayMode && ambientArtwork != null) {
-                Image(
-                    bitmap = ambientArtwork.asImageBitmap(),
-                    contentDescription = null,
-                    contentScale = ContentScale.FillBounds,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-            if (overlayMode) {
-                Box(Modifier.matchParentSize().background(
-                    Brush.verticalGradient(
-                        listOf(Color(0xB8090B11), Color(0xE60A0B10), artistBase)
-                    )
-                ))
-            }
+        Box(Modifier.fillMaxSize().background(
+            if (overlayMode) Color.Black else artistBase
+        )) {
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
@@ -134,12 +116,14 @@ fun ImmersiveArtistPage(
             ) {
             item(key = "artist-hero") {
                 Box(
-                    Modifier.fillMaxWidth().height(if (overlayMode) 316.dp else 450.dp)
-                        .background(if (overlayMode) Color.Transparent else artistSurface)
+                    // Full-width, edge-to-edge album art: no little inset
+                    // cover thumbnail and no floating icon overlapping it.
+                    Modifier.fillMaxWidth().height(if (overlayMode) 360.dp else 450.dp)
+                        .background(if (overlayMode) Color.Black else artistSurface)
                 ) {
-                    if (heroSong != null && !overlayMode) {
+                    if (heroSong != null) {
                         heroArtwork(heroSong, Modifier.fillMaxSize())
-                    } else if (!overlayMode) {
+                    } else {
                         Box(
                             Modifier.fillMaxSize().background(
                                 Brush.linearGradient(
@@ -155,7 +139,7 @@ fun ImmersiveArtistPage(
                             )
                         }
                     }
-                    if (!overlayMode) Box(
+                    Box(
                         Modifier.matchParentSize().background(
                             Brush.verticalGradient(
                                 0f to Color.Black.copy(alpha = 0.22f),
@@ -182,12 +166,6 @@ fun ImmersiveArtistPage(
                         Modifier.align(Alignment.BottomStart).fillMaxWidth()
                             .padding(horizontal = 24.dp).padding(bottom = 22.dp)
                     ) {
-                        if (overlayMode && heroSong != null) {
-                            Box(Modifier.size(92.dp).clip(RoundedCornerShape(21.dp))) {
-                                heroArtwork(heroSong, Modifier.fillMaxSize())
-                            }
-                            Spacer(Modifier.height(16.dp))
-                        }
                         Text(
                             if (selectedAlbum == null)
                                 artistText("ARTIS • KOLEKSI LOKAL", "ARTIST • YOUR LIBRARY")

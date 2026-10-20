@@ -7,6 +7,9 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.Animatable
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -84,17 +87,28 @@ internal fun ImmersiveArtworkPlayer(
 ) {
     var playerBounds by remember { mutableStateOf<Rect?>(null) }
     var artistButtonBounds by remember { mutableStateOf<Rect?>(null) }
+    // One predictable, non-overshooting timeline moves BOTH the circle and
+    // the four-action pill. Read Animatable only in draw/placement modifiers;
+    // do not recompose the expensive artwork/player on every animation frame.
+    val artistLift = remember { Animatable(0f) }
+    var portalMounted by remember { mutableStateOf(false) }
+    LaunchedEffect(artistOpen) {
+        if (artistOpen) {
+            portalMounted = true
+            artistLift.animateTo(
+                1f, animationSpec = tween(660, easing = FastOutSlowInEasing)
+            )
+        } else {
+            artistLift.animateTo(
+                0f, animationSpec = tween(590, easing = FastOutSlowInEasing)
+            )
+            portalMounted = false
+        }
+    }
     BoxWithConstraints(modifier.onGloballyPositioned { coordinates ->
         val bounds = coordinates.boundsInRoot()
         if (playerBounds != bounds) playerBounds = bounds
     }) {
-        val artistPortalProgress by animateFloatAsState(
-            targetValue = if (artistOpen) 1f else 0f,
-            animationSpec = androidx.compose.animation.core.spring(
-                dampingRatio = 0.90f, stiffness = 340f
-            ),
-            label = "artistCircleToProfile"
-        )
         val primaryInk = if (lightMode) Color(0xFF171A20) else Color.White
         val mutedInk = primaryInk.copy(alpha = 0.72f)
         val density = LocalDensity.current
@@ -170,6 +184,14 @@ internal fun ImmersiveArtworkPlayer(
                 .coerceIn(maxHeight * 0.45f, maxHeight * 0.80f)
         val heroHeight by animateDpAsState(requestedHero, tween(220), label = "immersiveHeroHeight")
         artwork(Modifier.matchParentSize(), heroHeight, if (wide) (1f - controlsFraction + 0.06f) else 1f)
+        if (portalMounted) {
+            // Opaque full-screen black underlay, including BELOW the profile.
+            // No blurred cover or colored artwork can leak around the pill.
+            // The actual floating sheet is rendered over the playback controls.
+            Box(Modifier.matchParentSize()
+                .graphicsLayer { alpha = artistLift.value }
+                .background(Color.Black))
+        }
 
         // Dedicated top composer instead of reflowing the large Now Playing
         // title into smaller credits. Both fades are graphics layers only.
@@ -177,7 +199,7 @@ internal fun ImmersiveArtworkPlayer(
             Modifier.align(Alignment.TopStart)
                 .padding(start = horizontal, end = horizontal, top = targetHeaderTop)
                 .graphicsLayer {
-                    alpha = lyricsTransition
+                    alpha = lyricsTransition * (1f - artistLift.value)
                     translationY = (1f - lyricsTransition) * 8.dp.toPx()
                 }
         ) {
@@ -237,7 +259,7 @@ internal fun ImmersiveArtworkPlayer(
                 Column(
                     Modifier.fillMaxWidth()
                         .graphicsLayer {
-                            alpha = 1f - lyricsTransition
+                            alpha = (1f - lyricsTransition) * (1f - artistLift.value)
                             translationY = -8.dp.toPx() * lyricsTransition
                         }
                 ) {
@@ -308,6 +330,7 @@ internal fun ImmersiveArtworkPlayer(
                 }
                 }
                 Column(Modifier.fillMaxWidth()
+                    .graphicsLayer { alpha = 1f - artistLift.value }
                     .onSizeChanged { transportHeightPx = it.height }) {
                 progress(Modifier.fillMaxWidth().padding(top = if (wide) 4.dp else if (compact) 10.dp else 14.dp))
                 Spacer(Modifier.height(progressToTransportGap))
@@ -366,7 +389,7 @@ internal fun ImmersiveArtworkPlayer(
                                 if (artistButtonBounds != bounds) artistButtonBounds = bounds
                             }
                             .graphicsLayer {
-                                alpha = (1f - artistPortalProgress * 1.8f).coerceIn(0f, 1f)
+                                alpha = (1f - artistLift.value).coerceIn(0f, 1f)
                             }
                             .immersiveGlassPill(50.dp, lightMode),
                         contentAlignment = Alignment.Center
@@ -377,6 +400,15 @@ internal fun ImmersiveArtworkPlayer(
                     }
                     Row(
                         Modifier.width(actionPillWidth)
+                            // The pill's original center is 33dp right of the
+                            // screen center because Artist takes 56dp + 10dp.
+                            // Move the actual layout/hit target, not only pixels.
+                            .offset {
+                                IntOffset(
+                                    x = (-33.dp.toPx() * artistLift.value).roundToInt(),
+                                    y = 0
+                                )
+                            }
                             .height(56.dp)
                             .immersiveGlassPill(100.dp, lightMode),
                         verticalAlignment = Alignment.CenterVertically,
@@ -414,9 +446,9 @@ internal fun ImmersiveArtworkPlayer(
             Box(Modifier.align(Alignment.BottomCenter)) { foreground() }
         }
 
-        ImmersiveArtistPortal(
+        if (portalMounted) ImmersiveArtistPortal(
             open = artistOpen,
-            progress = artistPortalProgress,
+            progress = { artistLift.value },
             source = artistButtonBounds,
             host = playerBounds,
             topInsetPx = with(density) { topInset.toPx() },
