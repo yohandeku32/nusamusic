@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
@@ -39,6 +40,7 @@ class MiuixPagerTouchTest {
     private lateinit var pager: PagerState
     private lateinit var scope: CoroutineScope
     private val plays = IntArray(3)
+    private var nextTaps = 0
 
     private fun showPager() {
         compose.setContent {
@@ -48,14 +50,22 @@ class MiuixPagerTouchTest {
                 pager, Color.Black, Modifier.fillMaxSize().testTag("pager")
             ) { page ->
                 Box(Modifier.fillMaxSize()) {
-                    // Neighbour pages have a full-page target, as a song list
-                    // would. Player only has an actual small central button.
+                    // Neighbour pages have a full-page target, like Artist or
+                    // Library rows. Now Playing contains separate transport
+                    // controls and must NEVER route them to the Artist.
                     Box(
                         (if (page == 1) Modifier.align(Alignment.Center).size(64.dp)
                          else Modifier.fillMaxSize())
                             .background(Color.Gray)
                             .clickable { plays[page]++ }
                     )
+                    if (page == 1) {
+                        Box(Modifier.align(Alignment.BottomEnd)
+                            .padding(end = 24.dp, bottom = 96.dp)
+                            .size(56.dp).testTag("player-next")
+                            .background(Color.White)
+                            .clickable { nextTaps++ })
+                    }
                 }
             }
         }
@@ -71,6 +81,25 @@ class MiuixPagerTouchTest {
         compose.runOnIdle { assertEquals(listOf(0, 0, 0), plays.toList()) }
         compose.onNodeWithTag("pager").performTouchInput { click(center) }
         compose.runOnIdle { assertEquals(listOf(0, 1, 0), plays.toList()) }
+    }
+
+    @Test fun nowPlayingNextButtonNeverClicksHiddenArtistOrLibrary() {
+        showPager()
+        compose.onNodeWithTag("player-next").performTouchInput { click(center) }
+        compose.runOnIdle {
+            assertEquals(1, nextTaps)
+            assertEquals(listOf(0, 0, 0), plays.toList())
+        }
+        // A canceled partial drag must restore the same active hit region.
+        compose.onNodeWithTag("pager").performTouchInput { swipeRight() }
+        compose.waitForIdle()
+        compose.onNodeWithTag("pager").performTouchInput { swipeLeft() }
+        compose.waitForIdle()
+        compose.onNodeWithTag("player-next").performTouchInput { click(center) }
+        compose.runOnIdle {
+            assertEquals(2, nextTaps)
+            assertEquals(listOf(0, 0, 0), plays.toList())
+        }
     }
 
     @Test fun swipeDoesNotPlayAndDestinationReceivesItsOwnTaps() {

@@ -1,109 +1,78 @@
 package com.yohandeku32.nusamusic.ui
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MiuixPagerMotionTest {
-    @Test fun selectedPageIsFullyOpaqueWithoutZoom() {
-        val v = miuixPagerVisuals(0f, 1080f, false)
-        assertEquals(0f, v.translationX, 0.001f)
-        assertEquals(1f, v.scale, 0.001f)
-        assertEquals(1f, v.alpha, 0.001f)
-        assertEquals(0f, v.scrimAlpha, 0.001f)
-    }
-
-    @Test fun adjacentPageGlidesFiftyEightPercentWithRestrainedDepth() {
-        val v = miuixPagerVisuals(1f, 1080f, false)
-        // Native 1080px travel minus 42% compensation leaves 626.4px.
-        assertEquals(453.6f, v.translationX, 0.1f)
-        assertEquals(626.4f, 1080f - v.translationX, 0.1f)
-        assertEquals(0.990f, v.scale, 0.001f)
-        assertEquals(0f, v.scrimAlpha, 0.001f)
-        assertEquals(0f, v.alpha, 0.001f)
-    }
-
-    @Test fun midpointUsesOpaqueSurfacesRatherThanExpensiveCrossfade() {
-        val outgoing = miuixPagerVisuals(0.5f, 1080f, false)
-        val incoming = miuixPagerVisuals(-0.5f, 1080f, false)
-        assertEquals(1f, outgoing.alpha, 0.001f)
-        assertEquals(1f, incoming.alpha, 0.001f)
-        assertEquals(-outgoing.translationX, incoming.translationX, 0.001f)
-    }
-
-    @Test fun fadeIsConfinedToGestureEdges() {
-        assertEquals(0f, miuixPagerVisuals(1f, 1080f, false).alpha, 0.001f)
-        assertEquals(1f, miuixPagerVisuals(0.79f, 1080f, false).alpha, 0.001f)
-        assertEquals(1f, miuixPagerVisuals(0.2f, 1080f, false).alpha, 0.001f)
-        val edge = miuixPagerVisuals(0.9f, 1080f, false).alpha
-        assertTrue(edge > 0f && edge < 1f)
-    }
-
-    @Test fun reverseSwipeMirrorsDirectionAndOpacity() {
-        val right = miuixPagerVisuals(0.4f, 1080f, false)
-        val left = miuixPagerVisuals(-0.4f, 1080f, false)
-        assertEquals(-right.translationX, left.translationX, 0.001f)
-        assertEquals(right.alpha, left.alpha, 0.001f)
-        assertEquals(right.scale, left.scale, 0.001f)
-        assertTrue(right.scale < 1f)
-    }
-
-    @Test fun rtlMirrorsMotionWithoutChangingFade() {
-        val ltr = miuixPagerVisuals(0.4f, 1080f, false)
-        val rtl = miuixPagerVisuals(0.4f, 1080f, true)
-        assertEquals(-ltr.translationX, rtl.translationX, 0.001f)
-        assertEquals(ltr.alpha, rtl.alpha, 0.001f)
-    }
-
-    @Test fun scrubBackAndForthKeepsOpaqueEndpoints() {
-        for (depth in listOf(-1f, -0.8f, -0.4f, 0f, 0.4f, 0.8f, 1f)) {
-            val v = miuixPagerVisuals(depth, 1080f, false)
-            assertTrue(v.alpha in 0f..1f)
-            assertTrue(v.scale in 0.990f..1f)
-            assertEquals(0f, v.scrimAlpha, 0.001f)
-        }
-        assertEquals(1f, miuixPagerVisuals(0f, 1080f, false).alpha, 0.001f)
-        assertEquals(0f, miuixPagerVisuals(1f, 1080f, false).alpha, 0.001f)
-    }
-
-    @Test fun physicalGlideIsMonotonicOnEveryReversibleSwipe() {
-        for (sign in listOf(-1f, 1f)) {
-            var lastTravel = -1f
-            for (step in 0..100) {
-                val fraction = step / 100f
-                val visuals = miuixPagerVisuals(sign * fraction, 1080f, false)
-                val physicalTravel = kotlin.math.abs(sign * fraction * 1080f - visuals.translationX)
-                assertTrue(physicalTravel + 0.01f >= lastTravel)
-                assertTrue(physicalTravel <= 626.5f)
-                lastTravel = physicalTravel
-            }
+    @Test fun restingPagesHaveNoShadowOrRoundedCardMask() {
+        for (page in 0..2) {
+            val v = miuixCardVisuals(page, page.toFloat(), false)
+            assertEquals(0f, v.shadowElevationDp, 0.0001f)
+            assertEquals(0f, v.cornerRadiusDp, 0.0001f)
+            assertEquals(0f, v.edgeShadeAlpha, 0.0001f)
         }
     }
 
-    @Test fun incomingPageLeadsOnlyDuringMotion() {
-        assertEquals(1f, miuixPageZIndex(1, 1, false), 0f)
-        assertEquals(0f, miuixPageZIndex(0, 1, false), 0f)
-        assertEquals(0f, miuixPageZIndex(1, 1, true), 0f)
-        assertEquals(1f, miuixPageZIndex(0, 1, true), 0f)
-        assertEquals(1f, miuixPageZIndex(2, 1, true), 0f)
+    @Test fun cardStackOrderNeverChangesDuringLeftOrRightSwipe() {
+        assertTrue(miuixPageZIndex(0) < miuixPageZIndex(1))
+        assertTrue(miuixPageZIndex(1) < miuixPageZIndex(2))
     }
 
-    @Test fun invalidInputsNeverProduceNaN() {
-        val v = miuixPagerVisuals(Float.NaN, Float.POSITIVE_INFINITY, false)
-        assertTrue(v.translationX.isFinite())
-        assertTrue(v.alpha.isFinite())
-        assertTrue(v.scale.isFinite())
-        assertTrue(v.scrimAlpha.isFinite())
+    @Test fun rightSwipeRevealsArtistBehindTheExistingPlayerCard() {
+        val player = miuixCardVisuals(1, 0.5f, true)
+        val artist = miuixCardVisuals(0, 0.5f, true)
+        assertEquals(16f, player.cornerRadiusDp, 0f)
+        assertTrue(player.shadowElevationDp > 0f)
+        assertTrue(player.edgeShadeAlpha > 0f)
+        assertEquals(0f, artist.shadowElevationDp, 0f)
     }
 
-    @Test fun transparentNeighboursCannotAcceptTapsOnSettledPlayer() {
+    @Test fun leftSwipeSlidesLibraryCardOverPlayer() {
+        val library = miuixCardVisuals(2, 1.5f, true)
+        val player = miuixCardVisuals(1, 1.5f, true)
+        assertEquals(16f, library.cornerRadiusDp, 0f)
+        assertTrue(library.shadowElevationDp > 0f)
+        assertEquals(0f, player.shadowElevationDp, 0f)
+    }
+
+    @Test fun reversingEitherGestureKeepsTheSameForegroundCard() {
+        for (position in listOf(0.25f, 0.5f, 0.75f)) {
+            assertTrue(miuixCardVisuals(1, position, true).shadowElevationDp > 0f)
+            assertEquals(0f, miuixCardVisuals(0, position, true).shadowElevationDp, 0f)
+        }
+        for (position in listOf(1.25f, 1.5f, 1.75f)) {
+            assertTrue(miuixCardVisuals(2, position, true).shadowElevationDp > 0f)
+            assertEquals(0f, miuixCardVisuals(1, position, true).shadowElevationDp, 0f)
+        }
+    }
+
+    @Test fun shadowAndEdgeAreBoundedAndSymmetricAroundMidGesture() {
+        val one = miuixCardVisuals(1, 0.25f, true)
+        val two = miuixCardVisuals(1, 0.75f, true)
+        assertEquals(one.shadowElevationDp, two.shadowElevationDp, 0.001f)
+        assertEquals(one.edgeShadeAlpha, two.edgeShadeAlpha, 0.001f)
+        for (step in 0..100) {
+            val v = miuixCardVisuals(1, step / 100f, true)
+            assertTrue(v.shadowElevationDp in 0f..9f)
+            assertTrue(v.edgeShadeAlpha in 0f..0.19f)
+        }
+    }
+
+    @Test fun returnedToRestHasNoCardEffectAndInvalidInputsAreSafe() {
+        assertEquals(0f, miuixCardVisuals(1, 1f, false).shadowElevationDp, 0f)
+        assertEquals(0f, miuixCardVisuals(2, Float.NaN, true).shadowElevationDp, 0f)
+        assertEquals(0f, miuixCardVisuals(2, Float.POSITIVE_INFINITY, true).edgeShadeAlpha, 0f)
+    }
+
+    @Test fun invisibleNeighboursCannotAcceptTapsOnSettledPlayer() {
         for (page in 0..2) {
             assertEquals(page == 1, miuixPageAcceptsInput(page, 1, 1, 0f, false))
         }
     }
 
-    @Test fun noPageAcceptsPlaybackTapsWhileDraggingOrSettlingInEitherDirection() {
+    @Test fun noPageAcceptsPlaybackTapsWhileDraggingOrSettling() {
         for (settled in 0..2) {
             for (current in 0..2) {
                 for (page in 0..2) {
@@ -113,7 +82,6 @@ class MiuixPagerMotionTest {
                 }
             }
         }
-        // Midpoint currentPage change must not activate the incoming page.
         assertFalse(miuixPageAcceptsInput(0, 1, 0, 0f, false))
         assertFalse(miuixPageAcceptsInput(1, 1, 1, 0.1f, false))
         assertFalse(miuixPageAcceptsInput(1, 1, 1, Float.NaN, false))
@@ -124,16 +92,5 @@ class MiuixPagerMotionTest {
         assertFalse(miuixPageAcceptsInput(1, 0, 0, 0f, false))
         assertTrue(miuixPageAcceptsInput(1, 1, 1, 0f, false))
         assertFalse(miuixPageAcceptsInput(0, 1, 1, 0f, false))
-    }
-
-    @Test fun revealHasSoftEndpointsAndMonotonicOpacity() {
-        assertTrue(miuixPagerVisuals(0.01f, 1080f, false).alpha > 0.999f)
-        assertTrue(miuixPagerVisuals(0.99f, 1080f, false).alpha < 0.01f)
-        var last = 1f
-        for (step in 0..100) {
-            val alpha = miuixPagerVisuals(step / 100f, 1080f, false).alpha
-            assertTrue(alpha <= last)
-            last = alpha
-        }
     }
 }

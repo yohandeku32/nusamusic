@@ -17,17 +17,21 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 
-// Critically damped: natural response to a release, no rubber-band overshoot.
-internal val miuixPageSpring = spring<Float>(dampingRatio = 1f, stiffness = 345f, visibilityThreshold = 1f)
+// Critically damped settle, with no rubber-band overshoot. Native pager
+// scrolling carries the full page so both the image and touch area line up.
+internal val miuixPageSpring = spring<Float>(dampingRatio = 1f, stiffness = 330f, visibilityThreshold = 1f)
 
 internal suspend fun PagerState.animateMiuixScrollToPage(page: Int) {
     animateScrollToPage(page = page, animationSpec = miuixPageSpring)
@@ -42,8 +46,9 @@ internal fun MiuixHorizontalPager(
     onHorizontalSwipeStarted: () -> Unit = {},
     content: @Composable (Int) -> Unit
 ) {
-    val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val swipeAction by rememberUpdatedState(onHorizontalSwipeStarted)
+    // One fixed shape per pager instance; never allocate a shape per frame.
+    val cardShape = remember { RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp) }
     HorizontalPager(
         state = state,
         modifier = modifier.background(backgroundColor).clipToBounds()
@@ -100,23 +105,37 @@ internal fun MiuixHorizontalPager(
         }
         Box(
             Modifier.fillMaxSize()
-                // Place the incoming MIUIX layer above the outgoing page while
-                // swiping, then return ownership to the settled page at rest.
-                // Hidden neighbours still cannot intercept player button taps.
-                .zIndex(miuixPageZIndex(page, state.settledPage, state.isScrollInProgress))
-                // Genuine 58% finger-driven glide. Keep both surfaces opaque
-                // through the mid-swipe, avoiding a full-screen dissolve and
-                // offscreen pixel blending across expensive artwork and Media3.
-                // Updates remain in the draw phase, never on the layout path.
+                // Fixed iOS-style navigation order (Artist, Player, Library).
+                // No z-index flips in the middle of a gesture.
+                .zIndex(miuixPageZIndex(page))
+                // No custom X translation, alpha or scale: the native pager
+                // keeps every visual at its true hit-test coordinate.
+                // Clip only the leading corners of the moving front card.
                 .graphicsLayer {
-                    val depth = state.currentPage +
-                        state.currentPageOffsetFraction - page
-                    val visuals = miuixPagerVisuals(depth, size.width, isRtl)
-                    translationX = visuals.translationX
-                    alpha = visuals.alpha
-                    scaleX = visuals.scale
-                    scaleY = visuals.scale
-                    clip = true
+                    val position = state.currentPage + state.currentPageOffsetFraction
+                    val card = miuixCardVisuals(page, position, state.isScrollInProgress)
+                    shape = cardShape
+                    clip = card.shadowElevationDp > 0f
+                    shadowElevation = card.shadowElevationDp.dp.toPx()
+                }
+                // Cheap internal edge shadow makes the card separation
+                // visible even if the pager clips real elevation outside
+                // the page bounds. The brush is cached; only alpha changes.
+                .drawWithCache {
+                    val band = 22.dp.toPx()
+                    val brush = Brush.horizontalGradient(
+                        0f to Color.Black, 1f to Color.Transparent,
+                        startX = 0f, endX = band
+                    )
+                    onDrawWithContent {
+                        drawContent()
+                        val position = state.currentPage + state.currentPageOffsetFraction
+                        val card = miuixCardVisuals(page, position, state.isScrollInProgress)
+                        if (card.edgeShadeAlpha > 0f) {
+                            drawRect(brush = brush, alpha = card.edgeShadeAlpha,
+                                size = Size(band, size.height))
+                        }
+                    }
                 }
                 .pagerPageInput { interactive }
                 .then(if (interactive) Modifier else Modifier.clearAndSetSemantics { })
