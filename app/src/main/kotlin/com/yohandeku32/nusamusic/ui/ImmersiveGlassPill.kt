@@ -3,6 +3,9 @@ package com.yohandeku32.nusamusic.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -14,6 +17,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
@@ -38,17 +42,22 @@ internal fun Modifier.immersiveGlassPill(
     lightMode: Boolean = false,
     emphasized: Boolean = false,
     liquidGlass: Boolean = true,
-    hazeState: HazeState? = null
+    hazeState: HazeState? = null,
+    artworkTint: Color? = null
 ): Modifier {
     val shape = RoundedCornerShape(radius)
+    val baseGlass = artworkTint?.let { lerp(Color(0xFF252D38), it, 0.52f) }
+        ?: Color(0xFF252D38)
     if (emphasized && liquidGlass && hazeState != null) {
         // Dark, tinted material with light passing through from the live
         // backdrop; a translucent colored rectangle is not a blur.
         val style = HazeStyle(
-            backgroundColor = Color(0xFF131720),
+            backgroundColor = baseGlass,
             // Less diffusion lets artwork colors and scrolling rows remain
             // perceptible, while the glass is still a real backdrop blur.
-            tints = listOf(HazeTint(Color(0x781B202C))),
+            tints = listOf(HazeTint(
+                lerp(Color(0x781B202C), baseGlass.copy(alpha = 0.48f), 0.42f)
+            )),
             blurRadius = 20.dp,
             noiseFactor = 0.035f,
             fallbackTint = HazeTint(Color(0xCD232833))
@@ -79,7 +88,10 @@ internal fun Modifier.immersiveGlassPill(
     if (emphasized) return this.clip(shape)
         .background(
             Brush.verticalGradient(
-                listOf(Color(0xC82B303C), Color(0xAF1D222D))
+                listOf(
+                    lerp(Color(0xFF2B303C), baseGlass, 0.72f).copy(alpha = 0.80f),
+                    lerp(Color(0xFF1D222D), baseGlass, 0.48f).copy(alpha = 0.69f)
+                )
             )
         )
         // During a swipe the inexpensive fallback still has the same
@@ -162,8 +174,14 @@ internal fun ContinuousLiquidGlassSurface(
     liquidGlassEnabled: Boolean,
     hazeState: HazeState?,
     hazeAlpha: Float,
+    artworkTint: Color = Color(0xFF29303B),
     modifier: Modifier = Modifier
 ) {
+    val smoothArtworkTint by animateColorAsState(
+        targetValue = artworkTint,
+        animationSpec = tween(640, easing = FastOutSlowInEasing),
+        label = "artworkResponsiveLiquidGlass"
+    )
     Box(modifier) {
         Box(
             Modifier.matchParentSize().immersiveGlassPill(
@@ -171,7 +189,8 @@ internal fun ContinuousLiquidGlassSurface(
                 lightMode = lightMode,
                 emphasized = liquidGlassEnabled,
                 liquidGlass = liquidGlassEnabled,
-                hazeState = null
+                hazeState = null,
+                artworkTint = if (liquidGlassEnabled) smoothArtworkTint else null
             )
         )
         if (liquidGlassEnabled && hazeState != null) {
@@ -185,7 +204,8 @@ internal fun ContinuousLiquidGlassSurface(
                         lightMode = lightMode,
                         emphasized = true,
                         liquidGlass = true,
-                        hazeState = hazeState
+                        hazeState = hazeState,
+                        artworkTint = smoothArtworkTint
                     )
             )
         }

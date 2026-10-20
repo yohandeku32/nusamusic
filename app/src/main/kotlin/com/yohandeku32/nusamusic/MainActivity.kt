@@ -1898,6 +1898,14 @@ private fun NusaMusicApp(
             )
         })
     }
+    // Already computed and cached with each track; never resample the
+    // bitmap on the UI thread just to recolor the navigation glass.
+    var playerGlassArtworkColor by remember(currentSong?.uri) {
+        mutableStateOf(
+            currentSong?.let { ImmersiveArtworkCache.cached(it)?.backdrop }?.let(::Color)
+                ?: Color(0xFF29303B)
+        )
+    }
     val uiPrefs = remember(context) {
         context.getSharedPreferences("ui_preferences", android.content.Context.MODE_PRIVATE)
     }
@@ -2511,6 +2519,7 @@ private fun NusaMusicApp(
                                 libraryOpen = libraryOverlayOpen,
                                 libraryLightMode = libraryLightMode,
                                 liquidGlassEnabled = liquidGlassEnabled,
+                                glassArtworkColor = playerGlassArtworkColor,
                                 onLibraryClose = { libraryOverlayOpen = false },
                                 onHome = {
                                     artistOverlayOpen = false
@@ -2578,6 +2587,9 @@ private fun NusaMusicApp(
                                         },
                                         onCoverReady = { uri, cover ->
                                             if (uri == currentSong?.uri) artistTransitionCover = cover
+                                        },
+                                        onPaletteReady = { uri, palette ->
+                                            if (uri == currentSong?.uri) playerGlassArtworkColor = palette
                                         }
                                     )
                                 },
@@ -4488,7 +4500,8 @@ private fun ImmersiveArtwork(
     sourceOrder: ArtworkSourceOrder = ArtworkSourceOrder.APPLE_FIRST,
     playerPageVisible: Boolean = true,
     pageReveal: () -> Float = { 0f },
-    onCoverReady: (String, Bitmap) -> Unit = { _, _ -> }
+    onCoverReady: (String, Bitmap) -> Unit = { _, _ -> },
+    onPaletteReady: (String, Color) -> Unit = { _, _ -> }
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     // Open the persistent MP4 cache off the UI thread while Apple is searched.
@@ -4678,6 +4691,22 @@ private fun ImmersiveArtwork(
         }
     }
 
+    // Static cover and first animated frame both have a prepared palette.
+    // Publish once per actual colour change; ignore retained previous tracks.
+    val latestPaletteReady by rememberUpdatedState(onPaletteReady)
+    LaunchedEffect(
+        song?.uri, artworkSongUri, backdrop, frozenAnimatedBackdrop,
+        animatedArtworkEnabled, animatedArtworkUrl
+    ) {
+        val uri = song?.uri
+        if (uri != null && artworkSongUri == uri) {
+            latestPaletteReady(uri,
+                if (animatedArtworkEnabled && animatedArtworkUrl != null) {
+                    frozenAnimatedBackdrop ?: backdrop
+                } else backdrop
+            )
+        }
+    }
     val activeBlur = retainedAmbientBlur ?: staticBlur
     val targetScrimOpacity = remember(activeBlur) { immersiveScrimOpacity(activeBlur) }
     val scrimOpacity by animateFloatAsState(
