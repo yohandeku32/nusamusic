@@ -101,6 +101,10 @@ dependencies {
     implementation("androidx.compose.ui:ui-text-google-fonts")
     implementation("androidx.compose.material3:material3:1.4.0")
     implementation("androidx.compose.material:material-icons-extended")
+    // Hardware-backed, source-aware backdrop blur for the floating
+    // Immersive control pills. Pin Haze 1.6.x for Kotlin 2.2.10 compatibility;
+    // Haze 2.x requires a newer Kotlin/Compose toolchain.
+    implementation("dev.chrisbanes.haze:haze:1.6.10")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.4")
     implementation("androidx.media3:media3-exoplayer:1.9.3")
     // Persistent, bounded video cache for Spotify Canvas (Media3 SimpleCache).

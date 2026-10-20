@@ -24,6 +24,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 
 /**
  * One 660ms compositor-only timeline. The artist circle rises smoothly from
@@ -49,6 +51,7 @@ internal fun ImmersiveArtistPortal(
     canSwipeDown: () -> Boolean = { true },
     swipeFromHeaderOnly: Boolean = false,
     showArtistCircle: Boolean = true,
+    hazeState: HazeState,
     profile: @Composable () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -149,6 +152,7 @@ internal fun ImmersiveArtistPortal(
                     alpha = ((p - 0.04f) / 0.94f).coerceIn(0f, 1f)
                     clip = false
                 }
+                .hazeSource(hazeState)
         ) {
             profile()
         }
@@ -164,7 +168,9 @@ internal fun ImmersiveArtistPortal(
                     translationY = (destY - sourceY) * p
                     alpha = p
                 }
-                .immersiveGlassPill(50.dp, emphasized = true)
+                .immersiveGlassPill(
+                    50.dp, emphasized = true, hazeState = hazeState
+                )
                 .clickable(enabled = open, onClick = onClose)
                 .semantics { contentDescription = "Close artist profile" },
             contentAlignment = Alignment.Center

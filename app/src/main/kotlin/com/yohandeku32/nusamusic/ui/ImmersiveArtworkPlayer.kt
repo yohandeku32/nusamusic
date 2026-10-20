@@ -48,6 +48,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 import java.util.Locale
 
 private fun immersiveText(id: String, en: String) =
@@ -102,6 +104,9 @@ internal fun ImmersiveArtworkPlayer(
     // the four-action pill. Read Animatable only in draw/placement modifiers;
     // do not recompose the expensive artwork/player on every animation frame.
     val artistLift = remember { Animatable(0f) }
+    // Both content sources are recorded beneath the same small glass
+    // controls: current-player artwork and the currently visible portal.
+    val glassBackdrop = remember { HazeState() }
     val dragScope = rememberCoroutineScope()
     var dragActive by remember { mutableStateOf(false) }
     var dragFraction by remember { mutableFloatStateOf(1f) }
@@ -220,7 +225,10 @@ internal fun ImmersiveArtworkPlayer(
                 64.dp + addedTransportGap)
                 .coerceIn(maxHeight * 0.45f, maxHeight * 0.80f)
         val heroHeight by animateDpAsState(requestedHero, tween(220), label = "immersiveHeroHeight")
-        artwork(Modifier.matchParentSize(), heroHeight, if (wide) (1f - controlsFraction + 0.06f) else 1f)
+        artwork(
+            Modifier.matchParentSize().hazeSource(glassBackdrop),
+            heroHeight, if (wide) (1f - controlsFraction + 0.06f) else 1f
+        )
         if (portalMounted) {
             // Opaque full-screen black underlay, including BELOW the profile.
             // No blurred cover or colored artwork can leak around the pill.
@@ -492,6 +500,7 @@ internal fun ImmersiveArtworkPlayer(
             },
             swipeFromHeaderOnly = lastOverlayIsLibrary,
             showArtistCircle = !lastOverlayIsLibrary,
+            hazeState = glassBackdrop,
             profile = {
                 if (lastOverlayIsLibrary) libraryContent(portalSettled)
                 else artistProfile()
@@ -512,11 +521,13 @@ internal fun ImmersiveArtworkPlayer(
                 fullWidth = actionPillWidth,
                 lyricsEnabled = lyricsEnabled,
                 lyricsOpen = lyricsOpen,
-                lightMode = if (lastOverlayIsLibrary && portalMounted)
-                    libraryLightMode else lightMode,
+                // In white Library mode the list stays white, but its pill
+                // deliberately uses dark frosted glass and white glyphs.
+                lightMode = if (portalMounted) false else lightMode,
                 libraryOpen = libraryOpen,
                 overlayOpen = overlayOpen,
                 emphasized = portalMounted,
+                hazeState = glassBackdrop,
                 hasSong = hasSong,
                 onLyrics = onLyrics,
                 onArtist = onArtist,
@@ -547,6 +558,7 @@ private fun ImmersiveOverlayActionPill(
     libraryOpen: Boolean,
     overlayOpen: Boolean,
     emphasized: Boolean,
+    hazeState: HazeState,
     hasSong: Boolean,
     onLyrics: () -> Unit,
     onArtist: () -> Unit,
@@ -579,7 +591,9 @@ private fun ImmersiveOverlayActionPill(
         }
             .width(width)
             .height(56.dp)
-            .immersiveGlassPill(100.dp, lightMode, emphasized = emphasized),
+            .immersiveGlassPill(
+                100.dp, lightMode, emphasized = emphasized, hazeState = hazeState
+            ),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceEvenly
     ) {
