@@ -462,7 +462,10 @@ internal fun ImmersiveArtworkPlayer(
                 )
             },
             canSwipeDown = {
-                lastOverlayIsLibrary || canCloseArtistBySwipe()
+                // Do not interrupt the still-opening 710ms Animatable with a
+                // drag snapTo; allow gestures once the sheet has settled.
+                portalSettled &&
+                    (lastOverlayIsLibrary || canCloseArtistBySwipe())
             },
             swipeFromHeaderOnly = lastOverlayIsLibrary,
             showArtistCircle = !lastOverlayIsLibrary,
