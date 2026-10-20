@@ -22,8 +22,8 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.LayoutDirection
 
-// Natural, critically damped settling. No jelly bounce or overshoot.
-internal val miuixPageSpring = spring<Float>(dampingRatio = 1f, stiffness = 330f, visibilityThreshold = 1f)
+// Critically damped: natural response to a release, no rubber-band overshoot.
+internal val miuixPageSpring = spring<Float>(dampingRatio = 1f, stiffness = 300f, visibilityThreshold = 1f)
 
 internal suspend fun PagerState.animateMiuixScrollToPage(page: Int) {
     animateScrollToPage(page = page, animationSpec = miuixPageSpring)
@@ -78,6 +78,8 @@ internal fun MiuixHorizontalPager(
             },
         beyondViewportPageCount = 1,
         userScrollEnabled = userScrollEnabled,
+        // Android's stretch overscroll reads as jelly at the first/last page.
+        overscrollEffect = null,
         flingBehavior = PagerDefaults.flingBehavior(
             state = state,
             pagerSnapDistance = PagerSnapDistance.atMost(1),
@@ -86,12 +88,15 @@ internal fun MiuixHorizontalPager(
     ) { page ->
         Box(
             Modifier.fillMaxSize()
-                // Preserve the system pager's ordinary horizontal movement.
-                // Only a tiny 5% depth parallax remains; NO page zoom,
-                // corner morphing, opacity flicker or black scrim.
+                // Hold pages almost in place as one gently reveals the next.
+                // The layer transform runs on the render path, not in Compose
+                // layout or expensive per-frame bitmap blur calculations.
                 .graphicsLayer {
-                    val depth = state.currentPage + state.currentPageOffsetFraction - page
-                    translationX = miuixPagerVisuals(depth, size.width, isRtl).translationX
+                    val depth = state.currentPage +
+                        state.currentPageOffsetFraction - page
+                    val visuals = miuixPagerVisuals(depth, size.width, isRtl)
+                    translationX = visuals.translationX
+                    alpha = visuals.alpha
                 }
                 .background(backgroundColor)
         ) {
