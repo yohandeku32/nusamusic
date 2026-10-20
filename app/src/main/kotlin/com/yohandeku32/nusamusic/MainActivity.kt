@@ -2371,8 +2371,12 @@ private fun NusaMusicApp(
                 backgroundColor = pageBackdrop,
                 modifier = Modifier.fillMaxSize(),
                 onHorizontalSwipeStarted = {
-                    keyboardForPager?.hide()
-                    focusForPager.clearFocus(force = true)
+                    // Avoid running expensive global focus/IME callbacks on
+                    // player <-> artist gestures where no keyboard is open.
+                    if (pagerState.settledPage == libraryPage) {
+                        keyboardForPager?.hide()
+                        focusForPager.clearFocus(force = true)
+                    }
                 }
             ) { page ->
                 when {
@@ -2434,11 +2438,16 @@ private fun NusaMusicApp(
                                         artworkModifier, lyricsMode = lyricsRequested,
                                         sourceOrder = artworkSourceOrder,
                                         playerPageVisible = pagerState.settledPage == playerPage,
-                                        artistReveal = {
-                                            if (artistPageEnabled)
-                                                (playerPage - pagerState.currentPage -
-                                                    pagerState.currentPageOffsetFraction).coerceIn(0f, 1f)
-                                            else 0f
+                                        pageReveal = {
+                                            // Renderer reads the changing pager
+                                            // offset only inside graphicsLayer.
+                                            // Fade live TextureView early on BOTH
+                                            // swipe directions; the existing cover
+                                            // stays warm beneath it.
+                                            kotlin.math.abs(
+                                                playerPage - pagerState.currentPage -
+                                                    pagerState.currentPageOffsetFraction
+                                            ).coerceIn(0f, 1f)
                                         },
                                         onCoverReady = { uri, cover ->
                                             if (uri == currentSong?.uri) artistTransitionCover = cover
@@ -2661,7 +2670,8 @@ private fun NusaMusicApp(
                                 songs = songs,
                                 currentSong = currentSong,
                                 isPlaying = isPlaying,
-                                isVisible = pagerState.currentPage == libraryPage,
+                                isVisible = pagerState.settledPage == libraryPage &&
+                                    !pagerState.isScrollInProgress,
                                 lightMode = libraryLightMode,
                                 hasMusicAccess = hasMusicAccess,
                                 isScanning = isScanningMusic,
@@ -4350,7 +4360,7 @@ private fun ImmersiveArtwork(
     lightMode: Boolean = false,
     sourceOrder: ArtworkSourceOrder = ArtworkSourceOrder.APPLE_FIRST,
     playerPageVisible: Boolean = true,
-    artistReveal: () -> Float = { 0f },
+    pageReveal: () -> Float = { 0f },
     onCoverReady: (String, Bitmap) -> Unit = { _, _ -> }
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -4586,12 +4596,14 @@ private fun ImmersiveArtwork(
                     AnimatedArtworkVideoBackground(
                         url = activeUrl,
                         playbackVisible = !lyricsMode && playerPageVisible,
-                        // Reveal the same still cover used by Artist as the
-                        // gesture progresses. Reversing the swipe restores the
-                        // existing video; no new decoder or URL lookup.
+                        // During any horizontal swipe, leave the already-decoded
+                        // still cover on screen and hide the live TextureView
+                        // over the first 14% of travel. Keep the decoder/player
+                        // alive: reversing the gesture needs no new stream.
                         modifier = Modifier.fillMaxSize().graphicsLayer {
-                            val reveal = artistReveal()
-                            alpha = 1f - reveal * reveal * (3f - 2f * reveal)
+                            val fraction = (pageReveal() / 0.14f).coerceIn(0f, 1f)
+                            val eased = fraction * fraction * (3f - 2f * fraction)
+                            alpha = 1f - eased
                         },
                         captureBackdrop = frozenAnimatedBlur == null,
                         onBackdropReady = { blurredFrame, frameColor ->

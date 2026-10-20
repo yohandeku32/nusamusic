@@ -27,7 +27,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.zIndex
 
 // Critically damped: natural response to a release, no rubber-band overshoot.
-internal val miuixPageSpring = spring<Float>(dampingRatio = 1f, stiffness = 275f, visibilityThreshold = 1f)
+internal val miuixPageSpring = spring<Float>(dampingRatio = 1f, stiffness = 345f, visibilityThreshold = 1f)
 
 internal suspend fun PagerState.animateMiuixScrollToPage(page: Int) {
     animateScrollToPage(page = page, animationSpec = miuixPageSpring)
@@ -104,8 +104,10 @@ internal fun MiuixHorizontalPager(
                 // swiping, then return ownership to the settled page at rest.
                 // Hidden neighbours still cannot intercept player button taps.
                 .zIndex(miuixPageZIndex(page, state.settledPage, state.isScrollInProgress))
-                // Preserve a perceptible 24% glide with subtle layer depth.
-                // Pure GPU transforms: no layout remeasure or new blur decoding.
+                // Genuine 58% finger-driven glide. Keep both surfaces opaque
+                // through the mid-swipe, avoiding a full-screen dissolve and
+                // offscreen pixel blending across expensive artwork and Media3.
+                // Updates remain in the draw phase, never on the layout path.
                 .graphicsLayer {
                     val depth = state.currentPage +
                         state.currentPageOffsetFraction - page

@@ -11,15 +11,16 @@ internal data class MiuixPagerVisuals(
 )
 
 /**
- * MIUIX-style layered glide, not a stationary cross-fade or a full-page slide.
+ * MIUIX-style reveal with most of the transition spent moving, not fading.
  *
- * The underlying HorizontalPager still owns drag/fling physics and accessibility.
- * Cancel 76% of its native translation, leaving 24% real physical movement
- * under the finger. A restrained 1.6% depth scale makes each page feel layered.
- * Incoming content draws above the departing page while the gesture is active.
+ * The native pager still owns drag and fling physics. Compensate only 42%
+ * of its translation, so the page glides 58% of the viewport under the finger.
+ * Keep both pages opaque through the middle 60% of the gesture: unlike a
+ * full-screen crossfade, this avoids blending two heavy artwork/video scenes
+ * on every frame. Fade only at the edges to conceal resting neighbours.
  *
- * The eased opacity keeps the midpoint bright and both endpoints gentle;
- * no black scrim, corner morph, overshoot or additional artwork blur work.
+ * Depth is limited to a 1% GPU transform. No overscroll, scrim, dynamic
+ * corner mask, live blur or extra bitmap decoding while swiping.
  */
 internal fun miuixPagerVisuals(
     relativeDepth: Float, widthPx: Float, isRtl: Boolean
@@ -28,16 +29,17 @@ internal fun miuixPagerVisuals(
     val width = widthPx.takeIf { it.isFinite() && it > 0f } ?: 0f
     val normalizedDepth = depth.coerceIn(-1f, 1f)
     val distance = abs(normalizedDepth)
-    // Zero slope at both ends avoids a sudden appearance/disappearance when
-    // the gesture starts or the settling spring reaches its destination.
     val easedDistance = distance * distance * (3f - 2f * distance)
-    val opacity = (1f - easedDistance * easedDistance).coerceIn(0f, 1f)
+    // Edge-only dissolve. At mid-swipe BOTH surfaces are opaque so the
+    // incoming surface covers the outgoing one without costly pixel blending.
+    val reveal = ((1f - distance) / 0.20f).coerceIn(0f, 1f)
+    val opacity = reveal * reveal * (3f - 2f * reveal)
     return MiuixPagerVisuals(
-        translationX = normalizedDepth * width * 0.76f * if (isRtl) -1f else 1f,
+        translationX = normalizedDepth * width * 0.42f * if (isRtl) -1f else 1f,
         alpha = opacity,
         scrimAlpha = 0f,
         leadingCornerFraction = 0f,
-        scale = 1f - 0.016f * easedDistance
+        scale = 1f - 0.010f * easedDistance
     )
 }
 

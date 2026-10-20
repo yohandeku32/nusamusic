@@ -94,15 +94,17 @@ fun ImmersiveArtistPage(
     }
     BackHandler(enabled = isVisible) { navigateBack() }
 
-    // The library Light switch must not recolor the main player or Artist.
-    MaterialTheme(
-        colorScheme = darkColorScheme(
+    // Reuse a stable theme object instead of building a new color scheme
+    // when Now Playing state updates while the Artist page is precomposed.
+    val artistScheme = remember {
+        darkColorScheme(
             background = artistBase, surface = artistSurface,
             surfaceVariant = Color(0xFF22242B), primary = artistInk,
             onPrimary = artistBase, onBackground = artistInk,
             onSurface = artistInk, onSurfaceVariant = artistMuted
         )
-    ) {
+    }
+    MaterialTheme(colorScheme = artistScheme) {
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize().background(artistBase),

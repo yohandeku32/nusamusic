@@ -14,25 +14,30 @@ class MiuixPagerMotionTest {
         assertEquals(0f, v.scrimAlpha, 0.001f)
     }
 
-    @Test fun adjacentPageGlidesTwentyFourPercentWithRestrainedDepth() {
+    @Test fun adjacentPageGlidesFiftyEightPercentWithRestrainedDepth() {
         val v = miuixPagerVisuals(1f, 1080f, false)
-        // Native 1080px travel minus 76% compensation leaves 259.2px.
-        assertEquals(820.8f, v.translationX, 0.1f)
-        assertEquals(259.2f, 1080f - v.translationX, 0.1f)
-        assertEquals(0.984f, v.scale, 0.001f)
+        // Native 1080px travel minus 42% compensation leaves 626.4px.
+        assertEquals(453.6f, v.translationX, 0.1f)
+        assertEquals(626.4f, 1080f - v.translationX, 0.1f)
+        assertEquals(0.990f, v.scale, 0.001f)
         assertEquals(0f, v.scrimAlpha, 0.001f)
         assertEquals(0f, v.alpha, 0.001f)
     }
 
-    @Test fun midpointDissolvePreservesBrightnessWithoutBlackFlash() {
+    @Test fun midpointUsesOpaqueSurfacesRatherThanExpensiveCrossfade() {
         val outgoing = miuixPagerVisuals(0.5f, 1080f, false)
         val incoming = miuixPagerVisuals(-0.5f, 1080f, false)
-        assertEquals(0.75f, outgoing.alpha, 0.001f)
-        assertEquals(0.75f, incoming.alpha, 0.001f)
-        // Their alpha-over composition covers 93.75% of the screen.
-        val combinedOpacity = 1f - (1f - outgoing.alpha) * (1f - incoming.alpha)
-        assertTrue(combinedOpacity >= 0.93f)
+        assertEquals(1f, outgoing.alpha, 0.001f)
+        assertEquals(1f, incoming.alpha, 0.001f)
         assertEquals(-outgoing.translationX, incoming.translationX, 0.001f)
+    }
+
+    @Test fun fadeIsConfinedToGestureEdges() {
+        assertEquals(0f, miuixPagerVisuals(1f, 1080f, false).alpha, 0.001f)
+        assertEquals(1f, miuixPagerVisuals(0.79f, 1080f, false).alpha, 0.001f)
+        assertEquals(1f, miuixPagerVisuals(0.2f, 1080f, false).alpha, 0.001f)
+        val edge = miuixPagerVisuals(0.9f, 1080f, false).alpha
+        assertTrue(edge > 0f && edge < 1f)
     }
 
     @Test fun reverseSwipeMirrorsDirectionAndOpacity() {
@@ -55,7 +60,7 @@ class MiuixPagerMotionTest {
         for (depth in listOf(-1f, -0.8f, -0.4f, 0f, 0.4f, 0.8f, 1f)) {
             val v = miuixPagerVisuals(depth, 1080f, false)
             assertTrue(v.alpha in 0f..1f)
-            assertTrue(v.scale in 0.984f..1f)
+            assertTrue(v.scale in 0.990f..1f)
             assertEquals(0f, v.scrimAlpha, 0.001f)
         }
         assertEquals(1f, miuixPagerVisuals(0f, 1080f, false).alpha, 0.001f)
@@ -70,7 +75,7 @@ class MiuixPagerMotionTest {
                 val visuals = miuixPagerVisuals(sign * fraction, 1080f, false)
                 val physicalTravel = kotlin.math.abs(sign * fraction * 1080f - visuals.translationX)
                 assertTrue(physicalTravel + 0.01f >= lastTravel)
-                assertTrue(physicalTravel <= 259.3f)
+                assertTrue(physicalTravel <= 626.5f)
                 lastTravel = physicalTravel
             }
         }
@@ -123,7 +128,7 @@ class MiuixPagerMotionTest {
 
     @Test fun revealHasSoftEndpointsAndMonotonicOpacity() {
         assertTrue(miuixPagerVisuals(0.01f, 1080f, false).alpha > 0.999f)
-        assertTrue(miuixPagerVisuals(0.99f, 1080f, false).alpha < 0.001f)
+        assertTrue(miuixPagerVisuals(0.99f, 1080f, false).alpha < 0.01f)
         var last = 1f
         for (step in 0..100) {
             val alpha = miuixPagerVisuals(step / 100f, 1080f, false).alpha
