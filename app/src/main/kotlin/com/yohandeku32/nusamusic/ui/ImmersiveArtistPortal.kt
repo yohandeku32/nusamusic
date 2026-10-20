@@ -24,11 +24,13 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
+import dev.chrisbanes.haze.HazeState
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.UserRound
+import dev.chrisbanes.haze.hazeSource
 
 /**
- * A compositor-only transition. The artist circle rises smoothly from
+ * One 660ms compositor-only timeline. The artist circle rises smoothly from
  * its measured bottom pill coordinate into its own black 76dp toolbar; the
  * full-width artwork begins below that toolbar so the icon never covers it.
  *
@@ -51,6 +53,10 @@ internal fun ImmersiveArtistPortal(
     canSwipeDown: () -> Boolean = { true },
     swipeFromHeaderOnly: Boolean = false,
     showArtistCircle: Boolean = true,
+    hazeState: HazeState?,
+    liquidGlassEnabled: Boolean = true,
+    hazeAlpha: Float = 0f,
+    artworkTint: Color = Color(0xFF29303B),
     profile: @Composable () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -151,7 +157,10 @@ internal fun ImmersiveArtistPortal(
                     alpha = ((p - 0.04f) / 0.94f).coerceIn(0f, 1f)
                     clip = false
                 }
-
+                .then(
+                    if (hazeState != null) Modifier.hazeSource(hazeState)
+                    else Modifier
+                )
         ) {
             profile()
         }
@@ -171,8 +180,17 @@ internal fun ImmersiveArtistPortal(
                 .semantics { contentDescription = "Close artist profile" },
             contentAlignment = Alignment.Center
         ) {
-            // Solid black on all pages; no blur sampling during movement.
-            SolidNavigationSurface(radius = 50.dp, modifier = Modifier.matchParentSize())
+            // Identical glass as the Home and Library Artist circles.
+            // The live blurred reflection fades over the same lens fallback.
+            ContinuousLiquidGlassSurface(
+                radius = 50.dp,
+                lightMode = false,
+                liquidGlassEnabled = liquidGlassEnabled,
+                hazeState = hazeState,
+                hazeAlpha = hazeAlpha,
+                artworkTint = artworkTint,
+                modifier = Modifier.matchParentSize()
+            )
             Icon(
                 imageVector = Lucide.UserRound,
                 contentDescription = null,

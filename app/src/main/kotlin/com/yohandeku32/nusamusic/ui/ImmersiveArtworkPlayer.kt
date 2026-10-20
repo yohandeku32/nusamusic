@@ -57,6 +57,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 import java.util.Locale
 
 private fun immersiveText(id: String, en: String) =
@@ -92,6 +94,7 @@ internal fun ImmersiveArtworkPlayer(
     artistProfile: @Composable () -> Unit = {},
     libraryOpen: Boolean = false,
     libraryLightMode: Boolean = false,
+    liquidGlassEnabled: Boolean = true,
     glassArtworkColor: Color = Color(0xFF29303B),
     onLibraryClose: () -> Unit = {},
     onHome: () -> Unit = {},
@@ -112,7 +115,12 @@ internal fun ImmersiveArtworkPlayer(
     // the four-action pill. Read Animatable only in draw/placement modifiers;
     // do not recompose the expensive artwork/player on every animation frame.
     val artistLift = remember { Animatable(0f) }
-    // Solid navigation controls do not capture artwork or portal backdrops.
+    // Both content sources are recorded beneath the same small glass
+    // controls: current-player artwork and the currently visible portal.
+    val glassBackdrop = remember { HazeState() }
+    // One liquid material is shared by Home, Artist and Library. Keep live
+    // Haze on the idle Now Playing screen as well, but never re-record a
+    // moving full-screen source while entering or leaving a portal.
     var portalSettled by remember { mutableStateOf(false) }
     val dragScope = rememberCoroutineScope()
     var dragActive by remember { mutableStateOf(false) }
@@ -127,6 +135,15 @@ internal fun ImmersiveArtworkPlayer(
     // of waiting for LaunchedEffect to mount the portal a frame later.
     val portalVisible = overlayOpen || portalMounted
     val presentingLibrary = if (overlayOpen) libraryOpen else lastOverlayIsLibrary
+    val liveGlassReady = liquidGlassEnabled && (!portalVisible || portalSettled)
+    val liveBackdrop = if (liveGlassReady) glassBackdrop else null
+    // Crossfade ONLY the real blur layer. The same refractive satin surface
+    // remains underneath on Home and both portals at every animation frame.
+    val liveGlassAlpha by animateFloatAsState(
+        targetValue = if (liveGlassReady) 1f else 0f,
+        animationSpec = tween(320, easing = FastOutSlowInEasing),
+        label = "continuousLiquidGlassBackdrop"
+    )
     LaunchedEffect(artistOpen, libraryOpen) {
         if (overlayOpen) {
             dragActive = false
@@ -139,7 +156,7 @@ internal fun ImmersiveArtworkPlayer(
             artistLift.animateTo(
                 1f,
                 animationSpec = tween(
-                    if (libraryOpen) 350 else 420,
+                    if (libraryOpen) 580 else 710,
                     easing = FastOutSlowInEasing
                 )
             )
@@ -153,8 +170,8 @@ internal fun ImmersiveArtworkPlayer(
             }
             // Touch-down dismiss should not leave a 600ms tail after the
             // sheet has already followed the finger most of the way.
-            val remainingMs = (250f * artistLift.value)
-                .toInt().coerceIn(80, 250)
+            val remainingMs = (390f * artistLift.value)
+                .toInt().coerceIn(105, 390)
             artistLift.animateTo(
                 0f, animationSpec = tween(remainingMs, easing = FastOutSlowInEasing)
             )
@@ -248,7 +265,9 @@ internal fun ImmersiveArtworkPlayer(
                 .coerceIn(maxHeight * 0.45f, maxHeight * 0.80f)
         val heroHeight by animateDpAsState(requestedHero, tween(220), label = "immersiveHeroHeight")
         artwork(
-            Modifier.matchParentSize(),
+            Modifier.matchParentSize().then(
+                if (liveGlassReady) Modifier.hazeSource(glassBackdrop) else Modifier
+            ),
             heroHeight, if (wide) (1f - controlsFraction + 0.06f) else 1f
         )
         if (portalVisible) {
@@ -482,14 +501,23 @@ internal fun ImmersiveArtworkPlayer(
                             },
                         contentAlignment = Alignment.Center
                     ) {
-                        // Stable opaque artist control on every page.
-                        SolidNavigationSurface(
-                            radius = 50.dp, modifier = Modifier.matchParentSize()
+                        // Home's independent Artist circle is already Liquid
+                        // Glass, so entering Library never swaps materials.
+                        ContinuousLiquidGlassSurface(
+                            radius = 50.dp,
+                            lightMode = lightMode,
+                            liquidGlassEnabled = liquidGlassEnabled,
+                            hazeState = liveBackdrop,
+                            hazeAlpha = liveGlassAlpha,
+            artworkTint = glassArtworkColor,
+                            modifier = Modifier.matchParentSize()
                         )
                         ImmersiveAction(lightMode, Lucide.UserRound,
                             immersiveText("Buka halaman artis", "Open artist page"),
                             onArtist, hasSong && !artistOpen && !libraryOpen,
-                            iconSize = 23.dp, iconTint = Color.White)
+                            iconSize = 23.dp,
+                            iconTint = if (liquidGlassEnabled) Color.White else null,
+                            liquidMotion = liquidGlassEnabled)
                     }
                     // Reserve its space to keep the player geometry stable.
                     // The actual pill and hit targets live in the top overlay.
@@ -531,18 +559,22 @@ internal fun ImmersiveArtworkPlayer(
                     artistLift.snapTo(releasedAt)
                     dragActive = false
                     artistLift.animateTo(
-                        1f, animationSpec = tween(220, easing = FastOutSlowInEasing)
+                        1f, animationSpec = tween(300, easing = FastOutSlowInEasing)
                     )
                 }
             },
             canSwipeDown = {
-                // Do not interrupt the still-opening portal animation with a
+                // Do not interrupt the still-opening 710ms Animatable with a
                 // drag snapTo; allow gestures once the sheet has settled.
                 portalSettled &&
                     (presentingLibrary || canCloseArtistBySwipe())
             },
             swipeFromHeaderOnly = presentingLibrary,
             showArtistCircle = !presentingLibrary,
+            hazeState = liveBackdrop,
+            liquidGlassEnabled = liquidGlassEnabled,
+            hazeAlpha = liveGlassAlpha,
+            artworkTint = glassArtworkColor,
             profile = {
                 if (presentingLibrary) libraryContent(portalSettled)
                 else artistProfile()
@@ -574,9 +606,16 @@ internal fun ImmersiveArtworkPlayer(
                         .size(56.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    // Opaque black circle; transition opacity stays on the GPU.
-                    SolidNavigationSurface(
+                    // The Library Artist bubble uses the EXACT same material
+                    // as its real counterpart on Home. Only its draw-phase
+                    // opacity changes with the transition.
+                    ContinuousLiquidGlassSurface(
                         radius = 50.dp,
+                        lightMode = lightMode,
+                        liquidGlassEnabled = liquidGlassEnabled,
+                        hazeState = liveBackdrop,
+                        hazeAlpha = liveGlassAlpha,
+            artworkTint = glassArtworkColor,
                         modifier = Modifier.matchParentSize()
                             .graphicsLayer {
                                 alpha = libraryArtistCircleOpacity(shownProgress())
@@ -615,6 +654,11 @@ internal fun ImmersiveArtworkPlayer(
                 libraryOpen = libraryOpen,
                 presentingLibrary = presentingLibrary && portalVisible,
                 overlayOpen = overlayOpen,
+                showSolidPill = portalVisible,
+                hazeState = liveBackdrop,
+                liquidGlassEnabled = liquidGlassEnabled,
+                hazeAlpha = liveGlassAlpha,
+            artworkTint = glassArtworkColor,
                 hasSong = hasSong,
                 onLyrics = onLyrics,
                 onLibrary = onLibrary,
@@ -625,7 +669,11 @@ internal fun ImmersiveArtworkPlayer(
     }
 }
 
-/** One opaque black navigation capsule on Home, Library and Artist. */
+/**
+ * One measured navigation row on every screen. The backdrop layers fade
+ * smoothly between the Now Playing capsule and Haze's live frosted glass
+ * while the portal settles. This avoids abrupt style swaps on Home.
+ */
 @Composable
 private fun ImmersiveOverlayActionPill(
     anchorX: Float,
@@ -639,6 +687,11 @@ private fun ImmersiveOverlayActionPill(
     libraryOpen: Boolean,
     presentingLibrary: Boolean,
     overlayOpen: Boolean,
+    showSolidPill: Boolean,
+    hazeState: HazeState?,
+    liquidGlassEnabled: Boolean,
+    hazeAlpha: Float,
+    artworkTint: Color,
     hasSong: Boolean,
     onLyrics: () -> Unit,
     onLibrary: () -> Unit,
@@ -646,7 +699,12 @@ private fun ImmersiveOverlayActionPill(
     onSettings: () -> Unit
 ) {
     val density = LocalDensity.current
-    val iconColor = Color.White
+    val iconColor by animateColorAsState(
+        targetValue = if (liquidGlassEnabled || overlayOpen) Color.White
+            else if (lightMode) Color(0xFF171A20) else Color.White,
+        animationSpec = tween(390, easing = FastOutSlowInEasing),
+        label = "frostedPillIconColor"
+    )
     Box(
         Modifier.offset {
             val diameterPx = with(density) { 56.dp.toPx() }
@@ -665,10 +723,25 @@ private fun ImmersiveOverlayActionPill(
             IntOffset(left.roundToInt(), anchorY.roundToInt())
         }.width(width).height(56.dp)
     ) {
-        // No glass, translucency, background recording or blur crossfade.
-        SolidNavigationSurface(
-            radius = 100.dp, modifier = Modifier.matchParentSize()
-        )
+        // Black solid only for the bottom pill in Library and Artist.
+        // The Now Playing bottom pill retains its original Liquid Glass.
+        if (showSolidPill) {
+            Box(
+                Modifier.matchParentSize()
+                    .clip(RoundedCornerShape(100.dp))
+                    .background(Color.Black)
+            )
+        } else {
+            ContinuousLiquidGlassSurface(
+                radius = 100.dp,
+                lightMode = lightMode,
+                liquidGlassEnabled = liquidGlassEnabled,
+                hazeState = hazeState,
+                hazeAlpha = hazeAlpha,
+                artworkTint = artworkTint,
+                modifier = Modifier.matchParentSize()
+            )
+        }
         Row(
             Modifier.fillMaxSize(),
             verticalAlignment = Alignment.CenterVertically,
@@ -679,35 +752,46 @@ private fun ImmersiveOverlayActionPill(
                 if (lyricsOpen) immersiveText("Tutup lirik", "Close lyrics")
                 else immersiveText("Buka lirik", "Open lyrics"),
                 onLyrics, hasSong, active = lyricsOpen, iconSize = 23.dp,
-                iconTint = iconColor
+                iconTint = iconColor, liquidMotion = liquidGlassEnabled
             )
             // Library now swaps with Artist at the separate circle position,
             // not inside the action pill.
             AnimatedVisibility(
                 visible = !libraryOpen,
-                enter = fadeIn(tween(140)),
-                exit = fadeOut(tween(110))
+                enter = expandHorizontally(
+                    animationSpec = tween(350, easing = FastOutSlowInEasing)
+                ) + fadeIn(tween(260)),
+                exit = shrinkHorizontally(
+                    animationSpec = tween(300, easing = FastOutSlowInEasing)
+                ) + fadeOut(tween(220))
             ) {
                 ImmersiveAction(
                     lightMode, Lucide.ListMusic,
                     immersiveText("Perpustakaan", "Library"),
-                    onLibrary, iconSize = 23.dp, iconTint = iconColor
+                    onLibrary, iconSize = 23.dp, iconTint = iconColor,
+                    liquidMotion = liquidGlassEnabled
                 )
             }
             ImmersiveAction(
                 lightMode, Lucide.Settings2,
                 immersiveText("Pengaturan", "Settings"),
-                onSettings, iconSize = 23.dp, iconTint = iconColor
+                onSettings, iconSize = 23.dp, iconTint = iconColor,
+                liquidMotion = liquidGlassEnabled
             )
             AnimatedVisibility(
                 visible = overlayOpen,
-                enter = fadeIn(tween(140)),
-                exit = fadeOut(tween(110))
+                enter = expandHorizontally(
+                    animationSpec = tween(390, easing = FastOutSlowInEasing)
+                ) + fadeIn(tween(290)),
+                exit = shrinkHorizontally(
+                    animationSpec = tween(330, easing = FastOutSlowInEasing)
+                ) + fadeOut(tween(220))
             ) {
                 ImmersiveAction(
                     lightMode, Lucide.House,
                     immersiveText("Kembali ke pemutar", "Back to Now Playing"),
-                    onHome, iconSize = 23.dp, iconTint = iconColor
+                    onHome, iconSize = 23.dp, iconTint = iconColor,
+                    liquidMotion = liquidGlassEnabled
                 )
             }
         }
@@ -771,15 +855,25 @@ private fun ImmersiveAction(
     icon: ImageVector, label: String, onClick: () -> Unit, enabled: Boolean = true,
     active: Boolean = false, iconSize: Dp = 22.dp,
     iconTint: Color? = null,
+    liquidMotion: Boolean = false,
     touchSize: Dp = 50.dp
 ) {
-    // Lightweight compositor-only scale feedback with no liquid overlay.
+    // iOS-inspired liquid press response is a restrained native Compose
+    // spring, not a screen-wide transform or heavy shader animation.
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
     val touchScale by animateFloatAsState(
-        targetValue = if (enabled && pressed) 0.96f else 1f,
-        animationSpec = spring(dampingRatio = 0.88f, stiffness = 800f),
-        label = "solidNavigationPress"
+        targetValue = if (liquidMotion && pressed) 0.945f else 1f,
+        animationSpec = spring(
+            dampingRatio = 0.86f,
+            stiffness = 680f
+        ),
+        label = "liquidNavigationPress"
+    )
+    val pressLight by animateFloatAsState(
+        targetValue = if (liquidMotion && pressed && enabled) 1f else 0f,
+        animationSpec = spring(dampingRatio = 0.87f, stiffness = 750f),
+        label = "liquidPressReflection"
     )
     IconButton(
         onClick = onClick,
@@ -790,10 +884,33 @@ private fun ImmersiveAction(
                 scaleX = touchScale
                 scaleY = touchScale
             }
+            // A tiny caustic glint blooms under the finger on touch, then
+            // recedes. Unlike a ripple it stays within the round tap target.
+            .drawWithCache {
+                val highlight = Brush.radialGradient(
+                    listOf(
+                        Color.White.copy(alpha = 0.16f * pressLight),
+                        Color.White.copy(alpha = 0.045f * pressLight),
+                        Color.Transparent
+                    ),
+                    center = Offset(size.width * 0.34f, size.height * 0.26f),
+                    radius = size.width * 0.63f
+                )
+                onDrawWithContent {
+                    drawContent()
+                    if (liquidMotion && pressLight > 0.001f) {
+                        drawCircle(
+                            brush = highlight,
+                            radius = size.width * 0.49f,
+                            center = center
+                        )
+                    }
+                }
+            }
             .semantics { selected = active }
     ) {
         Icon(icon, label, tint = (iconTint ?: if (lightMode) Color(0xFF171A20) else Color.White)
-            .copy(alpha = if (!enabled) 0.32f else 1f),
+            .copy(alpha = if (!enabled) 0.26f else if (active) 1f else 0.68f),
             modifier = Modifier.size(iconSize))
     }
 }

@@ -70,6 +70,8 @@ internal fun PlayerSettingsContent(
     onPresentationSelected: (PlayerPresentationMode) -> Unit,
     libraryLightMode: Boolean,
     onLibraryLightModeChange: (Boolean) -> Unit,
+    liquidGlassEnabled: Boolean,
+    onLiquidGlassChange: (Boolean) -> Unit,
     animatedArtworkEnabled: Boolean,
     roundedCarouselCorners: Boolean,
     onRoundedCarouselCornersChange: (Boolean) -> Unit,
@@ -242,6 +244,17 @@ internal fun PlayerSettingsContent(
                     }
                     SettingsDivider()
                     if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
+                        SettingToggle(
+                            title = settingsText("Liquid Glass", "Liquid Glass"),
+                            subtitle = settingsText(
+                                "Kaca dinamis pada navigasi. Nonaktifkan untuk tampilan lebih ringan.",
+                                "Dynamic glass navigation. Turn off for smoother, lighter rendering."
+                            ),
+                            checked = liquidGlassEnabled,
+                            onCheckedChange = onLiquidGlassChange,
+                            icon = Icons.Default.WaterDrop
+                        )
+                        SettingsDivider()
                         SettingToggle(
                             settingsText("Daftar lagu terang", "Light song list"),
                             settingsText(

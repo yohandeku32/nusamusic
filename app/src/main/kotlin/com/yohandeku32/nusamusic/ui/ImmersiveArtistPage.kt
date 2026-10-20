@@ -159,7 +159,7 @@ fun ImmersiveArtistPage(
                         onClick = { navigateBack() },
                         modifier = Modifier.statusBarsPadding()
                             .padding(start = 16.dp, top = 10.dp)
-                            .size(46.dp).immersiveSolidPill(100.dp)
+                            .size(46.dp).immersiveGlassPill(100.dp)
                     ) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
@@ -384,9 +384,9 @@ private fun ArtistActionButton(
         onClick = onClick,
         modifier = modifier.height(50.dp),
         shape = RoundedCornerShape(17.dp),
-        color = if (primary) artistInk else Color.Black,
+        color = if (primary) artistInk else Color.White.copy(alpha = 0.09f),
         border = if (primary) null else androidx.compose.foundation.BorderStroke(
-            1.dp, Color(0xFF333333)
+            1.dp, Color.White.copy(alpha = 0.10f)
         )
     ) {
         Row(

@@ -176,7 +176,7 @@ import com.yohandeku32.nusamusic.ui.VinylSongList
 import com.yohandeku32.nusamusic.ui.ImmersiveMusicLibrary
 import com.yohandeku32.nusamusic.ui.immersiveColors
 import com.yohandeku32.nusamusic.ui.ImmersiveArtworkPlayer
-import com.yohandeku32.nusamusic.ui.immersiveSolidPill
+import com.yohandeku32.nusamusic.ui.immersiveGlassPill
 import com.yohandeku32.nusamusic.ui.ImmersiveArtworkScene
 import com.yohandeku32.nusamusic.ui.ImmersiveArtistPage
 import com.yohandeku32.nusamusic.ui.ImmersiveArtistPageState
@@ -1937,6 +1937,11 @@ private fun NusaMusicApp(
                 uiPrefs.getBoolean("immersive_light_mode", false))
         )
     }
+    // Existing frosted-glass users keep the appearance by default; the
+    // preference can disable costly live backdrop capture immediately.
+    var liquidGlassEnabled by remember {
+        mutableStateOf(uiPrefs.getBoolean("immersive_liquid_glass_enabled", true))
+    }
     var animatedArtworkEnabled by remember {
         mutableStateOf(uiPrefs.getBoolean("animated_artwork_enabled", true))
     }
@@ -2284,6 +2289,11 @@ private fun NusaMusicApp(
                 onResetCustomTitleFont = onResetCustomTitleFont,
                 playerPresentationMode = playerPresentationMode,
                 libraryLightMode = libraryLightMode,
+                liquidGlassEnabled = liquidGlassEnabled,
+                onLiquidGlassChange = { enabled ->
+                    liquidGlassEnabled = enabled
+                    uiPrefs.edit().putBoolean("immersive_liquid_glass_enabled", enabled).apply()
+                },
                 onLibraryLightModeChange = { light ->
                     libraryLightMode = light
                     uiPrefs.edit()
@@ -2508,6 +2518,7 @@ private fun NusaMusicApp(
                                 },
                                 libraryOpen = libraryOverlayOpen,
                                 libraryLightMode = libraryLightMode,
+                                liquidGlassEnabled = liquidGlassEnabled,
                                 glassArtworkColor = playerGlassArtworkColor,
                                 onLibraryClose = { libraryOverlayOpen = false },
                                 onHome = {
@@ -3519,7 +3530,7 @@ private fun AudioQualityPill(
                             // Preserve the original compact rounded rectangle;
                             // only its translucent glass material matches the
                             // bottom controls, not their capsule silhouette.
-                            if (immersive) Modifier.immersiveSolidPill(7.dp)
+                            if (immersive) Modifier.immersiveGlassPill(7.dp, immersiveLightMode)
                             else Modifier
                                 .clip(RoundedCornerShape(7.dp))
                                 .background(
@@ -3548,7 +3559,7 @@ private fun AudioQualityPill(
                     modifier = Modifier
                         .padding(top = if (immersive) 0.dp else 4.dp)
                         .then(
-                            if (immersive) Modifier.immersiveSolidPill(100.dp)
+                            if (immersive) Modifier.immersiveGlassPill(100.dp, immersiveLightMode)
                             else Modifier
                                 .clip(RoundedCornerShape(50))
                                 .background(MaterialTheme.colorScheme.surfaceVariant)
