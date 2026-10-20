@@ -126,8 +126,17 @@ class MiuixPagerTouchTest {
         // Artist/Library content composed in the actual 36dp underlap.
         compose.onNodeWithTag("pager").performTouchInput {
             down(center)
-            moveBy(Offset(width * 0.10f, 0f))
-            moveBy(Offset(-width * 0.10f, 0f))
+            // Inject a genuinely slow reversible gesture, not two near-
+            // instantaneous deltas that accidentally produce a fling.
+            repeat(6) {
+                moveBy(Offset(width * 0.018f, 0f))
+                advanceEventTime(45)
+            }
+            repeat(6) {
+                moveBy(Offset(-width * 0.018f, 0f))
+                advanceEventTime(45)
+            }
+            advanceEventTime(160)
             up()
         }
         compose.waitForIdle()

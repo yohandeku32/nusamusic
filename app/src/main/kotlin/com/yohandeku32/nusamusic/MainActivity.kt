@@ -1840,6 +1840,18 @@ private fun NusaMusicApp(
     var isFavorite by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var artistOverlayOpen by remember { mutableStateOf(false) }
+    // Resume Media3 animated artwork only AFTER the circle has returned to
+    // the bottom pill. Decoder wake-up should not compete with the 590ms
+    // close animation or create a hitch on its final frames.
+    var artistVideoSuspended by remember { mutableStateOf(false) }
+    LaunchedEffect(artistOverlayOpen) {
+        if (artistOverlayOpen) {
+            artistVideoSuspended = true
+        } else if (artistVideoSuspended) {
+            delay(630L)
+            artistVideoSuspended = false
+        }
+    }
     var deleteFromLibrary by remember { mutableStateOf<Song?>(null) }
     val artistKey = ArtistNameUtils.cacheKey(currentSong?.artist)
 
@@ -2467,7 +2479,8 @@ private fun NusaMusicApp(
                                         currentSong, animatedArtworkEnabled, heroHeight, heroWidth,
                                         artworkModifier, lyricsMode = lyricsRequested,
                                         sourceOrder = artworkSourceOrder,
-                                        playerPageVisible = pagerState.settledPage == playerPage && !artistOverlayOpen,
+                                        playerPageVisible = pagerState.settledPage == playerPage &&
+                                            !artistOverlayOpen && !artistVideoSuspended,
                                         pageReveal = {
                                             // Renderer reads the changing pager
                                             // offset only inside graphicsLayer.
