@@ -76,6 +76,7 @@ internal fun ImmersiveArtworkPlayer(
     onLyrics: () -> Unit,
     onArtist: () -> Unit,
     artistOpen: Boolean = false,
+    canCloseArtistBySwipe: () -> Boolean = { true },
     onArtistClose: () -> Unit = {},
     artistProfile: @Composable () -> Unit = {},
     libraryOpen: Boolean = false,
@@ -450,7 +451,7 @@ internal fun ImmersiveArtworkPlayer(
             topInsetPx = with(density) { topInset.toPx() },
             onClose = if (lastOverlayIsLibrary) onLibraryClose else onArtistClose,
             canSwipeDown = {
-                if (lastOverlayIsLibrary) true else true
+                lastOverlayIsLibrary || canCloseArtistBySwipe()
             },
             swipeFromHeaderOnly = lastOverlayIsLibrary,
             showArtistCircle = !lastOverlayIsLibrary,

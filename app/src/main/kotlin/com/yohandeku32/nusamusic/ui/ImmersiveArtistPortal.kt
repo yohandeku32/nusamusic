@@ -60,8 +60,8 @@ internal fun ImmersiveArtistPortal(
             val down = awaitFirstDown(
                 requireUnconsumed = false, pass = PointerEventPass.Initial
             )
-            val acceptsStart = !swipeFromHeaderOnly ||
-                down.position.y <= maxHeaderY
+            val acceptsStart = (!swipeFromHeaderOnly ||
+                down.position.y <= maxHeaderY) && canSwipeDown()
             var deltaX = 0f
             var deltaY = 0f
             var pointer = down.id
@@ -70,7 +70,7 @@ internal fun ImmersiveArtistPortal(
                 val change = event.changes.firstOrNull { it.id == pointer }
                     ?: event.changes.firstOrNull { it.pressed } ?: break
                 if (!change.pressed) {
-                    if (open && acceptsStart && canSwipeDown() &&
+                    if (open && acceptsStart &&
                         shouldDismissOverlaySwipe(deltaX, deltaY, minSwipe)) {
                         onClose()
                     }

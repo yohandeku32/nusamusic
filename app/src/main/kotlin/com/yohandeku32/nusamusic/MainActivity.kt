@@ -2334,6 +2334,11 @@ private fun NusaMusicApp(
     androidx.activity.compose.BackHandler(
         enabled = lyricsRequested && pagerState.settledPage == playerPage && !showSettings
     ) { lyricsRequested = false }
+    // The Library is now an in-player overlay rather than a pager destination.
+    // Physical Android Back must dismiss it even when its search isn't active.
+    androidx.activity.compose.BackHandler(
+        enabled = libraryOverlayOpen && !showSettings
+    ) { libraryOverlayOpen = false }
     LaunchedEffect(pagerState.settledPage) {
         if (pagerState.settledPage != playerPage) lyricsRequested = false
     }
@@ -2445,6 +2450,10 @@ private fun NusaMusicApp(
                                     }
                                 },
                                 artistOpen = artistOverlayOpen,
+                                canCloseArtistBySwipe = {
+                                    artistPageState.listState.firstVisibleItemIndex == 0 &&
+                                        artistPageState.listState.firstVisibleItemScrollOffset < 12
+                                },
                                 onArtistClose = { artistOverlayOpen = false },
                                 artistProfile = {
                                     ImmersiveArtistPage(
