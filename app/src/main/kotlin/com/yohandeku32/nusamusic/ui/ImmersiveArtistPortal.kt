@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
@@ -55,13 +57,17 @@ internal fun ImmersiveArtistPortal(
     val destY = topInsetPx + with(density) { 10.dp.toPx() }
     val minSwipe = with(density) { 96.dp.toPx() }
     val maxHeaderY = topInsetPx + with(density) { 118.dp.toPx() }
-    Box(modifier.pointerInput(open, swipeFromHeaderOnly, onClose) {
+    // Audio progress can recompose the player frequently. Keep the pointer
+    // detector alive across callback changes so a slow gesture is never lost.
+    val closeCallback by rememberUpdatedState(onClose)
+    val swipeAllowed by rememberUpdatedState(canSwipeDown)
+    Box(modifier.pointerInput(open, swipeFromHeaderOnly) {
         awaitEachGesture {
             val down = awaitFirstDown(
                 requireUnconsumed = false, pass = PointerEventPass.Initial
             )
             val acceptsStart = (!swipeFromHeaderOnly ||
-                down.position.y <= maxHeaderY) && canSwipeDown()
+                down.position.y <= maxHeaderY) && swipeAllowed()
             var deltaX = 0f
             var deltaY = 0f
             var pointer = down.id
@@ -72,7 +78,7 @@ internal fun ImmersiveArtistPortal(
                 if (!change.pressed) {
                     if (open && acceptsStart &&
                         shouldDismissOverlaySwipe(deltaX, deltaY, minSwipe)) {
-                        onClose()
+                        closeCallback()
                     }
                     break
                 }
