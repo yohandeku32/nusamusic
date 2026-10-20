@@ -1902,7 +1902,7 @@ private fun NusaMusicApp(
     // bitmap on the UI thread just to recolor the navigation glass.
     var playerGlassArtworkColor by remember(currentSong?.uri) {
         mutableStateOf(
-            currentSong?.let { ImmersiveArtworkCache.cached(it)?.backdrop }?.let(::Color)
+            currentSong?.let { ImmersiveArtworkCache.cached(it)?.backdrop }?.let { Color(it) }
                 ?: Color(0xFF29303B)
         )
     }

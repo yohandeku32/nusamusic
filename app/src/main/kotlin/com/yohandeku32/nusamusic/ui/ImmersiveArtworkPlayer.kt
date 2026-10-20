@@ -499,6 +499,7 @@ internal fun ImmersiveArtworkPlayer(
                             immersiveText("Buka halaman artis", "Open artist page"),
                             onArtist, hasSong && !artistOpen && !libraryOpen,
                             iconSize = 23.dp,
+                            iconTint = if (liquidGlassEnabled) Color.White else null,
                             liquidMotion = liquidGlassEnabled)
                     }
                     // Reserve its space to keep the player geometry stable.
@@ -680,7 +681,7 @@ private fun ImmersiveOverlayActionPill(
 ) {
     val density = LocalDensity.current
     val iconColor by animateColorAsState(
-        targetValue = if (overlayOpen) Color.White
+        targetValue = if (liquidGlassEnabled || overlayOpen) Color.White
             else if (lightMode) Color(0xFF171A20) else Color.White,
         animationSpec = tween(390, easing = FastOutSlowInEasing),
         label = "frostedPillIconColor"
