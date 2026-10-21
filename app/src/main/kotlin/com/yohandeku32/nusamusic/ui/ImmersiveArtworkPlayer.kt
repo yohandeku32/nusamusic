@@ -802,19 +802,23 @@ private fun ImmersiveOverlayActionPill(
                 onLyrics, hasSong, active = lyricsOpen, iconSize = 23.dp,
                 iconTint = iconColor, liquidMotion = liquidGlassEnabled
             )
-            // Library now swaps with Artist at the separate circle position,
-            // not inside the action pill.
-            AnimatedVisibility(
-                visible = !libraryOpen,
-                // Opacity-only: expanding/shrinking the button remeasured the
-                // row during every animation frame and caused visible drops.
-                enter = fadeIn(tween(105)),
-                exit = fadeOut(tween(90))
-            ) {
+            // A single stable 50dp slot morphs Library into Home. Keeping
+            // the same measured slot prevents the entire navigation row from
+            // redistributing its icons in the middle of a page transition.
+            Crossfade(
+                targetState = libraryOpen,
+                animationSpec = tween(95),
+                label = "navigationLibraryHomeGlyph"
+            ) { showingLibraryHome ->
                 ImmersiveAction(
-                    lightMode, Lucide.ListMusic,
-                    immersiveText("Perpustakaan", "Library"),
-                    onLibrary, iconSize = 23.dp, iconTint = iconColor,
+                    lightMode,
+                    if (showingLibraryHome) Lucide.House else Lucide.ListMusic,
+                    if (showingLibraryHome)
+                        immersiveText("Kembali ke pemutar", "Back to Now Playing")
+                    else immersiveText("Perpustakaan", "Library"),
+                    if (showingLibraryHome) onHome else onLibrary,
+                    enabled = showingLibraryHome == libraryOpen,
+                    iconSize = 23.dp, iconTint = iconColor,
                     liquidMotion = liquidGlassEnabled
                 )
             }
@@ -824,8 +828,10 @@ private fun ImmersiveOverlayActionPill(
                 onSettings, iconSize = 23.dp, iconTint = iconColor,
                 liquidMotion = liquidGlassEnabled
             )
+            // Artist alone needs the additional Home action. Library
+            // already uses the first, fixed-width slot for its Home button.
             AnimatedVisibility(
-                visible = overlayOpen,
+                visible = overlayOpen && !libraryOpen,
                 enter = fadeIn(tween(110)),
                 exit = fadeOut(tween(90))
             ) {
