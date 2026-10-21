@@ -79,16 +79,42 @@ internal class OnlineLyricsService(
     }
 
     private suspend fun findLrclib(song: Song): Result? {
-        val parameters = buildString {
-            append("?track_name=${encodeLyricsQuery(song.title)}")
-            append("&artist_name=${encodeLyricsQuery(primaryLyricsArtist(song.artist))}")
-            if (song.album.isNotBlank()) append("&album_name=${encodeLyricsQuery(song.album)}")
-            if (song.durationMs in 1000L..3_600_000L)
-                append("&duration=${(song.durationMs + 500L) / 1000L}")
+        val common = "?track_name=${encodeLyricsQuery(song.title)}" +
+            "&artist_name=${encodeLyricsQuery(primaryLyricsArtist(song.artist))}"
+        val duration = if (song.durationMs in 1000L..3_600_000L)
+            "&duration=${(song.durationMs + 500L) / 1000L}" else ""
+        val album = if (song.album.isNotBlank())
+            "&album_name=${encodeLyricsQuery(song.album)}" else ""
+
+        // First exact matching, then drop potentially incorrect album tags,
+        // then search. Metadata in personal local files is often incomplete.
+        val attempts = buildList {
+            if (album.isNotBlank()) add("https://lrclib.net/api/get$common$album$duration")
+            add("https://lrclib.net/api/get$common$duration")
+        }.distinct()
+        for (url in attempts) {
+            coroutineContext.ensureActive()
+            val json = request(url) ?: continue
+            val candidate = parseLrclib(JSONObject(json), song)
+            if (candidate != null) return candidate
         }
-        // A 404 means missing, not a network failure.
-        val json = request("https://lrclib.net/api/get$parameters") ?: return null
-        val item = JSONObject(json)
+
+        val search = "https://lrclib.net/api/search" + common
+        val response = request(search) ?: return null
+        val candidates = org.json.JSONArray(response)
+        val compatible = buildList {
+            for (i in 0 until minOf(20, candidates.length())) {
+                val data = candidates.optJSONObject(i) ?: continue
+                val lyrics = parseLrclib(data, song) ?: continue
+                val albumScore = if (normalizeLyricsTag(data.optString("albumName")) ==
+                    normalizeLyricsTag(song.album)) 1 else 0
+                add(albumScore to lyrics)
+            }
+        }
+        return compatible.maxByOrNull { it.first }?.second
+    }
+
+    private fun parseLrclib(item: JSONObject, song: Song): Result? {
         if (item.optBoolean("instrumental") ||
             !onlineLyricsMatch(song,
                 listOf(item.optString("trackName")), listOf(item.optString("artistName")))
