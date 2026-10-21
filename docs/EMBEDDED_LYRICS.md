@@ -11,10 +11,10 @@ LyricsRepository first reads the current local audio URI on Dispatchers.IO.
 If the file has valid authored word/syllable-timed karaoke, that embedded version
 wins and no online request is made. Otherwise NusaMusic searches lrc.red via
 https://lrc.red/match.json or https://lrc.red/search.json, then downloads
-https://lrc.red/s/{ISRC}.song.json. The API response's original TTML is
-preferred; explicitly timed word/line segments can also be reconstructed into
-TTML. Only lrc.red is queried. Title, artist, and duration checks avoid
-incorrect-song matches.
+https://lrc.red/s/{ISRC}.ttml first, tries .song.json for explicitly timed
+word/line segments if needed, and finally .lrc for line-synced lyrics.
+If lrc.red cannot supply a result, a bounded LRCLIB API search is the final
+fallback. Title, artist, and duration checks avoid incorrect-song matches.
 
 The original embedded version can render immediately while online lookup runs.
 Only a more precisely synchronized online version replaces it. Plain or
@@ -22,7 +22,7 @@ malformed online responses never displace valid embedded lyrics; offline failure
 keeps local lyrics. No API token, user sign-in, WebView, Apple private endpoint,
 sidecar file, audio upload, or invented word timing is used.
 
-A separate bounded online cache at cacheDir/lyrics/online-lrcred-v1 stores up to 120
+A separate bounded online cache at cacheDir/lyrics/online-lrcred-v2 stores up to 120
 successful matches, including provider attribution in cache metadata.
 Confirmed misses expire after 6 hours; network errors do not become misses.
 Settings > Lyrics > Reload lyrics forces a fresh embedded/online lookup.
