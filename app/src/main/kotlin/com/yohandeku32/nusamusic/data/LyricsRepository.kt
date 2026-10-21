@@ -24,14 +24,14 @@ data class SongLyrics(
 )
 
 /**
- * Offline-first, optional online upgrade. Authoritative embedded karaoke
- * always wins. AMLL TTML can upgrade plain/line-only metadata; LRCLIB LRC is
- * the line-synced fallback. No WebView and no audio file leaves the device.
+ * Offline-first online upgrade. Embedded karaoke always wins; lrc.red can
+ * upgrade missing, plain or line-synced local lyrics with authored timing.
+ * No WebView and no audio leaves the device.
  */
 class LyricsRepository(context: Context) {
     private val resolver = context.applicationContext.contentResolver
     private val embedded = LyricsDiskStore(File(context.applicationContext.cacheDir, "lyrics/embedded-v2"), maxEntries = 120)
-    private val online = LyricsDiskStore(File(context.applicationContext.cacheDir, "lyrics/online-v1"), maxEntries = 120)
+    private val online = LyricsDiskStore(File(context.applicationContext.cacheDir, "lyrics/online-lrcred-v1"), maxEntries = 120)
     private val service = OnlineLyricsService()
 
     companion object {
