@@ -13,6 +13,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
+/** Show Save only for retrieved lyrics that are not already stored in audio. */
+internal fun lyricsNeedEmbedding(data: SongLyrics?, hasEmbeddedLyrics: Boolean): Boolean =
+    !hasEmbeddedLyrics && data != null && data.stored.content.isNotBlank() &&
+        data.stored.source != "embedded"
+
 class SongLyricsState {
     var data by mutableStateOf<SongLyrics?>(null)
     var hasEmbeddedLyrics by mutableStateOf(false)
