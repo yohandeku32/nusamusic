@@ -1,8 +1,6 @@
 package com.yohandeku32.nusamusic.ui
 
-import kotlin.math.PI
 import kotlin.math.abs
-import kotlin.math.sin
 
 /** Only timestamped, reliably held vocals can animate a word. */
 internal data class LyricsHeldWordUnit(
@@ -30,6 +28,12 @@ internal data class LyricsHeldWordPose(
  * A slow bell-shaped crest travels across the measured word as the vowel
  * progresses. The amplitude eases in and out over the authored hold.
  */
+/** C2-continuous rise/fall; exactly zero slope at the start, crest and end. */
+internal fun heldWordEase(value: Float): Float {
+    val t = value.coerceIn(0f, 1f)
+    return t * t * t * (t * (6f * t - 15f) + 10f)
+}
+
 internal class LyricsHeldWordWave(units: List<LyricsHeldWordUnit>) {
     private data class Word(
         val left: Float,
@@ -83,25 +87,34 @@ internal class LyricsHeldWordWave(units: List<LyricsHeldWordUnit>) {
             playbackMs >= word.holdEndMs) return LyricsHeldWordPose()
 
         val elapsed = (playbackMs.toLong() - word.holdStartMs).toFloat()
-        // The envelope is sampled directly from audio time: pause freezes it,
-        // seek reanchors immediately, and no independent cycle resets.
-        val riseMs = minOf(900f, duration * 0.30f).coerceAtLeast(1f)
-        val fallMs = minOf(850f, duration * 0.27f).coerceAtLeast(1f)
-        val envelope = lyricEase(elapsed / riseMs) *
-            lyricEase((duration - elapsed) / fallMs)
         val progress = (elapsed / duration).coerceIn(0f, 1f)
 
-        // A slow, broad mountain: its crest moves from left to right with the
-        // held syllable, without turning every letter into a separate wave.
+        // Spend the WHOLE authored hold on one unhurried rise and descent,
+        // rather than attacking in 900ms and dropping in the last 850ms.
+        // The peak arrives around 42%; the remaining 58% is a slow release.
+        // Quintic easing makes acceleration, slope and the final return to
+        // baseline continuous, including the final frame before the next lyric.
+        val peakAt = 0.42f
+        val envelope = if (progress <= peakAt) {
+            heldWordEase(progress / peakAt)
+        } else {
+            1f - heldWordEase((progress - peakAt) / (1f - peakAt))
+        }
+
+        // One broad mountain moving from left to right through the authored
+        // word. Adjacent syllables feel like a connected arch, not independent
+        // quick bounces. Do not split or clip the font's shaped text run.
         val center = ((centerDp - word.left) /
             (word.right - word.left).coerceAtLeast(1f)).coerceIn(0f, 1f)
-        val crest = 0.32f + 0.36f * lyricEase(progress)
+        val crest = 0.30f + 0.40f * heldWordEase(progress)
         val distance = abs(center - crest)
-        val mountain = 1f - lyricEase(distance / 0.75f)
-        // Gentle breathing rather than a short, repetitive vibration.
-        val breathing = (0.88 + 0.12 *
-            sin(playbackMs.toDouble() * 2.0 * PI / 3_800.0)).toFloat()
-        val strength = (envelope * mountain * breathing).coerceIn(0f, 1f)
+        val mountain = 1f - heldWordEase(distance / 0.82f)
+
+        // A 1.2-second unit cannot carry a full 4.5dp mountain gracefully.
+        // Longer actual holds grow into the full expression continuously.
+        val holdWeight = 0.32f + 0.68f *
+            heldWordEase((duration - 1_200f) / 1_600f)
+        val strength = (envelope * mountain * holdWeight).coerceIn(0f, 1f)
 
         // <5dp total lift; a mild tilt conveys a moving arch while retaining
         // complete glyph shapes, kerning and diacritics.
