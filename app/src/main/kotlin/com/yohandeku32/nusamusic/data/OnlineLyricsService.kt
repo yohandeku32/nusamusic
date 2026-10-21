@@ -6,140 +6,155 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 import java.util.Locale
 import kotlin.coroutines.coroutineContext
+import kotlin.math.abs
 
 /**
- * Optional online source for LOCAL songs. AMLL supplies authored TTML
- * word/syllable timing; LRCLIB supplies synced LRC as the fallback.
- * No WebView, tokens, user account, lyrics HTML scraping or media upload.
+ * lrc.red only: resolve title and artist via match/search, then fetch the
+ * ISRC-specific song JSON containing original TTML or timed lyric lines.
+ * No Apple Music account, WebView or uploaded audio.
  */
 internal class OnlineLyricsService(
-    private val request: suspend (String) -> String? = ::requestLyricsJson
+    private val request: suspend (String) -> String? = ::requestLyricsText
 ) {
-    data class Result(val content: String, val source: String)
+    data class Result(val content: String, val source: String = "lrc.red")
     data class Lookup(val result: Result?, val conclusivelyMissing: Boolean)
 
     suspend fun lookup(song: Song): Lookup {
         if (song.title.isBlank() || song.artist.isBlank()) return Lookup(null, true)
-        var allAvailable = true
-        val amll = try { findAmll(song) }
-            catch (e: CancellationException) { throw e }
-            catch (_: Exception) { allAvailable = false; null }
-        if (amll != null) return Lookup(amll, true)
+        val artist = primaryLyricsArtist(song.artist)
+        val shared = "track=" + encodeLyricsQuery(song.title) +
+            "&artist=" + encodeLyricsQuery(artist)
+        val album = if (song.album.isNotBlank())
+            "&album=" + encodeLyricsQuery(song.album) else ""
+        val duration = if (song.durationMs in 1_000L..3_600_000L)
+            "&duration=" + ((song.durationMs + 500L) / 1_000L) else ""
+        val queries = listOf(
+            "https://lrc.red/match.json?" + shared + album + duration,
+            "https://lrc.red/match.json?" + shared,
+            "https://lrc.red/search.json?q=" + encodeLyricsQuery(song.title + " " + artist)
+        ).distinct()
 
-        val lrclib = try { findLrclib(song) }
-            catch (e: CancellationException) { throw e }
-            catch (_: Exception) { allAvailable = false; null }
-        return Lookup(lrclib, allAvailable)
+        var gotSearchResponse = false
+        var hadError = false
+        val seenIsrcs = HashSet<String>()
+        for (url in queries) {
+            coroutineContext.ensureActive()
+            val payload = try { request(url) }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { hadError = true; continue }
+            if (payload == null) continue
+            val hits = try { JSONObject(payload).optJSONArray("hits") }
+                catch (_: Exception) { hadError = true; continue }
+            if (hits == null) { hadError = true; continue }
+            gotSearchResponse = true
+            for (index in 0 until minOf(hits.length(), 6)) {
+                coroutineContext.ensureActive()
+                val hit = hits.optJSONObject(index) ?: continue
+                val isrc = hit.optString("isrc").trim().uppercase(Locale.ROOT)
+                if (!VALID_ISRC.matches(isrc) || !seenIsrcs.add(isrc)) continue
+                val title = hit.optString("title").ifBlank { hit.optString("track") }
+                val artistName = hit.optString("artist")
+                if (title.isNotBlank() && artistName.isNotBlank() &&
+                    !onlineLyricsMatch(song, listOf(title), listOf(artistName))) continue
+                try {
+                    fetchSong(isrc, song)?.let { return Lookup(it, true) }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) { hadError = true }
+            }
+        }
+        return Lookup(null, gotSearchResponse && !hadError)
     }
 
-    private suspend fun findAmll(song: Song): Result? {
-        val url = "https://api.amll.dev/v1/lyrics/search" +
-            "?musicName=${encodeLyricsQuery(song.title)}" +
-            "&artistName=${encodeLyricsQuery(primaryLyricsArtist(song.artist))}&pageSize=8"
-        val root = JSONObject(request(url) ?: throw IOException("AMLL unavailable"))
-        val items = root.optJSONObject("data")?.optJSONArray("items") ?: return null
-        val candidates = buildList {
-            for (i in 0 until minOf(items.length(), 8)) {
-                val entry = items.optJSONObject(i) ?: continue
-                val titleNames = entry.optJSONArray("musicNames").lyricNames()
-                val artistNames = entry.optJSONArray("artistNames").lyricNames()
-                if (!onlineLyricsMatch(song, titleNames, artistNames)) continue
-                val filename = entry.optString("filename")
-                if (filename.isBlank() || !filename.endsWith(".ttml")) continue
-                val albums = entry.optJSONArray("albumNames").lyricNames()
-                val albumRank = if (song.album.isNotBlank() &&
-                    albums.any { normalizeLyricsTag(it) == normalizeLyricsTag(song.album) }
-                ) 1 else 0
-                add(albumRank to filename)
-            }
-        }.sortedByDescending { it.first }
-        // Bounded fetches. Invalid community TTML must never replace a local
-        // lyric or trigger a provider-wide crawl of candidate versions.
-        for ((_, filename) in candidates.take(2)) {
-            coroutineContext.ensureActive()
-            val uri = "https://api.amll.dev/v1/lyrics/get?filename=${encodeLyricsQuery(filename)}"
-            val response = JSONObject(request(uri) ?: throw IOException("AMLL unavailable"))
-            val ttml = response.optJSONObject("data")?.optString("lyrics").orEmpty()
-            if (ttml.isNotBlank() && ttml.toByteArray(Charsets.UTF_8).size <= LyricsDecoder.MAX_BYTES &&
-                runCatching {
-                    LyricsDecoder.decodeWithTiming(ttml, song.durationMs)
-                        .lyrics.lines.any {
-                            it is com.mocharealm.accompanist.lyrics.core.model.karaoke.KaraokeLine
-                        }
-                }.getOrDefault(false)
-            ) return Result(ttml, "AMLL")
-        }
+    private suspend fun fetchSong(isrc: String, song: Song): Result? {
+        val payload = request("https://lrc.red/s/" + isrc + ".song.json") ?: return null
+        val record = JSONObject(payload)
+        val title = record.optString("title")
+        val artist = record.optString("artist")
+        if (title.isNotBlank() && artist.isNotBlank() &&
+            !onlineLyricsMatch(song, listOf(title), listOf(artist))) return null
+        val duration = record.optDouble("duration", Double.NaN)
+        if (duration.isFinite() && duration > 0 && song.durationMs > 0 &&
+            abs(song.durationMs / 1000.0 - duration) > 6.0) return null
+
+        // Original word-timed TTML preserves Apple-style syllable boundaries.
+        val ttml = record.optString("source").takeIf { it.startsWith("<") }
+        if (validTiming(ttml, song.durationMs)) return Result(ttml!!)
+
+        // A number of lrc.red records contain only structured timed lines.
+        // Convert explicit timestamps to TTML; never invent word timings.
+        val reconstructed = reconstructTtml(record)
+        if (validTiming(reconstructed, song.durationMs)) return Result(reconstructed!!)
         return null
     }
 
-    private suspend fun findLrclib(song: Song): Result? {
-        val common = "?track_name=${encodeLyricsQuery(song.title)}" +
-            "&artist_name=${encodeLyricsQuery(primaryLyricsArtist(song.artist))}"
-        val duration = if (song.durationMs in 1000L..3_600_000L)
-            "&duration=${(song.durationMs + 500L) / 1000L}" else ""
-        val album = if (song.album.isNotBlank())
-            "&album_name=${encodeLyricsQuery(song.album)}" else ""
+    private fun validTiming(raw: String?, duration: Long): Boolean =
+        !raw.isNullOrBlank() &&
+            raw.toByteArray(Charsets.UTF_8).size <= LyricsDecoder.MAX_BYTES &&
+            runCatching { LyricsDecoder.decodeWithTiming(raw, duration).lyrics.lines.isNotEmpty() }
+                .getOrDefault(false)
 
-        // First exact matching, then drop potentially incorrect album tags,
-        // then search. Metadata in personal local files is often incomplete.
-        val attempts = buildList {
-            if (album.isNotBlank()) add("https://lrclib.net/api/get$common$album$duration")
-            add("https://lrclib.net/api/get$common$duration")
-        }.distinct()
-        for (url in attempts) {
-            coroutineContext.ensureActive()
-            val json = request(url) ?: continue
-            val candidate = parseLrclib(JSONObject(json), song)
-            if (candidate != null) return candidate
-        }
-
-        val search = "https://lrclib.net/api/search" + common
-        val response = request(search) ?: return null
-        val candidates = org.json.JSONArray(response)
-        val compatible = buildList {
-            for (i in 0 until minOf(20, candidates.length())) {
-                val data = candidates.optJSONObject(i) ?: continue
-                val lyrics = parseLrclib(data, song) ?: continue
-                val albumScore = if (normalizeLyricsTag(data.optString("albumName")) ==
-                    normalizeLyricsTag(song.album)) 1 else 0
-                add(albumScore to lyrics)
+    private fun reconstructTtml(record: JSONObject): String? {
+        val lyrics = record.optJSONObject("lyrics") ?: return null
+        val rows = lyrics.optJSONArray("lines") ?: return null
+        if (rows.length() !in 1..800) return null
+        val wordSync = lyrics.optString("sync") == "word"
+        val xml = StringBuilder("<tt><body>")
+        var count = 0
+        for (index in 0 until rows.length()) {
+            val row = rows.optJSONObject(index) ?: continue
+            val begin = row.second("begin") ?: continue
+            val end = row.second("end") ?: continue
+            if (end <= begin) continue
+            val words = if (wordSync) row.optJSONArray("words") else null
+            val pieces = ArrayList<Triple<String, Double, Double>>()
+            if (words != null) {
+                for (w in 0 until minOf(words.length(), 100)) {
+                    val word = words.optJSONArray(w) ?: continue
+                    for (k in 0 until minOf(word.length(), 32)) {
+                        val syllable = word.optJSONObject(k) ?: continue
+                        val text = syllable.optString("text")
+                        val a = syllable.second("begin") ?: continue
+                        val b = syllable.second("end") ?: continue
+                        if (text.isBlank() || b <= a || a < begin || b > end + 0.2) continue
+                        val gap = if (k == word.length() - 1 && w < words.length() - 1)
+                            " " else ""
+                        pieces.add(Triple(text + gap, a, b))
+                    }
+                }
             }
+            val lineText = row.optString("text")
+            if (pieces.isEmpty() && lineText.isBlank()) continue
+            xml.append("<p begin=\"").append(begin).append("s\" end=\"")
+                .append(end).append("s\">")
+            if (pieces.isEmpty()) xml.append(escapeXml(lineText))
+            else for ((text, a, b) in pieces) {
+                xml.append("<span begin=\"").append(a).append("s\" end=\"")
+                    .append(b).append("s\">").append(escapeXml(text)).append("</span>")
+            }
+            xml.append("</p>")
+            count++
         }
-        return compatible.maxByOrNull { it.first }?.second
-    }
-
-    private fun parseLrclib(item: JSONObject, song: Song): Result? {
-        if (item.optBoolean("instrumental") ||
-            !onlineLyricsMatch(song,
-                listOf(item.optString("trackName")), listOf(item.optString("artistName")))
-        ) return null
-        val remoteDuration = item.optDouble("duration", 0.0)
-        if (song.durationMs > 0 && remoteDuration > 0 &&
-            kotlin.math.abs(song.durationMs / 1000.0 - remoteDuration) > 3.5
-        ) return null
-        val synced = item.optString("syncedLyrics").takeIf {
-            it.isNotBlank() && it != "null" &&
-                it.toByteArray(Charsets.UTF_8).size <= LyricsDecoder.MAX_BYTES &&
-                runCatching { LyricsDecoder.decode(it, song.durationMs).lines.isNotEmpty() }
-                    .getOrDefault(false)
-        }
-        return synced?.let { Result(it, "LRCLIB") }
+        xml.append("</body></tt>")
+        return if (count > 0) xml.toString() else null
     }
 }
 
-private fun org.json.JSONArray?.lyricNames(): List<String> = buildList {
-    val array = this@lyricNames ?: return@buildList
-    for (i in 0 until array.length()) {
-        val value = array.optString(i)
-        if (value.isNotBlank()) add(value)
-    }
-}
+private fun JSONObject.second(key: String): Double? =
+    optDouble(key, Double.NaN).takeIf { it.isFinite() && it in 0.0..86400.0 }
+
+private fun escapeXml(value: String): String = value
+    .replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    .replace("\"", "&quot;")
+
+private val VALID_ISRC = Regex("[A-Z]{2}[A-Z0-9]{3}[0-9]{7}")
 
 internal fun normalizeLyricsTag(value: String): String = value
     .lowercase(Locale.ROOT)
@@ -150,21 +165,28 @@ internal fun primaryLyricsArtist(value: String): String =
     value.split(Regex("(?i)\\s+(?:feat\\.?|ft\\.?|featuring|with|&|x|and)\\s+|[,;/]"))
         .firstOrNull().orEmpty().trim()
 
-internal fun onlineLyricsMatch(
-    song: Song, titles: List<String>, artists: List<String>
-): Boolean {
-    val targetTitle = normalizeLyricsTag(song.title)
-    val targetArtist = normalizeLyricsTag(primaryLyricsArtist(song.artist))
-    if (targetTitle.isBlank() || targetArtist.isBlank()) return false
-    return titles.any { normalizeLyricsTag(it) == targetTitle } &&
-        artists.any { normalizeLyricsTag(primaryLyricsArtist(it)) == targetArtist }
+private fun normalizeTrackTitle(title: String): String {
+    val suffix = Regex(
+        "(?i)\\s*[-(\\[]\\s*(?:remaster(?:ed)?(?:\\s+\\d{4})?|\\d{4}\\s+remaster(?:ed)?|official\\s+audio|official\\s+video)\\s*[)\\]]?$"
+    )
+    return normalizeLyricsTag(title.replace(suffix, ""))
 }
 
-internal fun encodeLyricsQuery(text: String): String =
-    URLEncoder.encode(text, "UTF-8")
+internal fun onlineLyricsMatch(song: Song, titles: List<String>, artists: List<String>): Boolean {
+    val wantedTitle = normalizeTrackTitle(song.title)
+    val wantedArtist = normalizeLyricsTag(primaryLyricsArtist(song.artist))
+    if (wantedTitle.isBlank() || wantedArtist.isBlank()) return false
+    return titles.any { normalizeTrackTitle(it) == wantedTitle } &&
+        artists.any {
+            val actual = normalizeLyricsTag(primaryLyricsArtist(it))
+            actual == wantedArtist ||
+                normalizeLyricsTag(it).split(' ').containsAll(wantedArtist.split(' '))
+        }
+}
 
-/** Bounded HTTPS, streamed response limited to 512 KiB. 404 is a normal miss. */
-private suspend fun requestLyricsJson(url: String): String? = withContext(Dispatchers.IO) {
+internal fun encodeLyricsQuery(text: String): String = URLEncoder.encode(text, "UTF-8")
+
+private suspend fun requestLyricsText(url: String): String? = withContext(Dispatchers.IO) {
     val connection = URL(url).openConnection() as HttpURLConnection
     try {
         connection.connectTimeout = 3_500
@@ -175,11 +197,11 @@ private suspend fun requestLyricsJson(url: String): String? = withContext(Dispat
         when (connection.responseCode) {
             HttpURLConnection.HTTP_NOT_FOUND -> null
             HttpURLConnection.HTTP_OK -> {
-                val length = connection.contentLengthLong
-                if (length > LyricsDecoder.MAX_BYTES.toLong()) throw IOException("Lyrics response too large")
+                if (connection.contentLengthLong > LyricsDecoder.MAX_BYTES.toLong())
+                    throw IOException("Lyrics response too large")
                 connection.inputStream.use { input ->
                     val buffer = ByteArray(8192)
-                    val output = java.io.ByteArrayOutputStream()
+                    val output = ByteArrayOutputStream()
                     while (true) {
                         coroutineContext.ensureActive()
                         val n = input.read(buffer)
@@ -191,7 +213,7 @@ private suspend fun requestLyricsJson(url: String): String? = withContext(Dispat
                     output.toString(Charsets.UTF_8.name())
                 }
             }
-            else -> throw IOException("Lyrics HTTP ${connection.responseCode}")
+            else -> throw IOException("Lyrics HTTP " + connection.responseCode)
         }
     } finally {
         connection.disconnect()
