@@ -369,12 +369,8 @@ internal fun ImmersiveArtworkPlayer(
             }
         }
 
-        // Share is intentionally absent; keep measured player geometry,
-        // the moving pill, and touch targets symmetrical with 3/2 controls.
+        // The three-action navigation pill stays centered across transitions.
         val actionPillWidth = if (lyricsEnabled) 176.dp else 128.dp
-        // Fixed player geometry: navigation expansion is animated outside
-        // composition, so album artwork and transport don't recompose at 120Hz.
-        val pillExpansionPx = with(density) { 48.dp.toPx() }
 
         // On compact/large-text screens the foreground can scroll rather than
         // clipping transport buttons. The artwork remains a full-screen canvas.
@@ -426,10 +422,8 @@ internal fun ImmersiveArtworkPlayer(
                             textAlign = TextAlign.Start,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            // Artist navigation already has its explicit
-                            // action in the lower control pill. Do not leave
-                            // a full-width invisible click zone under the song
-                            // title: swipes and taps there are for the player.
+                            // Artist opens with a right swipe on the artwork.
+                            // Keep this text free of an extra hidden tap target.
                             modifier = Modifier.padding(top = 5.dp)
                         )
                         // Still measured, but entirely faded out with the
@@ -596,7 +590,7 @@ internal fun ImmersiveArtworkPlayer(
                 hazeState = liveBackdrop,
                 liquidGlassEnabled = liquidGlassEnabled,
                 hazeAlpha = liveGlassAlpha,
-            artworkTint = glassArtworkColor,
+                artworkTint = glassArtworkColor,
                 hasSong = hasSong,
                 onLyrics = onLyrics,
                 onLibrary = onLibrary,
