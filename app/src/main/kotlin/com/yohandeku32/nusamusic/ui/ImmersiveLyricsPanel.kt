@@ -257,7 +257,11 @@ fun ImmersiveLyricsPanel(
             )
         ) {
             IconButton(
-                onClick = { saveWithFolderAccess(PendingLyricsEmbed(song, data)) },
+                onClick = {
+                    data?.let { available ->
+                        saveWithFolderAccess(PendingLyricsEmbed(song, available))
+                    }
+                },
                 enabled = !embedBusy,
                 modifier = Modifier.align(Alignment.TopEnd)
                     .padding(top = 2.dp, end = 16.dp)
