@@ -74,24 +74,41 @@ internal class OnlineLyricsService(
     }
 
     private suspend fun fetchSong(isrc: String, song: Song): Result? {
-        val payload = request("https://lrc.red/s/" + isrc + ".song.json") ?: return null
-        val record = JSONObject(payload)
-        val title = record.optString("title")
-        val artist = record.optString("artist")
-        if (title.isNotBlank() && artist.isNotBlank() &&
-            !onlineLyricsMatch(song, listOf(title), listOf(artist))) return null
-        val duration = record.optDouble("duration", Double.NaN)
-        if (duration.isFinite() && duration > 0 && song.durationMs > 0 &&
-            abs(song.durationMs / 1000.0 - duration) > 6.0) return null
+        val base = "https://lrc.red/s/" + isrc
 
-        // Original word-timed TTML preserves Apple-style syllable boundaries.
-        val ttml = record.optString("source").takeIf { it.startsWith("<") }
-        if (validTiming(ttml, song.durationMs)) return Result(ttml!!)
+        // The public lrc.red API documents .ttml and .lrc directly. The
+        // community .song.json is useful but must not be the only path.
+        // A missing/invalid song.json must never hide an available file.
+        val json = try { request(base + ".song.json") }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { null }
+        if (json != null) {
+            val record = runCatching { JSONObject(json) }.getOrNull()
+            if (record != null) {
+                val title = record.optString("title")
+                val artist = record.optString("artist")
+                if (title.isNotBlank() && artist.isNotBlank() &&
+                    !onlineLyricsMatch(song, listOf(title), listOf(artist))) return null
+                val duration = record.optDouble("duration", Double.NaN)
+                if (duration.isFinite() && duration > 0 && song.durationMs > 0 &&
+                    abs(song.durationMs / 1000.0 - duration) > 6.0) return null
 
-        // A number of lrc.red records contain only structured timed lines.
-        // Convert explicit timestamps to TTML; never invent word timings.
-        val reconstructed = reconstructTtml(record)
-        if (validTiming(reconstructed, song.durationMs)) return Result(reconstructed!!)
+                // First use authored TTML, then explicit structured timing.
+                val ttml = record.optString("source").takeIf { it.trimStart().startsWith("<") }
+                if (validTiming(ttml, song.durationMs)) return Result(ttml!!)
+                val reconstructed = reconstructTtml(record)
+                if (validTiming(reconstructed, song.durationMs)) return Result(reconstructed!!)
+            }
+        }
+
+        // Documented public endpoints, with the most detailed format first.
+        for (extension in listOf("ttml", "lrc")) {
+            coroutineContext.ensureActive()
+            val raw = try { request(base + "." + extension) }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { null }
+            if (validTiming(raw, song.durationMs)) return Result(raw!!)
+        }
         return null
     }
 
@@ -193,7 +210,9 @@ private suspend fun requestLyricsText(url: String): String? = withContext(Dispat
         connection.readTimeout = 3_500
         connection.setRequestProperty("User-Agent", "NusaMusic/1.0 (Android; lyrics lookup)")
         connection.setRequestProperty("Accept", "application/json")
-        connection.instanceFollowRedirects = false
+        // lrc.red uses canonical redirects on some routes. Java handles these
+        // without asking callers to resubmit a lookup or discard the result.
+        connection.instanceFollowRedirects = true
         when (connection.responseCode) {
             HttpURLConnection.HTTP_NOT_FOUND -> null
             HttpURLConnection.HTTP_OK -> {
