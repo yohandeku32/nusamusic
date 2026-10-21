@@ -2,8 +2,11 @@ package com.yohandeku32.nusamusic.data
 
 import com.yohandeku32.nusamusic.model.Song
 import kotlinx.coroutines.runBlocking
+import org.json.JSONArray
+import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Test
+import java.io.IOException
 
 class OnlineLyricsServiceTest {
     private val song = Song(
@@ -11,92 +14,131 @@ class OnlineLyricsServiceTest {
         album = "Kisah", uri = "content://music/13",
         durationMs = 180_000, albumId = 1L
     )
+    private val isrc = "USAAA2600001"
+    private val ttml = "<tt><body><p begin=\"1s\" end=\"5s\">" +
+        "<span begin=\"1s\" end=\"2s\">Aku </span>" +
+        "<span begin=\"2s\" end=\"5s\">cinta kamu</span></p></body></tt>"
 
-    @Test fun amllTtmlWinsBeforeLrclibAndUsesExplicitWordTiming() = runBlocking {
-        val calls = ArrayList<String>()
+    private fun hits(vararg entries: JSONObject): String =
+        JSONObject().put("hits", JSONArray().apply { entries.forEach { put(it) } }).toString()
+
+    private fun hit(
+        title: String = song.title,
+        artist: String = song.artist,
+        code: String = isrc
+    ) = JSONObject().put("isrc", code).put("title", title).put("artist", artist)
+
+    private fun record(
+        title: String = song.title,
+        artist: String = song.artist,
+        duration: Double = 180.0
+    ) = JSONObject().put("title", title).put("artist", artist)
+        .put("album", song.album).put("duration", duration)
+
+    @Test fun lrcRedMatchFetchesIsrcSongAndPreservesOriginalSyllableTtml() = runBlocking {
+        val urls = mutableListOf<String>()
         val service = OnlineLyricsService { url ->
-            calls += url
-            when {
-                url.contains("/lyrics/search") -> """
-                    {"status":200,"data":{"items":[
-                      {"filename":"trusted.ttml","musicNames":["Aku Cinta Kamu"],
-                       "artistNames":["Nusa Singer"],"albumNames":["Kisah"]},
-                      {"filename":"wrong.ttml","musicNames":["Different Song"],
-                       "artistNames":["Nusa Singer"],"albumNames":["Kisah"]}]}}
-                """.trimIndent()
-                url.contains("/lyrics/get") -> """
-                    {"status":200,"data":{"lyrics":"<tt><body><p begin=\\"1s\\" end=\\"5s\\"><span begin=\\"1s\\" end=\\"2s\\">Aku </span><span begin=\\"2s\\" end=\\"5s\\">cinta kamu</span></p></body></tt>"}}
-                """.trimIndent().replace("\\\\", "\\")
-                else -> error("Unexpected endpoint $url")
-            }
+            urls.add(url)
+            if (url.contains("/match.json")) hits(hit())
+            else if (url == "https://lrc.red/s/" + isrc + ".song.json")
+                record().put("source", ttml).toString()
+            else error("Unexpected endpoint: " + url)
         }
         val result = service.lookup(song).result!!
-        assertEquals("AMLL", result.source)
-        assertTrue(result.content.startsWith("<tt>"))
-        assertEquals(2, calls.size)
-        assertTrue(calls[0].contains("musicName=Aku+Cinta+Kamu"))
-        assertTrue(calls.none { it.contains("lrclib") || it.contains("wrong.ttml") })
+        assertEquals("lrc.red", result.source)
+        assertEquals(ttml, result.content)
+        assertEquals(2, urls.size)
+        assertTrue(urls.first().contains("/match.json?track=Aku+Cinta+Kamu&artist=Nusa+Singer"))
+        assertEquals(3, lyricQuality(EmbeddedLyricsSelector.select(
+            listOf(result.content), song.durationMs)))
     }
 
-    @Test fun missingAmllFallsBackToSynchronizedLrclib() = runBlocking {
+    @Test fun wordSyncedJsonIsConvertedToAuthoredTimedTtml() = runBlocking {
+        val line = JSONObject().put("text", "Aku cinta kamu")
+            .put("begin", 1.0).put("end", 5.0)
+            .put("words", JSONArray().put(JSONArray().put(
+                JSONObject().put("text", "Aku").put("begin", 1.0).put("end", 1.6)
+            )).put(JSONArray().put(
+                JSONObject().put("text", "cinta").put("begin", 1.6).put("end", 2.4)
+            )).put(JSONArray().put(
+                JSONObject().put("text", "kamu").put("begin", 2.4).put("end", 5.0)
+            )))
         val service = OnlineLyricsService { url ->
-            if (url.contains("api.amll.dev")) """{"status":200,"data":{"items":[]}}"""
-            else """{"trackName":"Aku Cinta Kamu","artistName":"Nusa Singer",
-                    "duration":180,"instrumental":false,
-                    "syncedLyrics":"[00:01]Aku cinta kamu\n[00:05]Selamanya"}""".trimIndent()
+            if (url.contains("match.json")) hits(hit())
+            else record().put("lyrics", JSONObject().put("sync", "word")
+                .put("lines", JSONArray().put(line))).toString()
         }
-        val lyrics = service.lookup(song).result!!
-        assertEquals("LRCLIB", lyrics.source)
-        assertTrue(lyrics.content.contains("[00:01]"))
+        val content = service.lookup(song).result!!.content
+        assertTrue(content.contains("<span begin=\"2.4s\" end=\"5.0s\">kamu</span>"))
+        assertEquals(3, lyricQuality(EmbeddedLyricsSelector.select(
+            listOf(content), song.durationMs)))
     }
 
-    @Test fun remoteRecordsForWrongArtistOrDurationAreRejected() = runBlocking {
+    @Test fun lineSyncedJsonKeepsLineTimingWithoutInventedSyllables() = runBlocking {
+        val lines = JSONArray().put(JSONObject().put("text", "Aku cinta kamu")
+            .put("begin", 1.0).put("end", 5.0))
+            .put(JSONObject().put("text", "Selamanya")
+                .put("begin", 5.0).put("end", 8.0))
         val service = OnlineLyricsService { url ->
-            if (url.contains("api.amll.dev")) """{"status":200,"data":{"items":[
-              {"filename":"wrong.ttml","musicNames":["Aku Cinta Kamu"],
-               "artistNames":["Wrong Artist"]}]}}"""
-            else """{"trackName":"Aku Cinta Kamu","artistName":"Nusa Singer",
-                    "duration":225,"instrumental":false,
-                    "syncedLyrics":"[00:01]Wrong version"}"""
+            if (url.contains("match.json")) hits(hit())
+            else record().put("lyrics", JSONObject().put("sync", "line")
+                .put("lines", lines)).toString()
+        }
+        val result = service.lookup(song).result!!
+        assertEquals(2, lyricQuality(EmbeddedLyricsSelector.select(
+            listOf(result.content), song.durationMs)))
+        assertTrue(result.content.contains("Selamanya"))
+    }
+
+    @Test fun searchFallbackUsedWhenExactMetadataMatchMisses() = runBlocking {
+        val calls = mutableListOf<String>()
+        val service = OnlineLyricsService { url ->
+            calls.add(url)
+            when {
+                url.contains("/match.json") -> hits()
+                url.contains("/search.json") -> hits(hit())
+                url.contains(".song.json") -> record().put("source", ttml).toString()
+                else -> null
+            }
+        }
+        assertEquals("lrc.red", service.lookup(song).result?.source)
+        assertTrue(calls.any { it.contains("/search.json?q=") })
+    }
+
+    @Test fun doesNotAcceptWrongArtistOrDifferentRecording() = runBlocking {
+        val service = OnlineLyricsService { url ->
+            when {
+                url.contains("/match.json") -> hits(hit(), hit(artist = "Unrelated Singer"))
+                url.contains("/search.json") -> hits()
+                else -> record(duration = 240.0).put("source", ttml).toString()
+            }
         }
         assertNull(service.lookup(song).result)
     }
 
-    @Test fun lrclibSearchRecoversWhenLocalAlbumTagsDoNotMatch() = runBlocking {
-        val calls = mutableListOf<String>()
-        val service = OnlineLyricsService { url ->
-            calls += url
-            when {
-                url.contains("api.amll.dev") -> """{"status":200,"data":{"items":[]}}"""
-                url.contains("/api/get") -> null
-                else -> """[
-                    {"trackName":"Someone Else","artistName":"Nusa Singer","duration":180,
-                     "syncedLyrics":"[00:01]Incorrect"},
-                    {"trackName":"Aku Cinta Kamu","artistName":"Nusa Singer",
-                     "albumName":"Kisah","duration":180,"instrumental":false,
-                     "syncedLyrics":"[00:01]Aku cinta kamu"}
-                ]"""
-            }
-        }
-        assertEquals("LRCLIB", service.lookup(song).result?.source)
-        assertTrue(calls.any { it.contains("/api/search") })
-    }
-
-    @Test fun temporaryApiFailuresDoNotCreateFalsePermanentMisses() = runBlocking {
-        val service = OnlineLyricsService { throw java.io.IOException("offline") }
-        val result = service.lookup(song)
+    @Test fun networkErrorsAreNotStoredAsPermanentMissingLyrics() = runBlocking {
+        val result = OnlineLyricsService { throw IOException("Offline") }.lookup(song)
         assertNull(result.result)
         assertFalse(result.conclusivelyMissing)
     }
 
-    @Test fun normalizesPunctuationButNeverAcceptsUnrelatedTitles() {
-        assertTrue(onlineLyricsMatch(song, listOf("Aku, Cinta Kamu!"), listOf("Nusa Singer")))
-        assertFalse(onlineLyricsMatch(song, listOf("Aku Cinta Dia"), listOf("Nusa Singer")))
-        assertFalse(onlineLyricsMatch(song, listOf("Aku Cinta Kamu"), listOf("Different Singer")))
+    @Test fun ordinaryUnmatchedSearchesProduceShortLivedMisses() = runBlocking {
+        val result = OnlineLyricsService { hits() }.lookup(song)
+        assertNull(result.result)
+        assertTrue(result.conclusivelyMissing)
+    }
+
+    @Test fun normalizesRemasterSuffixButRejectsWrongSongs() {
+        assertTrue(onlineLyricsMatch(song, listOf("Aku Cinta Kamu (Remastered)"),
+            listOf("Nusa Singer")))
+        assertFalse(onlineLyricsMatch(song, listOf("Aku Cinta Dia"),
+            listOf("Nusa Singer")))
+        assertFalse(onlineLyricsMatch(song, listOf("Aku Cinta Kamu"),
+            listOf("Different Singer")))
         assertEquals("Nusa Singer", primaryLyricsArtist("Nusa Singer feat. Guest"))
     }
 
-    @Test fun onlineSyncedUpgradesPlainButNeverDowngradesEmbeddedKaraoke() {
+    @Test fun syncedRemoteUpgradesPlainButNeverReplacesLocalSyllableLyrics() {
         val plain = EmbeddedLyricsSelector.select(listOf("Aku cinta kamu"), song.durationMs)
         val timed = EmbeddedLyricsSelector.select(listOf("[00:01]Aku cinta kamu"), song.durationMs)
         val karaoke = EmbeddedLyricsSelector.select(listOf(
