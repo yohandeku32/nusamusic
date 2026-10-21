@@ -252,10 +252,9 @@ fun ImmersiveLyricsPanel(
 
         // Save is a one-tap operation after the first persistent folder grant.
         // Existing embedded lyrics never show this action.
-        if (song != null && data != null &&
-            data.stored.content.isNotBlank() &&
-            data.stored.source != "embedded" &&
-            entry?.hasEmbeddedLyrics != true
+        if (song != null && lyricsNeedEmbedding(
+                data, entry?.hasEmbeddedLyrics == true
+            )
         ) {
             IconButton(
                 onClick = { saveWithFolderAccess(PendingLyricsEmbed(song, data)) },
