@@ -36,7 +36,6 @@ import com.yohandeku32.nusamusic.data.PlaybackHistory
 import com.yohandeku32.nusamusic.model.Song
 import java.util.Locale
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.delay
 
 private val artistBase = Color(0xFF090A0D)
 private val artistSurface = Color(0xFF17191F)
@@ -92,9 +91,9 @@ fun ImmersiveArtistPage(
             ArtistNameUtils.cacheKey(it.artist) == ArtistNameUtils.cacheKey(artist)
         } ?: popular.firstOrNull() ?: tracks.firstOrNull()
 
-    // The artist portrait is an optional, cached enhancement. The local hero
-    // is drawn immediately, even on slow/offline networks. No network request
-    // is made while the Artist sheet is animating into view.
+    // The local cover appears instantly while a cached Apple portrait is
+    // resolved. The player prewarms the likely artist, and on-demand loading
+    // begins immediately when this page opens; no extra 380ms delay.
     var portrait by remember(artist) {
         mutableStateOf(AppleArtistPortraitLoader.cached(artist))
     }
@@ -102,7 +101,6 @@ fun ImmersiveArtistPage(
         if (!isVisible || selectedAlbumKey != null ||
             portrait != null || artist.isBlank()
         ) return@LaunchedEffect
-        delay(380L) // Let the Artist entrance and hero measurement settle.
         portrait = AppleArtistPortraitLoader.load(context, artist)
     }
     val portraitOpacity by androidx.compose.animation.core.animateFloatAsState(
