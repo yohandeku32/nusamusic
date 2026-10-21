@@ -5,6 +5,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -122,12 +123,25 @@ fun ImmersiveLyricsPanel(
                 }
             }
 
-            else -> Text(
-                "No lyrics found (local or online)",
+            else -> Column(
                 Modifier.align(Alignment.Center).padding(28.dp),
-                color = Color.White.copy(alpha = 0.7f),
-                fontSize = 16.sp
-            )
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    "No synchronized lyrics found",
+                    color = Color.White.copy(alpha = 0.76f),
+                    fontSize = 16.sp
+                )
+                // A transient provider error should not require leaving the
+                // lyrics page and finding Reload inside Settings.
+                if (song != null) TextButton(
+                    onClick = { state.load(song, scope, retry = true) },
+                    enabled = entry?.loading != true
+                ) {
+                    Text("Try again", color = Color.White)
+                }
+            }
         }
     }
 }
