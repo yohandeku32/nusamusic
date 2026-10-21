@@ -105,10 +105,11 @@ https://www.xiph.org/vorbis/doc/v-comment.html
 
 ## Embed downloaded lyrics into the original audio file
 
-When a track has online lyrics but no lyrics embedded in its original MP3,
+When a track has online lyrics with better timing than its original MP3,
 a small Lucide Save icon appears at the **top right** of Immersive Lyrics.
-Tap it once to embed the lyrics. There is **no Choose MP3 dialog** and no
-per-song manual file selection.
+This includes songs that already have plain or line-synced embedded lyrics
+when online word/syllable karaoke is available. Tap once to upgrade the
+original MP3. There is **no Choose MP3 dialog** or per-song selection.
 
 **First use only:** if NusaMusic has no suitable writable folder grant, Android
 asks you to select the folder that contains the song. The app requests
@@ -136,8 +137,9 @@ TTML or Enhanced LRC for NusaMusic's syllable animation. A failed write
 attempts restoration; on a failed rollback, an untouched recovery copy is
 retained in the app cache.
 
-The Save icon hides immediately after successful verified embedding, and
-remains hidden for tracks with embedded lyrics even if a higher-quality online
-version is subsequently displayed. It reappears only for another track with
-online lyrics and no embedded text. Important originals should still be backed
-up separately. FLAC, M4A, Opus and other formats are not edited by this feature.
+The Save icon hides immediately after a verified write of the richer
+timing. It stays hidden after refresh when the file contains timing at least
+as detailed as the online version; an online syllable/word version will still
+offer Save if the original has only plain or line-synced lyrics. Other files
+are evaluated independently. Important originals should still be backed up
+separately. FLAC, M4A, Opus and other formats are not edited by this feature.
