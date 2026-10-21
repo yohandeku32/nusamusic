@@ -73,6 +73,37 @@ object AppleMusicAnimatedArtworkLoader {
         finish(result.url, result.failed, result.alternatives)
     }
 
+    // Album-detail hero uses Apple's SQUARE animated cover, unlike the tall
+    // player artwork. Reuse m8tec's existing open community endpoint without
+    // opening a local audio file or searching per track.
+    private val albumSquareCache = LinkedHashMap<String, CacheEntry>(32, 0.75f, true)
+
+    suspend fun loadAlbumSquareArtworkUrl(artist: String, album: String): String? =
+        withContext(Dispatchers.IO) {
+            val artistName = ArtistNameUtils.firstArtist(artist).trim()
+            val albumName = album.trim()
+            if (artistName.length < 2 || albumName.length < 2 ||
+                albumName.equals("unknown album", true)) return@withContext null
+            val key = (artistName + "\u0001" + albumName).lowercase(Locale.ROOT)
+            val now = System.currentTimeMillis()
+            synchronized(albumSquareCache) {
+                albumSquareCache[key]?.takeIf { it.expiresAtMs > now }?.let {
+                    return@withContext it.url
+                }
+            }
+            val response = readJson(
+                API_URL + "/search?artist=${Uri.encode(artistName)}&album=${Uri.encode(albumName)}"
+            )
+            val url = response.body?.optString("url")?.takeIf { isAppleArtworkUrl(it) }
+            val ttl = if (url != null) POSITIVE_CACHE_MS
+                else if (response.failed) ERROR_CACHE_MS else NEGATIVE_CACHE_MS
+            synchronized(albumSquareCache) {
+                albumSquareCache[key] = CacheEntry(url, now + ttl)
+                while (albumSquareCache.size > 128) albumSquareCache.remove(albumSquareCache.keys.first())
+            }
+            url
+        }
+
     fun nextPlaybackUrl(failedUrl: String): String? = synchronized(cache) {
         var nextUrl: String? = null
         val entries = cache.entries.iterator()
