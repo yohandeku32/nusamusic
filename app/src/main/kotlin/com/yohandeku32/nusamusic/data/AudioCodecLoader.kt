@@ -10,6 +10,10 @@ import java.security.MessageDigest
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -26,6 +30,46 @@ object AudioCodecLoader {
         ): Boolean = size > 2_048
     }
     private val metadataPermit = Semaphore(2)
+    // The LazyColumn recycles track rows when scrolling. Do not tie native
+    // audio probing to each row's composition lifecycle: that restarted file
+    // reads for ordinary tracks every time they re-entered the viewport.
+    // One background request per URI survives row disposal and is remembered
+    // even when the bounded detail cache eventually evicts an old result.
+    private val inspectScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val pendingBadgeInspections = HashSet<String>()
+    private val inspectedBadgeUris = object : LinkedHashMap<String, Boolean>(16_384, 0.75f, true) {
+        override fun removeEldestEntry(
+            eldest: MutableMap.MutableEntry<String, Boolean>?
+        ): Boolean = size > 16_384
+    }
+
+    fun requestHiResBadgeOnce(context: Context, uriString: String) {
+        if (uriString.isBlank()) return
+        if (isHiResCached(uriString)) return
+        synchronized(metadataCache) {
+            if (metadataCache.containsKey(uriString)) return
+        }
+        synchronized(pendingBadgeInspections) {
+            if (uriString in pendingBadgeInspections ||
+                inspectedBadgeUris.containsKey(uriString)
+            ) return
+            pendingBadgeInspections.add(uriString)
+        }
+        val appContext = context.applicationContext
+        inspectScope.launch {
+            try {
+                // A short one-time grace period keeps native extractors away
+                // from the first frames after a fast flick stops.
+                delay(260L)
+                load(appContext, uriString)
+            } finally {
+                synchronized(pendingBadgeInspections) {
+                    pendingBadgeInspections.remove(uriString)
+                    inspectedBadgeUris[uriString] = true
+                }
+            }
+        }
+    }
     // Compose observes the verified badge of each song separately. This makes
     // already-visible rows update as soon as metadata becomes available,
     // without recomposing the entire library or decoding its logo per row.
