@@ -1,4 +1,4 @@
-# Embedded Lyrics (Immersive only)
+# Lyrics: Embedded and Online (Immersive only)
 
 Tap Lyrics in the Immersive Now Playing controls. CD and Vinyl do not expose this feature.
 The modal has one open anchor at half the window height, full width, 28dp top corners,
@@ -7,8 +7,24 @@ or a downward swipe. The existing player remains visible behind it.
 
 ## Sources and timing
 
-LyricsRepository opens only the current local audio URI on Dispatchers.IO. It never
-queries a lyric service, opens a sidecar, or reads previous imported/remote lyric caches.
+LyricsRepository first reads the current local audio URI on Dispatchers.IO.
+If the file has a valid authored word/syllable-timed karaoke, that embedded version
+wins and no online request is made. Otherwise NusaMusic checks the public AMLL TTML
+API (https://api.amll.dev/v1/lyrics/search and /v1/lyrics/get), then LRCLIB
+(https://lrclib.net/api/get, with a /api/search fallback). Strict title/artist
+matching and duration checks on LRCLIB reduce incorrect-song matches.
+
+The original embedded version can render immediately while online lookup runs.
+Only a more precisely synchronized online version replaces it. Plain or
+malformed online responses never displace valid embedded lyrics; offline failure
+keeps local lyrics. No API token, user sign-in, WebView, Apple private endpoint,
+sidecar file, audio upload, or invented word timing is used.
+
+A separate bounded online cache at cacheDir/lyrics/online-v1 stores up to 120
+successful matches, including provider attribution in cache metadata.
+Confirmed misses expire after 6 hours; network errors do not become misses.
+Settings > Lyrics > Reload lyrics forces a fresh embedded/online lookup.
+Queries share local file title, artist, album and duration with public providers.
 
 | Container | Embedded metadata |
 | --- | --- |
