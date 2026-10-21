@@ -5180,6 +5180,16 @@ private fun ArtworkView(
             bitmap = cachedExactOrLarger
             return@LaunchedEffect
         }
+        // Track rows that previously had no embedded image must not reopen
+        // the file and resample it every time LazyColumn recycles them.
+        if (song != null && ArtworkLoader.isMissingCached(
+                song.uri, maxSizePx,
+                song.albumId.takeIf { it > 0L }?.toString()
+            )
+        ) {
+            bitmap = null
+            return@LaunchedEffect
+        }
         // Skip IO for tracks that are replaced by rapid Shuffle transitions.
         if (song != null && loadDelayMs > 0L) delay(loadDelayMs)
         bitmap = song?.let {
