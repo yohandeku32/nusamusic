@@ -69,8 +69,6 @@ private object LyricsGlowPaletteCache {
 internal class SyllableLyricsPainter(
     layouts: List<List<SyllableLayout>>,
     private val density: Float,
-    private val lineStart: Int,
-    private val lineEnd: Int,
     expressions: List<LyricsAdaptiveExpression>? = null,
     alignEnd: Boolean = false,
     viewportWidthPx: Float = 0f
@@ -96,7 +94,8 @@ internal class SyllableLyricsPainter(
         // slices have slightly different lift/scale, especially on slow vocals.
         // Keep the approved V6 horizontal phase at this run's visual centre.
         val horizontalDp = (position.x + width / 2f) / density
-        val motion = LyricsFloatingMotion(horizontalDp)
+        // Word-local shape is sampled once per frame, reused by halo and fill.
+        var wavePose = LyricsHeldWordPose()
         val controller = LyricsExpressionController(layout.syllable.start, layout.syllable.end, expression)
         // Separate sustained-vocal accent. Reuses the intact syllable's
         // measured text run so no individual character can break apart.
@@ -145,37 +144,24 @@ internal class SyllableLyricsPainter(
         }
     }
 
-    // One pivot spans every rendered syllable and wrapped row. A final held
-    // vowel can then carry its entire word/phrase instead of just its letters.
-    private val closingPivot = if (glyphs.isEmpty()) Offset.Zero else Offset(
-        (glyphs.minOf { it.position.x } +
-            glyphs.maxOf { it.position.x + it.width }) / 2f,
-        (glyphs.minOf { it.position.y } +
-            glyphs.maxOf { it.position.y + it.layout.textLayoutResult.size.height }) / 2f
-    )
-    private val closingMotion = LyricsClosingVocalMotion(
-        glyphs.map { LyricsExpressionTiming(it.layout.syllable.start, it.layout.syllable.end) },
-        glyphs.map { it.expression }, closingPivot.x / density
-    )
-
-    private val vocalMask = LyricsTravelingWaveMask(glyphs.map { glyph ->
-        LyricsVocalSpan(
-            glyph.layout.syllable.start,
-            glyph.layout.syllable.end,
-            glyph.pathStartDp,
-            glyph.pathEndDp
+    // Every word is independent: only authored, reliably timed long notes
+    // produce a mountain wave. Completed words remain completely stationary.
+    private val heldWords = LyricsHeldWordWave(glyphs.map { glyph ->
+        LyricsHeldWordUnit(
+            content = glyph.layout.syllable.content,
+            startMs = glyph.layout.syllable.start,
+            endMs = glyph.layout.syllable.end,
+            pathStartDp = glyph.pathStartDp,
+            pathEndDp = glyph.pathEndDp,
+            reliableHold = glyph.expression.breathing > 0f
         )
     })
     private val glowPalette = LyricsGlowPaletteCache.forDensity(density)
 
     /**
-     * Keep the V6 global phase and V7 traveling vocal front, but apply their
-     * combined intensity uniformly to an entire syllable text run. Drawing one
-     * intact glyph layout prevents seams, broken strokes, and doubled edges
-     * at slice boundaries on long or slowly sung notes.
-     *
-     * Halo and foreground always use the SAME transform; highlighting,
-     * shimmer, lyric timings, and scrolling are unchanged.
+     * Long holds move only their OWN word. Each syllable is shaped and drawn
+     * intact to avoid clipped letters or seams. Both glow and text share the
+     * same mountain-wave transform sampled from the existing playback clock.
      */
     private val frameClock = LyricsFrameTimeSmoother()
 
@@ -183,46 +169,25 @@ internal class SyllableLyricsPainter(
              playbackRevision: Int) = with(scope) {
         val frameTime = frameClock.sample(waveTime, playbackRevision)
         val strength = focus.coerceIn(0f, 1f)
-        val lineStrength = lyricsLineWaveIntensity(lineStart, lineEnd, frameTime)
-        val front = if (lineStrength > 0f) vocalMask.front(frameTime) else null
-        // A held terminal vowel carries the entire measured phrase together,
-        // rather than independently enlarging its already-sung syllables.
-        closingMotion.update(frameTime)
 
-        // Playback time alone drives the transform. No animation restarting,
-        // no clipping through characters and no text measurement per frame.
+        // Sample ONCE from the Media3 clock. A fast "aku cinta" stays still;
+        // only a long, explicitly authored "kamu" receives the moving arch.
+        // Existing karaoke fill and glow timings are not modified.
         for ((index, glyph) in glyphs.withIndex()) {
-            val influence = vocalMask.glyphInfluence(
-                front, glyph.pathStartDp, glyph.pathEndDp
+            glyph.wavePose = heldWords.pose(
+                index, frameTime, (glyph.pathStartDp + glyph.pathEndDp) * 0.5f
             )
-            val localIntensity = lineStrength * influence
             glyph.controller.update(frameTime)
-            // Keep the original traveling mask and 4.2s carrier. Duration only
-            // attenuates their amplitude; its playback phase never restarts.
-            glyph.motion.update(frameTime, localIntensity * glyph.controller.wave)
-            // Let sustained TTML units throughout the phrase breathe in sequence.
-            // Earlier words get a restrained depth accent; the closing
-            // syllable retains the stronger, approved held-vowel pop.
-            // Short units are gated by LyricsLongVocalMotion's duration
-            // envelope, so rapid lyrics remain visually quiet.
-            val depth = if (index == glyphs.lastIndex) 1f else 0.58f
-            glyph.bubble.update(frameTime, localIntensity * depth)
+            glyph.bubble.update(frameTime, glyph.wavePose.intensity)
         }
 
-        withTransform({
-            translate(closingMotion.offsetXDp * this@SyllableLyricsPainter.density,
-                closingMotion.offsetYDp * this@SyllableLyricsPainter.density)
-            scale(closingMotion.scaleX, closingMotion.scaleY, closingPivot)
-        }) {
-            for (pass in 0..1) for (glyph in glyphs) {
-                val halo = pass == 0
-                val unit = glyph.layout.syllable
-                if (halo && (strength <= 0f || glyph.controller.glow <= 0f)) continue
-                val progress = syllableProgress(unit, frameTime)
-                val glow = glyph.controller.glow * strength
-
-                drawGlyph(glyph, halo, progress, glow, strength, frameTime)
-            }
+        for (pass in 0..1) for (glyph in glyphs) {
+            val halo = pass == 0
+            val unit = glyph.layout.syllable
+            if (halo && (strength <= 0f || glyph.controller.glow <= 0f)) continue
+            val progress = syllableProgress(unit, frameTime)
+            val glow = glyph.controller.glow * strength
+            drawGlyph(glyph, halo, progress, glow, strength, frameTime)
         }
     }
 
@@ -235,22 +200,20 @@ internal class SyllableLyricsPainter(
         now: Int
     ) {
         val result = glyph.layout.textLayoutResult
-        val localWeight = closingMotion.localWeight
-        val shift = glyph.motion.liftDp
+        val pose = glyph.wavePose
         val position = glyph.position + Offset(
-            glyph.bubble.offsetXDp * density * localWeight,
-            (glyph.bubble.offsetYDp - shift) * density * localWeight
+            glyph.bubble.offsetXDp * density,
+            (pose.liftDp + glyph.bubble.offsetYDp) * density
         )
-        // The carrier stays continuous. The bubble adds only a small non-uniform
-        // scale around the same baseline pivot; never relayout text.
-        val scaleX = 1f + (glyph.motion.scale * glyph.bubble.scaleX - 1f) * localWeight
-        val scaleY = 1f + (glyph.motion.scale * glyph.bubble.scaleY - 1f) * localWeight
+        // A single intact measured text run tilts and rises with the local
+        // mountain, never distorting glyphs with separately clipped slices.
+        val scaleX = glyph.bubble.scaleX
+        val scaleY = pose.scaleY * glyph.bubble.scaleY
         val width = glyph.width
         withTransform({
-            scale(
-                scaleX, scaleY,
-                position + Offset(width / 2f, result.size.height * 0.8f)
-            )
+            val pivot = position + Offset(width / 2f, result.size.height * 0.8f)
+            rotate(pose.rotationDegrees, pivot)
+            scale(scaleX, scaleY, pivot)
         }) {
             // TextLayoutResult reuses AndroidTextPaint: a null drawStyle retains
             // the last Stroke. Reset every ordinary pass explicitly to Fill.
