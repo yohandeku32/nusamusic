@@ -149,9 +149,10 @@ internal object AppleArtistPortraitLoader {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
         if (bounds.outWidth < 120 || bounds.outHeight < 120) return null
-        val sample = generateSequence(1) { it * 2 }
-            .takeWhile { maxOf(bounds.outWidth, bounds.outHeight) / it > MAX_EDGE * 2 }
-            .lastOrNull() ?: 1
+        var sample = 1
+        while (maxOf(bounds.outWidth, bounds.outHeight) / sample > MAX_EDGE &&
+            sample < 32
+        ) sample *= 2
         return BitmapFactory.decodeByteArray(
             bytes, 0, bytes.size,
             BitmapFactory.Options().apply {
