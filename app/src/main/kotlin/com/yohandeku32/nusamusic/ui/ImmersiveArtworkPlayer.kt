@@ -589,11 +589,7 @@ internal fun ImmersiveArtworkPlayer(
                     (presentingLibrary || canCloseArtistBySwipe())
             },
             swipeFromHeaderOnly = presentingLibrary,
-            showArtistCircle = !presentingLibrary,
             hazeState = liveBackdrop,
-            liquidGlassEnabled = liquidGlassEnabled,
-            hazeAlpha = liveGlassAlpha,
-            artworkTint = glassArtworkColor,
             profile = {
                 if (presentingLibrary) libraryContent(portalSettled)
                 else artistProfile()
