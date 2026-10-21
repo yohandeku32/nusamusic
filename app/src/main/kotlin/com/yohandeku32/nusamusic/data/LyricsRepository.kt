@@ -31,7 +31,7 @@ data class SongLyrics(
 class LyricsRepository(context: Context) {
     private val resolver = context.applicationContext.contentResolver
     private val embedded = LyricsDiskStore(File(context.applicationContext.cacheDir, "lyrics/embedded-v2"), maxEntries = 120)
-    private val online = LyricsDiskStore(File(context.applicationContext.cacheDir, "lyrics/online-lrcred-v1"), maxEntries = 120)
+    private val online = LyricsDiskStore(File(context.applicationContext.cacheDir, "lyrics/online-lrcred-v2"), maxEntries = 120)
     private val service = OnlineLyricsService()
 
     companion object {
@@ -68,7 +68,7 @@ class LyricsRepository(context: Context) {
         // Public providers can be slow or offline. Keep a hard upper bound
         // on the whole lookup so an empty Lyrics screen never waits forever.
         val response = try {
-            withTimeoutOrNull(10_000L) { service.lookup(song) }
+            withTimeoutOrNull(16_000L) { service.lookup(song) }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) { null }
