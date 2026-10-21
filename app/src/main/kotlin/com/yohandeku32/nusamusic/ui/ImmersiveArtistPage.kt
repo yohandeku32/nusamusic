@@ -39,7 +39,6 @@ import com.yohandeku32.nusamusic.data.PlaybackHistory
 import com.yohandeku32.nusamusic.model.Song
 import java.util.Locale
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.Dispatchers
 
 private val artistBase = Color(0xFF090A0D)
 private val artistSurface = Color(0xFF17191F)
@@ -337,7 +336,7 @@ fun ImmersiveArtistPage(
                                 info.releaseDate?.take(4)?.takeIf { it.length == 4 },
                                 info.genre,
                                 info.trackCount?.let {
-                                    artistText("$"+"it lagu", "$"+"it tracks")
+                                    artistText("${it} lagu", "${it} tracks")
                                 }
                             )
                             if (details.isNotEmpty()) {
