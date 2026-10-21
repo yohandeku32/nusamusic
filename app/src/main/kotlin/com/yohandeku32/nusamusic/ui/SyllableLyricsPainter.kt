@@ -178,7 +178,9 @@ internal class SyllableLyricsPainter(
                 index, frameTime, (glyph.pathStartDp + glyph.pathEndDp) * 0.5f
             )
             glyph.controller.update(frameTime)
-            glyph.bubble.update(frameTime, glyph.wavePose.intensity)
+            // A tiny supporting breath only. The slow full-hold mountain is
+            // the primary motion; the old 2.85s pulse must not rush its release.
+            glyph.bubble.update(frameTime, glyph.wavePose.intensity * 0.30f)
         }
 
         for (pass in 0..1) for (glyph in glyphs) {
