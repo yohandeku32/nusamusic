@@ -2833,11 +2833,13 @@ private fun NusaMusicApp(
                                 onTogglePlay = onTogglePlay,
                                 onScanMusic = onScanMusic,
                                 onRequestPermission = onRequestPermission,
-                                artwork = { track, tileModifier ->
+                                artwork = { track, tileModifier, settled, index ->
                                     ArtworkView(
                                         song = track,
                                         maxSizePx = 144,
-                                        loadDelayMs = 32L,
+                                        loadAllowed = settled,
+                                        loadDelayMs = 40L +
+                                            (index.coerceIn(0, 12) * 28L),
                                         grainOverlay = false,
                                         modifier = tileModifier
                                     )
