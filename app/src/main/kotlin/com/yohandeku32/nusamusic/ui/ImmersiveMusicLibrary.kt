@@ -8,7 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -40,6 +40,8 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -65,6 +67,7 @@ import com.yohandeku32.nusamusic.model.Song
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.first
 
 // The CD/Vinyl libraries stay unchanged. Immersive uses inexpensive static
 // surfaces instead of live blur, per-row animations, shadows or scroll effects.
@@ -79,6 +82,26 @@ private enum class ImmersiveSort(val label: String) {
 }
 private enum class FocusType { ARTIST, ALBUM }
 private data class LibraryFocus(val type: FocusType, val name: String)
+
+/**
+ * Reopening the library should not re-sort thousands of tracks on the first
+ * animated frame. Retain only the last base-order result; search and focused
+ * views remain request-specific and are not cached.
+ */
+private object ImmersiveBaseOrderCache {
+    private var source: List<Song>? = null
+    private var order: ImmersiveSort? = null
+    private var result: List<Song>? = null
+
+    fun get(songs: List<Song>, sort: ImmersiveSort): List<Song>? =
+        if (source === songs && order == sort) result else null
+
+    fun put(songs: List<Song>, sort: ImmersiveSort, sorted: List<Song>) {
+        source = songs
+        order = sort
+        result = sorted
+    }
+}
 
 private fun findImmersiveSongs(
     songs: List<Song>, search: String, focus: LibraryFocus?, sort: ImmersiveSort
@@ -127,7 +150,9 @@ internal fun ImmersiveMusicLibrary(
     onTogglePlay: () -> Unit,
     onScanMusic: () -> Unit,
     onRequestPermission: () -> Unit,
-    artwork: @Composable (Song, Modifier) -> Unit,
+    // The third argument gates uncached cover IO until the portal settles;
+    // the fourth spreads first-screen loads across frames instead of a burst.
+    artwork: @Composable (Song, Modifier, Boolean, Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val palette = immersiveColors(lightMode)
@@ -155,7 +180,10 @@ internal fun ImmersiveMusicLibrary(
     LaunchedEffect(isVisible) {
         if (!isVisible) dismissKeyboard()
     }
-    var visibleSongs by remember(songs) { mutableStateOf(songs) }
+    var visibleSongs by remember(songs) {
+        mutableStateOf(ImmersiveBaseOrderCache.get(songs, sort) ?: songs)
+    }
+    val currentlyVisible by rememberUpdatedState(isVisible)
     val listState = rememberLazyListState()
     val density = LocalDensity.current
     val imeInsets = WindowInsets.ime
@@ -183,6 +211,14 @@ internal fun ImmersiveMusicLibrary(
         val result = withContext(Dispatchers.Default) {
             findImmersiveSongs(songs, search, focus, sort)
         }
+        if (search.isBlank() && focus == null) {
+            // Background sort once; the next Library open gets the prepared
+            // order immediately instead of a second sort and list reset.
+            ImmersiveBaseOrderCache.put(songs, sort, result)
+        }
+        // A mid-transition list replacement causes its LazyColumn to
+        // remeasure and fights the portal animation. Publish once settled.
+        snapshotFlow { currentlyVisible }.first { it }
         visibleSongs = result
         if (listState.firstVisibleItemIndex != 0 || listState.firstVisibleItemScrollOffset != 0) {
             listState.scrollToItem(0)
@@ -406,16 +442,21 @@ internal fun ImmersiveMusicLibrary(
                             start = 12.dp, end = 12.dp, top = 2.dp,
                             bottom = 24.dp)
                     ) {
-                        items(
+                        itemsIndexed(
                             items = visibleSongs,
-                            key = { it.id },
-                            contentType = { "immersive-track" }
-                        ) { song ->
+                            key = { _, song -> song.id },
+                            contentType = { _, _ -> "immersive-track" }
+                        ) { index, song ->
                             ImmersiveTrackRow(
                                 song = song, active = currentSong?.id == song.id,
                                 lightMode = lightMode,
-                                loadMetadata = canReadMetadata && !searchDialogOpen,
-                                hiResPainter = hiResPainter, artwork = artwork,
+                                // The native extractor must not compete with
+                                // the first Library animation frames.
+                                loadMetadata = isVisible && canReadMetadata && !searchDialogOpen,
+                                hiResPainter = hiResPainter,
+                                artwork = { track, imageModifier ->
+                                    artwork(track, imageModifier, isVisible, index)
+                                },
                                 onPlay = { onPlay(song, visibleSongs) },
                                 onPlayNext = { onPlayNext(song) },
                                 onShare = { onShare(song) },
