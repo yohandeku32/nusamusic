@@ -57,7 +57,9 @@ internal object AppleArtistPortraitLoader {
     private const val MAX_BYTES = 4 * 1024 * 1024
     private const val MAX_EDGE = 1080
 
-    private val images = object : LruCache<String, Bitmap>(12 * 1024) {
+    // Seven square 1080px portraits can exceed 12 MiB; keep the current
+    // and next-six queue window in RAM so Artist opens without disk decode.
+    private val images = object : LruCache<String, Bitmap>(20 * 1024) {
         override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount / 1024
     }
     private val misses = LruCache<String, Long>(128)
