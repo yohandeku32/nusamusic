@@ -106,8 +106,9 @@ supports ID3 USLT/SYLT/TXXX, FLAC and Ogg Vorbis/Opus comments, MP4/M4A lyrics
 atoms, and ID3 chunks in WAV/AIFF. Fully-timed embedded karaoke wins. If the
 file has only line-synced, plain or missing lyrics, NusaMusic tries the public
 lrc.red community API, matching the song by title and artist before fetching
-the ISRC-based song JSON. Original TTML supplies authored word-level timing;
-structured per-word or line timing is used when TTML is unavailable. Local
+the documented ISRC-based .ttml file first. Structured per-word JSON or the
+documented .lrc file is used if TTML is unavailable. When lrc.red is offline
+or has no suitable track, LRCLIB can supply line-synced lyrics as a fallback. Local
 text displays immediately while these network requests run.
 Online hits are cached separately on-device; misses expire after 6 hours.
 No login, API key, WebView, song audio upload or automatic timestamps.
