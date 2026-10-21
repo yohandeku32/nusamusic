@@ -57,7 +57,7 @@ internal fun CenteredKaraokeLine(
                 calculateStaticLineLayout(wrapped, false, width, lineHeight, rtl)
             }
             val painter = remember(layouts, density.density, line.start, line.end, expressions, alignEnd, width) {
-                SyllableLyricsPainter(layouts, density.density, line.start, line.end, expressions,
+                SyllableLyricsPainter(layouts, density.density, expressions,
                     alignEnd = alignEnd, viewportWidthPx = width)
             }
             val height = with(density) { (lineHeight * wrapped.size).toDp() } + 8.dp
