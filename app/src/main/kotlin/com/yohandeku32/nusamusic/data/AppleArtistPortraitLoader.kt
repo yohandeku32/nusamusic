@@ -39,6 +39,18 @@ internal fun buildAppleMusicPortraitUrl(name: String): String? {
     return "https://unavatar.io/apple-music/$encoded?fallback=false"
 }
 
+/**
+ * Match queue order, not alphabetical Library order. Multiple songs by the
+ * same artist need one portrait, and invalid artist tags do not use bandwidth.
+ */
+internal fun portraitPrefetchArtists(queueArtistNames: List<String>): List<String> =
+    queueArtistNames.asSequence()
+        .map(ArtistNameUtils::firstArtist)
+        .filter { buildAppleMusicPortraitUrl(it) != null }
+        .distinctBy(ArtistNameUtils::cacheKey)
+        .take(7)
+        .toList()
+
 internal object AppleArtistPortraitLoader {
     private const val POSITIVE_TTL_MS = 30L * 24 * 60 * 60 * 1000
     private const val NEGATIVE_TTL_MS = 12L * 60 * 60 * 1000
