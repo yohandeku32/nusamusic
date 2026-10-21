@@ -6,6 +6,9 @@ import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.util.LruCache
+import java.io.File
+import java.security.MessageDigest
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Semaphore
@@ -17,10 +20,10 @@ object ArtworkLoader {
     private val decodePermit = Semaphore(2)
     // Many local files have no embedded artwork. Remember that result so
     // scrolling past them again never reopens a metadata retriever.
-    private val noArtworkCache = LruCache<String, Boolean>(512)
+    private val noArtworkCache = LruCache<String, Boolean>(8_192)
 
     // Keep a bounded memory cache instead of retaining dozens of large album covers.
-    private val cache = object : LruCache<String, Bitmap>(24 * 1024) {
+    private val cache = object : LruCache<String, Bitmap>(36 * 1024) {
         override fun sizeOf(key: String, value: Bitmap): Int {
             return value.byteCount / 1024
         }
@@ -29,7 +32,60 @@ object ArtworkLoader {
     // The CD player, its carousel and the library request different image
     // sizes. Reuse an already decoded album cover immediately instead of
     // showing the placeholder and reopening the same audio file.
-    private val commonSizes = intArrayOf(128, 160, 256, 512, 768)
+    private val commonSizes = intArrayOf(128, 144, 160, 256, 512, 768)
+    private const val THUMBNAIL_MAX_EDGE = 160
+    private const val MAX_DISK_THUMBNAILS = 2_400
+    private val diskWrites = AtomicInteger()
+
+    private fun thumbnailFile(context: Context, key: String): File {
+        val digest = MessageDigest.getInstance("SHA-256")
+            .digest(key.toByteArray(Charsets.UTF_8))
+            .take(16).joinToString("") { "%02x".format(it) }
+        return File(File(context.cacheDir, "library_artwork_thumbnails"), "$digest.webp")
+    }
+
+    private fun loadDiskThumbnail(context: Context, key: String): Bitmap? =
+        runCatching {
+            val file = thumbnailFile(context, key)
+            if (!file.isFile) return@runCatching null
+            BitmapFactory.decodeFile(
+                file.absolutePath,
+                BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.RGB_565 }
+            )
+        }.getOrNull()
+
+    // Disk thumbnails replace repeated MediaMetadataRetriever calls once
+    // the small in-memory LRU rotates through large music libraries.
+    // All operations happen on Dispatchers.IO and only for <=160px covers.
+    private fun saveDiskThumbnail(context: Context, key: String, bitmap: Bitmap) {
+        runCatching {
+            val target = thumbnailFile(context, key)
+            if (target.isFile) return@runCatching
+            val dir = target.parentFile ?: return@runCatching
+            if (!dir.isDirectory && !dir.mkdirs()) return@runCatching
+            val temporary = File.createTempFile("cover-", ".tmp", dir)
+            try {
+                temporary.outputStream().use { output ->
+                    if (!bitmap.compress(Bitmap.CompressFormat.WEBP, 82, output)) {
+                        return@runCatching
+                    }
+                }
+                if (!temporary.renameTo(target) && !target.isFile) {
+                    // Racing rows can share an album; never replace an
+                    // existing thumbnail while another row decodes it.
+                    temporary.copyTo(target, overwrite = false)
+                }
+                if (diskWrites.incrementAndGet() % 40 == 0) {
+                    dir.listFiles { it -> it.extension == "webp" }
+                        ?.sortedByDescending { it.lastModified() }
+                        ?.drop(MAX_DISK_THUMBNAILS)
+                        ?.forEach(File::delete)
+                }
+            } finally {
+                temporary.delete()
+            }
+        }
+    }
 
     fun cached(
         uriString: String,
@@ -78,12 +134,21 @@ object ArtworkLoader {
     ): Bitmap? = withContext(Dispatchers.IO) {
         val memoryKey = resolvedCacheKey(uriString, maxSize, cacheKey)
         cache.get(memoryKey)?.let { return@withContext it }
+        if (maxSize <= THUMBNAIL_MAX_EDGE) {
+            loadDiskThumbnail(context, memoryKey)?.let { bitmap ->
+                cache.put(memoryKey, bitmap)
+                return@withContext bitmap
+            }
+        }
 
         // Downsample an existing larger cover on a background thread instead
         // of decoding embedded art and creating a MediaMetadataRetriever again.
         cachedLarger(uriString, maxSize, cacheKey)?.let { larger ->
             val thumbnail = scaleDown(larger, maxSize)
             cache.put(memoryKey, thumbnail)
+            if (maxSize <= THUMBNAIL_MAX_EDGE) {
+                saveDiskThumbnail(context, memoryKey, thumbnail)
+            }
             return@withContext thumbnail
         }
         if (noArtworkCache.get(memoryKey) == true) return@withContext null
@@ -93,6 +158,9 @@ object ArtworkLoader {
             cachedLarger(uriString, maxSize, cacheKey)?.let { larger ->
                 val thumbnail = scaleDown(larger, maxSize)
                 cache.put(memoryKey, thumbnail)
+                if (maxSize <= THUMBNAIL_MAX_EDGE) {
+                    saveDiskThumbnail(context, memoryKey, thumbnail)
+                }
                 return@withPermit thumbnail
             }
             if (noArtworkCache.get(memoryKey) == true) return@withPermit null
@@ -138,6 +206,9 @@ object ArtworkLoader {
             }
 
             cache.put(memoryKey, bitmap)
+            if (maxSize <= THUMBNAIL_MAX_EDGE) {
+                saveDiskThumbnail(context, memoryKey, bitmap)
+            }
             bitmap
         } catch (_: Exception) {
             null
