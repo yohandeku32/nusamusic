@@ -72,7 +72,8 @@ internal fun CenteredKaraokeLine(
                 // Raw playback time drives the whole-line wave even when a
                 // syllable is inactive. visualTime retains the old syllable
                 // highlight/seek logic, so the two animations stay separate.
-                painter.draw(this, now, focus, waveTime = time())
+                painter.draw(this, now, focus, waveTime = time(),
+                    playbackRevision = motion.revision)
             }
         }
     }
