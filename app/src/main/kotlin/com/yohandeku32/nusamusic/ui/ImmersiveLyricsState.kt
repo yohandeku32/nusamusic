@@ -3,25 +3,34 @@ package com.yohandeku32.nusamusic.ui
 import androidx.collection.LruCache
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.yohandeku32.nusamusic.data.LyricsRepository
 import com.yohandeku32.nusamusic.data.SongLyrics
+import com.yohandeku32.nusamusic.data.lyricQuality
 import com.yohandeku32.nusamusic.model.Song
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
-/** Show Save only for retrieved lyrics that are not already stored in audio. */
-internal fun lyricsNeedEmbedding(data: SongLyrics?, hasEmbeddedLyrics: Boolean): Boolean =
-    !hasEmbeddedLyrics && data != null && data.stored.content.isNotBlank() &&
-        data.stored.source != "embedded"
+/**
+ * Save should also upgrade an existing embedded lyric when a higher-quality
+ * online syllable version is available. Equal or worse timing is not an upgrade.
+ */
+internal fun lyricsNeedEmbedding(displayed: SongLyrics?, embeddedQuality: Int): Boolean =
+    displayed != null &&
+        displayed.stored.source != "embedded" &&
+        displayed.stored.content.isNotBlank() &&
+        lyricQuality(displayed) > embeddedQuality
 
 class SongLyricsState {
     var data by mutableStateOf<SongLyrics?>(null)
-    var hasEmbeddedLyrics by mutableStateOf(false)
-    var confirmedEmbeddedWrite = false
+    var embeddedLyricsQuality by mutableIntStateOf(0)
+    // A completed, verified write must not briefly re-show Save while Android's
+    // media index continues to report the earlier version of this audio file.
+    var confirmedEmbeddedQuality = 0
     var loading by mutableStateOf(false)
     var attempted = false
     var job: Job? = null
@@ -36,10 +45,11 @@ class ImmersiveLyricsState(private val repository: LyricsRepository) {
     fun forSong(song: Song): SongLyricsState = entries.get(LyricsRepository.cacheKey(song))
         ?: SongLyricsState().also { entries.put(LyricsRepository.cacheKey(song), it) }
 
-    fun markEmbedded(song: Song) {
+    /** Called only after AudioLyricsEmbedder verified the original file write. */
+    fun markEmbedded(song: Song, saved: SongLyrics) {
         forSong(song).apply {
-            confirmedEmbeddedWrite = true
-            hasEmbeddedLyrics = true
+            confirmedEmbeddedQuality = maxOf(confirmedEmbeddedQuality, lyricQuality(saved))
+            embeddedLyricsQuality = maxOf(embeddedLyricsQuality, confirmedEmbeddedQuality)
         }
     }
 
@@ -67,11 +77,13 @@ class ImmersiveLyricsState(private val repository: LyricsRepository) {
         state.job = scope.launch {
             try {
                 val result = repository.load(song, retry) { local ->
-                    // The Save button disappears when this file already has
-                    // lyrics, even if an online version provides better timing.
+                    // Keep the embedded version's actual timing quality
+                    // separate from the online version chosen for display.
+                    // A line-synced file (2) can upgrade to syllable TTML (3).
                     if (state.generation == generation) {
-                        state.hasEmbeddedLyrics = state.confirmedEmbeddedWrite ||
-                            local.stored.content.isNotBlank()
+                        state.embeddedLyricsQuality = maxOf(
+                            lyricQuality(local), state.confirmedEmbeddedQuality
+                        )
                         state.data = local
                     }
                 }
@@ -79,9 +91,11 @@ class ImmersiveLyricsState(private val repository: LyricsRepository) {
             } catch (e: CancellationException) {
                 if (state.generation == generation) state.attempted = state.data != null
                 throw e
+            } catch (_: Exception) {
+                if (state.generation == generation) state.data = null
+            } finally {
+                if (state.generation == generation) state.loading = false
             }
-            catch (_: Exception) { if (state.generation == generation) state.data = null }
-            finally { if (state.generation == generation) state.loading = false }
         }
     }
 }
