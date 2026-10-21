@@ -93,7 +93,7 @@ class LyricsRepository(context: Context) {
         return selected.copy(stored = selected.stored.copy(source = stored.source))
     }
 
-    private fun loadEmbedded(song: Song, retry: Boolean): SongLyrics {
+    private suspend fun loadEmbedded(song: Song, retry: Boolean): SongLyrics {
         val uri = Uri.parse(song.uri)
         if (uri.scheme !in setOf("content", "file"))
             return EmbeddedLyricsSelector.select(emptyList(), song.durationMs)
