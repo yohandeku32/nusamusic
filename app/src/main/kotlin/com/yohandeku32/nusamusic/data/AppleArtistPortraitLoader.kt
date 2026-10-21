@@ -6,6 +6,8 @@ import android.graphics.BitmapFactory
 import android.util.LruCache
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.net.HttpURLConnection
@@ -35,6 +37,20 @@ internal object AppleArtistPortraitLoader {
         override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount / 1024
     }
     private val misses = LruCache<String, Long>(128)
+    // Avoid duplicate image downloads when a warmup overlaps an Artist tap.
+    private val loadMutex = Mutex()
+    // Limit proactive lookups to avoid exhausting the free provider quota.
+    private val warmedArtists = HashSet<String>()
+    private const val MAX_AUTOMATIC_WARMUPS = 4
+
+    fun reserveBackgroundWarmup(name: String): Boolean {
+        if (artistUrl(name) == null || cached(name) != null) return false
+        val key = ArtistNameUtils.cacheKey(name)
+        return synchronized(warmedArtists) {
+            if (key in warmedArtists || warmedArtists.size >= MAX_AUTOMATIC_WARMUPS) false
+            else warmedArtists.add(key)
+        }
+    }
 
     fun artistUrl(name: String): String? {
         val clean = ArtistNameUtils.firstArtist(name).trim()
@@ -54,6 +70,8 @@ internal object AppleArtistPortraitLoader {
             val url = artistUrl(artistName) ?: return@withContext null
             val key = ArtistNameUtils.cacheKey(artistName)
             images.get(key)?.let { return@withContext it }
+            loadMutex.withLock {
+            images.get(key)?.let { return@withLock it }
 
             val directory = File(context.cacheDir, "apple_artist_portraits")
             val fileKey = MessageDigest.getInstance("SHA-256")
@@ -65,12 +83,12 @@ internal object AppleArtistPortraitLoader {
             if (cachedFile.isFile && now - cachedFile.lastModified() < POSITIVE_TTL_MS) {
                 runCatching { decode(cachedFile.readBytes()) }.getOrNull()?.let {
                     images.put(key, it)
-                    return@withContext it
+                    return@withLock it
                 }
             }
             if (misses.get(key)?.let { now - it < NEGATIVE_TTL_MS } == true ||
                 (missFile.isFile && now - missFile.lastModified() < NEGATIVE_TTL_MS)
-            ) return@withContext null
+            ) return@withLock null
 
             // Rate-limited third-party service; cache both successes and misses.
             val bitmapBytes = runCatching { requestImage(url) }.getOrNull()
@@ -78,7 +96,7 @@ internal object AppleArtistPortraitLoader {
             if (bitmap == null) {
                 misses.put(key, now)
                 runCatching { directory.mkdirs(); missFile.writeText("") }
-                return@withContext null
+                return@withLock null
             }
             images.put(key, bitmap)
             runCatching {
@@ -96,6 +114,7 @@ internal object AppleArtistPortraitLoader {
                     ?.drop(48)?.forEach(File::delete)
             }
             bitmap
+            }
         }
 
     private fun requestImage(urlText: String): ByteArray? {
