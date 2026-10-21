@@ -76,6 +76,58 @@ class LyricsHeldWordWaveTest {
         }
     }
 
+    @Test fun heldWordSpendsItsEntireDurationRisingThenDescendingSlowly() {
+        val wave = phrase()
+        fun lift(at: Int) = abs(wave.pose(2, at, 182f).liftDp)
+
+        // A 5-second held "kamu" no longer finishes its rise in 900ms.
+        assertTrue("rise must still be underway after one second",
+            lift(3000) < lift(3800))
+        assertTrue("the crest needs time to develop",
+            lift(3800) < lift(4200))
+
+        // The descent occupies more than half the real held timestamp.
+        assertTrue("still near the top shortly after the crest",
+            lift(5000) > 2.6f)
+        assertTrue("release must progress gently rather than a late cut",
+            lift(5000) > lift(5500))
+        assertTrue(lift(5500) > lift(6000))
+        assertTrue(lift(6000) > lift(6500))
+        assertTrue("return to baseline by the authored end", lift(6999) < 0.002f)
+    }
+
+    @Test fun theNextLyricStartsAfterThePreviousHeldWaveHasSettled() {
+        val wave = LyricsHeldWordWave(listOf(
+            LyricsHeldWordUnit("kamu ", 2000, 7000, 0f, 90f),
+            LyricsHeldWordUnit("selamanya", 7000, 11500, 98f, 220f)
+        ))
+        val before = wave.pose(0, 6800, 45f)
+        val after = wave.pose(0, 7000, 45f)
+        assertTrue("previous word should already be near rest", abs(before.liftDp) < 0.05f)
+        assertEquals(LyricsHeldWordPose(), after)
+        assertEquals("next word must not pre-animate", LyricsHeldWordPose(),
+            wave.pose(1, 6999, 150f))
+        assertEquals(LyricsHeldWordPose(), wave.pose(1, 7000, 150f))
+        assertTrue("new word rises softly from its own authored onset",
+            abs(wave.pose(1, 7100, 150f).liftDp) < 0.02f)
+        assertTrue("the next held word can reach its own crest",
+            abs(wave.pose(1, 9100, 150f).liftDp) > 2f)
+        assertEquals(LyricsHeldWordPose(), wave.pose(0, 9100, 45f))
+    }
+
+    @Test fun shortEligibleHoldsGetSmallerMountainsThanLongHeldVowels() {
+        val short = LyricsHeldWordWave(listOf(
+            LyricsHeldWordUnit("short", 1000, 2250, 0f, 90f)
+        ))
+        val long = LyricsHeldWordWave(listOf(
+            LyricsHeldWordUnit("long", 1000, 6000, 0f, 90f)
+        ))
+        val shortPeak = abs(short.pose(0, 1550, 45f).liftDp)
+        val longPeak = abs(long.pose(0, 3200, 45f).liftDp)
+        assertTrue(shortPeak > 0.1f)
+        assertTrue(longPeak > shortPeak * 2f)
+    }
+
     @Test fun pauseAndBackwardSeekReproduceExactlyTheSamePose() {
         val wave = phrase()
         val held = wave.pose(2, 4600, 182f)
