@@ -54,6 +54,18 @@ private class LyricsGlowPalette(density: Float) {
     fun edgeStroke(energy: Float) = edgeStrokes[(energy * 32f).roundToInt().coerceIn(0, 32)]
 }
 
+// Shadow tables are immutable; all visible rows share a small density cache.
+private object LyricsGlowPaletteCache {
+    private val palettes = LinkedHashMap<Int, LyricsGlowPalette>(4, 0.75f, true)
+    fun forDensity(density: Float): LyricsGlowPalette = synchronized(palettes) {
+        val key = (density * 100f).roundToInt()
+        palettes[key] ?: LyricsGlowPalette(density).also {
+            palettes[key] = it
+            while (palettes.size > 4) palettes.remove(palettes.keys.first())
+        }
+    }
+}
+
 internal class SyllableLyricsPainter(
     layouts: List<List<SyllableLayout>>,
     private val density: Float,
@@ -94,9 +106,14 @@ internal class SyllableLyricsPainter(
     }
 
     private val glyphs = buildList {
-        val profiles = expressions ?: lyricsAdaptiveExpressions(layouts.flatten()
-            .filter { it.syllable.content.isNotBlank() }
-            .map { LyricsExpressionTiming(it.syllable.start, it.syllable.end) })
+        // Use accurate authored fill immediately; phrase analysis arrives
+        // off-main from SyncedLyricsView. Do not redo it for each visible row.
+        val profiles = expressions ?: run {
+            val neutral = LyricsAdaptiveExpression(0)
+            List(layouts.sumOf { row -> row.count { it.syllable.content.isNotBlank() } }) {
+                neutral
+            }
+        }
         var endPathDp = 0f
         var previous: Glyph? = null
         for (row in layouts) {
@@ -149,7 +166,7 @@ internal class SyllableLyricsPainter(
             glyph.pathEndDp
         )
     })
-    private val glowPalette = LyricsGlowPalette(density)
+    private val glowPalette = LyricsGlowPaletteCache.forDensity(density)
 
     /**
      * Keep the V6 global phase and V7 traveling vocal front, but apply their
@@ -160,24 +177,17 @@ internal class SyllableLyricsPainter(
      * Halo and foreground always use the SAME transform; highlighting,
      * shimmer, lyric timings, and scrolling are unchanged.
      */
-    // Reject sub-frame backwards clock jitter, but permit deliberate seeks.
-    // A true seek reanchors both animation and highlighting immediately.
-    private var lastFrameMs = Int.MIN_VALUE
-    private fun stableFrameTime(sampleMs: Int): Int {
-        val stable = if (lastFrameMs != Int.MIN_VALUE &&
-            sampleMs < lastFrameMs && lastFrameMs - sampleMs <= 100) {
-            lastFrameMs
-        } else sampleMs
-        lastFrameMs = stable
-        return stable
-    }
+    private val frameClock = LyricsFrameTimeSmoother()
 
-    fun draw(scope: DrawScope, now: Int, focus: Float, waveTime: Int) = with(scope) {
-        val frameTime = stableFrameTime(waveTime)
+    fun draw(scope: DrawScope, now: Int, focus: Float, waveTime: Int,
+             playbackRevision: Int) = with(scope) {
+        val frameTime = frameClock.sample(waveTime, playbackRevision)
         val strength = focus.coerceIn(0f, 1f)
         val lineStrength = lyricsLineWaveIntensity(lineStart, lineEnd, frameTime)
         val front = if (lineStrength > 0f) vocalMask.front(frameTime) else null
-        // No phrase-wide expansion: keep earlier words anchored during a held final syllable.
+        // A held terminal vowel carries the entire measured phrase together,
+        // rather than independently enlarging its already-sung syllables.
+        closingMotion.update(frameTime)
 
         // Playback time alone drives the transform. No animation restarting,
         // no clipping through characters and no text measurement per frame.
