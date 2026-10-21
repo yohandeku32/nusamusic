@@ -522,6 +522,12 @@ internal fun ImmersiveArtworkPlayer(
                         Box(
                             Modifier.matchParentSize().graphicsLayer {
                                 alpha = (1f - shownProgress()).coerceIn(0f, 1f)
+                                // The pill expands 48dp. Shift both pieces
+                                // 24dp left to keep their combined group
+                                // visually centered throughout Library reveal.
+                                translationX = if (presentingLibrary) {
+                                    -24.dp.toPx() * pillExpansion.value
+                                } else 0f
                             },
                             contentAlignment = Alignment.Center
                         ) {
@@ -617,7 +623,8 @@ internal fun ImmersiveArtworkPlayer(
             Box(
                 Modifier.offset {
                     IntOffset(
-                        (bubble.left - root.left).roundToInt(),
+                        (bubble.left - root.left -
+                            24.dp.toPx() * pillExpansion.value).roundToInt(),
                         (bubble.top - root.top).roundToInt()
                     )
                 }.size(56.dp).graphicsLayer {
@@ -732,9 +739,17 @@ private fun ImmersiveOverlayActionPill(
     )
     Box(
         Modifier.offset {
-            // Preserve the 10dp gap to the restored Artist circle when the
-            // pill expands. Expansion grows rightwards, never over the circle.
-            IntOffset(anchorX.roundToInt(), anchorY.roundToInt())
+            // Keep navigation visually centered on BOTH overlays:
+            // - Library shows Artist + 10dp gap + widening pill as one group.
+            // - Artist hides its profile circle, so the pill itself centers.
+            // Distribute the 48dp pill growth equally left and right.
+            val reveal = widthExpansion().coerceIn(0f, 1f)
+            val halfGrowth = 24.dp.toPx() * reveal
+            val artistOnlyShift = if (showSolidPill && !presentingLibrary) {
+                33.dp.toPx() * reveal // (56dp profile + 10dp gap) / 2
+            } else 0f
+            IntOffset((anchorX - halfGrowth - artistOnlyShift).roundToInt(),
+                anchorY.roundToInt())
         }.layout { measurable, constraints ->
             // Measure only the tiny navigation bar, not the full player.
             // Reading widthExpansion here avoids recomposing the artwork,
