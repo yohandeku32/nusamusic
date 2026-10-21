@@ -155,9 +155,12 @@ fun ImmersiveArtistPage(
         )
     }
     MaterialTheme(colorScheme = artistScheme) {
-        Box(Modifier.fillMaxSize().background(
-            if (overlayMode) Color.Black else artistBase
-        )) {
+        // The very last pixel of the hero's artwork fade must match the
+        // surface immediately below it. Using artistBase (#090A0D) here
+        // with a true-black overlay background (#000000) left a visible
+        // horizontal cutoff, especially on moving Apple album artwork.
+        val pageBackground = if (overlayMode) Color.Black else artistBase
+        Box(Modifier.fillMaxSize().background(pageBackground)) {
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
@@ -173,7 +176,7 @@ fun ImmersiveArtistPage(
                     // Full-width, edge-to-edge album art: no little inset
                     // cover thumbnail and no floating icon overlapping it.
                     Modifier.fillMaxWidth().height(if (overlayMode) 360.dp else 450.dp)
-                        .background(if (overlayMode) Color.Black else artistSurface)
+                        .background(pageBackground)
                 ) {
                     if (heroSong != null) {
                         heroArtwork(heroSong, Modifier.fillMaxSize())
@@ -220,14 +223,22 @@ fun ImmersiveArtistPage(
                             )
                         }
                     }
+                    // The album hero is an edge-to-edge video, but its
+                    // lower gradient must land on EXACTLY the same surface
+                    // as the first content row. Multiple eased stops soften
+                    // the handoff without creating a dark horizontal band.
                     Box(
                         Modifier.matchParentSize().background(
                             Brush.verticalGradient(
-                                0f to Color.Black.copy(alpha = 0.22f),
-                                0.30f to Color.Transparent,
-                                0.59f to Color.Black.copy(alpha = 0.28f),
-                                0.86f to artistBase.copy(alpha = 0.86f),
-                                1f to artistBase
+                                0f to Color.Black.copy(alpha = 0.18f),
+                                0.26f to Color.Transparent,
+                                0.45f to Color.Black.copy(alpha = 0.08f),
+                                0.58f to pageBackground.copy(alpha = 0.24f),
+                                0.70f to pageBackground.copy(alpha = 0.50f),
+                                0.82f to pageBackground.copy(alpha = 0.77f),
+                                0.92f to pageBackground.copy(alpha = 0.94f),
+                                0.98f to pageBackground.copy(alpha = 0.995f),
+                                1f to pageBackground
                             )
                         )
                     )
