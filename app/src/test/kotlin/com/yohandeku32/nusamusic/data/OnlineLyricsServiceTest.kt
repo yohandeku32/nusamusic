@@ -190,6 +190,24 @@ class OnlineLyricsServiceTest {
         assertEquals(2, urls.size)
     }
 
+    @Test fun lyricDownloadTimeoutImmediatelyUsesBackupWithoutRepeatingHost() = runBlocking {
+        val calls = mutableListOf<String>()
+        val service = OnlineLyricsService { url ->
+            calls.add(url)
+            when {
+                url.contains("/match.json") -> hits(hit())
+                url.contains("lrc.red") -> throw IOException("download timeout")
+                else -> JSONArray().put(record()
+                    .put("trackName", song.title)
+                    .put("artistName", song.artist)
+                    .put("syncedLyrics", "[00:01]Aku cinta kamu")).toString()
+            }
+        }
+        assertEquals("LRCLIB", service.lookup(song).result?.source)
+        assertEquals(3, calls.size) // match, failed TTML, LRCLIB
+        assertTrue(calls.last().contains("lrclib.net"))
+    }
+
     @Test fun normalizesRemasterSuffixButRejectsWrongSongs() {
         assertTrue(onlineLyricsMatch(song, listOf("Aku Cinta Kamu (Remastered)"),
             listOf("Nusa Singer")))
