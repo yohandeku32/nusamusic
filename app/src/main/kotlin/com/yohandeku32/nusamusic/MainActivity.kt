@@ -1869,17 +1869,6 @@ private fun NusaMusicApp(
     val artistKey = ArtistNameUtils.cacheKey(currentSong?.artist)
 
     val context = androidx.compose.ui.platform.LocalContext.current
-    // Warm the active artist portrait while listening, before the user
-    // opens Artist. This runs on IO, never during hero composition or player
-    // animation. Bound to four artists/session to respect the provider quota.
-    LaunchedEffect(artistKey) {
-        val name = ArtistNameUtils.firstArtist(currentSong?.artist)
-        if (name.isBlank()) return@LaunchedEffect
-        delay(650L) // Coalesce rapid next/previous track changes.
-        if (AppleArtistPortraitLoader.reserveBackgroundWarmup(name)) {
-            AppleArtistPortraitLoader.load(context, name)
-        }
-    }
     // Restore verified Hi-Res badges as soon as the library becomes available,
     // before the user opens or flings through the song list. All disk IO stays
     // off the main thread; badge cache lookups inside rows are synchronous.
@@ -1940,6 +1929,19 @@ private fun NusaMusicApp(
                 uiPrefs.getString("player_presentation_mode", null)
             )
         )
+    }
+    // Warm the currently playing Artist *only* in Immersive mode. This
+    // improves first-open latency without spending provider quota in CD/Vinyl.
+    LaunchedEffect(artistKey, playerPresentationMode) {
+        if (playerPresentationMode != PlayerPresentationMode.IMMERSIVE_ARTWORK) {
+            return@LaunchedEffect
+        }
+        val name = ArtistNameUtils.firstArtist(currentSong?.artist)
+        if (name.isBlank()) return@LaunchedEffect
+        delay(650L) // Coalesce rapid next/previous song changes.
+        if (AppleArtistPortraitLoader.reserveBackgroundWarmup(name)) {
+            AppleArtistPortraitLoader.load(context, name)
+        }
     }
     // This option themes ONLY the Immersive song library and its search.
     // Reuse the existing preference on upgrade so the chosen color persists.
