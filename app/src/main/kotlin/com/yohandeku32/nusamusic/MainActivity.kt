@@ -156,6 +156,7 @@ import com.yohandeku32.nusamusic.data.SpotifyCanvasVideoCache
 import com.yohandeku32.nusamusic.data.AudioCodecInfo
 import com.yohandeku32.nusamusic.data.AudioCodecLoader
 import com.yohandeku32.nusamusic.data.ArtistNameUtils
+import com.yohandeku32.nusamusic.data.AppleArtistPortraitLoader
 import com.yohandeku32.nusamusic.data.MusicRepository
 import com.yohandeku32.nusamusic.data.MediaStoreCheckpoint
 import com.yohandeku32.nusamusic.data.LyricsRepository
@@ -1868,6 +1869,17 @@ private fun NusaMusicApp(
     val artistKey = ArtistNameUtils.cacheKey(currentSong?.artist)
 
     val context = androidx.compose.ui.platform.LocalContext.current
+    // Warm the active artist portrait while listening, before the user
+    // opens Artist. This runs on IO, never during hero composition or player
+    // animation. Bound to four artists/session to respect the provider quota.
+    LaunchedEffect(artistKey) {
+        val name = ArtistNameUtils.firstArtist(currentSong?.artist)
+        if (name.isBlank()) return@LaunchedEffect
+        delay(650L) // Coalesce rapid next/previous track changes.
+        if (AppleArtistPortraitLoader.reserveBackgroundWarmup(name)) {
+            AppleArtistPortraitLoader.load(context, name)
+        }
+    }
     // Restore verified Hi-Res badges as soon as the library becomes available,
     // before the user opens or flings through the song list. All disk IO stays
     // off the main thread; badge cache lookups inside rows are synchronous.
@@ -2475,6 +2487,17 @@ private fun NusaMusicApp(
                                         lyricsRequested = false
                                         artistPageState.selectedAlbumKey = null
                                         scope.launch { artistPageState.listState.scrollToItem(0) }
+                                        // Begin a cache-miss request at tap-time,
+                                        // not several hundred milliseconds after
+                                        // the Artist page becomes visible.
+                                        val selectedArtist = ArtistNameUtils.firstArtist(currentSong?.artist)
+                                        if (selectedArtist.isNotBlank() &&
+                                            AppleArtistPortraitLoader.cached(selectedArtist) == null
+                                        ) {
+                                            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                                AppleArtistPortraitLoader.load(context, selectedArtist)
+                                            }
+                                        }
                                         libraryOverlayOpen = false
                                         artistOverlayOpen = true
                                     }
