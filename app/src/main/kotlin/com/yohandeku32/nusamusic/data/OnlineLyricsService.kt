@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import org.json.JSONArray
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -74,7 +75,37 @@ internal class OnlineLyricsService(
                 } catch (_: Exception) { hadError = true }
             }
         }
-        return Lookup(null, gotSearchResponse && !hadError)
+        // lrc.red remains the preferred source. When that community host has
+        // no matching lyrics or is unreachable, a single documented LRCLIB
+        // search prevents an otherwise permanently empty Lyrics panel.
+        var fallbackError = false
+        val fallback = try { findSyncedLrclibFallback(song) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { fallbackError = true; null }
+        return Lookup(fallback, gotSearchResponse && !hadError && !fallbackError)
+    }
+
+    private suspend fun findSyncedLrclibFallback(song: Song): Result? {
+        val url = "https://lrclib.net/api/search?track_name=" +
+            encodeLyricsQuery(song.title) + "&artist_name=" +
+            encodeLyricsQuery(primaryLyricsArtist(song.artist))
+        val payload = request(url) ?: throw IOException("LRCLIB unavailable")
+        val results = JSONArray(payload)
+        for (i in 0 until minOf(results.length(), 20)) {
+            coroutineContext.ensureActive()
+            val candidate = results.optJSONObject(i) ?: continue
+            if (candidate.optBoolean("instrumental", false)) continue
+            if (!onlineLyricsMatch(song,
+                    listOf(candidate.optString("trackName")),
+                    listOf(candidate.optString("artistName"))
+                )) continue
+            val seconds = candidate.optDouble("duration", Double.NaN)
+            if (seconds.isFinite() && seconds > 0 && song.durationMs > 0 &&
+                abs(seconds - song.durationMs / 1_000.0) > 6.0) continue
+            val lrc = candidate.optString("syncedLyrics")
+            if (validTiming(lrc, song.durationMs)) return Result(lrc, "LRCLIB")
+        }
+        return null
     }
 
     private suspend fun fetchSong(isrc: String, song: Song): Result? {
@@ -214,7 +245,9 @@ private suspend fun requestLyricsText(url: String): String? = withContext(Dispat
     try {
         connection.connectTimeout = 3_500
         connection.readTimeout = 3_500
-        connection.setRequestProperty("User-Agent", "NusaMusic/1.0 (Android; lyrics lookup)")
+        connection.setRequestProperty(
+            "User-Agent", "NusaMusic/1.0 (https://github.com/yohandeku32/nusamusic)"
+        )
         connection.setRequestProperty("Accept", "application/json")
         // lrc.red uses canonical redirects on some routes. Java handles these
         // without asking callers to resubmit a lookup or discard the result.
