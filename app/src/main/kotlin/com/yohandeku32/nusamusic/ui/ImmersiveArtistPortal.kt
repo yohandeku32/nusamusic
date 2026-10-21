@@ -1,38 +1,24 @@
 package com.yohandeku32.nusamusic.ui
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.size
-import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import kotlin.math.roundToInt
 import dev.chrisbanes.haze.HazeState
-import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.UserRound
 import dev.chrisbanes.haze.hazeSource
 
 /**
- * One 660ms compositor-only timeline. The artist circle rises smoothly from
- * its measured bottom pill coordinate into its own black 76dp toolbar; the
- * full-width artwork begins below that toolbar so the icon never covers it.
+ * Full-screen compositor-only Artist overlay. The upper-left corner stays
+ * clear of duplicate profile icons; the bottom pill handles navigation.
  *
  * No blur, layout-frame animation, whole-page scaling, bounce or overlaid
  * artwork leaks. The profile always fills the viewport; the real four-action
@@ -52,21 +38,14 @@ internal fun ImmersiveArtistPortal(
     onSwipeCancelled: () -> Unit = {},
     canSwipeDown: () -> Boolean = { true },
     swipeFromHeaderOnly: Boolean = false,
-    showArtistCircle: Boolean = true,
     hazeState: HazeState?,
-    liquidGlassEnabled: Boolean = true,
-    hazeAlpha: Float = 0f,
-    artworkTint: Color = Color(0xFF29303B),
     profile: @Composable () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val anchor = source ?: return
-    val root = host ?: return
+    // Keep the portal anchored to the measured player without inserting
+    // a redundant Artist icon into the top-left of the Hero section.
+    if (source == null || host == null) return
     val density = LocalDensity.current
-    val sourceX = anchor.left - root.left
-    val sourceY = anchor.top - root.top
-    val destX = with(density) { 20.dp.toPx() }
-    val destY = topInsetPx + with(density) { 10.dp.toPx() }
     // Do not wait for finger-up after a long drag. A deliberate 64dp
     // downward movement starts closing instantly, while the touch slop
     // and directional check prevent accidental dismissal.
@@ -165,39 +144,8 @@ internal fun ImmersiveArtistPortal(
             profile()
         }
 
-        if (showArtistCircle) Box(
-            Modifier.offset {
-                IntOffset(sourceX.roundToInt(), sourceY.roundToInt())
-            }
-                .size(56.dp)
-                .graphicsLayer {
-                    val p = progress().coerceIn(0f, 1f)
-                    translationX = (destX - sourceX) * p
-                    translationY = (destY - sourceY) * p
-                    alpha = p
-                }
-                .clickable(enabled = open, onClick = onClose)
-                .semantics { contentDescription = "Close artist profile" },
-            contentAlignment = Alignment.Center
-        ) {
-            // Identical glass as the Home and Library Artist circles.
-            // The live blurred reflection fades over the same lens fallback.
-            ContinuousLiquidGlassSurface(
-                radius = 50.dp,
-                lightMode = false,
-                liquidGlassEnabled = liquidGlassEnabled,
-                hazeState = hazeState,
-                hazeAlpha = hazeAlpha,
-                artworkTint = artworkTint,
-                modifier = Modifier.matchParentSize()
-            )
-            Icon(
-                imageVector = Lucide.UserRound,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(23.dp)
-            )
-        }
+        // No duplicate profile bubble in the Artist header. Navigation
+        // remains in the bottom pill and swipe-to-close stays available.
     }
 }
 
