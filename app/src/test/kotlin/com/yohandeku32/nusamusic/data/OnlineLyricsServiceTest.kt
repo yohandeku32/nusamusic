@@ -62,6 +62,33 @@ class OnlineLyricsServiceTest {
         assertNull(service.lookup(song).result)
     }
 
+    @Test fun lrclibSearchRecoversWhenLocalAlbumTagsDoNotMatch() = runBlocking {
+        val calls = mutableListOf<String>()
+        val service = OnlineLyricsService { url ->
+            calls += url
+            when {
+                url.contains("api.amll.dev") -> """{"status":200,"data":{"items":[]}}"""
+                url.contains("/api/get") -> null
+                else -> """[
+                    {"trackName":"Someone Else","artistName":"Nusa Singer","duration":180,
+                     "syncedLyrics":"[00:01]Incorrect"},
+                    {"trackName":"Aku Cinta Kamu","artistName":"Nusa Singer",
+                     "albumName":"Kisah","duration":180,"instrumental":false,
+                     "syncedLyrics":"[00:01]Aku cinta kamu"}
+                ]"""
+            }
+        }
+        assertEquals("LRCLIB", service.lookup(song).result?.source)
+        assertTrue(calls.any { it.contains("/api/search") })
+    }
+
+    @Test fun temporaryApiFailuresDoNotCreateFalsePermanentMisses() = runBlocking {
+        val service = OnlineLyricsService { throw java.io.IOException("offline") }
+        val result = service.lookup(song)
+        assertNull(result.result)
+        assertFalse(result.conclusivelyMissing)
+    }
+
     @Test fun normalizesPunctuationButNeverAcceptsUnrelatedTitles() {
         assertTrue(onlineLyricsMatch(song, listOf("Aku, Cinta Kamu!"), listOf("Nusa Singer")))
         assertFalse(onlineLyricsMatch(song, listOf("Aku Cinta Dia"), listOf("Nusa Singer")))
