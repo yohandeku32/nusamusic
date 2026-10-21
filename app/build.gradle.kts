@@ -126,6 +126,8 @@ dependencies {
         implementation(files(localFfmpegAar))
     }
     testImplementation("junit:junit:4.13.2")
+    // Real JSONObject for pure JVM online-lyrics contract tests.
+    testImplementation("org.json:json:20240303")
     testImplementation("org.robolectric:robolectric:4.17")
     testImplementation("androidx.compose.ui:ui-test-junit4")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
