@@ -2,13 +2,10 @@ package com.yohandeku32.nusamusic.ui
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
-import androidx.compose.animation.expandHorizontally
-import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.animateColorAsState
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.*
@@ -43,6 +40,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -53,6 +51,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
@@ -115,6 +114,9 @@ internal fun ImmersiveArtworkPlayer(
     // the four-action pill. Read Animatable only in draw/placement modifiers;
     // do not recompose the expensive artwork/player on every animation frame.
     val artistLift = remember { Animatable(0f) }
+    // Animate the navigation bar independently and read its value only in
+    // draw/placement/measure blocks: no per-frame player recomposition.
+    val pillExpansion = remember { Animatable(0f) }
     // Both content sources are recorded beneath the same small glass
     // controls: current-player artwork and the currently visible portal.
     val glassBackdrop = remember { HazeState() }
@@ -145,7 +147,7 @@ internal fun ImmersiveArtworkPlayer(
     // remains underneath on Home and both portals at every animation frame.
     val liveGlassAlpha by animateFloatAsState(
         targetValue = if (liveGlassReady) 1f else 0f,
-        animationSpec = tween(320, easing = FastOutSlowInEasing),
+        animationSpec = tween(125, easing = FastOutSlowInEasing),
         label = "continuousLiquidGlassBackdrop"
     )
     LaunchedEffect(artistOpen, libraryOpen) {
@@ -154,19 +156,25 @@ internal fun ImmersiveArtworkPlayer(
             lastOverlayIsLibrary = libraryOpen
             portalMounted = true
             portalSettled = false
+            launch {
+                pillExpansion.animateTo(1f, tween(190, easing = FastOutSlowInEasing))
+            }
             // Start the animation immediately. Previously awaiting the next
             // frame added noticeable latency on Library taps; its expensive
             // metadata indexing is still deferred until the sheet settles.
             artistLift.animateTo(
                 1f,
                 animationSpec = tween(
-                    if (libraryOpen) 580 else 710,
+                    if (libraryOpen) 300 else 350,
                     easing = FastOutSlowInEasing
                 )
             )
             portalSettled = true
         } else {
             portalSettled = false
+            launch {
+                pillExpansion.animateTo(0f, tween(165, easing = FastOutSlowInEasing))
+            }
             // Continue closing from the actual finger position, not 100%.
             if (dragActive) {
                 artistLift.snapTo(dragFraction)
@@ -174,8 +182,8 @@ internal fun ImmersiveArtworkPlayer(
             }
             // Touch-down dismiss should not leave a 600ms tail after the
             // sheet has already followed the finger most of the way.
-            val remainingMs = (390f * artistLift.value)
-                .toInt().coerceIn(105, 390)
+            val remainingMs = (225f * artistLift.value)
+                .toInt().coerceIn(75, 225)
             artistLift.animateTo(
                 0f, animationSpec = tween(remainingMs, easing = FastOutSlowInEasing)
             )
@@ -342,17 +350,9 @@ internal fun ImmersiveArtworkPlayer(
         // Share is intentionally absent; keep measured player geometry,
         // the moving pill, and touch targets symmetrical with 3/2 controls.
         val actionPillWidth = if (lyricsEnabled) 176.dp else 128.dp
-        // Both the right-hand pill and the separate Library Artist circle
-        // use one width animation, so neither jumps or overlaps the other.
-        val expandedPillWidth by animateDpAsState(
-            targetValue = if (overlayOpen) actionPillWidth + 48.dp else actionPillWidth,
-            // Synchronize pill width with the actual portal open/close.
-            animationSpec = tween(
-                if (overlayOpen) { if (libraryOpen) 580 else 710 } else 390,
-                easing = FastOutSlowInEasing
-            ),
-            label = "overlayHomePillWidth"
-        )
+        // Fixed player geometry: navigation expansion is animated outside
+        // composition, so album artwork and transport don't recompose at 120Hz.
+        val pillExpansionPx = with(density) { 48.dp.toPx() }
 
         // On compact/large-text screens the foreground can scroll rather than
         // clipping transport buttons. The artwork remains a full-screen canvas.
@@ -512,9 +512,7 @@ internal fun ImmersiveArtworkPlayer(
                             Modifier.matchParentSize().graphicsLayer {
                                 alpha = (1f - shownProgress()).coerceIn(0f, 1f)
                                 translationX = if (presentingLibrary) {
-                                    -with(density) {
-                                        (expandedPillWidth - actionPillWidth).toPx()
-                                    } * 0.5f
+                                    -pillExpansionPx * pillExpansion.value * 0.5f
                                 } else 0f
                             },
                             contentAlignment = Alignment.Center
@@ -579,12 +577,12 @@ internal fun ImmersiveArtworkPlayer(
                     artistLift.snapTo(releasedAt)
                     dragActive = false
                     artistLift.animateTo(
-                        1f, animationSpec = tween(300, easing = FastOutSlowInEasing)
+                        1f, animationSpec = tween(170, easing = FastOutSlowInEasing)
                     )
                 }
             },
             canSwipeDown = {
-                // Do not interrupt the still-opening 710ms Animatable with a
+                // Do not interrupt the still-opening Animatable with a
                 // drag snapTo; allow gestures once the sheet has settled.
                 portalSettled &&
                     (presentingLibrary || canCloseArtistBySwipe())
@@ -610,9 +608,6 @@ internal fun ImmersiveArtworkPlayer(
         if (bubble != null && root != null) {
             val circleX = bubble.left - root.left
             val circleY = bubble.top - root.top
-            val extraWidthPx = with(density) {
-                (expandedPillWidth - actionPillWidth).toPx()
-            }
             if (portalVisible && presentingLibrary) {
                 Box(
                     Modifier.offset {
@@ -620,7 +615,7 @@ internal fun ImmersiveArtworkPlayer(
                             // Match Home's translated child exactly. Maintain
                             // the fixed 10dp gap to the widening action pill.
                             libraryArtistCircleLeftPx(
-                                circleX, extraWidthPx
+                                circleX, pillExpansionPx * pillExpansion.value
                             ).roundToInt(),
                             circleY.roundToInt()
                         )
@@ -670,7 +665,7 @@ internal fun ImmersiveArtworkPlayer(
                 anchorY = circleY,
                 progress = shownProgress,
                 fullWidth = actionPillWidth,
-                width = expandedPillWidth,
+                widthExpansion = { pillExpansion.value },
                 lyricsEnabled = lyricsEnabled,
                 lyricsOpen = lyricsOpen,
                 lightMode = lightMode,
@@ -720,7 +715,7 @@ private fun ImmersiveOverlayActionPill(
     anchorY: Float,
     progress: () -> Float,
     fullWidth: Dp,
-    width: Dp,
+    widthExpansion: () -> Float,
     lyricsEnabled: Boolean,
     lyricsOpen: Boolean,
     lightMode: Boolean,
@@ -749,7 +744,9 @@ private fun ImmersiveOverlayActionPill(
         Modifier.offset {
             val diameterPx = with(density) { 56.dp.toPx() }
             val gapPx = with(density) { 10.dp.toPx() }
-            val widthIncrease = with(density) { (width - fullWidth).toPx() }
+            val widthIncrease = with(density) {
+                48.dp.toPx()
+            } * widthExpansion().coerceIn(0f, 1f)
             val left = if (presentingLibrary) {
                 // Keep the separate Artist circle and right-hand pill in
                 // exactly the same positions as the Now Playing row.
@@ -761,7 +758,17 @@ private fun ImmersiveOverlayActionPill(
                     widthIncrease * 0.5f
             }
             IntOffset(left.roundToInt(), anchorY.roundToInt())
-        }.width(width).height(56.dp)
+        }.layout { measurable, constraints ->
+            // Measure only the tiny navigation bar, not the full player.
+            // Reading widthExpansion here avoids recomposing the artwork,
+            // transport and entire portal once per animation frame.
+            val expandedPx = (48.dp.toPx() *
+                widthExpansion().coerceIn(0f, 1f)).roundToInt()
+            val targetWidth = constraints.constrainWidth(fullWidth.roundToPx() + expandedPx)
+            val targetHeight = constraints.constrainHeight(56.dp.roundToPx())
+            val placeable = measurable.measure(Constraints.fixed(targetWidth, targetHeight))
+            layout(targetWidth, targetHeight) { placeable.placeRelative(0, 0) }
+        }
     ) {
         // The original Home glass remains mounted as black fades out,
         // preventing the last-frame material swap on return.
@@ -798,12 +805,10 @@ private fun ImmersiveOverlayActionPill(
             // not inside the action pill.
             AnimatedVisibility(
                 visible = !libraryOpen,
-                enter = expandHorizontally(
-                    animationSpec = tween(350, easing = FastOutSlowInEasing)
-                ) + fadeIn(tween(260)),
-                exit = shrinkHorizontally(
-                    animationSpec = tween(300, easing = FastOutSlowInEasing)
-                ) + fadeOut(tween(220))
+                // Opacity-only: expanding/shrinking the button remeasured the
+                // row during every animation frame and caused visible drops.
+                enter = fadeIn(tween(105)),
+                exit = fadeOut(tween(90))
             ) {
                 ImmersiveAction(
                     lightMode, Lucide.ListMusic,
@@ -820,12 +825,8 @@ private fun ImmersiveOverlayActionPill(
             )
             AnimatedVisibility(
                 visible = overlayOpen,
-                enter = expandHorizontally(
-                    animationSpec = tween(390, easing = FastOutSlowInEasing)
-                ) + fadeIn(tween(290)),
-                exit = shrinkHorizontally(
-                    animationSpec = tween(330, easing = FastOutSlowInEasing)
-                ) + fadeOut(tween(220))
+                enter = fadeIn(tween(110)),
+                exit = fadeOut(tween(90))
             ) {
                 ImmersiveAction(
                     lightMode, Lucide.House,
