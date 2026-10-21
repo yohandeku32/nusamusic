@@ -157,6 +157,7 @@ import com.yohandeku32.nusamusic.data.AudioCodecInfo
 import com.yohandeku32.nusamusic.data.AudioCodecLoader
 import com.yohandeku32.nusamusic.data.ArtistNameUtils
 import com.yohandeku32.nusamusic.data.AppleArtistPortraitLoader
+import com.yohandeku32.nusamusic.data.portraitPrefetchArtists
 import com.yohandeku32.nusamusic.data.MusicRepository
 import com.yohandeku32.nusamusic.data.MediaStoreCheckpoint
 import com.yohandeku32.nusamusic.data.LyricsRepository
@@ -1374,10 +1375,9 @@ class MainActivity : ComponentActivity() {
         nextArtistPortraitJob = lifecycleScope.launch {
             val artists = withContext(Dispatchers.Default) {
                 val byId = librarySnapshot.associateBy { it.id }
-                ids.mapNotNull(byId::get)
-                    .map { ArtistNameUtils.firstArtist(it.artist) }
-                    .filter { it.isNotBlank() }
-                    .distinctBy { ArtistNameUtils.cacheKey(it) }
+                portraitPrefetchArtists(
+                    ids.mapNotNull(byId::get).map { it.artist }
+                )
             }
             kotlinx.coroutines.supervisorScope {
                 artists.forEachIndexed { index, name ->
