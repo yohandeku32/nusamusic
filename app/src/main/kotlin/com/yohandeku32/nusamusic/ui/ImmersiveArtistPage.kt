@@ -30,12 +30,16 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yohandeku32.nusamusic.data.AppleArtistPortraitLoader
+import com.yohandeku32.nusamusic.data.AppleMusicAnimatedArtworkLoader
+import com.yohandeku32.nusamusic.data.AppleMusicAlbumInfo
+import com.yohandeku32.nusamusic.data.AppleMusicAlbumInfoLoader
 import com.yohandeku32.nusamusic.data.ArtistLibrary
 import com.yohandeku32.nusamusic.data.ArtistNameUtils
 import com.yohandeku32.nusamusic.data.PlaybackHistory
 import com.yohandeku32.nusamusic.model.Song
 import java.util.Locale
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
 
 private val artistBase = Color(0xFF090A0D)
 private val artistSurface = Color(0xFF17191F)
@@ -109,6 +113,29 @@ fun ImmersiveArtistPage(
         label = "appleArtistPortraitReveal"
     )
 
+    // Each selected ALBUM resolves independently. Both tasks run off the UI
+    // thread and never postpone the local cover, actions or track listing.
+    // Opening another album cancels stale calls and clears the previous data.
+    val albumTitle = selectedAlbum?.title.orEmpty()
+    var appleAlbum by remember(artist, albumTitle) {
+        mutableStateOf<AppleMusicAlbumInfo?>(null)
+    }
+    var albumNotes by remember(artist, albumTitle) { mutableStateOf<String?>(null) }
+    var animatedSquare by remember(artist, albumTitle) { mutableStateOf<String?>(null) }
+    LaunchedEffect(artist, albumTitle, isVisible) {
+        if (!isVisible || albumTitle.isBlank()) return@LaunchedEffect
+        launch {
+            appleAlbum = AppleMusicAlbumInfoLoader.load(artist, albumTitle)
+            appleAlbum?.appleMusicUrl?.let {
+                albumNotes = AppleMusicAlbumInfoLoader.editorialNotes(it)
+            }
+        }
+        launch {
+            animatedSquare = AppleMusicAnimatedArtworkLoader
+                .loadAlbumSquareArtworkUrl(artist, albumTitle)
+        }
+    }
+
     fun showAlbum(key: String?) {
         selectedAlbumKey = key
         scope.launch { listState.scrollToItem(0) }
@@ -167,8 +194,18 @@ fun ImmersiveArtistPage(
                             )
                         }
                     }
-                    // Use Apple's artist portrait only on the Artist overview.
-                    // Album detail still shows its own local album cover.
+                    // The Apple portrait is for Artist overview only.
+                    // Album detail keeps the LOCAL cover visible until the
+                    // square Apple Music HLS video has rendered a real frame.
+                    if (selectedAlbum != null && isVisible) {
+                        animatedSquare?.let { url ->
+                            AppleAlbumAnimatedHero(
+                                url = url,
+                                active = isVisible,
+                                modifier = Modifier.matchParentSize()
+                            )
+                        }
+                    }
                     if (selectedAlbum == null) {
                         portrait?.let { image ->
                             Image(
@@ -280,6 +317,72 @@ fun ImmersiveArtistPage(
             }
 
             if (selectedAlbum != null) {
+                if (appleAlbum != null) {
+                    item(key = "apple-album-information") {
+                        val info = appleAlbum!!
+                        Column(
+                            Modifier.fillMaxWidth()
+                                .padding(horizontal = 24.dp)
+                                .padding(bottom = 28.dp)
+                        ) {
+                            Text(
+                                artistText("TENTANG ALBUM", "ABOUT THE ALBUM"),
+                                color = artistMuted,
+                                fontSize = 11.sp,
+                                letterSpacing = 1.2.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Spacer(Modifier.height(10.dp))
+                            val details = listOfNotNull(
+                                info.releaseDate?.take(4)?.takeIf { it.length == 4 },
+                                info.genre,
+                                info.trackCount?.let {
+                                    artistText("$"+"it lagu", "$"+"it tracks")
+                                }
+                            )
+                            if (details.isNotEmpty()) {
+                                Text(
+                                    details.joinToString("  ·  "),
+                                    color = artistInk, fontSize = 13.sp
+                                )
+                            }
+                            albumNotes?.takeIf { it.isNotBlank() }?.let { description ->
+                                Spacer(Modifier.height(12.dp))
+                                Text(
+                                    description,
+                                    color = artistInk.copy(alpha = 0.86f),
+                                    fontSize = 13.sp,
+                                    lineHeight = 21.sp
+                                )
+                            }
+                            info.copyright?.let { notice ->
+                                Spacer(Modifier.height(11.dp))
+                                Text(
+                                    notice,
+                                    color = artistMuted,
+                                    fontSize = 11.sp,
+                                    lineHeight = 16.sp
+                                )
+                            }
+                            info.appleMusicUrl?.let { appleUrl ->
+                                Spacer(Modifier.height(12.dp))
+                                Text(
+                                    artistText("Lihat di Apple Music ↗", "View on Apple Music ↗"),
+                                    modifier = Modifier.clickable {
+                                        val intent = android.content.Intent(
+                                            android.content.Intent.ACTION_VIEW,
+                                            android.net.Uri.parse(appleUrl)
+                                        )
+                                        runCatching { context.startActivity(intent) }
+                                    },
+                                    color = artistInk,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+                    }
+                }
                 item(key = "album-title") {
                     ArtistSectionHeader(
                         artistText("Daftar Lagu", "Tracklist"),
