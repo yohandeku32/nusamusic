@@ -10,7 +10,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.AlertDialog
+import android.net.Uri
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.*
@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.widget.Toast
+import com.yohandeku32.nusamusic.data.LyricsFolderAccess
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Save
 import com.yohandeku32.nusamusic.data.AudioLyricsEmbedder
@@ -65,46 +66,86 @@ fun ImmersiveLyricsPanel(
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    var showEmbedConfirmation by remember { mutableStateOf(false) }
-    var pendingEmbed by remember { mutableStateOf<PendingLyricsEmbed?>(null) }
+    val folderAccess = remember(context) { LyricsFolderAccess(context.applicationContext) }
+    var pendingFolder by remember { mutableStateOf<PendingLyricsEmbed?>(null) }
     var embedBusy by remember { mutableStateOf(false) }
     val activeSong by rememberUpdatedState(song)
     val beforeEmbed by rememberUpdatedState(onBeforeEmbed)
-    val filePicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
-    ) { selected ->
-        val candidate = pendingEmbed
-        pendingEmbed = null
-        if (selected != null && candidate != null && !embedBusy) {
-            embedBusy = true
+
+    suspend fun writeLyrics(snapshot: PendingLyricsEmbed, target: Uri) {
+        check(activeSong?.uri == snapshot.song.uri) {
+            "The playing song changed. Open Lyrics and save it again."
+        }
+        AudioLyricsEmbedder(context.applicationContext).embed(
+            snapshot.song, target, snapshot.lyrics,
+            beforeWrite = {
+                check(activeSong?.uri == snapshot.song.uri) {
+                    "The playing song changed. Try again."
+                }
+                beforeEmbed()
+            }
+        )
+        // The confirmed file write makes the Save icon disappear immediately,
+        // regardless of whether an online lyric version remains in memory.
+        state.markEmbedded(snapshot.song)
+        state.load(snapshot.song, scope, retry = true)
+        Toast.makeText(context, "Lyrics saved in the original MP3", Toast.LENGTH_LONG).show()
+    }
+
+    val folderPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        val snapshot = pendingFolder
+        pendingFolder = null
+        if (uri == null || snapshot == null) {
+            embedBusy = false
+        } else {
             scope.launch {
                 try {
-                    if (activeSong?.uri != candidate.song.uri) {
-                        throw IllegalArgumentException(
-                            "The playing song changed. Select Embed again."
-                        )
+                    folderAccess.rememberFolder(uri)
+                    check(activeSong?.uri == snapshot.song.uri) {
+                        "The playing song changed. Save its lyrics again."
                     }
-                    AudioLyricsEmbedder(context.applicationContext).embed(
-                        candidate.song, selected, candidate.lyrics,
-                        beforeWrite = {
-                            check(activeSong?.uri == candidate.song.uri) {
-                                "The playing song changed. Try again."
-                            }
-                            beforeEmbed()
-                        }
-                    )
-                    state.load(candidate.song, scope, retry = true)
-                    Toast.makeText(context, "Lyrics embedded in MP3", Toast.LENGTH_LONG).show()
+                    val target = folderAccess.find(snapshot.song)
+                        ?: error("This folder does not contain the original MP3. Select its actual music folder.")
+                    writeLyrics(snapshot, target)
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (error: Exception) {
-                    Toast.makeText(
-                        context, error.message ?: "Unable to embed lyrics",
-                        Toast.LENGTH_LONG
-                    ).show()
+                    Toast.makeText(context, error.message ?: "Unable to embed lyrics",
+                        Toast.LENGTH_LONG).show()
                 } finally {
                     embedBusy = false
                 }
+            }
+        }
+    }
+
+    fun saveWithFolderAccess(snapshot: PendingLyricsEmbed) {
+        if (embedBusy) return
+        embedBusy = true
+        scope.launch {
+            try {
+                check(activeSong?.uri == snapshot.song.uri) {
+                    "The playing song changed. Save its lyrics again."
+                }
+                val target = folderAccess.find(snapshot.song)
+                if (target == null) {
+                    // First time only (or another folder outside existing
+                    // grants): Android's folder picker grants durable access.
+                    // Automatically finish this same save after selection.
+                    pendingFolder = snapshot
+                    folderPicker.launch(null)
+                } else {
+                    writeLyrics(snapshot, target)
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Toast.makeText(context, error.message ?: "Unable to embed lyrics",
+                    Toast.LENGTH_LONG).show()
+            } finally {
+                if (pendingFolder == null) embedBusy = false
             }
         }
     }
@@ -207,16 +248,15 @@ fun ImmersiveLyricsPanel(
             }
         }
 
-        // Only remotely downloaded lyrics need embedding. Show one small
-        // outlined 44dp touch target at the top-right of the Lyrics viewport.
-        // Existing local-file lyrics have already been embedded and do not
-        // need a second write action.
+        // Save is a one-tap operation after the first persistent folder grant.
+        // Existing embedded lyrics never show this action.
         if (song != null && data != null &&
             data.stored.content.isNotBlank() &&
-            data.stored.source != "embedded"
+            data.stored.source != "embedded" &&
+            entry?.hasEmbeddedLyrics != true
         ) {
             IconButton(
-                onClick = { showEmbedConfirmation = true },
+                onClick = { saveWithFolderAccess(PendingLyricsEmbed(song, data)) },
                 enabled = !embedBusy,
                 modifier = Modifier.align(Alignment.TopEnd)
                     .padding(top = 2.dp, end = 16.dp)
@@ -242,33 +282,4 @@ fun ImmersiveLyricsPanel(
         }
     }
 
-    if (showEmbedConfirmation && song != null) AlertDialog(
-        onDismissRequest = { showEmbedConfirmation = false },
-        title = { Text("Embed lyrics in audio") },
-        text = {
-            Text(
-                "Choose the original MP3 file for this song. " +
-                "NusaMusic verifies the file and makes a temporary backup " +
-                "before writing the timed lyrics into its ID3 tags. " +
-                "Other formats are not supported yet."
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = {
-                showEmbedConfirmation = false
-                val existing = entry?.data
-                if (existing != null && existing.stored.content.isNotBlank()) {
-                    pendingEmbed = PendingLyricsEmbed(song, existing)
-                    filePicker.launch(arrayOf("audio/*", "application/octet-stream"))
-                }
-            }) {
-                Text("Choose MP3")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = { showEmbedConfirmation = false }) {
-                Text("Cancel")
-            }
-        }
-    )
 }
