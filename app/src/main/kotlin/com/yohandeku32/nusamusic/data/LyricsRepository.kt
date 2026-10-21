@@ -156,7 +156,11 @@ internal fun lyricQuality(value: SongLyrics): Int = when {
 }
 
 internal fun preferLyrics(local: SongLyrics, remote: SongLyrics): SongLyrics =
-    if (lyricQuality(remote) > lyricQuality(local)) remote else local
+    if (lyricQuality(remote) > lyricQuality(local)) remote.copy(
+        // Remote text must not erase composer / lyricist credits authored
+        // in the locally owned audio metadata.
+        stored = remote.stored.copy(credits = local.stored.credits)
+    ) else local
 
 internal object EmbeddedLyricsSelector {
     private val timed = Regex("(?m)^\\s*\\[\\d+:|^\\s*<(?:\\w+:)?tt(?:\\s|>)")
