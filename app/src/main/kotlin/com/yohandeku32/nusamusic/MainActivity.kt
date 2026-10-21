@@ -2546,10 +2546,18 @@ private fun NusaMusicApp(
                                         onTogglePlay = onTogglePlay,
                                         onScanMusic = onQuickRefreshMusic,
                                         onRequestPermission = onRequestPermission,
-                                        artwork = { track, tileModifier ->
+                                        artwork = { track, tileModifier, settled, index ->
                                             ArtworkView(
-                                                song = track, maxSizePx = 144,
-                                                loadDelayMs = 32L, grainOverlay = false,
+                                                song = track,
+                                                maxSizePx = 144,
+                                                // Cached album thumbnails are available
+                                                // instantly; defer misses until the
+                                                // Library entrance finishes. Stagger
+                                                // each visible row to avoid frame spikes.
+                                                loadAllowed = settled,
+                                                loadDelayMs = 40L +
+                                                    (index.coerceIn(0, 12) * 28L),
+                                                grainOverlay = false,
                                                 modifier = tileModifier
                                             )
                                         }
