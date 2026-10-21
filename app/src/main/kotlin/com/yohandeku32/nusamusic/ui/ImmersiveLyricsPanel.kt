@@ -87,7 +87,7 @@ fun ImmersiveLyricsPanel(
         )
         // The confirmed file write makes the Save icon disappear immediately,
         // regardless of whether an online lyric version remains in memory.
-        state.markEmbedded(snapshot.song)
+        state.markEmbedded(snapshot.song, snapshot.lyrics)
         state.load(snapshot.song, scope, retry = true)
         Toast.makeText(context, "Lyrics saved in the original MP3", Toast.LENGTH_LONG).show()
     }
@@ -250,10 +250,10 @@ fun ImmersiveLyricsPanel(
             }
         }
 
-        // Save is a one-tap operation after the first persistent folder grant.
-        // Existing embedded lyrics never show this action.
+        // Offer one-tap Save for a missing lyric OR a richer online version.
+        // Local plain/line lyrics must not hide an available syllable upgrade.
         if (song != null && lyricsNeedEmbedding(
-                data, entry?.hasEmbeddedLyrics == true
+                data, entry?.embeddedLyricsQuality ?: 0
             )
         ) {
             IconButton(
