@@ -40,6 +40,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.yohandeku32.nusamusic.R
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInRoot
@@ -699,7 +701,7 @@ private fun ImmersiveOverlayActionPill(
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
             if (lyricsEnabled) ImmersiveAction(
-                lightMode, Lucide.MessageSquareText,
+                lightMode, ImageVector.vectorResource(R.drawable.tabler_nav_lyrics),
                 if (lyricsOpen) immersiveText("Tutup lirik", "Close lyrics")
                 else immersiveText("Buka lirik", "Open lyrics"),
                 onLyrics, hasSong, active = lyricsOpen, iconSize = 23.dp,
@@ -715,7 +717,9 @@ private fun ImmersiveOverlayActionPill(
             ) { showingLibraryHome ->
                 ImmersiveAction(
                     lightMode,
-                    if (showingLibraryHome) Lucide.House else Lucide.ListMusic,
+                    if (showingLibraryHome)
+                        ImageVector.vectorResource(R.drawable.tabler_nav_home)
+                    else ImageVector.vectorResource(R.drawable.tabler_nav_library),
                     if (showingLibraryHome)
                         immersiveText("Kembali ke pemutar", "Back to Now Playing")
                     else immersiveText("Perpustakaan", "Library"),
@@ -726,7 +730,7 @@ private fun ImmersiveOverlayActionPill(
                 )
             }
             ImmersiveAction(
-                lightMode, Lucide.Settings2,
+                lightMode, ImageVector.vectorResource(R.drawable.tabler_nav_settings),
                 immersiveText("Pengaturan", "Settings"),
                 onSettings, iconSize = 23.dp, iconTint = iconColor,
                 liquidMotion = liquidGlassEnabled
@@ -739,7 +743,7 @@ private fun ImmersiveOverlayActionPill(
                 exit = fadeOut(tween(90))
             ) {
                 ImmersiveAction(
-                    lightMode, Lucide.House,
+                    lightMode, ImageVector.vectorResource(R.drawable.tabler_nav_home),
                     immersiveText("Kembali ke pemutar", "Back to Now Playing"),
                     onHome, iconSize = 23.dp, iconTint = iconColor,
                     liquidMotion = liquidGlassEnabled
