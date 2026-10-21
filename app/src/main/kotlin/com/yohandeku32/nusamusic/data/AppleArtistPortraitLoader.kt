@@ -37,8 +37,12 @@ internal object AppleArtistPortraitLoader {
         override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount / 1024
     }
     private val misses = LruCache<String, Long>(128)
-    // Avoid duplicate image downloads when a warmup overlaps an Artist tap.
-    private val loadMutex = Mutex()
+    // Single-flight by artist: a background warmup and an Artist tap reuse
+    // the same request, without unrelated artists waiting on each other.
+    private val requestLocks = LruCache<String, Mutex>(48)
+    private fun artistLock(key: String): Mutex = synchronized(requestLocks) {
+        requestLocks.get(key) ?: Mutex().also { requestLocks.put(key, it) }
+    }
     // Limit proactive lookups to avoid exhausting the free provider quota.
     private val warmedArtists = HashSet<String>()
     private const val MAX_AUTOMATIC_WARMUPS = 4
@@ -70,8 +74,8 @@ internal object AppleArtistPortraitLoader {
             val url = artistUrl(artistName) ?: return@withContext null
             val key = ArtistNameUtils.cacheKey(artistName)
             images.get(key)?.let { return@withContext it }
-            loadMutex.withLock {
-            images.get(key)?.let { return@withLock it }
+            artistLock(key).withLock {
+                images.get(key)?.let { return@withLock it }
 
             val directory = File(context.cacheDir, "apple_artist_portraits")
             val fileKey = MessageDigest.getInstance("SHA-256")
