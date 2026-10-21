@@ -122,7 +122,7 @@ fun ImmersiveLyricsPanel(
             }
 
             else -> Text(
-                "No embedded lyrics available",
+                "No lyrics found (local or online)",
                 Modifier.align(Alignment.Center).padding(28.dp),
                 color = Color.White.copy(alpha = 0.7f),
                 fontSize = 16.sp
