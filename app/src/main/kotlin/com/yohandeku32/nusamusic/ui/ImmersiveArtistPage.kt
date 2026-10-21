@@ -44,6 +44,7 @@ private val artistBase = Color(0xFF090A0D)
 private val artistSurface = Color(0xFF17191F)
 private val artistInk = Color(0xFFF7F8FA)
 private val artistMuted = Color(0xFF999EAA)
+internal const val ArtistHeroTextScrimAlpha = 0.72f
 
 private fun artistText(id: String, en: String): String =
     if (Locale.getDefault().language == "id") id else en
@@ -175,14 +176,14 @@ fun ImmersiveArtistPage(
                 Box(
                     // Full-width, edge-to-edge album art: no little inset
                     // cover thumbnail and no floating icon overlapping it.
-                    Modifier.fillMaxWidth().height(if (overlayMode) 360.dp else 450.dp)
+                    Modifier.fillMaxWidth().heightIn(min = if (overlayMode) 360.dp else 450.dp)
                         .background(pageBackground)
                 ) {
                     if (heroSong != null) {
-                        heroArtwork(heroSong, Modifier.fillMaxSize())
+                        heroArtwork(heroSong, Modifier.matchParentSize())
                     } else {
                         Box(
-                            Modifier.fillMaxSize().background(
+                            Modifier.matchParentSize().background(
                                 Brush.linearGradient(
                                     listOf(Color(0xFF343C4C), Color(0xFF151720), artistBase)
                                 )
@@ -217,7 +218,7 @@ fun ImmersiveArtistPage(
                                     "Artist portrait: $displayName"
                                 ),
                                 contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize().graphicsLayer {
+                                modifier = Modifier.matchParentSize().graphicsLayer {
                                     alpha = portraitOpacity
                                 }
                             )
@@ -256,42 +257,59 @@ fun ImmersiveArtistPage(
                     }
                     Column(
                         Modifier.align(Alignment.BottomStart).fillMaxWidth()
-                            .padding(horizontal = 24.dp).padding(bottom = 22.dp)
+                            .padding(top = 96.dp)
                     ) {
-                        Text(
-                            if (selectedAlbum == null)
-                                artistText("ARTIS • KOLEKSI LOKAL", "ARTIST • YOUR LIBRARY")
-                            else artistText("ALBUM • KOLEKSI LOKAL", "ALBUM • YOUR LIBRARY"),
-                            color = Color.White.copy(alpha = 0.8f),
-                            fontSize = 11.sp, letterSpacing = 1.4.sp,
-                            fontWeight = FontWeight.SemiBold
+                        // Fade into a text-sized scrim so even a wrapped title
+                        // stays protected over a white cover or video frame.
+                        Spacer(
+                            Modifier.fillMaxWidth().height(56.dp).background(
+                                Brush.verticalGradient(listOf(
+                                    Color.Transparent,
+                                    Color.Black.copy(alpha = ArtistHeroTextScrimAlpha)
+                                ))
+                            )
                         )
-                        Spacer(Modifier.height(10.dp))
-                        Text(
-                            selectedAlbum?.title?.ifBlank {
-                                artistText("Album tanpa judul", "Untitled album")
-                            } ?: displayName,
-                            color = artistInk,
-                            fontSize = if (selectedAlbum == null) 42.sp else 37.sp,
-                            lineHeight = if (selectedAlbum == null) 46.sp else 41.sp,
-                            fontWeight = FontWeight.Bold, maxLines = 3,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Spacer(Modifier.height(10.dp))
-                        Text(
-                            if (selectedAlbum == null)
-                                artistText(
-                                    tracks.size.toString() + " lagu  ·  " + albums.size + " album",
-                                    tracks.size.toString() + " songs  ·  " + albums.size + " albums"
-                                )
-                            else artistText(
-                                displayName + "  ·  " + selectedAlbum.tracks.size + " lagu",
-                                displayName + "  ·  " + selectedAlbum.tracks.size + " songs"
-                            ),
-                            color = Color.White.copy(alpha = 0.73f),
-                            fontSize = 13.sp, fontWeight = FontWeight.Medium,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis
-                        )
+                        Column(
+                            Modifier.fillMaxWidth().background(
+                                Brush.verticalGradient(listOf(
+                                    Color.Black.copy(alpha = ArtistHeroTextScrimAlpha),
+                                    pageBackground
+                                ))
+                            ).padding(horizontal = 24.dp).padding(bottom = 22.dp)
+                        ) {
+                            Text(
+                                if (selectedAlbum == null)
+                                    artistText("ARTIS • KOLEKSI LOKAL", "ARTIST • YOUR LIBRARY")
+                                else artistText("ALBUM • KOLEKSI LOKAL", "ALBUM • YOUR LIBRARY"),
+                                color = Color.White.copy(alpha = 0.8f),
+                                fontSize = 11.sp, letterSpacing = 1.4.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Spacer(Modifier.height(10.dp))
+                            Text(
+                                selectedAlbum?.title?.ifBlank {
+                                    artistText("Album tanpa judul", "Untitled album")
+                                } ?: displayName,
+                                color = artistInk,
+                                fontSize = if (selectedAlbum == null) 42.sp else 37.sp,
+                                lineHeight = if (selectedAlbum == null) 46.sp else 41.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(Modifier.height(10.dp))
+                            Text(
+                                if (selectedAlbum == null)
+                                    artistText(
+                                        tracks.size.toString() + " lagu  ·  " + albums.size + " album",
+                                        tracks.size.toString() + " songs  ·  " + albums.size + " albums"
+                                    )
+                                else artistText(
+                                    displayName + "  ·  " + selectedAlbum.tracks.size + " lagu",
+                                    displayName + "  ·  " + selectedAlbum.tracks.size + " songs"
+                                ),
+                                color = Color.White.copy(alpha = 0.73f),
+                                fontSize = 13.sp, fontWeight = FontWeight.Medium
+                            )
+                        }
                     }
                 }
             }
