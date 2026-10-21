@@ -57,6 +57,7 @@ internal class AudioLyricsEmbedder(private val context: Context) {
         }
         val backup = File.createTempFile("nusa-lyrics-original-", ".mp3", context.cacheDir)
         val updated = File.createTempFile("nusa-lyrics-updated-", ".mp3", context.cacheDir)
+        var preserveBackup = false
         try {
             val chosenHash = resolver.openInputStream(selectedUri)?.use { source ->
                 FileOutputStream(backup).use { out -> copyAndHash(source, out, MAX_AUDIO_BYTES) }
@@ -94,9 +95,12 @@ internal class AudioLyricsEmbedder(private val context: Context) {
                 if (attemptedWrite) {
                     val restored = runCatching { overwriteOriginal(selectedUri, backup) }
                     if (restored.isFailure) {
+                        // Never discard the last intact copy if both writing
+                        // and rollback fail (e.g. an unplugged USB provider).
+                        preserveBackup = true
                         throw IOException(
-                            "Writing failed and the original could not be restored. " +
-                                "Do not delete the file; check storage before retrying.",
+                            "Writing and automatic restoration failed. An untouched " +
+                                "backup is retained inside NusaMusic's cache for recovery.",
                             error
                         )
                     }
@@ -104,7 +108,7 @@ internal class AudioLyricsEmbedder(private val context: Context) {
                 throw IOException("Embedding failed; the original file was restored.", error)
             }
         } finally {
-            backup.delete()
+            if (!preserveBackup) backup.delete()
             updated.delete()
         }
     }
