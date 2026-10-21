@@ -142,6 +142,8 @@ fun ImmersiveLyricsPanel(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
+                // An unavailable folder picker should not leave Save disabled.
+                pendingFolder = null
                 Toast.makeText(context, error.message ?: "Unable to embed lyrics",
                     Toast.LENGTH_LONG).show()
             } finally {
