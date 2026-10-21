@@ -43,7 +43,7 @@ class OnlineLyricsServiceTest {
             if (url.contains("api.amll.dev")) """{"status":200,"data":{"items":[]}}"""
             else """{"trackName":"Aku Cinta Kamu","artistName":"Nusa Singer",
                     "duration":180,"instrumental":false,
-                    "syncedLyrics":"[00:01]Aku cinta kamu\\n[00:05]Selamanya"}""".trimIndent()
+                    "syncedLyrics":"[00:01]Aku cinta kamu\n[00:05]Selamanya"}""".trimIndent()
         }
         val lyrics = service.lookup(song).result!!
         assertEquals("LRCLIB", lyrics.source)
