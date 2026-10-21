@@ -113,6 +113,7 @@ internal fun ImmersiveArtworkPlayer(
 ) {
     var playerBounds by remember { mutableStateOf<Rect?>(null) }
     var navigationPillBounds by remember { mutableStateOf<Rect?>(null) }
+    var artistButtonBounds by remember { mutableStateOf<Rect?>(null) }
     // One predictable, non-overshooting timeline moves BOTH the circle and
     // the four-action pill. Read Animatable only in draw/placement modifiers;
     // do not recompose the expensive artwork/player on every animation frame.
@@ -502,18 +503,56 @@ internal fun ImmersiveArtworkPlayer(
                         touchSize = if (compact) 48.dp else 50.dp
                     )
                 }
-                // The action pill is now the only navigation surface.
-                // Anchor it at the exact center instead of leaving a space
-                // for the removed Artist icon.
+                // Restore the original separate Artist profile circle beside
+                // the Lyrics/Library/Settings pill. Both are 56dp high and
+                // share the same measured row during transitions.
                 Spacer(Modifier.height(transportToPillGap + if (wide) 0.dp else 12.dp))
-                Spacer(
-                    Modifier.align(Alignment.CenterHorizontally)
-                        .width(actionPillWidth).height(56.dp)
-                        .onGloballyPositioned { coordinates ->
+                Row(
+                    Modifier.align(Alignment.CenterHorizontally),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        Modifier.size(56.dp).onGloballyPositioned { coordinates ->
                             val bounds = coordinates.boundsInRoot()
-                            if (navigationPillBounds != bounds) navigationPillBounds = bounds
+                            if (artistButtonBounds != bounds) artistButtonBounds = bounds
+                        },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(
+                            Modifier.matchParentSize().graphicsLayer {
+                                alpha = (1f - shownProgress()).coerceIn(0f, 1f)
+                            },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            ContinuousLiquidGlassSurface(
+                                radius = 50.dp,
+                                lightMode = lightMode,
+                                liquidGlassEnabled = liquidGlassEnabled,
+                                hazeState = liveBackdrop,
+                                hazeAlpha = liveGlassAlpha,
+                                artworkTint = glassArtworkColor,
+                                modifier = Modifier.matchParentSize()
+                            )
+                            ImmersiveAction(
+                                lightMode, Lucide.UserRound,
+                                immersiveText("Buka halaman artis", "Open artist page"),
+                                onArtist, hasSong && !artistOpen && !libraryOpen,
+                                iconSize = 23.dp,
+                                iconTint = if (liquidGlassEnabled) Color.White else null,
+                                liquidMotion = liquidGlassEnabled,
+                                inactiveAlpha = 1f
+                            )
                         }
-                )
+                    }
+                    Spacer(
+                        Modifier.width(actionPillWidth).height(56.dp)
+                            .onGloballyPositioned { coordinates ->
+                                val bounds = coordinates.boundsInRoot()
+                                if (navigationPillBounds != bounds) navigationPillBounds = bounds
+                            }
+                    )
+                }
                 }
             }
         }
@@ -535,7 +574,7 @@ internal fun ImmersiveArtworkPlayer(
         if (portalVisible) ImmersiveArtistPortal(
             open = overlayOpen,
             progress = shownProgress,
-            source = navigationPillBounds,
+            source = artistButtonBounds ?: navigationPillBounds,
             host = playerBounds,
             topInsetPx = with(density) { topInset.toPx() },
             onClose = if (presentingLibrary) onLibraryClose else onArtistClose,
@@ -569,10 +608,47 @@ internal fun ImmersiveArtworkPlayer(
             modifier = Modifier.fillMaxSize()
         )
 
-        // Only Lyrics, Library/Home and Settings stay in the centered pill.
-        // Artist is opened by swiping right on the Now Playing artwork.
+        // Library keeps the separate Artist circle visible above its sheet.
+        // Now Playing still supports the artwork's right-swipe gesture.
         val pill = navigationPillBounds
         val root = playerBounds
+        val bubble = artistButtonBounds
+        if (presentingLibrary && portalVisible && bubble != null && root != null) {
+            Box(
+                Modifier.offset {
+                    IntOffset(
+                        (bubble.left - root.left).roundToInt(),
+                        (bubble.top - root.top).roundToInt()
+                    )
+                }.size(56.dp).graphicsLayer {
+                    alpha = shownProgress().coerceIn(0f, 1f)
+                },
+                contentAlignment = Alignment.Center
+            ) {
+                ContinuousLiquidGlassSurface(
+                    radius = 50.dp,
+                    lightMode = lightMode,
+                    liquidGlassEnabled = liquidGlassEnabled,
+                    hazeState = liveBackdrop,
+                    hazeAlpha = liveGlassAlpha,
+                    artworkTint = glassArtworkColor,
+                    modifier = Modifier.matchParentSize()
+                )
+                SolidNavigationOverlay(
+                    radius = 50.dp,
+                    progress = shownProgress,
+                    modifier = Modifier.matchParentSize()
+                )
+                ImmersiveAction(
+                    lightMode, Lucide.UserRound,
+                    immersiveText("Buka profil artis", "Open artist profile"),
+                    onArtist, hasSong && libraryOpen,
+                    iconSize = 23.dp, iconTint = Color.White,
+                    liquidMotion = liquidGlassEnabled,
+                    inactiveAlpha = 1f
+                )
+            }
+        }
         if (pill != null && root != null) {
             ImmersiveOverlayActionPill(
                 anchorX = pill.left - root.left,
@@ -656,10 +732,9 @@ private fun ImmersiveOverlayActionPill(
     )
     Box(
         Modifier.offset {
-            val widthIncrease = 48.dp.toPx() *
-                widthExpansion().coerceIn(0f, 1f)
-            // Keep the pill centered as it expands during portal transitions.
-            IntOffset((anchorX - widthIncrease * 0.5f).roundToInt(), anchorY.roundToInt())
+            // Preserve the 10dp gap to the restored Artist circle when the
+            // pill expands. Expansion grows rightwards, never over the circle.
+            IntOffset(anchorX.roundToInt(), anchorY.roundToInt())
         }.layout { measurable, constraints ->
             // Measure only the tiny navigation bar, not the full player.
             // Reading widthExpansion here avoids recomposing the artwork,
