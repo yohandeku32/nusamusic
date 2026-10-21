@@ -65,7 +65,6 @@ import com.yohandeku32.nusamusic.R
 import com.yohandeku32.nusamusic.data.AudioCodecLoader
 import com.yohandeku32.nusamusic.model.Song
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.first
 
@@ -521,9 +520,9 @@ private fun ImmersiveTrackRow(
 
     LaunchedEffect(song.uri, loadMetadata) {
         if (loadMetadata && !isHiRes) {
-            // Allow the entrance/scroll to settle before native file I/O.
-            delay(180L)
-            AudioCodecLoader.load(context, song.uri)
+            // Once scheduled, the app-scoped metadata lookup outlives this
+            // recycled row. Revisiting the song never repeats native reads.
+            AudioCodecLoader.requestHiResBadgeOnce(context, song.uri)
         }
     }
     Row(
