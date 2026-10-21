@@ -87,6 +87,13 @@ object ArtworkLoader {
         }
     }
 
+    /** One synchronous lookup to skip repeated IO for songs with no art. */
+    fun isMissingCached(
+        uriString: String,
+        maxSize: Int,
+        cacheKey: String? = null
+    ): Boolean = noArtworkCache.get(resolvedCacheKey(uriString, maxSize, cacheKey)) == true
+
     fun cached(
         uriString: String,
         maxSize: Int = 512,
