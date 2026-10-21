@@ -105,25 +105,39 @@ https://www.xiph.org/vorbis/doc/v-comment.html
 
 ## Embed downloaded lyrics into the original audio file
 
-When remote lyrics have been found, a small outlined Save icon appears in the
-top-right corner of the Immersive Lyrics viewport. It opens a confirmation
-dialog and the Android system document picker. Select the **same original
-MP3** that is currently playing, not an unrelated song.
+When a track has online lyrics but no lyrics embedded in its original MP3,
+a small Lucide Save icon appears at the **top right** of Immersive Lyrics.
+Tap it once to embed the lyrics. There is **no Choose MP3 dialog** and no
+per-song manual file selection.
 
-NusaMusic compares the entire chosen document with the local playback source
-(SHA-256), makes a temporary byte-for-byte backup, writes a fresh staged MP3,
-verifies that the original authored TTML or LRC can be read again, and only
-then uses the granted SAF write permission to update the chosen file. Existing
-ID3v2.3/v2.4 frames (including cover art) and MPEG audio frames are preserved.
-An ordinary USLT stores readable text for other players, while
-TXXX:LYRICS retains original fine-grained TTML / Enhanced LRC timing for
-NusaMusic. Successful writes are verified with a full checksum, and a failed
-write attempts to restore the original backup.
+**First use only:** if NusaMusic has no suitable writable folder grant, Android
+asks you to select the folder that contains the song. The app requests
+persistable read/write access to that folder using the system OpenDocumentTree
+picker and completes the same pending Save automatically. Later songs stored
+under that authorized folder can be saved with one tap, without asking for
+permission again. Existing library folders that already have persistent write
+permission are reused. Different, external folders require their own one-time
+folder grant; Android may restrict selecting some protected folder roots.
 
-This feature intentionally supports **MP3 with standard ID3v2.3 or ID3v2.4**
-only for now. FLAC, M4A, Opus, and other audio formats are not overwritten
-with incompatible tags. The system picker must grant write permission, and
-there must be free storage for the backup and edited copy. The audio file is
-not uploaded. The player pauses before the short final write. For safety,
-keep an external copy of any important original before editing.
+The original audio file is located by its actual filename inside granted
+folders and matched to the **currently playing song by a whole-file SHA-256
+checksum** before any changes. NusaMusic never guesses by artist/title alone
+or writes to a similarly named but different file. Directory traversal is
+bounded, and the original file must be MP3 with ordinary ID3v2.3/v2.4 frames.
+If a folder does not contain the exact matching file, Save reports the issue
+without modifying any audio.
 
+A temporary byte-for-byte backup and fully staged edited MP3 are made before
+writing. The staged copy is read back with the embedded lyrics decoder, then
+the original is overwritten through its authorized SAF URI and verified by
+checksum. MPEG audio and unrelated ID3 frames (including cover art) are
+preserved. USLT stores readable lyric text, and TXXX:LYRICS stores the authored
+TTML or Enhanced LRC for NusaMusic's syllable animation. A failed write
+attempts restoration; on a failed rollback, an untouched recovery copy is
+retained in the app cache.
+
+The Save icon hides immediately after successful verified embedding, and
+remains hidden for tracks with embedded lyrics even if a higher-quality online
+version is subsequently displayed. It reappears only for another track with
+online lyrics and no embedded text. Important originals should still be backed
+up separately. FLAC, M4A, Opus and other formats are not edited by this feature.
