@@ -48,11 +48,15 @@ internal class OnlineLyricsService(
             coroutineContext.ensureActive()
             val payload = try { request(url) }
                 catch (cancelled: CancellationException) { throw cancelled }
-                catch (_: Exception) { hadError = true; continue }
+                catch (_: Exception) {
+                    // Do not repeat dead-host requests when the first failed.
+                    hadError = true
+                    break
+                }
             if (payload == null) continue
             val hits = try { JSONObject(payload).optJSONArray("hits") }
                 catch (_: Exception) { hadError = true; continue }
-            if (hits == null) { hadError = true; continue }
+            if (hits == null) { hadError = true; break }
             gotSearchResponse = true
             for (index in 0 until minOf(hits.length(), 6)) {
                 coroutineContext.ensureActive()
@@ -76,9 +80,14 @@ internal class OnlineLyricsService(
     private suspend fun fetchSong(isrc: String, song: Song): Result? {
         val base = "https://lrc.red/s/" + isrc
 
-        // The public lrc.red API documents .ttml and .lrc directly. The
-        // community .song.json is useful but must not be the only path.
-        // A missing/invalid song.json must never hide an available file.
+        // The directly documented TTML endpoint is checked first, avoiding
+        // an unnecessary community JSON round-trip when karaoke is present.
+        val directTtml = try { request(base + ".ttml") }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { null }
+        if (validTiming(directTtml, song.durationMs)) return Result(directTtml!!)
+
+        // Some records supply timed word segments only in .song.json.
         val json = try { request(base + ".song.json") }
             catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { null }
@@ -101,14 +110,11 @@ internal class OnlineLyricsService(
             }
         }
 
-        // Documented public endpoints, with the most detailed format first.
-        for (extension in listOf("ttml", "lrc")) {
-            coroutineContext.ensureActive()
-            val raw = try { request(base + "." + extension) }
-                catch (cancelled: CancellationException) { throw cancelled }
-                catch (_: Exception) { null }
-            if (validTiming(raw, song.durationMs)) return Result(raw!!)
-        }
+        // Finally try the documented line-synced format.
+        val lrc = try { request(base + ".lrc") }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { null }
+        if (validTiming(lrc, song.durationMs)) return Result(lrc!!)
         return null
     }
 
