@@ -2,6 +2,7 @@ package com.yohandeku32.nusamusic.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -18,6 +19,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -25,12 +29,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.yohandeku32.nusamusic.data.AppleArtistPortraitLoader
 import com.yohandeku32.nusamusic.data.ArtistLibrary
 import com.yohandeku32.nusamusic.data.ArtistNameUtils
 import com.yohandeku32.nusamusic.data.PlaybackHistory
 import com.yohandeku32.nusamusic.model.Song
 import java.util.Locale
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 private val artistBase = Color(0xFF090A0D)
 private val artistSurface = Color(0xFF17191F)
@@ -85,6 +91,25 @@ fun ImmersiveArtistPage(
         ?: currentSong?.takeIf {
             ArtistNameUtils.cacheKey(it.artist) == ArtistNameUtils.cacheKey(artist)
         } ?: popular.firstOrNull() ?: tracks.firstOrNull()
+
+    // The artist portrait is an optional, cached enhancement. The local hero
+    // is drawn immediately, even on slow/offline networks. No network request
+    // is made while the Artist sheet is animating into view.
+    var portrait by remember(artist) {
+        mutableStateOf(AppleArtistPortraitLoader.cached(artist))
+    }
+    LaunchedEffect(artist, isVisible, selectedAlbumKey) {
+        if (!isVisible || selectedAlbumKey != null ||
+            portrait != null || artist.isBlank()
+        ) return@LaunchedEffect
+        delay(380L) // Let the Artist entrance and hero measurement settle.
+        portrait = AppleArtistPortraitLoader.load(context, artist)
+    }
+    val portraitOpacity by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (selectedAlbum == null && portrait != null) 1f else 0f,
+        animationSpec = androidx.compose.animation.core.tween(260),
+        label = "appleArtistPortraitReveal"
+    )
 
     fun showAlbum(key: String?) {
         selectedAlbumKey = key
@@ -141,6 +166,23 @@ fun ImmersiveArtistPage(
                                 Icons.Default.MusicNote, null,
                                 tint = Color.White.copy(alpha = 0.12f),
                                 modifier = Modifier.size(130.dp)
+                            )
+                        }
+                    }
+                    // Use Apple's artist portrait only on the Artist overview.
+                    // Album detail still shows its own local album cover.
+                    if (selectedAlbum == null) {
+                        portrait?.let { image ->
+                            Image(
+                                bitmap = image.asImageBitmap(),
+                                contentDescription = artistText(
+                                    "Foto artis: $displayName",
+                                    "Artist portrait: $displayName"
+                                ),
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize().graphicsLayer {
+                                    alpha = portraitOpacity
+                                }
                             )
                         }
                     }
