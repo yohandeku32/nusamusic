@@ -76,7 +76,8 @@ fun ImmersiveLyricsPanel(
     Box(modifier) {
         val data = entry?.data
         when {
-            entry != null && (entry.loading || !entry.attempted) && data == null ->
+            entry != null && (entry.loading || !entry.attempted) &&
+                data?.stored?.content.isNullOrBlank() ->
                 CircularProgressIndicator(
                     modifier = Modifier.align(Alignment.Center).size(24.dp),
                     color = Color.White,
