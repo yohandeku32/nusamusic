@@ -11,6 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.nio.ByteBuffer
 import kotlin.coroutines.coroutineContext
@@ -64,9 +65,13 @@ class LyricsRepository(context: Context) {
             if (cached.content.isEmpty()) return@withContext local
         }
 
-        val response = try { service.lookup(song) }
-            catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { null }
+        // Public providers can be slow or offline. Keep a hard upper bound
+        // on the whole lookup so an empty Lyrics screen never waits forever.
+        val response = try {
+            withTimeoutOrNull(10_000L) { service.lookup(song) }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) { null }
 
         coroutineContext.ensureActive()
         val found = response?.result
