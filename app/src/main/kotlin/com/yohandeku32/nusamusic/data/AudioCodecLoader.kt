@@ -23,13 +23,14 @@ object AudioCodecLoader {
     // Metadata is expensive: opening a MediaExtractor for every row that
     // enters the viewport can saturate storage while the user scrolls.
     // Keep a small LRU (including missing/unreadable results) and allow only
-    // two native metadata reads at once across the entire app.
+    // one background read at a time across the entire app. Avoid flash
+    // storage contention with artwork decoding while the user scrolls.
     private val metadataCache = object : LinkedHashMap<String, AudioCodecInfo?>(2_048, 0.75f, true) {
         override fun removeEldestEntry(
             eldest: MutableMap.MutableEntry<String, AudioCodecInfo?>?
         ): Boolean = size > 2_048
     }
-    private val metadataPermit = Semaphore(2)
+    private val metadataPermit = Semaphore(1)
     // The LazyColumn recycles track rows when scrolling. Do not tie native
     // audio probing to each row's composition lifecycle: that restarted file
     // reads for ordinary tracks every time they re-entered the viewport.
@@ -60,8 +61,8 @@ object AudioCodecLoader {
             try {
                 // A short one-time grace period keeps native extractors away
                 // from the first frames after a fast flick stops.
-                delay(260L)
-                load(appContext, uriString)
+                delay(380L)
+                runCatching { load(appContext, uriString) }
             } finally {
                 synchronized(pendingBadgeInspections) {
                     pendingBadgeInspections.remove(uriString)
