@@ -106,14 +106,14 @@ class ImmersiveArtistHeroTest {
     @Test fun shortArtistKeepsOverlayHeight() {
         showPage(song())
         assertEquals(360f, compose.onNodeWithTag("hero-art")
-            .getUnclippedBoundsInRoot().height.value, 1f)
+            .getUnclippedBoundsInRoot().let { (it.bottom - it.top).value }, 1f)
         assertTextFitsHero("Test Artist")
     }
 
     @Test fun shortArtistKeepsStandaloneHeightAndBackAction() {
         showPage(song(), overlay = false)
         assertEquals(450f, compose.onNodeWithTag("hero-art")
-            .getUnclippedBoundsInRoot().height.value, 1f)
+            .getUnclippedBoundsInRoot().let { (it.bottom - it.top).value }, 1f)
         compose.onNodeWithContentDescription("Back").performClick()
         compose.runOnIdle { assertEquals(1, backCount) }
     }
@@ -128,7 +128,7 @@ class ImmersiveArtistHeroTest {
             assertTextFitsHero("ARTIST • YOUR LIBRARY")
             assertTextFitsHero("1 songs  ·  1 albums")
             assertTrue(compose.onNodeWithTag("hero-art")
-                .getUnclippedBoundsInRoot().height.value > 360f)
+                .getUnclippedBoundsInRoot().let { (it.bottom - it.top).value } > 360f)
         }
     }
 
