@@ -2722,7 +2722,12 @@ private fun NusaMusicApp(
                                         state = lyricsState,
                                         onSeek = onSeek,
                                         fontSize = lyricsFontSize,
-                                        modifier = lyricsModifier
+                                        modifier = lyricsModifier,
+                                        // Avoid playback reading an audio file while its
+                                        // ID3 header is being rewritten through SAF.
+                                        onBeforeEmbed = {
+                                            if (isPlaying) onTogglePlay()
+                                        }
                                     )
                                 },
                                 modifier = Modifier.fillMaxSize()
