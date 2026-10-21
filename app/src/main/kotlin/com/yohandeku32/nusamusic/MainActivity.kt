@@ -216,6 +216,10 @@ class MainActivity : ComponentActivity() {
     private var pendingPlaySongJob: Job? = null
     private var nextArtworkLookaheadJob: Job? = null
     private var nextArtworkLookaheadIds: List<Long> = emptyList()
+    private var nextArtistPortraitJob: Job? = null
+    private var nextArtistPortraitIds: List<Long> = emptyList()
+    // At most two remote artist photos at once, regardless of queue changes.
+    private val artistPortraitSlots = kotlinx.coroutines.sync.Semaphore(2)
     private var restoringPlaybackQueue = false
     private var songs by mutableStateOf<List<Song>>(emptyList())
     private var currentSong by mutableStateOf<Song?>(null)
@@ -1328,12 +1332,77 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
+     * Prefetch the current Artist portrait and those of the next six REAL
+     * Media3 queue items. The timeline handles shuffle, repeat, and Play Next;
+     * the library's display/sort order is never used as a proxy for playback.
+     * All disk/network IO is off-main and is bounded by two fetch slots.
+     */
+    private fun scheduleArtistPortraitLookahead(player: MediaController) {
+        if (restoringPlaybackQueue) return
+        val immersive = PlayerPresentationMode.fromPreference(
+            uiPrefsForFonts().getString("player_presentation_mode", null)
+        ) == PlayerPresentationMode.IMMERSIVE_ARTWORK
+        if (!immersive || songs.isEmpty() || player.mediaItemCount == 0 ||
+            player.currentTimeline.isEmpty
+        ) {
+            nextArtistPortraitJob?.cancel()
+            nextArtistPortraitJob = null
+            nextArtistPortraitIds = emptyList()
+            return
+        }
+        val timeline = player.currentTimeline
+        val repeat = if (player.repeatMode == Player.REPEAT_MODE_ALL)
+            Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
+        val next = upcomingPlaybackIndices(
+            currentIndex = player.currentMediaItemIndex,
+            itemCount = player.mediaItemCount,
+            limit = 6,
+            nextIndex = { index ->
+                timeline.getNextWindowIndex(index, repeat, player.shuffleModeEnabled)
+            }
+        )
+        val ids = (listOfNotNull(player.currentMediaItem?.mediaId?.toLongOrNull()) +
+            next.mapNotNull { player.getMediaItemAt(it).mediaId.toLongOrNull() })
+            .distinct()
+        if (ids == nextArtistPortraitIds) return
+        nextArtistPortraitJob?.cancel()
+        nextArtistPortraitIds = ids
+        if (ids.isEmpty()) return
+
+        val librarySnapshot = songs
+        nextArtistPortraitJob = lifecycleScope.launch {
+            val artists = withContext(Dispatchers.Default) {
+                val byId = librarySnapshot.associateBy { it.id }
+                ids.mapNotNull(byId::get)
+                    .map { ArtistNameUtils.firstArtist(it.artist) }
+                    .filter { it.isNotBlank() }
+                    .distinctBy { ArtistNameUtils.cacheKey(it) }
+            }
+            kotlinx.coroutines.supervisorScope {
+                artists.forEachIndexed { index, name ->
+                    launch(Dispatchers.IO) {
+                        // The foreground player gets its first frame first.
+                        // Current Artist starts earliest; upcoming Artists
+                        // follow in playback order without saturating data.
+                        delay(if (index == 0) 120L else 500L + (index - 1) * 140L)
+                        artistPortraitSlots.withPermit {
+                            AppleArtistPortraitLoader.warm(this@MainActivity, name)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
      * Keep exactly five real upcoming Media3 entries warm, including its
      * shuffled order. Do not guess the next tracks from library sorting.
      * No ExoPlayer instances are created here (five decoders would stutter);
      * metadata resolution is capped at two and video-byte IO at one.
      */
     private fun scheduleArtworkLookahead(player: MediaController) {
+        // Portrait lookahead runs even when animated video artwork is disabled.
+        scheduleArtistPortraitLookahead(player)
         if (restoringPlaybackQueue) return
         val preferences = uiPrefsForFonts()
         val sourceOrder = ArtworkSourceOrder.fromPreference(
@@ -1405,7 +1474,10 @@ class MainActivity : ComponentActivity() {
     // Re-evaluate after a library scan, mode switch or animated-artwork
     // setting change; controller timeline may have existed before songs loaded.
     internal fun refreshArtworkLookahead(reset: Boolean = false) {
-        if (reset) nextArtworkLookaheadIds = emptyList()
+        if (reset) {
+            nextArtworkLookaheadIds = emptyList()
+            nextArtistPortraitIds = emptyList()
+        }
         controller?.let(::scheduleArtworkLookahead)
     }
 
@@ -1554,6 +1626,9 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        nextArtistPortraitJob?.cancel()
+        nextArtistPortraitJob = null
+        nextArtistPortraitIds = emptyList()
         nextArtworkLookaheadJob?.cancel()
         nextArtworkLookaheadJob = null
         nextArtworkLookaheadIds = emptyList()
@@ -1930,18 +2005,17 @@ private fun NusaMusicApp(
             )
         )
     }
-    // Warm the currently playing Artist *only* in Immersive mode. This
-    // improves first-open latency without spending provider quota in CD/Vinyl.
+    // Cover the brief startup window before Media3 restores its queue.
+    // The queue lookahead also includes this Artist; the loader shares cache
+    // and de-duplicates requests when both paths are active.
     LaunchedEffect(artistKey, playerPresentationMode) {
         if (playerPresentationMode != PlayerPresentationMode.IMMERSIVE_ARTWORK) {
             return@LaunchedEffect
         }
         val name = ArtistNameUtils.firstArtist(currentSong?.artist)
         if (name.isBlank()) return@LaunchedEffect
-        delay(650L) // Coalesce rapid next/previous song changes.
-        if (AppleArtistPortraitLoader.reserveBackgroundWarmup(name)) {
-            AppleArtistPortraitLoader.load(context, name)
-        }
+        delay(380L)
+        AppleArtistPortraitLoader.warm(context, name)
     }
     // This option themes ONLY the Immersive song library and its search.
     // Reuse the existing preference on upgrade so the chosen color persists.
