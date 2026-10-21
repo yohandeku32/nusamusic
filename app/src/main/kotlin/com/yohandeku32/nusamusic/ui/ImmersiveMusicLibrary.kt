@@ -177,8 +177,17 @@ internal fun ImmersiveMusicLibrary(
         focusManager.clearFocus(force = true)
         searchDialogOpen = false
     }
+    // The first Library frame is intentionally not "settled" yet.
+    // Do not request keyboard hide / force-clear focus on that entrance
+    // frame; that work can trigger an unnecessary Android UI traversal.
+    var wasSettledVisible by remember { mutableStateOf(false) }
     LaunchedEffect(isVisible) {
-        if (!isVisible) dismissKeyboard()
+        if (isVisible) {
+            wasSettledVisible = true
+        } else if (wasSettledVisible) {
+            dismissKeyboard()
+            wasSettledVisible = false
+        }
     }
     var visibleSongs by remember(songs) {
         mutableStateOf(ImmersiveBaseOrderCache.get(songs, sort) ?: songs)
