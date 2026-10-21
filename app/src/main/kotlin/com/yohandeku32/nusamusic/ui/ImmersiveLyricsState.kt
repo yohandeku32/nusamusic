@@ -52,7 +52,11 @@ class ImmersiveLyricsState(private val repository: LyricsRepository) {
         state.attempted = true
         state.job = scope.launch {
             try {
-                val result = repository.load(song, retry)
+                val result = repository.load(song, retry) { local ->
+                    // Show existing embedded lyrics immediately while AMLL / LRCLIB
+                    // are checked in IO. This never blocks playback or the UI.
+                    if (state.generation == generation) state.data = local
+                }
                 if (state.generation == generation) state.data = result
             } catch (e: CancellationException) {
                 if (state.generation == generation) state.attempted = state.data != null
