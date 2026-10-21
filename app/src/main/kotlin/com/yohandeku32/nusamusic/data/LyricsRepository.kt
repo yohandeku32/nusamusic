@@ -20,7 +20,9 @@ data class SongLyrics(
     val stored: StoredLyrics,
     val synced: SyncedLyrics?,
     val inferredEnds: Set<LyricsUnitKey> = emptySet(),
-    val duetRightLines: Set<Int> = emptySet()
+    val duetRightLines: Set<Int> = emptySet(),
+    // User-visible reason only when neither local nor online lyrics exist.
+    val onlineNotice: String? = null
 )
 
 /**
@@ -62,7 +64,9 @@ class LyricsRepository(context: Context) {
             val decoded = decodeOnline(cached, song.durationMs)
             if (decoded != null) return@withContext preferLyrics(local, decoded)
             // Negative result is retained only for the short miss TTL.
-            if (cached.content.isEmpty()) return@withContext local
+            if (cached.content.isEmpty()) return@withContext local.copy(
+                onlineNotice = "No matching online lyrics found"
+            )
         }
 
         // Public providers can be slow or offline. Keep a hard upper bound
@@ -86,7 +90,9 @@ class LyricsRepository(context: Context) {
         if (response?.conclusivelyMissing == true) runCatching {
             online.write(key, StoredLyrics("", "online"))
         }
-        local
+        local.copy(onlineNotice = if (response?.conclusivelyMissing == true)
+            "No matching online lyrics found"
+        else "Cannot reach the online lyrics service")
     }
 
     private fun decodeOnline(stored: StoredLyrics, durationMs: Long): SongLyrics? {
