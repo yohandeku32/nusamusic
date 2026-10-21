@@ -21,6 +21,7 @@ internal fun lyricsNeedEmbedding(data: SongLyrics?, hasEmbeddedLyrics: Boolean):
 class SongLyricsState {
     var data by mutableStateOf<SongLyrics?>(null)
     var hasEmbeddedLyrics by mutableStateOf(false)
+    var confirmedEmbeddedWrite = false
     var loading by mutableStateOf(false)
     var attempted = false
     var job: Job? = null
@@ -36,7 +37,10 @@ class ImmersiveLyricsState(private val repository: LyricsRepository) {
         ?: SongLyricsState().also { entries.put(LyricsRepository.cacheKey(song), it) }
 
     fun markEmbedded(song: Song) {
-        forSong(song).hasEmbeddedLyrics = true
+        forSong(song).apply {
+            confirmedEmbeddedWrite = true
+            hasEmbeddedLyrics = true
+        }
     }
 
     fun load(song: Song, scope: CoroutineScope, retry: Boolean = false) {
@@ -66,7 +70,8 @@ class ImmersiveLyricsState(private val repository: LyricsRepository) {
                     // The Save button disappears when this file already has
                     // lyrics, even if an online version provides better timing.
                     if (state.generation == generation) {
-                        state.hasEmbeddedLyrics = local.stored.content.isNotBlank()
+                        state.hasEmbeddedLyrics = state.confirmedEmbeddedWrite ||
+                            local.stored.content.isNotBlank()
                         state.data = local
                     }
                 }
