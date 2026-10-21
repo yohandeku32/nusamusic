@@ -27,6 +27,18 @@ import java.util.Locale
  * An explicit fallback=false prevents unavatar's default placeholder picture
  * from being misidentified as an official artist photo.
  */
+/** Pure JVM-safe URL builder: no Android image cache initialization. */
+internal fun buildAppleMusicPortraitUrl(name: String): String? {
+    val clean = ArtistNameUtils.firstArtist(name).trim()
+    if (clean.length !in 2..100 ||
+        clean.equals("unknown artist", true) ||
+        clean.equals("artis tidak dikenal", true)
+    ) return null
+    val encoded = URLEncoder.encode("artist:$clean", StandardCharsets.UTF_8.name())
+        .replace("+", "%20")
+    return "https://unavatar.io/apple-music/$encoded?fallback=false"
+}
+
 internal object AppleArtistPortraitLoader {
     private const val POSITIVE_TTL_MS = 30L * 24 * 60 * 60 * 1000
     private const val NEGATIVE_TTL_MS = 12L * 60 * 60 * 1000
@@ -56,16 +68,7 @@ internal object AppleArtistPortraitLoader {
         }
     }
 
-    fun artistUrl(name: String): String? {
-        val clean = ArtistNameUtils.firstArtist(name).trim()
-        if (clean.length !in 2..100 ||
-            clean.equals("unknown artist", true) ||
-            clean.equals("artis tidak dikenal", true)
-        ) return null
-        val encoded = URLEncoder.encode("artist:$clean", StandardCharsets.UTF_8.name())
-            .replace("+", "%20")
-        return "https://unavatar.io/apple-music/$encoded?fallback=false"
-    }
+    fun artistUrl(name: String): String? = buildAppleMusicPortraitUrl(name)
 
     fun cached(name: String): Bitmap? = images.get(ArtistNameUtils.cacheKey(name))
 
