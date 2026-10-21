@@ -45,7 +45,7 @@ internal class OnlineLyricsService(
         var gotSearchResponse = false
         var hadError = false
         val seenIsrcs = HashSet<String>()
-        for (url in queries) {
+        search@ for (url in queries) {
             coroutineContext.ensureActive()
             val payload = try { request(url) }
                 catch (cancelled: CancellationException) { throw cancelled }
@@ -72,7 +72,12 @@ internal class OnlineLyricsService(
                     fetchSong(isrc, song)?.let { return Lookup(it, true) }
                 } catch (cancelled: CancellationException) {
                     throw cancelled
-                } catch (_: Exception) { hadError = true }
+                } catch (_: Exception) {
+                    // Avoid exhausting the remaining timeout retrying a
+                    // failing host. Try the independent LRCLIB server now.
+                    hadError = true
+                    break@search
+                }
             }
         }
         // lrc.red remains the preferred source. When that community host has
@@ -113,15 +118,11 @@ internal class OnlineLyricsService(
 
         // The directly documented TTML endpoint is checked first, avoiding
         // an unnecessary community JSON round-trip when karaoke is present.
-        val directTtml = try { request(base + ".ttml") }
-            catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { null }
+        val directTtml = request(base + ".ttml")
         if (validTiming(directTtml, song.durationMs)) return Result(directTtml!!)
 
         // Some records supply timed word segments only in .song.json.
-        val json = try { request(base + ".song.json") }
-            catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { null }
+        val json = request(base + ".song.json")
         if (json != null) {
             val record = runCatching { JSONObject(json) }.getOrNull()
             if (record != null) {
@@ -142,9 +143,7 @@ internal class OnlineLyricsService(
         }
 
         // Finally try the documented line-synced format.
-        val lrc = try { request(base + ".lrc") }
-            catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { null }
+        val lrc = request(base + ".lrc")
         if (validTiming(lrc, song.durationMs)) return Result(lrc!!)
         return null
     }
