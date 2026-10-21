@@ -40,14 +40,15 @@ class OnlineLyricsServiceTest {
         val service = OnlineLyricsService { url ->
             urls.add(url)
             if (url.contains("/match.json")) hits(hit())
-            else if (url == "https://lrc.red/s/" + isrc + ".song.json")
-                record().put("source", ttml).toString()
+            else if (url == "https://lrc.red/s/" + isrc + ".ttml")
+                ttml
             else error("Unexpected endpoint: " + url)
         }
         val result = service.lookup(song).result!!
         assertEquals("lrc.red", result.source)
         assertEquals(ttml, result.content)
         assertEquals(2, urls.size)
+        assertEquals("https://lrc.red/s/" + isrc + ".ttml", urls.last())
         assertTrue(urls.first().contains("/match.json?track=Aku+Cinta+Kamu&artist=Nusa+Singer"))
         assertEquals(3, lyricQuality(EmbeddedLyricsSelector.select(
             listOf(result.content), song.durationMs)))
@@ -123,9 +124,70 @@ class OnlineLyricsServiceTest {
     }
 
     @Test fun ordinaryUnmatchedSearchesProduceShortLivedMisses() = runBlocking {
-        val result = OnlineLyricsService { hits() }.lookup(song)
+        val result = OnlineLyricsService { url ->
+            if (url.contains("lrclib.net")) "[]" else hits()
+        }.lookup(song)
         assertNull(result.result)
         assertTrue(result.conclusivelyMissing)
+    }
+
+    @Test fun directTtmlFailsButJsonTimedWordsStillLoad() = runBlocking {
+        val calls = mutableListOf<String>()
+        val service = OnlineLyricsService { url ->
+            calls.add(url)
+            when {
+                url.contains("/match.json") -> hits(hit())
+                url.endsWith(".ttml") -> null
+                url.endsWith(".song.json") -> record().put("source", ttml).toString()
+                else -> error("No further fallback needed")
+            }
+        }
+        assertEquals(ttml, service.lookup(song).result?.content)
+        assertTrue(calls.any { it.endsWith(".song.json") })
+    }
+
+    @Test fun officialLineLrcLoadsWhenSongJsonIsMissing() = runBlocking {
+        val lines = "[00:01.00]Aku cinta kamu\n[00:05.00]Selamanya"
+        val service = OnlineLyricsService { url ->
+            when {
+                url.contains("/match.json") -> hits(hit())
+                url.endsWith(".ttml") || url.endsWith(".song.json") -> null
+                url.endsWith(".lrc") -> lines
+                else -> error("Unexpected URL: $url")
+            }
+        }
+        assertEquals(lines, service.lookup(song).result?.content)
+    }
+
+    @Test fun lrclibIsFallbackOnlyWhenLrcRedHasNoResults() = runBlocking {
+        val calls = mutableListOf<String>()
+        val service = OnlineLyricsService { url ->
+            calls.add(url)
+            if (url.contains("lrclib.net")) JSONArray().put(
+                record().put("trackName", song.title)
+                    .put("artistName", song.artist)
+                    .put("syncedLyrics", "[00:01]Aku cinta kamu")
+            ).toString() else hits()
+        }
+        val found = service.lookup(song).result!!
+        assertEquals("LRCLIB", found.source)
+        assertEquals("[00:01]Aku cinta kamu", found.content)
+        assertTrue(calls.first().contains("lrc.red/match.json"))
+        assertTrue(calls.last().contains("lrclib.net/api/search"))
+    }
+
+    @Test fun transientRedOutageStillFallsBackToSyncedLyrics() = runBlocking {
+        val urls = mutableListOf<String>()
+        val service = OnlineLyricsService { url ->
+            urls.add(url)
+            if (url.contains("lrc.red")) throw IOException("Host unavailable")
+            JSONArray().put(record().put("trackName", song.title)
+                .put("artistName", song.artist)
+                .put("syncedLyrics", "[00:01]Aku cinta kamu")).toString()
+        }
+        assertEquals("LRCLIB", service.lookup(song).result?.source)
+        // Do not waste time retrying the same failed lrc.red host.
+        assertEquals(2, urls.size)
     }
 
     @Test fun normalizesRemasterSuffixButRejectsWrongSongs() {
