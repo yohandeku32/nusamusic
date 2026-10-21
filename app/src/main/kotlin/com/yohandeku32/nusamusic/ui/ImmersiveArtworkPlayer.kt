@@ -17,6 +17,8 @@ import kotlin.math.roundToInt
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -110,7 +112,7 @@ internal fun ImmersiveArtworkPlayer(
     contentInsets: WindowInsets = WindowInsets.safeDrawing
 ) {
     var playerBounds by remember { mutableStateOf<Rect?>(null) }
-    var artistButtonBounds by remember { mutableStateOf<Rect?>(null) }
+    var navigationPillBounds by remember { mutableStateOf<Rect?>(null) }
     // One predictable, non-overshooting timeline moves BOTH the circle and
     // the four-action pill. Read Animatable only in draw/placement modifiers;
     // do not recompose the expensive artwork/player on every animation frame.
@@ -283,6 +285,25 @@ internal fun ImmersiveArtworkPlayer(
             ),
             heroHeight, if (wide) (1f - controlsFraction + 0.06f) else 1f
         )
+        // Rightward drags on the artwork open Artist; leave vertical scroll,
+        // seeking, and transport-button gestures to their own controls.
+        if (hasSong && !overlayOpen && !lyricsOpen) {
+            Box(Modifier.matchParentSize().pointerInput(onArtist) {
+                var distance = 0f
+                val thresholdPx = 72.dp.toPx()
+                detectHorizontalDragGestures(
+                    onDragStart = { distance = 0f },
+                    onHorizontalDrag = { change, amount ->
+                        distance += amount
+                        change.consume()
+                    },
+                    onDragEnd = {
+                        if (distance >= thresholdPx) onArtist()
+                    },
+                    onDragCancel = { distance = 0f }
+                )
+            })
+        }
         if (portalVisible) {
             // Opaque full-screen black underlay, including BELOW the profile.
             // No blurred cover or colored artwork can leak around the pill.
@@ -487,61 +508,18 @@ internal fun ImmersiveArtworkPlayer(
                         touchSize = if (compact) 48.dp else 50.dp
                     )
                 }
-                // Raise title, seek bar and transport together by 12dp while
-                // keeping the bottom artist button and action pill anchored.
-                // Extra spacing is inserted ABOVE the pill, not below it.
+                // The action pill is now the only navigation surface.
+                // Anchor it at the exact center instead of leaving a space
+                // for the removed Artist icon.
                 Spacer(Modifier.height(transportToPillGap + if (wide) 0.dp else 12.dp))
-                // Only the circle is here. The 4-action pill is mounted
-                // separately in the viewport overlay, ABOVE Artist content,
-                // so the profile can fill every pixel behind it.
-                Row(
-                    Modifier.align(Alignment.CenterHorizontally),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Box(
-                        Modifier.size(56.dp)
-                            // Keep the measured anchor fixed; only the child
-                            // layer moves with the other Library control.
-                            .onGloballyPositioned { coordinates ->
-                                val bounds = coordinates.boundsInRoot()
-                                if (artistButtonBounds != bounds) artistButtonBounds = bounds
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Box(
-                            Modifier.matchParentSize().graphicsLayer {
-                                alpha = (1f - shownProgress()).coerceIn(0f, 1f)
-                                translationX = if (presentingLibrary) {
-                                    -pillExpansionPx * pillExpansion.value * 0.5f
-                                } else 0f
-                            },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            ContinuousLiquidGlassSurface(
-                                radius = 50.dp,
-                                lightMode = lightMode,
-                                liquidGlassEnabled = liquidGlassEnabled,
-                                hazeState = liveBackdrop,
-                                hazeAlpha = liveGlassAlpha,
-                                artworkTint = glassArtworkColor,
-                                modifier = Modifier.matchParentSize()
-                            )
-                            ImmersiveAction(
-                                lightMode, Lucide.UserRound,
-                                immersiveText("Buka halaman artis", "Open artist page"),
-                                onArtist, hasSong && !artistOpen && !libraryOpen,
-                                iconSize = 23.dp,
-                                iconTint = if (liquidGlassEnabled) Color.White else null,
-                                liquidMotion = liquidGlassEnabled,
-                                inactiveAlpha = 1f
-                            )
+                Spacer(
+                    Modifier.align(Alignment.CenterHorizontally)
+                        .width(actionPillWidth).height(56.dp)
+                        .onGloballyPositioned { coordinates ->
+                            val bounds = coordinates.boundsInRoot()
+                            if (navigationPillBounds != bounds) navigationPillBounds = bounds
                         }
-                    }
-                    // Reserve its space to keep the player geometry stable.
-                    // The actual pill and hit targets live in the top overlay.
-                    Spacer(Modifier.width(actionPillWidth).height(56.dp))
-                }
+                )
                 }
             }
         }
@@ -563,7 +541,7 @@ internal fun ImmersiveArtworkPlayer(
         if (portalVisible) ImmersiveArtistPortal(
             open = overlayOpen,
             progress = shownProgress,
-            source = artistButtonBounds,
+            source = navigationPillBounds,
             host = playerBounds,
             topInsetPx = with(density) { topInset.toPx() },
             onClose = if (presentingLibrary) onLibraryClose else onArtistClose,
@@ -597,69 +575,14 @@ internal fun ImmersiveArtworkPlayer(
             modifier = Modifier.fillMaxSize()
         )
 
-        // The REAL bottom pill sits above the portal. In Library, Artist
-        // remains a separate round control on its left (as on Now Playing).
-        // A width expansion is distributed equally across the group.
-        val bubble = artistButtonBounds
+        // Only Lyrics, Library/Home and Settings stay in the centered pill.
+        // Artist is opened by swiping right on the Now Playing artwork.
+        val pill = navigationPillBounds
         val root = playerBounds
-        if (bubble != null && root != null) {
-            val circleX = bubble.left - root.left
-            val circleY = bubble.top - root.top
-            if (portalVisible && presentingLibrary) {
-                Box(
-                    Modifier.offset {
-                        IntOffset(
-                            // Match Home's translated child exactly. Maintain
-                            // the fixed 10dp gap to the widening action pill.
-                            libraryArtistCircleLeftPx(
-                                circleX, pillExpansionPx * pillExpansion.value
-                            ).roundToInt(),
-                            circleY.roundToInt()
-                        )
-                    }
-                        .size(56.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    // Match the Home 56dp button and 23dp Lucide glyph.
-                    // Crossfade the entire control as a single layer.
-                    Box(
-                        Modifier.matchParentSize().graphicsLayer {
-                            alpha = libraryArtistCircleOpacity(shownProgress())
-                        },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        ContinuousLiquidGlassSurface(
-                            radius = 50.dp,
-                            lightMode = lightMode,
-                            liquidGlassEnabled = liquidGlassEnabled,
-                            hazeState = liveBackdrop,
-                            hazeAlpha = liveGlassAlpha,
-                            artworkTint = glassArtworkColor,
-                            modifier = Modifier.matchParentSize()
-                        )
-                        SolidNavigationOverlay(
-                            radius = 50.dp,
-                            progress = shownProgress,
-                            modifier = Modifier.matchParentSize()
-                        )
-                        IconButton(
-                            onClick = onArtist,
-                            enabled = hasSong && libraryOpen,
-                            modifier = Modifier.matchParentSize()
-                        ) {
-                            Icon(
-                                Lucide.UserRound,
-                                immersiveText("Buka profil artis", "Open artist profile"),
-                                tint = Color.White,
-                                modifier = Modifier.size(23.dp)
-                            )
-                        }
-                    }
-                }
-            }
+        if (pill != null && root != null) {
             ImmersiveOverlayActionPill(
-                anchorX = circleX,
-                anchorY = circleY,
+                anchorX = pill.left - root.left,
+                anchorY = pill.top - root.top,
                 progress = shownProgress,
                 fullWidth = actionPillWidth,
                 widthExpansion = { pillExpansion.value },
@@ -739,22 +662,10 @@ private fun ImmersiveOverlayActionPill(
     )
     Box(
         Modifier.offset {
-            val diameterPx = with(density) { 56.dp.toPx() }
-            val gapPx = with(density) { 10.dp.toPx() }
-            val widthIncrease = with(density) {
-                48.dp.toPx()
-            } * widthExpansion().coerceIn(0f, 1f)
-            val left = if (presentingLibrary) {
-                // Keep the separate Artist circle and right-hand pill in
-                // exactly the same positions as the Now Playing row.
-                libraryActionPillLeftPx(
-                    anchorX, diameterPx, gapPx, widthIncrease
-                )
-            } else {
-                artistPillLeftPx(anchorX, diameterPx, gapPx, progress()) -
-                    widthIncrease * 0.5f
-            }
-            IntOffset(left.roundToInt(), anchorY.roundToInt())
+            val widthIncrease = 48.dp.toPx() *
+                widthExpansion().coerceIn(0f, 1f)
+            // Keep the pill centered as it expands during portal transitions.
+            IntOffset((anchorX - widthIncrease * 0.5f).roundToInt(), anchorY.roundToInt())
         }.layout { measurable, constraints ->
             // Measure only the tiny navigation bar, not the full player.
             // Reading widthExpansion here avoids recomposing the artwork,
