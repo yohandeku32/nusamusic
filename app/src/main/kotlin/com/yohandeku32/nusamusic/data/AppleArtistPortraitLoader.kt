@@ -63,7 +63,7 @@ internal object AppleArtistPortraitLoader {
             val missFile = File(directory, "$fileKey.miss")
             val now = System.currentTimeMillis()
             if (cachedFile.isFile && now - cachedFile.lastModified() < POSITIVE_TTL_MS) {
-                decode(cachedFile.readBytes())?.let {
+                runCatching { decode(cachedFile.readBytes()) }.getOrNull()?.let {
                     images.put(key, it)
                     return@withContext it
                 }
