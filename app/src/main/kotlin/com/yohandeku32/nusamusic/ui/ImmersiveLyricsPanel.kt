@@ -129,7 +129,7 @@ fun ImmersiveLyricsPanel(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    "No synchronized lyrics found",
+                    data?.onlineNotice ?: "No synchronized lyrics found",
                     color = Color.White.copy(alpha = 0.76f),
                     fontSize = 16.sp
                 )
