@@ -5165,6 +5165,21 @@ private fun ArtworkView(
 
     LaunchedEffect(song?.uri, maxSizePx, loadDelayMs, loadAllowed) {
         if (!loadAllowed) return@LaunchedEffect
+        // Recycled Library rows may already have a full-resolution-enough
+        // thumbnail in shared memory. Skip the delay, coroutine IO handoff,
+        // and metadata retriever entirely for those tracks.
+        val cachedExactOrLarger = song?.let {
+            ArtworkLoader.cached(
+                uriString = it.uri,
+                maxSize = maxSizePx,
+                cacheKey = it.albumId.takeIf { albumId -> albumId > 0L }?.toString(),
+                allowSmallerPreview = false
+            )
+        }
+        if (cachedExactOrLarger != null) {
+            bitmap = cachedExactOrLarger
+            return@LaunchedEffect
+        }
         // Skip IO for tracks that are replaced by rapid Shuffle transitions.
         if (song != null && loadDelayMs > 0L) delay(loadDelayMs)
         bitmap = song?.let {
