@@ -765,8 +765,10 @@ private fun ImmersiveOverlayActionPill(
             // transport and entire portal once per animation frame.
             val expandedPx = (48.dp.toPx() *
                 widthExpansion().coerceIn(0f, 1f)).roundToInt()
-            val targetWidth = constraints.constrainWidth(fullWidth.roundToPx() + expandedPx)
-            val targetHeight = constraints.constrainHeight(56.dp.roundToPx())
+            val targetWidth = (fullWidth.roundToPx() + expandedPx).coerceIn(
+                constraints.minWidth, constraints.maxWidth
+            )
+            val targetHeight = 56.dp.roundToPx().coerceIn(constraints.minHeight, constraints.maxHeight)
             val placeable = measurable.measure(Constraints.fixed(targetWidth, targetHeight))
             layout(targetWidth, targetHeight) { placeable.placeRelative(0, 0) }
         }
