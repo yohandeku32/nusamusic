@@ -15,6 +15,7 @@ import kotlinx.coroutines.launch
 
 class SongLyricsState {
     var data by mutableStateOf<SongLyrics?>(null)
+    var hasEmbeddedLyrics by mutableStateOf(false)
     var loading by mutableStateOf(false)
     var attempted = false
     var job: Job? = null
@@ -28,6 +29,10 @@ class ImmersiveLyricsState(private val repository: LyricsRepository) {
     private var activeLoad: SongLyricsState? = null
     fun forSong(song: Song): SongLyricsState = entries.get(LyricsRepository.cacheKey(song))
         ?: SongLyricsState().also { entries.put(LyricsRepository.cacheKey(song), it) }
+
+    fun markEmbedded(song: Song) {
+        forSong(song).hasEmbeddedLyrics = true
+    }
 
     fun load(song: Song, scope: CoroutineScope, retry: Boolean = false) {
         val state = forSong(song)
@@ -53,9 +58,12 @@ class ImmersiveLyricsState(private val repository: LyricsRepository) {
         state.job = scope.launch {
             try {
                 val result = repository.load(song, retry) { local ->
-                    // Show existing embedded lyrics immediately while AMLL / LRCLIB
-                    // are checked in IO. This never blocks playback or the UI.
-                    if (state.generation == generation) state.data = local
+                    // The Save button disappears when this file already has
+                    // lyrics, even if an online version provides better timing.
+                    if (state.generation == generation) {
+                        state.hasEmbeddedLyrics = local.stored.content.isNotBlank()
+                        state.data = local
+                    }
                 }
                 if (state.generation == generation) state.data = result
             } catch (e: CancellationException) {
