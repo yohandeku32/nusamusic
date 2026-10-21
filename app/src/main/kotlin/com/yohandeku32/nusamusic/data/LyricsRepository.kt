@@ -102,20 +102,29 @@ class LyricsRepository(context: Context) {
             return EmbeddedLyricsSelector.select(listOf(entry.content), song.durationMs, entry.credits)
         }
         val loadContext = coroutineContext
-        val metadata = resolver.openAssetFileDescriptor(uri, "r")?.use { asset ->
-            asset.createInputStream().use { input ->
-                val channel = input.channel
-                val size = if (asset.declaredLength >= 0) asset.declaredLength else channel.size() - asset.startOffset
-                EmbeddedLyricsReader(size) { offset, count ->
-                    loadContext.ensureActive()
-                    val buffer = ByteBuffer.allocate(count)
-                    while (buffer.hasRemaining()) {
-                        if (channel.read(buffer, asset.startOffset + offset + buffer.position()) <= 0) break
-                    }
-                    buffer.array().copyOf(buffer.position())
-                }.readMetadata()
-            }
-        } ?: EmbeddedLyricsMetadata(emptyList())
+        val metadata = try {
+            resolver.openAssetFileDescriptor(uri, "r")?.use { asset ->
+                asset.createInputStream().use { input ->
+                    val channel = input.channel
+                    val size = if (asset.declaredLength >= 0) asset.declaredLength
+                        else channel.size() - asset.startOffset
+                    EmbeddedLyricsReader(size) { offset, count ->
+                        loadContext.ensureActive()
+                        val buffer = ByteBuffer.allocate(count)
+                        while (buffer.hasRemaining()) {
+                            if (channel.read(buffer, asset.startOffset + offset + buffer.position()) <= 0) break
+                        }
+                        buffer.array().copyOf(buffer.position())
+                    }.readMetadata()
+                }
+            } ?: EmbeddedLyricsMetadata(emptyList())
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            // A provider may deny metadata reads while the music file still
+            // plays; use the online lookup rather than failing the Lyrics UI.
+            EmbeddedLyricsMetadata(emptyList())
+        }
         val result = EmbeddedLyricsSelector.select(metadata.lyrics, song.durationMs, metadata.credits)
         coroutineContext.ensureActive()
         runCatching { embedded.write(key, result.stored) }
