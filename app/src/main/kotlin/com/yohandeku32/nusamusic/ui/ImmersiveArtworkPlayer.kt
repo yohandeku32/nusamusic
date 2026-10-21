@@ -526,7 +526,9 @@ internal fun ImmersiveArtworkPlayer(
                                 // 24dp left to keep their combined group
                                 // visually centered throughout Library reveal.
                                 translationX = if (presentingLibrary) {
-                                    -24.dp.toPx() * pillExpansion.value
+                                    navigationProfileLeftPx(
+                                        0f, 48.dp.toPx(), pillExpansion.value
+                                    )
                                 } else 0f
                             },
                             contentAlignment = Alignment.Center
@@ -623,8 +625,11 @@ internal fun ImmersiveArtworkPlayer(
             Box(
                 Modifier.offset {
                     IntOffset(
-                        (bubble.left - root.left -
-                            24.dp.toPx() * pillExpansion.value).roundToInt(),
+                        navigationProfileLeftPx(
+                            bubble.left - root.left,
+                            48.dp.toPx(),
+                            pillExpansion.value
+                        ).roundToInt(),
                         (bubble.top - root.top).roundToInt()
                     )
                 }.size(56.dp).graphicsLayer {
@@ -743,13 +748,14 @@ private fun ImmersiveOverlayActionPill(
             // - Library shows Artist + 10dp gap + widening pill as one group.
             // - Artist hides its profile circle, so the pill itself centers.
             // Distribute the 48dp pill growth equally left and right.
-            val reveal = widthExpansion().coerceIn(0f, 1f)
-            val halfGrowth = 24.dp.toPx() * reveal
-            val artistOnlyShift = if (showSolidPill && !presentingLibrary) {
-                33.dp.toPx() * reveal // (56dp profile + 10dp gap) / 2
-            } else 0f
-            IntOffset((anchorX - halfGrowth - artistOnlyShift).roundToInt(),
-                anchorY.roundToInt())
+            val left = navigationPillLeftPx(
+                originalLeft = anchorX,
+                expansionPx = 48.dp.toPx(),
+                profileWithGapPx = 66.dp.toPx(),
+                reveal = widthExpansion(),
+                artistOnly = showSolidPill && !presentingLibrary
+            )
+            IntOffset(left.roundToInt(), anchorY.roundToInt())
         }.layout { measurable, constraints ->
             // Measure only the tiny navigation bar, not the full player.
             // Reading widthExpansion here avoids recomposing the artwork,
