@@ -55,18 +55,62 @@ internal object AppleArtistPortraitLoader {
     private fun artistLock(key: String): Mutex = synchronized(requestLocks) {
         requestLocks.get(key) ?: Mutex().also { requestLocks.put(key, it) }
     }
-    // Limit proactive lookups to avoid exhausting the free provider quota.
-    private val warmedArtists = HashSet<String>()
-    private const val MAX_AUTOMATIC_WARMUPS = 4
+    // Automatic prefetch is intentionally bounded so six queue lookaheads do
+    // not exhaust the community image provider's shared daily allowance.
+    // Cached images never consume the quota; foreground taps still load on demand.
+    private const val MAX_DAILY_AUTOMATIC_FETCHES = 36
+    private const val DAY_MS = 24L * 60 * 60 * 1000
+    private val warmupMonitor = Any()
+    private var automaticFetchDay = -1L
+    private val automaticFetchKeys = HashSet<String>()
 
-    fun reserveBackgroundWarmup(name: String): Boolean {
-        if (artistUrl(name) == null || cached(name) != null) return false
-        val key = ArtistNameUtils.cacheKey(name)
-        return synchronized(warmedArtists) {
-            if (key in warmedArtists || warmedArtists.size >= MAX_AUTOMATIC_WARMUPS) false
-            else warmedArtists.add(key)
+    /** Load a cached portrait now; fetch an uncached one only if quota permits. */
+    suspend fun warm(context: Context, artistName: String): Bitmap? =
+        withContext(Dispatchers.IO) {
+            if (artistUrl(artistName) == null) return@withContext null
+            cached(artistName)?.let { return@withContext it }
+            val key = ArtistNameUtils.cacheKey(artistName)
+            val dir = File(context.applicationContext.cacheDir, "apple_artist_portraits")
+            val hashed = portraitFileKey(key)
+            val now = System.currentTimeMillis()
+            val imageFile = File(dir, "$hashed.img")
+            val missFile = File(dir, "$hashed.miss")
+            // Disk hits and known misses skip reservation and network work.
+            if ((imageFile.isFile && now - imageFile.lastModified() < POSITIVE_TTL_MS) ||
+                (missFile.isFile && now - missFile.lastModified() < NEGATIVE_TTL_MS)) {
+                return@withContext load(context, artistName)
+            }
+            val mayFetch = synchronized(warmupMonitor) {
+                val day = now / DAY_MS
+                val prefs = context.applicationContext.getSharedPreferences(
+                    "apple_artist_prefetch_budget", Context.MODE_PRIVATE
+                )
+                if (day != automaticFetchDay) {
+                    automaticFetchDay = day
+                    automaticFetchKeys.clear()
+                }
+                if (key in automaticFetchKeys) {
+                    true
+                } else {
+                    val savedDay = prefs.getLong("day", -1L)
+                    val count = if (savedDay == day) prefs.getInt("count", 0) else 0
+                    if (count >= MAX_DAILY_AUTOMATIC_FETCHES) false
+                    else {
+                        automaticFetchKeys.add(key)
+                        prefs.edit().putLong("day", day)
+                            .putInt("count", count + 1).apply()
+                        true
+                    }
+                }
+            }
+            if (!mayFetch) return@withContext null
+            load(context, artistName)
         }
-    }
+
+    private fun portraitFileKey(key: String): String =
+        MessageDigest.getInstance("SHA-256")
+            .digest(key.toByteArray(StandardCharsets.UTF_8))
+            .joinToString("") { "%02x".format(Locale.ROOT, it.toInt() and 0xff) }
 
     fun artistUrl(name: String): String? = buildAppleMusicPortraitUrl(name)
 
@@ -81,9 +125,7 @@ internal object AppleArtistPortraitLoader {
                 images.get(key)?.let { return@withLock it }
 
             val directory = File(context.cacheDir, "apple_artist_portraits")
-            val fileKey = MessageDigest.getInstance("SHA-256")
-                .digest(key.toByteArray(StandardCharsets.UTF_8))
-                .joinToString("") { "%02x".format(Locale.ROOT, it.toInt() and 0xff) }
+            val fileKey = portraitFileKey(key)
             val cachedFile = File(directory, "$fileKey.img")
             val missFile = File(directory, "$fileKey.miss")
             val now = System.currentTimeMillis()
