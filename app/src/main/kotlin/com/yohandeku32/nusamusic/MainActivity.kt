@@ -2019,21 +2019,6 @@ private fun NusaMusicApp(
     var vinylAccentColor by remember(currentSong?.uri) {
         mutableStateOf(Color(0xFFAAB0B8))
     }
-    LaunchedEffect(currentSong?.uri, playerPresentationMode) {
-        val active = currentSong ?: return@LaunchedEffect
-        if (playerPresentationMode != PlayerPresentationMode.VINYL) return@LaunchedEffect
-        val cacheKey = active.albumId.takeIf { it > 0L }?.toString()
-        val image = ArtworkLoader.cached(
-            uriString = active.uri, maxSize = 256, cacheKey = cacheKey
-        ) ?: ArtworkLoader.load(
-            context = context, uriString = active.uri, maxSize = 256, cacheKey = cacheKey
-        )
-        if (image != null) {
-            vinylAccentColor = withContext(kotlinx.coroutines.Dispatchers.Default) {
-                vinylAccentFromArtwork(image)
-            }
-        }
-    }
     val uiPrefs = remember(context) {
         context.getSharedPreferences("ui_preferences", android.content.Context.MODE_PRIVATE)
     }
@@ -2056,6 +2041,21 @@ private fun NusaMusicApp(
                 uiPrefs.getString("player_presentation_mode", null)
             )
         )
+    }
+    LaunchedEffect(currentSong?.uri, playerPresentationMode) {
+        val active = currentSong ?: return@LaunchedEffect
+        if (playerPresentationMode != PlayerPresentationMode.VINYL) return@LaunchedEffect
+        val cacheKey = active.albumId.takeIf { it > 0L }?.toString()
+        val image = ArtworkLoader.cached(
+            uriString = active.uri, maxSize = 256, cacheKey = cacheKey
+        ) ?: ArtworkLoader.load(
+            context = context, uriString = active.uri, maxSize = 256, cacheKey = cacheKey
+        )
+        if (image != null) {
+            vinylAccentColor = withContext(kotlinx.coroutines.Dispatchers.Default) {
+                vinylAccentFromArtwork(image)
+            }
+        }
     }
     // Cover the brief startup window before Media3 restores its queue.
     // The queue lookahead also includes this Artist; the loader shares cache
