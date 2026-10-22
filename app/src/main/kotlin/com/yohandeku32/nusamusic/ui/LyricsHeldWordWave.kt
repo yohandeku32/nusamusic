@@ -25,8 +25,10 @@ internal data class LyricsHeldWordPose(
  *
  * Each measured text run stays intact; no 20px slices, glyph clipping,
  * per-frame animation job, relayout or per-character timing inference.
- * A slow bell-shaped crest travels across the measured word as the vowel
- * progresses. The amplitude eases in and out over the authored hold.
+ * A visible, rounded mountain crest rises, crosses the measured word,
+ * and falls over the authored hold. Adjacent syllables trace the same arc
+ * with different heights and tangents; rapid words stay flat. The entire
+ * shaped syllable remains intact to protect kerning and diacritics.
  */
 /** C2-continuous rise/fall; exactly zero slope at the start, crest and end. */
 internal fun heldWordEase(value: Float): Float {
@@ -101,28 +103,30 @@ internal class LyricsHeldWordWave(units: List<LyricsHeldWordUnit>) {
             1f - heldWordEase((progress - peakAt) / (1f - peakAt))
         }
 
-        // One broad mountain moving from left to right through the authored
-        // word. Adjacent syllables feel like a connected arch, not independent
-        // quick bounces. Do not split or clip the font's shaped text run.
+        // The old glow looked like a straight horizontal sweep: its crest
+        // crossed only 40% of a word and the whole word lifted under 4.5dp.
+        // The new crest traverses 64%, giving every syllable a DIFFERENT
+        // height. An arch now reads as a mountain rather than a flat wave.
         val center = ((centerDp - word.left) /
             (word.right - word.left).coerceAtLeast(1f)).coerceIn(0f, 1f)
-        val crest = 0.30f + 0.40f * heldWordEase(progress)
+        val crest = 0.18f + 0.64f * heldWordEase(progress)
         val distance = abs(center - crest)
-        val mountain = 1f - heldWordEase(distance / 0.82f)
+        val mountain = 1f - heldWordEase(distance / 0.65f)
 
-        // A 1.2-second unit cannot carry a full 4.5dp mountain gracefully.
-        // Longer actual holds grow into the full expression continuously.
+        // True sustained notes form a visible rounded peak (max 8.75dp).
+        // A short 1.2-second note stays considerably more restrained.
         val holdWeight = 0.32f + 0.68f *
             heldWordEase((duration - 1_200f) / 1_600f)
         val strength = (envelope * mountain * holdWeight).coerceIn(0f, 1f)
 
-        // <5dp total lift; a mild tilt conveys a moving arch while retaining
-        // complete glyph shapes, kerning and diacritics.
-        val slope = ((center - crest) / 0.75f).coerceIn(-1f, 1f)
+        // The outer syllables follow opposite tangents of the same hill.
+        // Draw whole shaped runs rather than clipping characters into strips;
+        // this avoids torn fonts, jumpy glow edges and extra text layout.
+        val tangent = ((center - crest) / 0.65f).coerceIn(-1f, 1f)
         return LyricsHeldWordPose(
-            liftDp = -4.5f * strength,
-            scaleY = 1f + 0.012f * strength,
-            rotationDegrees = 0.65f * strength * slope,
+            liftDp = -8.75f * strength,
+            scaleY = 1f + 0.009f * strength,
+            rotationDegrees = -1.65f * tangent * strength,
             intensity = strength
         )
     }
