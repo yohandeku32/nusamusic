@@ -166,7 +166,7 @@ fun TurntablePlayer(
                         )
                     }
                     // The vinyl and its small center label alone rotate during playback.
-                    record(Modifier.size(stageSize * 0.88f))
+                    record(Modifier.size(stageSize * 0.78f))
                 }
                 // Secondary playback modes remain accessible, but do not crowd the disc.
                 Row(
