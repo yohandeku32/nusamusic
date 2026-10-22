@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -68,6 +69,7 @@ fun ImmersiveLyricsPanel(
     val context = LocalContext.current
     val folderAccess = remember(context) { LyricsFolderAccess(context.applicationContext) }
     var pendingFolder by remember { mutableStateOf<PendingLyricsEmbed?>(null) }
+    var folderNeedsReview by remember { mutableStateOf<PendingLyricsEmbed?>(null) }
     var embedBusy by remember { mutableStateOf(false) }
     val activeSong by rememberUpdatedState(song)
     val beforeEmbed by rememberUpdatedState(onBeforeEmbed)
@@ -131,11 +133,16 @@ fun ImmersiveLyricsPanel(
                 }
                 val target = folderAccess.find(snapshot.song)
                 if (target == null) {
-                    // Choose the parent Music folder once, not a separate Artist/Album
-                    // folder for every song. The persisted SAF grant includes all
-                    // descendants, and this Save resumes automatically.
-                    pendingFolder = snapshot
-                    folderPicker.launch(null)
+                    if (folderAccess.authorizedTrees().isEmpty()) {
+                        // First save: one explicit parent folder grant.
+                        pendingFolder = snapshot
+                        folderPicker.launch(null)
+                    } else {
+                        // Do NOT reopen Android's picker for every nested album
+                        // just because a provider lookup could not be resolved.
+                        // Only offer changing the parent explicitly.
+                        folderNeedsReview = snapshot
+                    }
                 } else {
                     writeLyrics(snapshot, target)
                 }
@@ -287,4 +294,38 @@ fun ImmersiveLyricsPanel(
         }
     }
 
+
+    if (folderNeedsReview != null) {
+        AlertDialog(
+            onDismissRequest = { folderNeedsReview = null },
+            title = { Text("Music folder access") },
+            text = {
+                Text(
+                    "This MP3 could not be found inside the authorized folder. " +
+                        "If it is stored elsewhere, choose the highest Music folder " +
+                        "that contains all your artists and albums. " +
+                        "NusaMusic will remember that folder for future saves."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val snapshot = folderNeedsReview ?: return@TextButton
+                    folderNeedsReview = null
+                    pendingFolder = snapshot
+                    embedBusy = true
+                    try {
+                        folderPicker.launch(null)
+                    } catch (error: Exception) {
+                        pendingFolder = null
+                        embedBusy = false
+                        Toast.makeText(context, error.message ?: "Cannot open folder picker",
+                            Toast.LENGTH_LONG).show()
+                    }
+                }) { Text("Choose music folder") }
+            },
+            dismissButton = {
+                TextButton(onClick = { folderNeedsReview = null }) { Text("Cancel") }
+            }
+        )
+    }
 }
