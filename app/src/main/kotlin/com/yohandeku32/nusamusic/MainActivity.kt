@@ -4475,7 +4475,6 @@ private fun RealisticControlButton(
 }
 
 
-@Composable
 /**
  * Select a readable, saturated-but-not-neon accent from the current album art.
  * The small sample and HSV conversion run off the UI thread once per track.
@@ -4508,6 +4507,7 @@ private fun vinylAccentFromArtwork(bitmap: Bitmap): Color {
     )
 }
 
+@Composable
 private fun VinylRecord(
     song: Song?,
     isPlaying: Boolean,
