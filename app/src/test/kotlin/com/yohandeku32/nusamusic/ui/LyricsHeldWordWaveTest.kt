@@ -244,7 +244,7 @@ class LyricsHeldWordWaveTest {
             left.perspectiveSlope * right.perspectiveSlope < 0f)
     }
 
-    @Test fun 3dLetterSizeShrinksSmoothlyWithoutGrowingAgainAtEveryRefreshRate() {
+    @Test fun threeDimensionalLetterSizeShrinksSmoothlyWithoutGrowingAgainAtEveryRefreshRate() {
         val wave = phrase()
         // 5-second held "kamu": 42% attack, 58% uninterrupted release.
         // Each word region must obey the SAME monotonically decreasing
