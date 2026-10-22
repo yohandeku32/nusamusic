@@ -81,8 +81,11 @@ fun ImmersiveLyricsPanel(
         // frames under its open descriptor. Persist this Save request only.
         // The MainActivity queue embeds it when a different song starts.
         onQueueLyrics(snapshot.song, snapshot.lyrics)
+        // The original file is untouched while Media3 reads it, but the
+        // authored lyrics are immediately durable and visible offline.
+        state.load(snapshot.song, scope, retry = true)
         Toast.makeText(context,
-            "Lyrics queued. They will be saved when you switch songs.",
+            "Lyrics saved in NusaMusic. File embedding completes when playback releases this song.",
             Toast.LENGTH_LONG).show()
     }
 
@@ -244,9 +247,9 @@ fun ImmersiveLyricsPanel(
 
         // Offer one-tap Save for a missing lyric OR a richer online version.
         // Local plain/line lyrics must not hide an available syllable upgrade.
-        if (song != null && lyricsNeedEmbedding(
+        if (song != null && (isLyricsQueued(song) || lyricsNeedEmbedding(
                 data, entry?.embeddedLyricsQuality ?: 0
-            )
+            ))
         ) {
             val queued = isLyricsQueued(song)
             IconButton(
@@ -272,7 +275,7 @@ fun ImmersiveLyricsPanel(
                     Icon(
                         imageVector = if (queued) Lucide.Clock3 else Lucide.Save,
                         contentDescription = if (queued)
-                            "Lyrics queued until this song is no longer playing"
+                            "Lyrics saved in NusaMusic; waiting to embed into original file"
                         else "Save lyrics to this song",
                         tint = Color.White,
                         modifier = Modifier.size(21.dp)
