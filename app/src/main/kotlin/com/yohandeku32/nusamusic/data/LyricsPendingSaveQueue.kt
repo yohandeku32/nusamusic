@@ -1,7 +1,6 @@
 package com.yohandeku32.nusamusic.data
 
 import android.content.Context
-import android.net.Uri
 import android.util.AtomicFile
 import androidx.compose.runtime.mutableStateMapOf
 import com.yohandeku32.nusamusic.model.Song
@@ -32,7 +31,7 @@ internal class LyricsPendingSaveQueue(context: Context) {
 
     fun isQueued(songId: Long): Boolean = pending[songId] == true
 
-    suspend fun enqueue(song: Song, selectedUri: Uri, lyrics: SongLyrics) {
+    suspend fun enqueue(song: Song, lyrics: SongLyrics) {
         val raw = lyrics.stored.content
         require(raw.isNotBlank() && raw.toByteArray(Charsets.UTF_8).size <= LyricsDecoder.MAX_BYTES) {
             "Lyrics are empty or too large to save."
@@ -40,7 +39,6 @@ internal class LyricsPendingSaveQueue(context: Context) {
         val payload = JSONObject()
             .put("songId", song.id)
             .put("songUri", song.uri)
-            .put("selectedUri", selectedUri.toString())
             .put("authored", raw)
             .put("plain", readableLyrics(lyrics))
         mutex.withLock {
@@ -88,9 +86,20 @@ internal class LyricsPendingSaveQueue(context: Context) {
                 continue
             }
             try {
+                // Resolve the original SAF document AND hash its contents
+                // only after Media3 has moved away. Large FLAC files no longer
+                // compete for disk bandwidth while their audio is playing.
+                val source = Song(
+                    id = id, title = "", artist = "", album = "",
+                    uri = item.getString("songUri"), durationMs = 0L, albumId = 0L
+                )
+                val original = LyricsFolderAccess(app).find(source)
+                    ?: error("The song was not found in the authorized Music folder. " +
+                        "Choose the folder containing your songs and try again.")
+                if (currentSongId() == id) continue
                 AudioLyricsEmbedder(app).embedPrepared(
-                    songUri = item.getString("songUri"),
-                    selectedUri = Uri.parse(item.getString("selectedUri")),
+                    songUri = source.uri,
+                    selectedUri = original,
                     raw = item.getString("authored"),
                     plain = item.getString("plain"),
                     beforeWrite = {
