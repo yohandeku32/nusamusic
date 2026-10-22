@@ -41,19 +41,19 @@ internal class LyricsFolderAccess(private val context: Context) {
             .toList()
     }
 
-    /** Prefer the exact MP3 location inside a persisted parent-folder grant. */
+    /** Resolve the original song inside a persistently authorized parent folder. */
     suspend fun find(song: Song): Uri? = withContext(Dispatchers.IO) {
         val trees = authorizedTrees()
         if (trees.isEmpty()) return@withContext null
         val location = indexedLocation(song)
         val filename = location.filename?.takeIf {
             EmbeddedAudioFormat.fromFilename(it) != null
-        } ?: throw IOException("Save Lyrics supports MP3, FLAC and M4A audio files.")
+        } ?: throw IOException("This song format cannot store lyrics yet.")
 
         // Compare bytes from the playing MediaStore URI against the exact SAF
         // audio document before writing. A matching filename is never sufficient.
         val original = resolver.openInputStream(Uri.parse(song.uri))?.use { digest(it) }
-            ?: throw IOException("Cannot read the currently playing MP3.")
+            ?: throw IOException("Cannot read the currently playing song.")
         for (tree in trees) {
             coroutineContext.ensureActive()
             val direct = sourceDocumentWithinTree(song, tree)
@@ -230,7 +230,7 @@ internal class LyricsFolderAccess(private val context: Context) {
             val n = input.read(buffer)
             if (n < 0) break
             count += n
-            if (count > 384L * 1024 * 1024) throw IOException("Song exceeds MP3 embed size limit.")
+            if (count > 384L * 1024 * 1024) throw IOException("This song exceeds the safe lyrics-embedding size limit.")
             sha.update(buffer, 0, n)
         }
         return Signature(count, sha.digest())
