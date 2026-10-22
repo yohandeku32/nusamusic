@@ -92,7 +92,15 @@ fun VinylTonearm(
                 move(0f, 0.042f)
                 curve(0.001f, 0.215f, -0.011f, 0.413f, -0.043f, 0.563f)
             }
-            drawPath(tube, Color.Black.copy(alpha = 0.16f), style = Stroke(unit * 0.029f, cap = StrokeCap.Round))
+            // Directional contact shadow separates the metal from the pale deck.
+            val tubeShadow = Path().apply {
+                move(0.012f, 0.054f)
+                curve(0.013f, 0.227f, 0.001f, 0.425f, -0.031f, 0.575f)
+            }
+            drawPath(
+                tubeShadow, Color.Black.copy(alpha = 0.18f),
+                style = Stroke(unit * 0.034f, cap = StrokeCap.Round)
+            )
             drawPath(tube, Color(0xFF161B1D), style = Stroke(unit * 0.021f, cap = StrokeCap.Round))
             drawPath(
                 tube,
@@ -128,6 +136,14 @@ fun VinylTonearm(
                 line(-0.145f, 0.638f)
                 close()
             }
+            val cartridgeShadow = Path().apply {
+                move(-0.043f, 0.587f)
+                line(-0.009f, 0.602f)
+                line(-0.090f, 0.676f)
+                line(-0.134f, 0.658f)
+                close()
+            }
+            drawPath(cartridgeShadow, Color.Black.copy(alpha = 0.18f))
             drawPath(headshell, Color(0xFF222729))
             drawLine(
                 Color(0xFF697174), pos(-0.096f, 0.651f), pos(-0.137f, 0.635f),
