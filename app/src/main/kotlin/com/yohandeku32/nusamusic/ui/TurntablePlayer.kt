@@ -111,92 +111,51 @@ fun TurntablePlayer(
     emptyState: @Composable () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val page = MaterialTheme.colorScheme.background
-    val surface = MaterialTheme.colorScheme.surface
-    val edge = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+    // A calm, warm-white listening surface: the vinyl is the centerpiece, not a boxed deck.
+    val page = Color(0xFFF8F7F4)
     BoxWithConstraints(modifier.background(page)) {
-        // Keep transport controls in view on compact phones; extra actions can
-        // continue below in the parent list when text scaling needs more room.
-        val deckSize = minOf((maxWidth - 32.dp).coerceAtLeast(0.dp), (viewportHeight - 392.dp).coerceAtLeast(160.dp))
+        // Reserve room for metadata and transport on compact phones.
+        val stageSize = minOf(
+            (maxWidth - 16.dp).coerceAtLeast(0.dp),
+            (viewportHeight - 324.dp).coerceAtLeast(190.dp)
+        )
         Column(
             modifier = Modifier.fillMaxWidth().heightIn(min = viewportHeight).navigationBarsPadding(),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                // Keep the original upper spacing and reveal the rear ports above the chassis.
-                val rearInset = 52.dp
-                Box(modifier = Modifier.size(width = deckSize, height = deckSize + rearInset)) {
+                Spacer(Modifier.height(12.dp))
+                Box(modifier = Modifier.size(stageSize)) {
+                    // Soft grounded shadow, rather than a heavy square chassis.
                     Canvas(Modifier.matchParentSize()) {
-                        val deckTop = rearInset.toPx()
-                        val powerX = size.width * 0.285f
-                        val audioXs = listOf(size.width * 0.335f, size.width * 0.385f)
-
-                        // Exposed rear connectors only: no cables attached.
-                        // Plug housings sit directly at the rear rim, behind the deck.
-                        val metal = Brush.horizontalGradient(
-                            listOf(Color(0xFF80591F), Color(0xFFEAC16D), Color(0xFFAA762A))
-                        )
-                        val powerWidth = 8.dp.toPx()
-                        drawRoundRect(
-                            brush = Brush.verticalGradient(
-                                listOf(Color(0xFF686C6E), Color(0xFF111518)),
-                                startY = deckTop - 5.dp.toPx(), endY = deckTop + 2.dp.toPx()
+                        val center = Offset(size.width * 0.415f, size.height * 0.51f)
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                0f to Color.Black.copy(alpha = 0.17f),
+                                0.70f to Color.Black.copy(alpha = 0.08f),
+                                1f to Color.Transparent,
+                                center = center + Offset(0f, 8.dp.toPx()),
+                                radius = size.minDimension * 0.45f
                             ),
-                            topLeft = Offset(powerX - powerWidth / 2f, deckTop - 5.dp.toPx()),
-                            size = Size(powerWidth, 7.dp.toPx()),
-                            cornerRadius = CornerRadius(1.dp.toPx())
+                            radius = size.minDimension * 0.45f,
+                            center = center + Offset(0f, 8.dp.toPx())
                         )
-                        audioXs.forEach { x ->
-                            drawRoundRect(
-                                color = Color(0xFF3A3227),
-                                topLeft = Offset(x - 2.6.dp.toPx(), deckTop - 3.dp.toPx()),
-                                size = Size(5.2.dp.toPx(), 5.dp.toPx()),
-                                cornerRadius = CornerRadius(0.7.dp.toPx())
-                            )
-                            drawRoundRect(
-                                brush = metal,
-                                topLeft = Offset(x - 1.6.dp.toPx(), deckTop - 7.dp.toPx()),
-                                size = Size(3.2.dp.toPx(), 8.dp.toPx()),
-                                cornerRadius = CornerRadius(0.8.dp.toPx())
-                            )
-                        }
                     }
 
-                    Box(
-                        modifier = Modifier.align(Alignment.BottomCenter).size(deckSize)
-                        .shadow(
-                            elevation = 16.dp,
-                            shape = RoundedCornerShape(18.dp),
-                            clip = false,
-                            ambientColor = Color.Black.copy(alpha = 0.42f),
-                            spotColor = Color.Black.copy(alpha = 0.55f)
-                        )
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(Brush.linearGradient(listOf(surface, page, surface)))
-                        .border(
-                            1.dp,
-                            Brush.linearGradient(
-                                listOf(Color.White.copy(alpha = 0.20f), edge, Color.Black.copy(alpha = 0.24f))
-                            ),
-                            RoundedCornerShape(18.dp)
-                        )
-                        .drawWithCache {
-                            onDrawBehind {
-                                // Small countersunk fittings remain on the deck surface.
-                                listOf(
-                                    Offset(size.width * 0.075f, size.height * 0.075f),
-                                    Offset(size.width * 0.77f, size.height * 0.075f)
-                                ).forEach { screw ->
-                                    drawCircle(edge, 2.dp.toPx(), screw)
-                                    drawCircle(surface, 1.dp.toPx(), screw - Offset(0.4f, 0.4f))
-                                }
-                            }
-                        }
-                ) {
-                    record(Modifier.size(deckSize * 0.78f).offset(x = deckSize * 0.10f, y = deckSize * 0.12f))
-                    // The real arm sits above the rotating record and casts its own subtle shadow.
-                    // Its angle follows playback progress; pause preserves the stylus position.
+                    record(
+                        Modifier.size(stageSize * 0.80f)
+                            .align(Alignment.CenterStart)
+                            .offset(x = stageSize * 0.015f)
+                            .shadow(
+                                elevation = 11.dp,
+                                shape = CircleShape,
+                                clip = false,
+                                ambientColor = Color.Black.copy(alpha = 0.16f),
+                                spotColor = Color.Black.copy(alpha = 0.24f)
+                            )
+                    )
+                    // Fine brushed-metal arm overlays the groove, with its stylus following playback.
                     VinylTonearm(
                         isPlaying = isPlaying,
                         hasSong = hasSong,
@@ -205,37 +164,37 @@ fun TurntablePlayer(
                         mountedOnDeck = true,
                         modifier = Modifier.matchParentSize()
                     )
-                    Row(
-                        modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 6.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        DeckSwitch(
-                            icon = Icons.Default.Shuffle,
-                            label = labels.shuffle,
-                            state = if (shuffleEnabled) labels.shuffleOn else labels.shuffleOff,
-                            active = shuffleEnabled,
-                            enabled = hasSong,
-                            onClick = onShuffle
-                        )
-                        DeckSwitch(
-                            icon = if (repeatMode == 1) Icons.Default.RepeatOne else Icons.Default.Repeat,
-                            label = labels.repeat,
-                            state = when (repeatMode) {
-                                1 -> labels.repeatOne
-                                2 -> labels.repeatAll
-                                else -> labels.repeatOff
-                            },
-                            active = repeatMode != 0,
-                            enabled = hasSong,
-                            onClick = onRepeat
-                        )
-                    }
-                    }
+                }
+                // Secondary playback modes remain accessible, but do not crowd the disc.
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 42.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    DeckSwitch(
+                        icon = Icons.Default.Shuffle,
+                        label = labels.shuffle,
+                        state = if (shuffleEnabled) labels.shuffleOn else labels.shuffleOff,
+                        active = shuffleEnabled,
+                        enabled = hasSong,
+                        onClick = onShuffle
+                    )
+                    DeckSwitch(
+                        icon = if (repeatMode == 1) Icons.Default.RepeatOne else Icons.Default.Repeat,
+                        label = labels.repeat,
+                        state = when (repeatMode) {
+                            1 -> labels.repeatOne
+                            2 -> labels.repeatAll
+                            else -> labels.repeatOff
+                        },
+                        active = repeatMode != 0,
+                        enabled = hasSong,
+                        onClick = onRepeat
+                    )
                 }
 
                 // Bring title/artist closer to the raised progress controls.
-                Spacer(Modifier.height(28.dp))
+                Spacer(Modifier.height(16.dp))
                 Text(
                     text = title,
                     fontFamily = titleFontFamily,
@@ -243,7 +202,7 @@ fun TurntablePlayer(
                     lineHeight = (titleFontSize * 0.79f).sp,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onBackground,
+                    color = Color(0xFF1C2022),
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 28.dp)
@@ -254,7 +213,7 @@ fun TurntablePlayer(
                     fontSize = 13.sp,
                     lineHeight = 18.sp,
                     textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = Color(0xFF737879),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 28.dp)
@@ -297,7 +256,7 @@ fun TurntablePlayer(
 
 @Composable
 private fun DeckSwitch(icon: ImageVector, label: String, state: String, active: Boolean, enabled: Boolean, onClick: () -> Unit) {
-    val ink = MaterialTheme.colorScheme.onSurfaceVariant
+    val ink = Color(0xFF545C60)
     IconButton(
         onClick = onClick,
         enabled = enabled,
@@ -328,9 +287,9 @@ private fun TurntableTransportButton(
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed) 0.95f else 1f, tween(130), label = "turntableButtonPress")
-    val face = MaterialTheme.colorScheme.surface
-    val shade = MaterialTheme.colorScheme.surfaceVariant
-    val ink = MaterialTheme.colorScheme.onSurfaceVariant
+    val face = Color(0xFFF8F7F4)
+    val shade = Color(0xFFEDEDE9)
+    val ink = Color(0xFF252B2E)
     Surface(
         onClick = onClick,
         enabled = enabled,
@@ -388,7 +347,7 @@ private fun TurntableProgress(positionMsState: State<Long>, durationMs: Long, ha
     val positionMs by positionMsState
     val enabled = hasSong && durationMs > 0L
     val fraction = if (durationMs > 0L) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
-    val ink = MaterialTheme.colorScheme.onBackground
+    val ink = Color(0xFF24292C)
     fun time(ms: Long): String {
         val seconds = ms.coerceAtLeast(0L) / 1000L
         return "${seconds / 60}:${(seconds % 60).toString().padStart(2, '0')}"
