@@ -18,6 +18,8 @@ internal data class LyricsHeldWordPose(
     /** Projected motion toward the viewer. Whole glyph runs stay intact. */
     val depth: Float = 0f,
     val parallaxXDp: Float = 0f,
+    /** One shared text-space pivot for every measured syllable of this word. */
+    val wordCenterDp: Float = 0f,
     /** Signed slope of the projected surface; mirrored across the crest. */
     val perspectiveSlope: Float = 0f,
     val rotationDegrees: Float = 0f,
@@ -147,21 +149,22 @@ internal class LyricsHeldWordWave(units: List<LyricsHeldWordUnit>) {
             // bounce, hard clamp, or discontinuity at the vocal's end.
             heldWordSizeRelease((progress - peakAt) / (1f - peakAt))
         }
-        val centeredDistance = abs(center - 0.5f)
-        val depthShape = 0.72f + 0.28f *
-            (1f - heldWordEase(centeredDistance / 0.65f))
-        val depth = (holdWeight * sizeEnvelope * depthShape).coerceIn(0f, 1f)
-        // A restrained 3D *arc*, not an expanding / ballooning word.
-        // The rising baseline remains the visible wave. Keep glyph widths
-        // and horizontal anchoring stable so kerning and adjacent syllables
-        // never crowd each other as the crest passes through the phrase.
+        // ONE expansion envelope for the complete word, independent of
+        // position. The mountain only changes the vertical baseline + light,
+        // never the font size of individual measured syllables. All glyphs
+        // share the same perspective/scale pivot in the painter, preserving
+        // their spacing and shaped letter proportions.
+        val depth = (holdWeight * sizeEnvelope).coerceIn(0f, 1f)
         return LyricsHeldWordPose(
             liftDp = -8.1f * strength,
-            scaleY = 1f + 0.008f * depth,
+            scaleY = 1f + 0.055f * depth,
             depth = depth,
+            wordCenterDp = (word.left + word.right) * 0.5f,
             parallaxXDp = 0f,
-            perspectiveSlope = tangent,
-            rotationDegrees = -0.65f * tangent * strength,
+            // Every syllable gets the SAME gentle camera transform; the
+            // traveling crest is the raised mountain, not a twisting glyph.
+            perspectiveSlope = 0f,
+            rotationDegrees = 0f,
             intensity = strength,
             crestDp = word.left + (word.right - word.left) * crest
         )
