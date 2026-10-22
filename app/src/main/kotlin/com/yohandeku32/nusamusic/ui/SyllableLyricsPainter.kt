@@ -228,12 +228,15 @@ internal class SyllableLyricsPainter(
         val result = glyph.layout.textLayoutResult
         val pose = glyph.wavePose
         val position = glyph.position + Offset(
-            glyph.bubble.offsetXDp * density,
+            (pose.parallaxXDp + glyph.bubble.offsetXDp) * density,
             (pose.liftDp + glyph.bubble.offsetYDp) * density
         )
         // A single intact measured text run tilts and rises with the local
         // mountain, never distorting glyphs with separately clipped slices.
-        val scaleX = glyph.bubble.scaleX
+        // A shallow foreground projection makes the held crest appear to
+        // swell *out of the screen*, not merely slide upwards. Scale
+        // originates around the baseline, and returns continuously to 1.
+        val scaleX = (1f + 0.11f * pose.depth) * glyph.bubble.scaleX
         val scaleY = pose.scaleY * glyph.bubble.scaleY
         val width = glyph.width
         withTransform({
@@ -285,6 +288,16 @@ internal class SyllableLyricsPainter(
                 // Unlike a flat left-to-right band, its luminous center
                 // follows the raised hill and spans adjacent syllables.
                 if (pose.intensity > 0.04f) {
+                    // A secondary blurred depth layer suggests a soft
+                    // foreground volume without clipping shaped characters
+                    // or allocating new shaders on each 120Hz frame.
+                    if (pose.depth > 0.06f) {
+                        drawText(result, brush = glyph.fill.brush,
+                            topLeft = position + Offset(0f, 2f * density * pose.depth),
+                            alpha = 0.13f * glow * pose.depth,
+                            shadow = glowPalette.outer(glow * pose.depth),
+                            drawStyle = Fill)
+                    }
                     glyph.mountainGlow.move(
                         centerX = (pose.crestDp - glyph.pathStartDp) * density,
                         centerY = result.size.height * 0.46f +
@@ -329,8 +342,13 @@ internal class SyllableLyricsPainter(
                 val unit = glyph.layout.syllable
                 // On held vocals, the curving mountain glow should lead;
                 // keep only a faint conventional horizontal sheen.
-                val shimmer = lyricShimmer(unit.start, unit.end, now) *
-                    (1f - 0.82f * pose.intensity)
+                // A per-syllable shimmer restarted at every word and looked
+                // like a tiny bump/loop. Fast and ordinary syllables now
+                // receive ONLY monotonic karaoke fill. Long vocals use the
+                // shared 3D mountain and a faint residual sheen.
+                val shimmer = if (unit.end.toLong() - unit.start < 2_000L)
+                    0f else lyricShimmer(unit.start, unit.end, now) *
+                    (1f - 0.92f * pose.intensity)
                 val sungWidth = (width * progress - glyph.feather).coerceAtLeast(0f)
                 if (shimmer > 0f && sungWidth >= 1f) {
                     val band = minOf(width * 0.3f + 4f * density, sungWidth / 2f)
