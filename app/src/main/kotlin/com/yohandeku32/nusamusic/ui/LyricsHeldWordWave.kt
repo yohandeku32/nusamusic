@@ -20,7 +20,7 @@ internal data class LyricsHeldWordPose(
     val parallaxXDp: Float = 0f,
     /** One shared text-space pivot for every measured syllable of this word. */
     val wordCenterDp: Float = 0f,
-    /** Signed slope of the projected surface; mirrored across the crest. */
+    /** Kept neutral while a full word uses one stable camera plane. */
     val perspectiveSlope: Float = 0f,
     val rotationDegrees: Float = 0f,
     val intensity: Float = 0f,
@@ -148,13 +148,10 @@ internal class LyricsHeldWordWave(units: List<LyricsHeldWordUnit>) {
         val holdWeight = heldWordEase((duration - 1_000f) / 1_500f)
         val strength = (envelope * mountain * holdWeight).coerceIn(0f, 1f)
 
-        // Spatial crest still travels for the arch and perspective tilt.
-        // The FONT SIZE must not follow the passing crest: previously the
-        // mountain multiplied depth, so each glyph rapidly contracted as
-        // the crest passed it, even when the singer kept holding the note.
-        // A spatially fixed depth profile and a single authored-time size
-        // envelope give a truly continuous big -> small return.
-        val tangent = ((center - crest) / 0.65f).coerceIn(-1f, 1f)
+        // The moving crest shapes the mountain through local vertical
+        // lift; the word's magnification must stay identical for all of its
+        // measured syllables. A single authored-time envelope returns the
+        // entire word to baseline smoothly as the next lyric approaches.
         val sizeEnvelope = if (progress <= peakAt) {
             heldWordEase(progress / peakAt)
         } else {
