@@ -36,19 +36,18 @@ internal class LyricsPendingSaveQueue(context: Context) {
      * in the original file: that part still waits for Media3 to release it.
      * Read the durable authored lyric directly, without rereading active audio.
      */
-    suspend fun savedForPlayback(song: Song): String? = mutex.withLock {
-        if (pending[song.id] != true) return@withLock null
-        withContext(Dispatchers.IO) {
-            runCatching {
-                val item = JSONObject(
-                    AtomicFile(File(folder, song.id.toString() + ".json"))
-                        .readFully().toString(Charsets.UTF_8)
-                )
-                if (item.optLong("songId") != song.id ||
-                    item.optString("songUri") != song.uri) null
-                else item.optString("authored").takeIf { it.isNotBlank() }
-            }.getOrNull()
-        }
+    suspend fun savedForPlayback(song: Song): String? = withContext(Dispatchers.IO) {
+        // The playback LyricsRepository and the Activity may have different
+        // queue instances. Their in-memory maps are NOT shared, so inspect the
+        // actual AtomicFile saved by the button rather than a stale map.
+        val file = File(folder, song.id.toString() + ".json")
+        if (!file.isFile) return@withContext null
+        runCatching {
+            val item = JSONObject(AtomicFile(file).readFully().toString(Charsets.UTF_8))
+            if (item.optLong("songId") != song.id ||
+                item.optString("songUri") != song.uri) null
+            else item.optString("authored").takeIf { it.isNotBlank() }
+        }.getOrNull()
     }
 
     suspend fun enqueue(song: Song, lyrics: SongLyrics) {
