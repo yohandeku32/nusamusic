@@ -244,4 +244,67 @@ class LyricsHeldWordWaveTest {
             left.perspectiveSlope * right.perspectiveSlope < 0f)
     }
 
+    @Test fun 3dLetterSizeShrinksSmoothlyWithoutGrowingAgainAtEveryRefreshRate() {
+        val wave = phrase()
+        // 5-second held "kamu": 42% attack, 58% uninterrupted release.
+        // Each word region must obey the SAME monotonically decreasing
+        // authored-time size envelope, even while the mountain crest moves.
+        for (hz in listOf(60, 90, 120)) {
+            for (center in listOf(145f, 163f, 182f, 203f, 220f)) {
+                val peak = 4_100
+                var previous = wave.pose(2, peak, center).depth
+                assertTrue("3D projection must remain visible at its crest", previous > 0.65f)
+                for (frame in 1..(hz * 3)) {
+                    val now = minOf(7_000, peak + (frame * 1000.0 / hz).toInt())
+                    val pose = wave.pose(2, now, center)
+                    assertTrue("size went backwards at $hz Hz, $now ms",
+                        pose.depth <= previous + 0.00001f)
+                    assertTrue("size reduction skipped a visible frame at $hz Hz, $now ms",
+                        previous - pose.depth < 0.018f)
+                    // Both face scale and 3D camera use pose.depth, so a
+                    // strictly decaying depth cannot create a sudden grow-back.
+                    assertEquals(1f + 0.065f * pose.depth, pose.scaleY, 0.000001f)
+                    previous = pose.depth
+                }
+                assertEquals(0f, wave.pose(2, 7_000, center).depth, 0f)
+            }
+        }
+    }
+
+    @Test fun heldWordProjectionNeverPopsAtPeakOrLastFrame() {
+        val wave = phrase()
+        val beforePeak = wave.pose(2, 4_099, 182f)
+        val peak = wave.pose(2, 4_100, 182f)
+        val afterPeak = wave.pose(2, 4_101, 182f)
+        assertTrue(abs(beforePeak.depth - peak.depth) < 0.00005f)
+        assertTrue(abs(afterPeak.depth - peak.depth) < 0.00005f)
+
+        val beforeEnd = wave.pose(2, 6_999, 182f)
+        val finished = wave.pose(2, 7_000, 182f)
+        assertTrue(beforeEnd.depth < 0.00001f)
+        assertEquals(0f, finished.depth, 0f)
+        assertEquals(1f, finished.scaleY, 0f)
+        assertEquals(0f, finished.parallaxXDp, 0f)
+        assertEquals(1f, heldWordSizeRelease(0f), 0f)
+        assertEquals(0f, heldWordSizeRelease(1f), 0f)
+    }
+
+    @Test fun adjacentHeldSyllablesShrinkIndependentlyOfMovingLightCrest() {
+        val wave = LyricsHeldWordWave(listOf(
+            LyricsHeldWordUnit("se", 1_000, 1_250, 0f, 30f),
+            LyricsHeldWordUnit("la", 1_250, 1_550, 30f, 60f),
+            LyricsHeldWordUnit("ma", 1_550, 1_850, 60f, 90f),
+            LyricsHeldWordUnit("nya", 1_850, 7_000, 90f, 120f)
+        ))
+        for (i in 0..3) {
+            val center = 15f + 30f * i
+            var previous = wave.pose(i, 4_100, center).depth
+            for (now in 4_116..7_000 step 16) {
+                val next = wave.pose(i, now, center).depth
+                assertTrue("syllable $i popped larger at $now ms", next <= previous + 0.00001f)
+                previous = next
+            }
+        }
+    }
+
 }
