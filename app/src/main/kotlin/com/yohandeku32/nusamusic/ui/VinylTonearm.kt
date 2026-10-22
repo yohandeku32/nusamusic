@@ -18,6 +18,10 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 
+/**
+ * Minimal brushed-silver tonearm, inspired by a real turntable on a pale surface.
+ * The cartridge follows the record from its outer groove inward as the song plays.
+ */
 @Composable
 fun VinylTonearm(
     isPlaying: Boolean,
@@ -32,13 +36,13 @@ fun VinylTonearm(
         (positionMs.toFloat() / durationMs).coerceIn(0f, 1f)
     } else 0f
 
-    // Keep the arm resting on the current groove when paused; park only without a song.
-    val targetAngle = if (hasSong) -5f + progress * 15f else -15f
+    // A restrained sweep into the inner grooves; pause keeps the current position.
+    val targetAngle = if (hasSong) -1f + progress * 11f else -12f
     val armAngle by animateFloatAsState(
         targetValue = targetAngle,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = if (isPlaying && hasSong) 35f else 90f
+            stiffness = if (isPlaying && hasSong) 38f else 105f
         ),
         label = "tonearmAngle"
     )
@@ -46,128 +50,147 @@ fun VinylTonearm(
     Canvas(modifier) {
         val unit = size.minDimension
         val pivot = Offset(
-            size.width * (if (mountedOnDeck) 0.86f else 0.88f),
-            size.height * (if (mountedOnDeck) 0.175f else 0.145f)
+            size.width * (if (mountedOnDeck) 0.90f else 0.90f),
+            size.height * (if (mountedOnDeck) 0.145f else 0.145f)
         )
-        // Shorten the lower arm by 20%, without squashing the silver counterweight.
-        fun pos(x: Float, y: Float) = pivot + Offset(x * unit, (if (y > 0f) y * 0.80f else y) * unit)
+        fun point(x: Float, y: Float) = pivot + Offset(x * unit, y * unit)
         fun Path.move(x: Float, y: Float) {
-            val p = pos(x, y)
+            val p = point(x, y)
             moveTo(p.x, p.y)
         }
         fun Path.line(x: Float, y: Float) {
-            val p = pos(x, y)
+            val p = point(x, y)
             lineTo(p.x, p.y)
         }
-        fun Path.curve(x1: Float, y1: Float, x2: Float, y2: Float, x3: Float, y3: Float) {
-            val a = pos(x1, y1)
-            val b = pos(x2, y2)
-            val c = pos(x3, y3)
+        fun Path.curve(
+            x1: Float, y1: Float, x2: Float, y2: Float, x3: Float, y3: Float
+        ) {
+            val a = point(x1, y1)
+            val b = point(x2, y2)
+            val c = point(x3, y3)
             cubicTo(a.x, a.y, b.x, b.y, c.x, c.y)
         }
-
-        // Only a subtle fixed bearing shadow; no decorative side levers.
-        drawCircle(Color.Black.copy(alpha = 0.09f), unit * 0.063f, pos(0.005f, 0.005f))
-
-        rotate(degrees = armAngle, pivot = pivot) {
-            // Brushed silver cylindrical counterweight and short black stem.
-            drawRoundRect(
-                color = Color(0xFF171C1E),
-                topLeft = pos(-0.018f, -0.067f),
-                size = Size(unit * 0.036f, unit * 0.080f),
-                cornerRadius = CornerRadius(unit * 0.004f)
+        fun armPath(dx: Float = 0f, dy: Float = 0f) = Path().apply {
+            move(dx, 0.030f + dy)
+            curve(
+                -0.005f + dx, 0.180f + dy,
+                -0.020f + dx, 0.344f + dy,
+                -0.075f + dx, 0.461f + dy
             )
-            drawRoundRect(
-                brush = Brush.horizontalGradient(
-                    listOf(Color(0xFF667075), Color(0xFFF7FAFB), Color(0xFFADB5B9), Color(0xFF4C565B))
-                ),
-                topLeft = pos(-0.055f, -0.128f),
-                size = Size(unit * 0.110f, unit * 0.064f),
-                cornerRadius = CornerRadius(unit * 0.008f)
+            curve(
+                -0.091f + dx, 0.489f + dy,
+                -0.112f + dx, 0.510f + dy,
+                -0.140f + dx, 0.519f + dy
             )
-            drawCircle(Color(0xFF323B3F), unit * 0.005f, pos(0f, -0.093f))
-
-            // Straight black tube with a restrained bend, like the reference.
-            val tube = Path().apply {
-                move(0f, 0.042f)
-                curve(0.001f, 0.215f, -0.011f, 0.413f, -0.043f, 0.563f)
-            }
-            // Directional contact shadow separates the metal from the pale deck.
-            val tubeShadow = Path().apply {
-                move(0.012f, 0.054f)
-                curve(0.013f, 0.227f, 0.001f, 0.425f, -0.031f, 0.575f)
-            }
-            drawPath(
-                tubeShadow, Color.Black.copy(alpha = 0.18f),
-                style = Stroke(unit * 0.034f, cap = StrokeCap.Round)
-            )
-            drawPath(tube, Color(0xFF161B1D), style = Stroke(unit * 0.021f, cap = StrokeCap.Round))
-            drawPath(
-                tube,
-                Color(0xFF4D565A).copy(alpha = 0.75f),
-                style = Stroke(unit * 0.0035f, cap = StrokeCap.Round)
-            )
-
-            // Small red tube keeper.
-            drawRoundRect(
-                color = Color(0xFFB13B35),
-                topLeft = pos(-0.027f, 0.382f),
-                size = Size(unit * 0.034f, unit * 0.028f),
-                cornerRadius = CornerRadius(unit * 0.003f)
-            )
-            drawLine(
-                Color(0xFF171B1D), pos(-0.010f, 0.382f), pos(-0.012f, 0.410f),
-                strokeWidth = unit * 0.019f, cap = StrokeCap.Round
-            )
-
-            // Narrow headshell clamp with two metal fasteners.
-            drawLine(
-                Color(0xFF25292B), pos(-0.081f, 0.561f), pos(-0.004f, 0.566f),
-                strokeWidth = unit * 0.014f, cap = StrokeCap.Round
-            )
-            drawCircle(Color(0xFFE0E5E6), unit * 0.005f, pos(-0.077f, 0.561f))
-            drawCircle(Color(0xFFE0E5E6), unit * 0.005f, pos(-0.010f, 0.566f))
-
-            // Angled black cartridge with a fine needle at the outer grooves.
-            val headshell = Path().apply {
-                move(-0.054f, 0.567f)
-                line(-0.020f, 0.582f)
-                line(-0.101f, 0.656f)
-                line(-0.145f, 0.638f)
-                close()
-            }
-            val cartridgeShadow = Path().apply {
-                move(-0.043f, 0.587f)
-                line(-0.009f, 0.602f)
-                line(-0.090f, 0.676f)
-                line(-0.134f, 0.658f)
-                close()
-            }
-            drawPath(cartridgeShadow, Color.Black.copy(alpha = 0.18f))
-            drawPath(headshell, Color(0xFF222729))
-            drawLine(
-                Color(0xFF697174), pos(-0.096f, 0.651f), pos(-0.137f, 0.635f),
-                strokeWidth = unit * 0.003f
-            )
-            drawCircle(Color(0xFFEDF0F1), unit * 0.005f, pos(-0.113f, 0.629f))
-            drawLine(
-                Color(0xFF171B1D), pos(-0.143f, 0.639f), pos(-0.170f, 0.650f),
-                strokeWidth = unit * 0.006f, cap = StrokeCap.Round
-            )
-            drawCircle(Color(0xFFCED3D5), unit * 0.003f, pos(-0.170f, 0.650f))
         }
 
-        // The silver circular pivot face remains stationary while the arm swings.
-        drawCircle(Color(0xFF697277), unit * 0.050f, pivot)
+        // The bearing shadow stays fixed while the slender tonearm pivots.
+        drawCircle(
+            Color.Black.copy(alpha = 0.095f),
+            radius = unit * 0.052f,
+            center = pivot + Offset(unit * 0.011f, unit * 0.015f)
+        )
+
+        rotate(degrees = armAngle, pivot = pivot) {
+            // Small machined counterweight, not a bulky black mechanical block.
+            drawRoundRect(
+                brush = Brush.horizontalGradient(
+                    listOf(Color(0xFF9BA3A5), Color(0xFFFEFEFC), Color(0xFFC5CDCE))
+                ),
+                topLeft = point(-0.027f, -0.096f),
+                size = Size(unit * 0.054f, unit * 0.093f),
+                cornerRadius = CornerRadius(unit * 0.012f)
+            )
+            drawRoundRect(
+                color = Color(0xFF9AA5A8).copy(alpha = 0.64f),
+                topLeft = point(-0.026f, -0.093f),
+                size = Size(unit * 0.005f, unit * 0.086f),
+                cornerRadius = CornerRadius(unit * 0.002f)
+            )
+
+            // Realistic soft cast shadow falls to the right of the raised metal tube.
+            drawPath(
+                armPath(dx = 0.012f, dy = 0.013f),
+                color = Color(0xFF33383A).copy(alpha = 0.14f),
+                style = Stroke(width = unit * 0.020f, cap = StrokeCap.Round)
+            )
+            val tube = armPath()
+            drawPath(
+                tube,
+                color = Color(0xFF899396),
+                style = Stroke(width = unit * 0.020f, cap = StrokeCap.Round)
+            )
+            drawPath(
+                tube,
+                brush = Brush.linearGradient(
+                    listOf(Color(0xFFF9FAF8), Color(0xFFDEE3E3), Color(0xFFB3BEC1)),
+                    start = point(0f, 0f),
+                    end = point(-0.14f, 0.55f)
+                ),
+                style = Stroke(width = unit * 0.014f, cap = StrokeCap.Round)
+            )
+            drawPath(
+                armPath(dx = -0.003f),
+                color = Color.White.copy(alpha = 0.68f),
+                style = Stroke(width = unit * 0.0030f, cap = StrokeCap.Round)
+            )
+
+            // Reference-inspired off-white headshell and very fine dark stylus.
+            val shellShadow = Path().apply {
+                move(-0.146f, 0.511f)
+                line(-0.181f, 0.535f)
+                line(-0.160f, 0.556f)
+                line(-0.123f, 0.532f)
+                close()
+            }
+            drawPath(
+                shellShadow,
+                color = Color.Black.copy(alpha = 0.15f)
+            )
+            val shell = Path().apply {
+                move(-0.151f, 0.501f)
+                line(-0.188f, 0.528f)
+                line(-0.166f, 0.547f)
+                line(-0.128f, 0.523f)
+                close()
+            }
+            drawPath(
+                shell,
+                brush = Brush.linearGradient(
+                    listOf(Color(0xFFFFFFFF), Color(0xFFE5E8E7), Color(0xFFBFC8CA)),
+                    start = point(-0.15f, 0.50f),
+                    end = point(-0.17f, 0.55f)
+                )
+            )
+            drawLine(
+                Color(0xFF454D50),
+                point(-0.172f, 0.543f),
+                point(-0.185f, 0.560f),
+                strokeWidth = unit * 0.0035f,
+                cap = StrokeCap.Round
+            )
+            drawCircle(
+                Color(0xFF697275),
+                radius = unit * 0.0028f,
+                center = point(-0.185f, 0.560f)
+            )
+        }
+
+        // Low-profile silver pivot cover floats naturally above the pale backdrop.
+        drawCircle(Color(0xFF8E999D), unit * 0.037f, pivot)
         drawCircle(
             brush = Brush.linearGradient(
-                colors = listOf(Color(0xFFFFFFFF), Color(0xFFE4E9EB), Color(0xFFABB5BA)),
-                start = pos(-0.042f, -0.042f),
-                end = pos(0.042f, 0.042f)
+                listOf(Color(0xFFFFFFFF), Color(0xFFE6EBEA), Color(0xFFAAB5B9)),
+                start = point(-0.033f, -0.035f),
+                end = point(0.033f, 0.035f)
             ),
-            radius = unit * 0.044f,
+            radius = unit * 0.031f,
             center = pivot
         )
-        drawCircle(Color(0xFFB0B8BC).copy(alpha = 0.65f), unit * 0.044f, pivot, style = Stroke(unit * 0.0015f))
+        drawCircle(
+            Color.White.copy(alpha = 0.67f),
+            radius = unit * 0.010f,
+            center = pivot + Offset(-unit * 0.006f, -unit * 0.007f)
+        )
     }
 }
