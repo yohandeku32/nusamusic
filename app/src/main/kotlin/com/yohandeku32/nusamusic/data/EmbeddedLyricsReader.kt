@@ -15,7 +15,8 @@ internal class EmbeddedLyricsReader(
     private var bytesRead = 0
     private var atomsRead = 0
     private val lyricKeys = setOf("LYRICS", "UNSYNCEDLYRICS", "UNSYNCED LYRICS", "SYNCEDLYRICS",
-        "SYNCED LYRICS", "SYNCHRONIZEDLYRICS", "SYLT", "USLT", "LRC", "ENHANCED LRC", "TTML")
+        "SYNCED LYRICS", "SYNCHRONIZEDLYRICS", "SYLT", "USLT", "LRC", "ENHANCED LRC", "TTML",
+        "NUSAMUSIC_LYRICS")
 
     fun read(): List<String> = readMetadata().lyrics
 
