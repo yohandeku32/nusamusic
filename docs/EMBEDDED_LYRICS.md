@@ -111,22 +111,25 @@ This includes songs that already have plain or line-synced embedded lyrics
 when online word/syllable karaoke is available. Tap once to upgrade the
 original MP3. There is **no Choose MP3 dialog** or per-song selection.
 
-**First use only:** if NusaMusic has no suitable writable folder grant, Android
-asks you to select the folder that contains the song. The app requests
-persistable read/write access to that folder using the system OpenDocumentTree
-picker and completes the same pending Save automatically. Later songs stored
-under that authorized folder can be saved with one tap, without asking for
-permission again. Existing library folders that already have persistent write
-permission are reused. Different, external folders require their own one-time
-folder grant; Android may restrict selecting some protected folder roots.
+**First use only:** select a single parent directory such as `Music` in
+Android's system folder picker, rather than opening each `Artist/Album`
+directory. NusaMusic persistently requests read/write access to the selected
+parent and **all of its descendants**. The first Save resumes automatically;
+later songs anywhere below that parent save directly without another picker.
+Existing persistent library folder grants are reused.
 
-The original audio file is located by its actual filename inside granted
-folders and matched to the **currently playing song by a whole-file SHA-256
-checksum** before any changes. NusaMusic never guesses by artist/title alone
-or writes to a similarly named but different file. Directory traversal is
-bounded, and the original file must be MP3 with ordinary ID3v2.3/v2.4 frames.
-If a folder does not contain the exact matching file, Save reports the issue
-without modifying any audio.
+For MediaStore-indexed songs, NusaMusic uses the original file's
+`RELATIVE_PATH` to walk straight to its nested directory under the authorized
+parent. A bounded recursive search of the same authorized subtree remains as a
+fallback for providers that do not expose this path. A whole-file SHA-256
+checksum is still mandatory before editing, so two MP3s with the same filename
+cannot be confused. A different directory outside the selected tree needs a
+separate one-time grant.
+
+Android 11+ may not allow the SAF picker to grant the literal root of internal
+storage or the `Download` directory. Choose the highest permitted **music
+parent folder** instead. NusaMusic does not request unrestricted device storage
+or bypass Android's system picker.
 
 A temporary byte-for-byte backup and fully staged edited MP3 are made before
 writing. The staged copy is read back with the embedded lyrics decoder, then
