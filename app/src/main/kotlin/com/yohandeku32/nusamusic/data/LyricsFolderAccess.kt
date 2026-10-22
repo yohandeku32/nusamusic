@@ -46,11 +46,12 @@ internal class LyricsFolderAccess(private val context: Context) {
         val trees = authorizedTrees()
         if (trees.isEmpty()) return@withContext null
         val location = indexedLocation(song)
-        val filename = location.filename?.takeIf { it.endsWith(".mp3", ignoreCase = true) }
-            ?: throw IOException("The playing file is not a recognized MP3.")
+        val filename = location.filename?.takeIf {
+            EmbeddedAudioFormat.fromFilename(it) != null
+        } ?: throw IOException("Save Lyrics supports MP3, FLAC and M4A audio files.")
 
         // Compare bytes from the playing MediaStore URI against the exact SAF
-        // document before writing. A matching filename is never sufficient.
+        // audio document before writing. A matching filename is never sufficient.
         val original = resolver.openInputStream(Uri.parse(song.uri))?.use { digest(it) }
             ?: throw IOException("Cannot read the currently playing MP3.")
         for (tree in trees) {
