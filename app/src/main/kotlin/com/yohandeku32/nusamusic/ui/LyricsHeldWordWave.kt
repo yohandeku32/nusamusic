@@ -18,6 +18,8 @@ internal data class LyricsHeldWordPose(
     /** Projected motion toward the viewer. Whole glyph runs stay intact. */
     val depth: Float = 0f,
     val parallaxXDp: Float = 0f,
+    /** Signed slope of the projected surface; mirrored across the crest. */
+    val perspectiveSlope: Float = 0f,
     val rotationDegrees: Float = 0f,
     val intensity: Float = 0f,
     /** Measured word-path location of the moving mountain's luminous crest. */
@@ -72,7 +74,7 @@ internal class LyricsHeldWordWave(units: List<LyricsHeldWordUnit>) {
                 it.content.trim().any(Char::isWhitespace)
             }
             val held = if (includesMultipleWords) null else group
-                .filter { it.reliableHold && it.endMs.toLong() - it.startMs >= 2_000L }
+                .filter { it.reliableHold && it.endMs.toLong() - it.startMs >= 1_300L }
                 .maxByOrNull { it.endMs.toLong() - it.startMs }
             if (held != null) {
                 val wave = Word(
@@ -118,24 +120,26 @@ internal class LyricsHeldWordWave(units: List<LyricsHeldWordUnit>) {
         val distance = abs(center - crest)
         val mountain = 1f - heldWordEase(distance / 0.65f)
 
-        // Do NOT bounce on ordinary 1-2s words. Only genuinely held
-        // vowels (>=2s authored timing) can create a mountain. A 5s note
-        // reaches full intensity; shorter holds blend in progressively.
-        val holdWeight = heldWordEase((duration - 2_000f) / 1_800f)
+        // The previous implementation required a 2,000ms individual unit
+        // and multiplied TWO duration gates together. Most real sustained
+        // syllables never reached visible depth. Engage reliably from a
+        // 1,300ms authored hold; only long notes reach the full projection.
+        val holdWeight = heldWordEase((duration - 1_000f) / 1_500f)
         val strength = (envelope * mountain * holdWeight).coerceIn(0f, 1f)
 
-        // Project the arc toward the listener instead of only lifting text:
-        // the center grows nearer, its wings move with opposing parallax
-        // and a restrained slope suggests a 3D ribbon (no per-glyph slices).
+        // Unlike uniform 2D scale, perspective depth now directly follows
+        // the sung note's single smooth envelope. No second attenuation!
+        // Opposite slopes make the word's left and right wings curl toward
+        // and away from the viewer, with the crest projecting furthest.
         val tangent = ((center - crest) / 0.65f).coerceIn(-1f, 1f)
-        val depth = (strength * heldWordEase((duration - 2_000f) / 1_600f))
-            .coerceIn(0f, 1f)
+        val depth = strength
         return LyricsHeldWordPose(
-            liftDp = -8.75f * strength,
-            scaleY = 1f + 0.034f * depth,
+            liftDp = -7.5f * strength,
+            scaleY = 1f + 0.065f * depth,
             depth = depth,
-            parallaxXDp = -1.9f * tangent * depth,
-            rotationDegrees = -2.4f * tangent * strength,
+            parallaxXDp = -2.7f * tangent * depth,
+            perspectiveSlope = tangent,
+            rotationDegrees = -2.2f * tangent * strength,
             intensity = strength,
             crestDp = word.left + (word.right - word.left) * crest
         )
