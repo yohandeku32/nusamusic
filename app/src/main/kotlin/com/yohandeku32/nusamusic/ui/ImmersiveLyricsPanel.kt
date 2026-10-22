@@ -147,7 +147,16 @@ fun ImmersiveLyricsPanel(
         }
     }
     val entry = song?.let { state.forSong(it) }
-    LaunchedEffect(song) { if (song != null) state.load(song, scope) }
+    val queuedForSong = song?.let { isLyricsQueued(it) } ?: false
+    LaunchedEffect(song?.uri, queuedForSong) {
+        if (song != null) {
+            // A queued local preview becomes real embedded metadata only
+            // after the source is released. Refresh on both transitions:
+            // offline Save -> queued, and queued -> verified embedded.
+            val stalePreview = entry?.data?.stored?.source == "saved-in-app"
+            state.load(song, scope, retry = queuedForSong || stalePreview)
+        }
+    }
 
     // Retain the original frame-clock driver. Pause freezes all renderers,
     // while Media3 seeks update the epoch and re-anchor lyric follow motion.
@@ -247,11 +256,11 @@ fun ImmersiveLyricsPanel(
 
         // Offer one-tap Save for a missing lyric OR a richer online version.
         // Local plain/line lyrics must not hide an available syllable upgrade.
-        if (song != null && (isLyricsQueued(song) || lyricsNeedEmbedding(
+        if (song != null && (queuedForSong || lyricsNeedEmbedding(
                 data, entry?.embeddedLyricsQuality ?: 0
             ))
         ) {
-            val queued = isLyricsQueued(song)
+            val queued = queuedForSong
             IconButton(
                 onClick = {
                     data?.let { available ->
