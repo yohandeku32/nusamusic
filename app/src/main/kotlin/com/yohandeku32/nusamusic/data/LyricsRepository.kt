@@ -35,6 +35,7 @@ class LyricsRepository(context: Context) {
     private val embedded = LyricsDiskStore(File(context.applicationContext.cacheDir, "lyrics/embedded-v2"), maxEntries = 120)
     private val online = LyricsDiskStore(File(context.applicationContext.cacheDir, "lyrics/online-lrcred-v2"), maxEntries = 120)
     private val service = OnlineLyricsService()
+    private val savedRequests = LyricsPendingSaveQueue(context.applicationContext)
 
     companion object {
         fun cacheKey(song: Song) = listOf(song.uri, song.durationMs.toString(), song.dateAddedMs.toString()).joinToString("\u0000")
@@ -105,6 +106,14 @@ class LyricsRepository(context: Context) {
     }
 
     private suspend fun loadEmbedded(song: Song, retry: Boolean): SongLyrics {
+        // Save is immediately durable in the app even while Media3 retains its
+        // source descriptor. Preview queued authored timing without touching
+        // the active track or waiting for an explicit Next.
+        savedRequests.savedForPlayback(song)?.let { raw ->
+            return EmbeddedLyricsSelector.select(listOf(raw), song.durationMs).let {
+                it.copy(stored = it.stored.copy(source = "saved-in-app"))
+            }
+        }
         val uri = Uri.parse(song.uri)
         if (uri.scheme !in setOf("content", "file"))
             return EmbeddedLyricsSelector.select(emptyList(), song.durationMs)
