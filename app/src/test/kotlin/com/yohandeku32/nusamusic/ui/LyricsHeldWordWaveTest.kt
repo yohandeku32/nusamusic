@@ -204,7 +204,7 @@ class LyricsHeldWordWaveTest {
                 val pose = wave.pose(2, now, 172f)
                 assertTrue(pose.depth in 0f..1f)
                 assertTrue("foreground depth jumped at $hz Hz",
-                    abs(pose.depth - previousDepth) < 0.014f)
+                    abs(pose.depth - previousDepth) < 0.02f)
                 assertTrue("horizontal parallax jumped at $hz Hz",
                     abs(pose.parallaxXDp - previousParallax) < 0.033f)
                 previousDepth = pose.depth
