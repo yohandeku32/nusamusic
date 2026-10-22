@@ -124,46 +124,18 @@ fun TurntablePlayer(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
                 Spacer(Modifier.height(12.dp))
-                Box(modifier = Modifier.size(stageSize)) {
-                    // Soft grounded shadow, rather than a heavy square chassis.
-                    Canvas(Modifier.matchParentSize()) {
-                        val center = Offset(size.width * 0.415f, size.height * 0.51f)
-                        drawCircle(
-                            brush = Brush.radialGradient(
-                                0f to Color.Black.copy(alpha = 0.17f),
-                                0.70f to Color.Black.copy(alpha = 0.08f),
-                                1f to Color.Transparent,
-                                center = center + Offset(0f, 8.dp.toPx()),
-                                radius = size.minDimension * 0.45f
-                            ),
-                            radius = size.minDimension * 0.45f,
-                            center = center + Offset(0f, 8.dp.toPx())
-                        )
-                    }
-
-                    record(
-                        Modifier.size(stageSize * 0.80f)
-                            .align(Alignment.CenterStart)
-                            .offset(x = stageSize * 0.015f)
-                            .shadow(
-                                elevation = 11.dp,
-                                shape = CircleShape,
-                                clip = false,
-                                ambientColor = Color.Black.copy(alpha = 0.16f),
-                                spotColor = Color.Black.copy(alpha = 0.24f)
-                            )
-                    )
-                    // Fine brushed-metal arm overlays the groove, with its stylus following playback.
-                    VinylTonearm(
-                        isPlaying = isPlaying,
-                        hasSong = hasSong,
-                        positionMsState = positionMsState,
-                        durationMs = durationMs,
-                        mountedOnDeck = true,
-                        modifier = Modifier.matchParentSize()
-                    )
+                // Center the record across the entire player width, with no tonearm or fake chassis.
+                // VinylRecord already draws its own physically grounded shadow.
+                Box(
+                    modifier = Modifier.fillMaxWidth().height(stageSize),
+                    contentAlignment = Alignment.Center
+                ) {
+                    record(Modifier.size(stageSize * 0.88f))
                 }
                 // Secondary playback modes remain accessible, but do not crowd the disc.
                 Row(
