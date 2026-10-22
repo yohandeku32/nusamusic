@@ -91,7 +91,7 @@ fun ImmersiveLyricsPanel(
         // regardless of whether an online lyric version remains in memory.
         state.markEmbedded(snapshot.song, snapshot.lyrics)
         state.load(snapshot.song, scope, retry = true)
-        Toast.makeText(context, "Lyrics saved in the original MP3", Toast.LENGTH_LONG).show()
+        Toast.makeText(context, "Lyrics saved to this song", Toast.LENGTH_LONG).show()
     }
 
     val folderPicker = rememberLauncherForActivityResult(
@@ -285,7 +285,7 @@ fun ImmersiveLyricsPanel(
                 } else {
                     Icon(
                         imageVector = Lucide.Save,
-                        contentDescription = "Embed lyrics into the original audio file",
+                        contentDescription = "Save lyrics to this song",
                         tint = Color.White,
                         modifier = Modifier.size(21.dp)
                     )
@@ -301,7 +301,7 @@ fun ImmersiveLyricsPanel(
             title = { Text("Music folder access") },
             text = {
                 Text(
-                    "This MP3 could not be found inside the authorized folder. " +
+                    "This song could not be found inside the authorized folder. " +
                         "If it is stored elsewhere, choose the highest Music folder " +
                         "that contains all your artists and albums. " +
                         "NusaMusic will remember that folder for future saves."
