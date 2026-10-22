@@ -51,6 +51,19 @@ internal fun heldWordSizeRelease(value: Float): Float {
     return 1f - t * t * (3f - 2f * t)
 }
 
+/**
+ * Every measured run of a word resolves to the SAME screen X pivot.
+ * The path uses authored syllable order, while glyphX is a local row pixel
+ * coordinate. Subtracting each run's path origin re-anchors the shared word
+ * center to the exact same pixel for all of its syllables.
+ */
+internal fun heldWordPivotX(
+    glyphX: Float,
+    glyphPathStartDp: Float,
+    wordCenterDp: Float,
+    density: Float
+): Float = glyphX + (wordCenterDp - glyphPathStartDp) * density
+
 internal class LyricsHeldWordWave(units: List<LyricsHeldWordUnit>) {
     private data class Word(
         val left: Float,
