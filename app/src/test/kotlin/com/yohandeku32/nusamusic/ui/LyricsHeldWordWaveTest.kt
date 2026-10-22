@@ -163,6 +163,8 @@ class LyricsHeldWordWaveTest {
         val lateRight = wave.pose(3, 5650, 105f).liftDp
         assertTrue(earlyLeft < earlyRight)
         assertTrue(lateRight < lateLeft)
+        assertTrue("luminous crest travels through the word, not along a flat stripe",
+            wave.pose(3, 5650, 105f).crestDp > wave.pose(3, 2800, 105f).crestDp)
     }
 
     @Test fun mountainDoesNotDisturbShortRapOrContinuePastHold() {
