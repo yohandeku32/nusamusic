@@ -16,7 +16,9 @@ internal data class LyricsHeldWordPose(
     val liftDp: Float = 0f,
     val scaleY: Float = 1f,
     val rotationDegrees: Float = 0f,
-    val intensity: Float = 0f
+    val intensity: Float = 0f,
+    /** Measured word-path location of the moving mountain's luminous crest. */
+    val crestDp: Float = 0f
 )
 
 /**
@@ -127,7 +129,8 @@ internal class LyricsHeldWordWave(units: List<LyricsHeldWordUnit>) {
             liftDp = -8.75f * strength,
             scaleY = 1f + 0.009f * strength,
             rotationDegrees = -1.65f * tangent * strength,
-            intensity = strength
+            intensity = strength,
+            crestDp = word.left + (word.right - word.left) * crest
         )
     }
 }
