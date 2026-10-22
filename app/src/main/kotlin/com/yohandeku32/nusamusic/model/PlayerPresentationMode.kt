@@ -6,7 +6,7 @@ enum class PlayerPresentationMode(val preferenceValue: String) {
     IMMERSIVE_ARTWORK("immersive_artwork");
 
     val isAvailable: Boolean
-        get() = this != VINYL
+        get() = true
 
     companion object {
         fun fromPreference(value: String?): PlayerPresentationMode {
