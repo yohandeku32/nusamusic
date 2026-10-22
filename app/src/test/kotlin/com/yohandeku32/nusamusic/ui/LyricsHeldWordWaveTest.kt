@@ -135,4 +135,46 @@ class LyricsHeldWordWaveTest {
         wave.pose(2, 6800, 182f)
         assertEquals(held, wave.pose(2, 4600, 182f))
     }
+
+    @Test fun longVowelFormsVisibleMountainAcrossFourAdjacentSyllables() {
+        val wave = LyricsHeldWordWave(listOf(
+            LyricsHeldWordUnit("se", 1000, 1250, 0f, 30f),
+            LyricsHeldWordUnit("la", 1250, 1550, 30f, 60f),
+            LyricsHeldWordUnit("ma", 1550, 1850, 60f, 90f),
+            LyricsHeldWordUnit("nya", 1850, 7000, 90f, 120f)
+        ))
+        val atCrest = (0..3).map { index ->
+            wave.pose(index, 4100, 15f + 30f * index)
+        }
+        // A broad central crest with lower left/right foothills is visibly
+        // curved, unlike a flat translated word or a straight sheen.
+        assertTrue("middle syllable rises more than left edge",
+            atCrest[1].liftDp < atCrest[0].liftDp - 2f)
+        assertTrue("middle syllable rises more than right edge",
+            atCrest[2].liftDp < atCrest[3].liftDp - 2f)
+        assertTrue("sustained lyric forms a clearly visible peak",
+            minOf(atCrest[1].liftDp, atCrest[2].liftDp) < -7f)
+        assertTrue("opposing sides follow opposing arc tangents",
+            atCrest.first().rotationDegrees * atCrest.last().rotationDegrees < 0f)
+        // The crest travels from left to right on authored playback time.
+        val earlyLeft = wave.pose(0, 2800, 15f).liftDp
+        val earlyRight = wave.pose(3, 2800, 105f).liftDp
+        val lateLeft = wave.pose(0, 5650, 15f).liftDp
+        val lateRight = wave.pose(3, 5650, 105f).liftDp
+        assertTrue(earlyLeft < earlyRight)
+        assertTrue(lateRight < lateLeft)
+    }
+
+    @Test fun mountainDoesNotDisturbShortRapOrContinuePastHold() {
+        val wave = LyricsHeldWordWave(listOf(
+            LyricsHeldWordUnit("quick ", 500, 800, 0f, 40f),
+            LyricsHeldWordUnit("held", 800, 5800, 46f, 116f)
+        ))
+        assertEquals(LyricsHeldWordPose(), wave.pose(0, 3200, 20f))
+        assertEquals(LyricsHeldWordPose(), wave.pose(1, 800, 80f))
+        assertEquals(LyricsHeldWordPose(), wave.pose(1, 5800, 80f))
+        val middle = wave.pose(1, 3200, 80f)
+        repeat(10) { assertEquals(middle, wave.pose(1, 3200, 80f)) }
+    }
+
 }
