@@ -5,8 +5,10 @@ enum class PlayerPresentationMode(val preferenceValue: String) {
     CD("cd"),
     IMMERSIVE_ARTWORK("immersive_artwork");
 
+    // Keep the legacy enum value so previously stored preferences can migrate safely.
+    // Vinyl is no longer a selectable or restorable player mode.
     val isAvailable: Boolean
-        get() = true
+        get() = this != VINYL
 
     companion object {
         fun fromPreference(value: String?): PlayerPresentationMode {
