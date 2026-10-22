@@ -237,7 +237,7 @@ fun TurntablePlayer(
                         )
                         TurntableTransportButton(
                             Icons.Default.SkipNext, labels.next, onNext, hasSong,
-                            realisticControls, Modifier.size(48.dp), 25.dp
+                            realisticControls, Modifier.size(48.dp), 25.dp, accent
                         )
                         DeckSwitch(
                             if (repeatMode == 1) Icons.Default.RepeatOne else Icons.Default.Repeat,
