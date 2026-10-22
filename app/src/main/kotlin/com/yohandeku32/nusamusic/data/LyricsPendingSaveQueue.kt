@@ -72,7 +72,7 @@ internal class LyricsPendingSaveQueue(context: Context) {
         }
         for (file in files) {
             val id = file.name.removeSuffix(".json").toLongOrNull() ?: continue
-            if (currentSongId() == id) continue
+            if (!mayCommitQueuedLyrics(id, currentSongId())) continue
             val item = try {
                 withContext(Dispatchers.IO) {
                     JSONObject(AtomicFile(file).readFully().toString(Charsets.UTF_8))
@@ -96,7 +96,7 @@ internal class LyricsPendingSaveQueue(context: Context) {
                 val original = LyricsFolderAccess(app).find(source)
                     ?: error("The song was not found in the authorized Music folder. " +
                         "Choose the folder containing your songs and try again.")
-                if (currentSongId() == id) continue
+                if (!mayCommitQueuedLyrics(id, currentSongId())) continue
                 AudioLyricsEmbedder(app).embedPrepared(
                     songUri = source.uri,
                     selectedUri = original,
@@ -124,3 +124,7 @@ internal class LyricsPendingSaveQueue(context: Context) {
         }
     }
 }
+
+/** A queued original is never writable while it remains Media3's active track. */
+internal fun mayCommitQueuedLyrics(songId: Long, activeSongId: Long?): Boolean =
+    songId != activeSongId
