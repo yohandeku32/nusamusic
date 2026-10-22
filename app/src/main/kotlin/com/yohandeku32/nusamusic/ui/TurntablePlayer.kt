@@ -195,6 +195,16 @@ fun TurntablePlayer(
                         }
                 ) {
                     record(Modifier.size(deckSize * 0.78f).offset(x = deckSize * 0.10f, y = deckSize * 0.12f))
+                    // The real arm sits above the rotating record and casts its own subtle shadow.
+                    // Its angle follows playback progress; pause preserves the stylus position.
+                    VinylTonearm(
+                        isPlaying = isPlaying,
+                        hasSong = hasSong,
+                        positionMsState = positionMsState,
+                        durationMs = durationMs,
+                        mountedOnDeck = true,
+                        modifier = Modifier.matchParentSize()
+                    )
                     Row(
                         modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
                             .padding(horizontal = 8.dp, vertical = 6.dp),
