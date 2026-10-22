@@ -204,8 +204,9 @@ internal class SyllableLyricsPainter(
                 index, frameTime, (glyph.pathStartDp + glyph.pathEndDp) * 0.5f
             )
             glyph.controller.update(frameTime)
-            // A tiny supporting breath only. The slow full-hold mountain is
-            // the primary motion; the old 2.85s pulse must not rush its release.
+            // Keep the old bubble as a LIGHT-only accent. Its independent
+            // sinusoidal position/scale must never re-enlarge a letter while
+            // the main 3D wave is smoothly shrinking back to baseline.
             glyph.bubble.update(frameTime, glyph.wavePose.intensity * 0.30f)
         }
 
@@ -230,8 +231,8 @@ internal class SyllableLyricsPainter(
         val result = glyph.layout.textLayoutResult
         val pose = glyph.wavePose
         val position = glyph.position + Offset(
-            (pose.parallaxXDp + glyph.bubble.offsetXDp) * density,
-            (pose.liftDp + glyph.bubble.offsetYDp) * density
+            pose.parallaxXDp * density,
+            pose.liftDp * density
         )
         // A single intact measured text run tilts and rises with the local
         // mountain, never distorting glyphs with separately clipped slices.
@@ -241,8 +242,11 @@ internal class SyllableLyricsPainter(
         // Strength should be readable on a phone: about 20% forward
         // magnification at the peak, plus actual X/Y perspective from
         // Android Camera (ordinary 2D scale alone looked flat).
-        val scaleX = (1f + 0.20f * pose.depth) * glyph.bubble.scaleX
-        val scaleY = pose.scaleY * glyph.bubble.scaleY
+        // A SINGLE release envelope drives every geometric component.
+        // Multiplying by the bubble's unrelated sine scale made the letters
+        // momentarily grow again while the 3D wave was shrinking.
+        val scaleX = 1f + 0.20f * pose.depth
+        val scaleY = pose.scaleY
         val width = glyph.width
         val native = drawContext.canvas.nativeCanvas
         val saved = if (pose.depth > 0.0001f) native.save() else -1
@@ -304,17 +308,17 @@ internal class SyllableLyricsPainter(
                 // A softly arched spotlight travels over the LONG vowel.
                 // Unlike a flat left-to-right band, its luminous center
                 // follows the raised hill and spans adjacent syllables.
-                if (pose.intensity > 0.025f) {
+                if (pose.depth > 0f) {
                     // A secondary blurred depth layer suggests a soft
                     // foreground volume without clipping shaped characters
                     // or allocating new shaders on each 120Hz frame.
-                    if (pose.depth > 0.06f) {
-                        drawText(result, brush = glyph.fill.brush,
-                            topLeft = position + Offset(0f, 3.5f * density * pose.depth),
-                            alpha = 0.20f * glow * pose.depth,
-                            shadow = glowPalette.outer(glow * pose.depth),
-                            drawStyle = Fill)
-                    }
+                    // No 6% depth threshold: that cutoff appeared as a
+                    // disappearing halo on the last frames of shrink.
+                    drawText(result, brush = glyph.fill.brush,
+                        topLeft = position + Offset(0f, 3.5f * density * pose.depth),
+                        alpha = 0.20f * glow * pose.depth,
+                        shadow = glowPalette.outer(glow * pose.depth),
+                        drawStyle = Fill)
                     glyph.mountainGlow.move(
                         centerX = (pose.crestDp - glyph.pathStartDp) * density,
                         centerY = result.size.height * 0.46f +
@@ -324,8 +328,8 @@ internal class SyllableLyricsPainter(
                     )
                     drawText(result, brush = glyph.mountainGlow.brush,
                         topLeft = position,
-                        alpha = 0.34f * glow * pose.intensity,
-                        shadow = glowPalette.outer(glow * pose.intensity * 0.7f),
+                        alpha = 0.34f * glow * pose.depth,
+                        shadow = glowPalette.outer(glow * pose.depth * 0.7f),
                         drawStyle = Fill)
                 }
 
