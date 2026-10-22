@@ -2014,6 +2014,26 @@ private fun NusaMusicApp(
                 ?: Color(0xFF29303B)
         )
     }
+    // Color belongs to the current track, not the selected app theme.
+    // Reuse cached art where possible; extract only when Vinyl is active.
+    var vinylAccentColor by remember(currentSong?.uri) {
+        mutableStateOf(Color(0xFFAAB0B8))
+    }
+    LaunchedEffect(currentSong?.uri, playerPresentationMode) {
+        val active = currentSong ?: return@LaunchedEffect
+        if (playerPresentationMode != PlayerPresentationMode.VINYL) return@LaunchedEffect
+        val cacheKey = active.albumId.takeIf { it > 0L }?.toString()
+        val image = ArtworkLoader.cached(
+            uriString = active.uri, maxSize = 256, cacheKey = cacheKey
+        ) ?: ArtworkLoader.load(
+            context = context, uriString = active.uri, maxSize = 256, cacheKey = cacheKey
+        )
+        if (image != null) {
+            vinylAccentColor = withContext(kotlinx.coroutines.Dispatchers.Default) {
+                vinylAccentFromArtwork(image)
+            }
+        }
+    }
     val uiPrefs = remember(context) {
         context.getSharedPreferences("ui_preferences", android.content.Context.MODE_PRIVATE)
     }
@@ -2900,6 +2920,7 @@ private fun NusaMusicApp(
                                                     modifier = recordModifier
                                                 )
                                             },
+                                            accentColor = vinylAccentColor,
                                             sleeve = { sleeveModifier ->
                                                 ArtworkView(
                                                     song = currentSong,
@@ -4455,6 +4476,38 @@ private fun RealisticControlButton(
 
 
 @Composable
+/**
+ * Select a readable, saturated-but-not-neon accent from the current album art.
+ * The small sample and HSV conversion run off the UI thread once per track.
+ * Neutral covers fall back to brushed-silver rather than a fixed red theme.
+ */
+private fun vinylAccentFromArtwork(bitmap: Bitmap): Color {
+    val hsv = FloatArray(3)
+    val weights = FloatArray(12)
+    for (row in 0 until 8) {
+        for (column in 0 until 8) {
+            val x = ((column + 0.5f) / 8f * bitmap.width).toInt()
+                .coerceIn(0, bitmap.width - 1)
+            val y = ((row + 0.5f) / 8f * bitmap.height).toInt()
+                .coerceIn(0, bitmap.height - 1)
+            android.graphics.Color.colorToHSV(bitmap.getPixel(x, y), hsv)
+            val saturation = hsv[1]
+            val value = hsv[2]
+            if (saturation < 0.22f || value < 0.16f || value > 0.97f) continue
+            val bucket = ((hsv[0] / 30f).toInt()).coerceIn(0, weights.lastIndex)
+            weights[bucket] += saturation * value
+        }
+    }
+    val winningIndex = weights.indices.maxByOrNull { weights[it] } ?: 0
+    if (weights[winningIndex] < 0.50f) return Color(0xFFAAB0B8)
+    val hue = winningIndex * 30f + 15f
+    return Color(
+        android.graphics.Color.HSVToColor(
+            floatArrayOf(hue, 0.62f, 0.88f)
+        )
+    )
+}
+
 private fun VinylRecord(
     song: Song?,
     isPlaying: Boolean,
