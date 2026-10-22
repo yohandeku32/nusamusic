@@ -2900,6 +2900,14 @@ private fun NusaMusicApp(
                                                     modifier = recordModifier
                                                 )
                                             },
+                                            sleeve = { sleeveModifier ->
+                                                ArtworkView(
+                                                    song = currentSong,
+                                                    maxSizePx = 512,
+                                                    modifier = sleeveModifier,
+                                                    grainOverlay = false
+                                                )
+                                            },
                                             quality = { AudioQualityPill(song = currentSong) },
                                             footer = {
                                                 Row(
