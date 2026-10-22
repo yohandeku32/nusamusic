@@ -26,6 +26,7 @@ import android.widget.Toast
 import com.yohandeku32.nusamusic.data.LyricsFolderAccess
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Save
+import com.composables.icons.lucide.Clock3
 import com.yohandeku32.nusamusic.data.SongLyrics
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -243,17 +244,18 @@ fun ImmersiveLyricsPanel(
 
         // Offer one-tap Save for a missing lyric OR a richer online version.
         // Local plain/line lyrics must not hide an available syllable upgrade.
-        if (song != null && !isLyricsQueued(song) && lyricsNeedEmbedding(
+        if (song != null && lyricsNeedEmbedding(
                 data, entry?.embeddedLyricsQuality ?: 0
             )
         ) {
+            val queued = isLyricsQueued(song)
             IconButton(
                 onClick = {
                     data?.let { available ->
                         saveWithFolderAccess(PendingLyricsEmbed(song, available))
                     }
                 },
-                enabled = !embedBusy,
+                enabled = !embedBusy && !queued,
                 modifier = Modifier.align(Alignment.TopEnd)
                     .padding(top = 2.dp, end = 16.dp)
                     .size(44.dp)
@@ -268,8 +270,10 @@ fun ImmersiveLyricsPanel(
                     )
                 } else {
                     Icon(
-                        imageVector = Lucide.Save,
-                        contentDescription = "Save lyrics to this song",
+                        imageVector = if (queued) Lucide.Clock3 else Lucide.Save,
+                        contentDescription = if (queued)
+                            "Lyrics queued until this song is no longer playing"
+                        else "Save lyrics to this song",
                         tint = Color.White,
                         modifier = Modifier.size(21.dp)
                     )
