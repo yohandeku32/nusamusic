@@ -36,7 +36,7 @@ internal class AudioLyricsEmbedder(private val context: Context) {
             if (cursor.moveToFirst()) cursor.getString(0) else null
         } ?: throw IOException("Cannot identify the selected file.")
         val format = EmbeddedAudioFormat.fromFilename(name)
-            ?: throw IOException("Save Lyrics supports MP3, FLAC and M4A files.")
+            ?: throw IOException("This song format cannot store lyrics yet.")
         val raw = lyric.stored.content
         require(raw.isNotBlank()) { "There are no lyrics to embed." }
         val plain = readableLyrics(lyric)
