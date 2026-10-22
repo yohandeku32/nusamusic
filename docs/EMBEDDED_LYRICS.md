@@ -136,16 +136,22 @@ Per-format metadata writers:
   audio sample offsets unchanged. Fragmented/protected/unusual layouts may be
   rejected for safety.
 
-**Save without playback interruption:** tapping Save writes a small,
-durable request in NusaMusic's private app storage, not the currently playing
-audio file. A clock icon indicates **queued** rather than **saved**. When
-Media3 advances to a different track (or after relaunch if the queued track
-is no longer active), NusaMusic resolves the original file in the authorized
-Music tree, performs its full hash check, constructs a staged tagged copy,
-and commits it while the old song is no longer in use. Playback is **never
-paused or toggled** by Save, and large original-file scans no longer run while
-the song being saved is playing. If users leave the same track playing, the
-request remains queued until a different song is selected.
+**Save without playback interruption:** tapping Save instantly commits
+the authored lyrics to durable NusaMusic private storage. The on-screen
+lyrics are refreshed from that stored copy immediately; reopening Lyrics or
+restarting the app does not require internet or pressing Next to view the
+saved lyrics. A clock icon accurately indicates that the lyrics are already
+saved **in NusaMusic**, but are still **queued for embedding into the original
+song file**. This is distinct from completed file metadata editing.
+
+When Media3 advances naturally or manually to a different song (or after
+relaunch if the queued track is no longer the active source), NusaMusic
+locates the original in the authorized Music tree, checks the full content
+hash, constructs a staged tagged copy and commits it. Save never pauses or
+toggles playback; searches and checksums of the playing file are also deferred
+to avoid I/O contention with the decoder. Rewriting a still-open SAF audio
+file during playback is intentionally prohibited because it may freeze the
+song or corrupt its currently open audio frames.
 
 Every writer confirms EmbeddedLyricsReader can read the staged authored
 timing, normalizing only the same harmless surrounding whitespace, BOM, and
@@ -158,6 +164,17 @@ After **verified success**, the queued indicator clears. Failure never reports
 success or marks the song embedded. The app does not request broad storage
 permission. Other formats (OGG, Opus, WAV, etc.) remain read-only for embedding
 until safe writers exist for them.
+
+### Immersive syllable wave tuning
+
+Ordinary, fast and moderately paced words keep their progressive karaoke
+highlight without per-word looping shimmer or miniature rise/fall effects.
+Only authored held syllables lasting at least 2 seconds qualify for the
+expressive ribbon. Longer holds produce a moving hill with a synchronized
+foreground depth scale (up to roughly 11%), restrained X-axis parallax, a
+soft depth halo, and smooth easing to the original baseline. The intact
+measured glyph runs are transformed as wholes, without slicing letter strokes
+or introducing additional timing clocks. Seek/pause remain deterministic.
 
 ### Device verification
 
