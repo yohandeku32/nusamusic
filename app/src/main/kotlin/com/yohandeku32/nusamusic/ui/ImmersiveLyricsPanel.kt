@@ -27,7 +27,6 @@ import android.widget.Toast
 import com.yohandeku32.nusamusic.data.LyricsFolderAccess
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Save
-import com.yohandeku32.nusamusic.data.AudioLyricsEmbedder
 import com.yohandeku32.nusamusic.data.SongLyrics
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -63,7 +62,8 @@ fun ImmersiveLyricsPanel(
     onSeek: (Long) -> Unit,
     fontSize: Float,
     modifier: Modifier = Modifier,
-    onBeforeEmbed: () -> Unit = {}
+    onQueueLyrics: suspend (Song, Uri, SongLyrics) -> Unit,
+    isLyricsQueued: (Song) -> Boolean
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -72,26 +72,18 @@ fun ImmersiveLyricsPanel(
     var folderNeedsReview by remember { mutableStateOf<PendingLyricsEmbed?>(null) }
     var embedBusy by remember { mutableStateOf(false) }
     val activeSong by rememberUpdatedState(song)
-    val beforeEmbed by rememberUpdatedState(onBeforeEmbed)
 
     suspend fun writeLyrics(snapshot: PendingLyricsEmbed, target: Uri) {
         check(activeSong?.uri == snapshot.song.uri) {
             "The playing song changed. Open Lyrics and save it again."
         }
-        AudioLyricsEmbedder(context.applicationContext).embed(
-            snapshot.song, target, snapshot.lyrics,
-            beforeWrite = {
-                check(activeSong?.uri == snapshot.song.uri) {
-                    "The playing song changed. Try again."
-                }
-                beforeEmbed()
-            }
-        )
-        // The confirmed file write makes the Save icon disappear immediately,
-        // regardless of whether an online lyric version remains in memory.
-        state.markEmbedded(snapshot.song, snapshot.lyrics)
-        state.load(snapshot.song, scope, retry = true)
-        Toast.makeText(context, "Lyrics saved to this song", Toast.LENGTH_LONG).show()
+        // Rewriting Media3's active source can freeze playback or truncate
+        // frames under its open descriptor. Persist this Save request only.
+        // The MainActivity queue embeds it when a different song starts.
+        onQueueLyrics(snapshot.song, target, snapshot.lyrics)
+        Toast.makeText(context,
+            "Lyrics queued. They will be saved when you switch songs.",
+            Toast.LENGTH_LONG).show()
     }
 
     val folderPicker = rememberLauncherForActivityResult(
@@ -259,7 +251,7 @@ fun ImmersiveLyricsPanel(
 
         // Offer one-tap Save for a missing lyric OR a richer online version.
         // Local plain/line lyrics must not hide an available syllable upgrade.
-        if (song != null && lyricsNeedEmbedding(
+        if (song != null && !isLyricsQueued(song) && lyricsNeedEmbedding(
                 data, entry?.embeddedLyricsQuality ?: 0
             )
         ) {
