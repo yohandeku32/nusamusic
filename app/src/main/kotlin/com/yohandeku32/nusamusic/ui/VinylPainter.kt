@@ -119,7 +119,7 @@ internal class VinylPainter(size: Size) {
         center = discCenter
     )
     // A visible steel pin and bevel, proportional to the record on every screen.
-    private val spindleRadius = radius * 0.035f
+    private val spindleRadius = radius * 0.017f
     private val spindleShadowCenter = discCenter + Offset(spindleRadius * 0.22f, spindleRadius * 0.32f)
     private val spindleShadow = Brush.radialGradient(
         0f to Color.Black.copy(alpha = 0.65f),
@@ -253,18 +253,38 @@ internal class VinylPainter(size: Size) {
     }
 
     fun DrawScope.drawSpindle() {
-        drawCircle(spindleShadow, spindleRadius * 1.65f, spindleShadowCenter)
-        // Dark contact ring and machined bevel separate the metal from any label colour.
-        drawCircle(Color(0xFF151B20), spindleRadius * 1.18f, discCenter)
-        drawCircle(spindleBevel, spindleRadius * 1.10f, discCenter)
-        drawCircle(spindle, spindleRadius * 0.88f, discCenter)
+        // A tiny recessed center hole with a machined metal rim, not an oversized
+        // glossy button. The soft side shadow creates physical contact depth.
         drawCircle(
-            Color.White.copy(alpha = 0.32f), spindleRadius * 0.82f, discCenter,
-            style = Stroke(spindleRadius * 0.055f)
+            color = Color.Black.copy(alpha = 0.45f),
+            radius = spindleRadius * 1.50f,
+            center = spindleShadowCenter
         )
         drawCircle(
-            Color.White.copy(alpha = 0.72f), spindleRadius * 0.18f,
-            discCenter - Offset(spindleRadius * 0.30f, spindleRadius * 0.35f)
+            brush = spindleBevel,
+            radius = spindleRadius * 1.17f,
+            center = discCenter
+        )
+        drawCircle(
+            color = Color(0xFF52595B),
+            radius = spindleRadius * 0.80f,
+            center = discCenter
+        )
+        drawCircle(
+            color = Color(0xFF070809),
+            radius = spindleRadius * 0.59f,
+            center = discCenter
+        )
+        drawCircle(
+            color = Color.White.copy(alpha = 0.30f),
+            radius = spindleRadius * 0.99f,
+            center = discCenter,
+            style = Stroke((spindleRadius * 0.07f).coerceAtLeast(0.45f))
+        )
+        drawCircle(
+            color = Color(0xFF101214),
+            radius = spindleRadius * 0.26f,
+            center = discCenter + Offset(spindleRadius * 0.11f, spindleRadius * 0.12f)
         )
     }
 
