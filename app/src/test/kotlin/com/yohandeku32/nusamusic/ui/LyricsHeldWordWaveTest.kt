@@ -155,8 +155,10 @@ class LyricsHeldWordWaveTest {
             atCrest[2].liftDp < atCrest[3].liftDp - 2f)
         assertTrue("sustained lyric forms a clearly visible peak",
             minOf(atCrest[1].liftDp, atCrest[2].liftDp) < -7f)
-        assertTrue("opposing sides follow opposing arc tangents",
-            atCrest.first().rotationDegrees * atCrest.last().rotationDegrees < 0f)
+        assertTrue("all syllables must have the same clean rotation",
+            atCrest.all { it.rotationDegrees == 0f })
+        assertTrue("all syllables must expand uniformly",
+            atCrest.all { abs(it.depth - atCrest[0].depth) < 0.00001f })
         // The crest travels from left to right on authored playback time.
         val earlyLeft = wave.pose(0, 2800, 15f).liftDp
         val earlyRight = wave.pose(3, 2800, 105f).liftDp
@@ -230,7 +232,7 @@ class LyricsHeldWordWaveTest {
         assertEquals(LyricsHeldWordPose(), word.pose(0, 3_800, 45f))
     }
 
-    @Test fun forwardWaveHasOpposingPerspectiveSlopesAcrossSyllables() {
+    @Test fun forwardWaveKeepsOnePerspectiveAcrossSyllables() {
         val word = LyricsHeldWordWave(listOf(
             LyricsHeldWordUnit("ca", 500, 800, 0f, 30f),
             LyricsHeldWordUnit("hu", 800, 1100, 30f, 60f),
@@ -240,8 +242,11 @@ class LyricsHeldWordWaveTest {
         val right = word.pose(2, 3_150, 75f)
         assertTrue(left.depth > 0.05f)
         assertTrue(right.depth > 0.05f)
-        assertTrue("3D wave must actually bend in perspective",
-            left.perspectiveSlope * right.perspectiveSlope < 0f)
+        assertEquals("3D perspective must be shared by the whole word",
+            left.perspectiveSlope, right.perspectiveSlope, 0f)
+        assertEquals("one word means one scale for all syllables",
+            left.depth, right.depth, 0f)
+        assertEquals(left.wordCenterDp, right.wordCenterDp, 0f)
     }
 
     @Test fun threeDimensionalLetterSizeShrinksSmoothlyWithoutGrowingAgainAtEveryRefreshRate() {
@@ -263,7 +268,7 @@ class LyricsHeldWordWaveTest {
                         previous - pose.depth < 0.018f)
                     // Both face scale and 3D camera use pose.depth, so a
                     // strictly decaying depth cannot create a sudden grow-back.
-                    assertEquals(1f + 0.008f * pose.depth, pose.scaleY, 0.000001f)
+                    assertEquals(1f + 0.055f * pose.depth, pose.scaleY, 0.000001f)
                     previous = pose.depth
                 }
                 assertEquals(0f, wave.pose(2, 7_000, center).depth, 0f)
@@ -322,9 +327,9 @@ class LyricsHeldWordWaveTest {
                     assertEquals("no sideways drift means no syllable crowding",
                         0f, pose.parallaxXDp, 0f)
                     assertTrue("wave must not stretch glyph heights",
-                        pose.scaleY in 1f..1.009f)
+                        pose.scaleY in 1f..1.056f)
                     assertTrue("perspective roll should stay understated",
-                        kotlin.math.abs(pose.rotationDegrees) < 0.66f)
+                        pose.rotationDegrees == 0f)
                     assertTrue("the curve should travel upwards, never bounce down",
                         pose.liftDp in -8.11f..0f)
                 }
@@ -337,6 +342,70 @@ class LyricsHeldWordWaveTest {
             minOf(duringHold[1], duringHold[2]) < -6.2f)
         assertTrue(duringHold[1] < duringHold[0] - 1.5f)
         assertTrue(duringHold[2] < duringHold[3] - 1.5f)
+    }
+
+    @Test fun everySyllableSharesOneExpansionAndOneWordCenterAt120Hz() {
+        val wave = LyricsHeldWordWave(listOf(
+            LyricsHeldWordUnit("se", 1_000, 1_300, 0f, 30f),
+            LyricsHeldWordUnit("la", 1_300, 1_600, 30f, 60f),
+            LyricsHeldWordUnit("ma", 1_600, 1_850, 60f, 90f),
+            LyricsHeldWordUnit("nya", 1_850, 7_000, 90f, 120f)
+        ))
+        for (hz in listOf(60, 90, 120)) {
+            for (frame in 0..hz * 8) {
+                val t = (frame * 1000.0 / hz).toInt()
+                val samples = (0..3).map { i -> wave.pose(i, t, 15f + i * 30f) }
+                for (pose in samples) {
+                    assertEquals(samples[0].depth, pose.depth, 0f)
+                    assertEquals(samples[0].scaleY, pose.scaleY, 0f)
+                    assertEquals(samples[0].wordCenterDp, pose.wordCenterDp, 0f)
+                    assertEquals(0f, pose.rotationDegrees, 0f)
+                }
+            }
+        }
+        val held = (0..3).map { i -> wave.pose(i, 4_100, 15f + i * 30f) }
+        assertTrue(held.all { it.depth > 0.9f })
+        assertTrue(held.all { it.scaleY > 1.05f })
+        // Only the vertical hill differs between syllables, preserving
+        // one stable typographic size across the entire expanding word.
+        assertTrue(held[1].liftDp < held[0].liftDp - 2f)
+        assertTrue(held[2].liftDp < held[3].liftDp - 2f)
+    }
+
+    @Test fun everyMeasuredRunUsesExactlyTheSameScreenPixelPivot() {
+        for (density in listOf(1f, 2f, 3.25f)) {
+            val startsDp = listOf(0f, 30f, 60f, 90f)
+            val initialX = 24f
+            val reference = heldWordPivotX(initialX, 0f, 60f, density)
+            for (pathStart in startsDp) {
+                val glyphX = initialX + pathStart * density
+                assertEquals(reference,
+                    heldWordPivotX(glyphX, pathStart, 60f, density), 0.00001f)
+            }
+        }
+    }
+
+    @Test fun fullWordExpansionReturnsToBaseBeforeNextLyricWithoutEndPop() {
+        val wave = LyricsHeldWordWave(listOf(
+            LyricsHeldWordUnit("long ", 2_000, 7_000, 0f, 90f),
+            LyricsHeldWordUnit("next", 7_000, 7_500, 96f, 160f)
+        ))
+        for (hz in listOf(60, 90, 120)) {
+            var previous = wave.pose(0, 4_100, 45f).depth
+            for (frame in 1..hz * 3) {
+                val time = minOf(7_000, 4_100 + (frame * 1000.0 / hz).toInt())
+                val pose = wave.pose(0, time, 45f)
+                assertTrue("shrink must be monotonic and never restart at " + time,
+                    pose.depth <= previous + 0.000001f)
+                assertTrue("must not change more than 1.8% in one frame",
+                    previous - pose.depth < 0.018f)
+                previous = pose.depth
+            }
+        }
+        assertTrue(wave.pose(0, 6_950, 45f).depth < 0.01f)
+        assertTrue(wave.pose(0, 6_999, 45f).depth < 0.00001f)
+        assertEquals(LyricsHeldWordPose(), wave.pose(0, 7_000, 45f))
+        assertEquals(LyricsHeldWordPose(), wave.pose(1, 7_100, 120f))
     }
 
 }
