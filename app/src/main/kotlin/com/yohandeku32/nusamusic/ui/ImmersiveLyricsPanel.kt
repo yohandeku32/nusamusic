@@ -11,7 +11,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import android.net.Uri
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.*
@@ -62,7 +61,7 @@ fun ImmersiveLyricsPanel(
     onSeek: (Long) -> Unit,
     fontSize: Float,
     modifier: Modifier = Modifier,
-    onQueueLyrics: suspend (Song, Uri, SongLyrics) -> Unit,
+    onQueueLyrics: suspend (Song, SongLyrics) -> Unit,
     isLyricsQueued: (Song) -> Boolean
 ) {
     val scope = rememberCoroutineScope()
@@ -73,14 +72,14 @@ fun ImmersiveLyricsPanel(
     var embedBusy by remember { mutableStateOf(false) }
     val activeSong by rememberUpdatedState(song)
 
-    suspend fun writeLyrics(snapshot: PendingLyricsEmbed, target: Uri) {
+    suspend fun writeLyrics(snapshot: PendingLyricsEmbed) {
         check(activeSong?.uri == snapshot.song.uri) {
             "The playing song changed. Open Lyrics and save it again."
         }
         // Rewriting Media3's active source can freeze playback or truncate
         // frames under its open descriptor. Persist this Save request only.
         // The MainActivity queue embeds it when a different song starts.
-        onQueueLyrics(snapshot.song, target, snapshot.lyrics)
+        onQueueLyrics(snapshot.song, snapshot.lyrics)
         Toast.makeText(context,
             "Lyrics queued. They will be saved when you switch songs.",
             Toast.LENGTH_LONG).show()
@@ -100,9 +99,9 @@ fun ImmersiveLyricsPanel(
                     check(activeSong?.uri == snapshot.song.uri) {
                         "The playing song changed. Save its lyrics again."
                     }
-                    val target = folderAccess.find(snapshot.song)
-                        ?: error("The song is not in this folder tree. Select the parent Music folder containing all your albums.")
-                    writeLyrics(snapshot, target)
+                    // No expensive SAF traversal or whole-song hashing on
+                    // the currently-playing audio source.
+                    writeLyrics(snapshot)
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (error: Exception) {
@@ -123,20 +122,13 @@ fun ImmersiveLyricsPanel(
                 check(activeSong?.uri == snapshot.song.uri) {
                     "The playing song changed. Save its lyrics again."
                 }
-                val target = folderAccess.find(snapshot.song)
-                if (target == null) {
-                    if (folderAccess.authorizedTrees().isEmpty()) {
-                        // First save: one explicit parent folder grant.
-                        pendingFolder = snapshot
-                        folderPicker.launch(null)
-                    } else {
-                        // Do NOT reopen Android's picker for every nested album
-                        // just because a provider lookup could not be resolved.
-                        // Only offer changing the parent explicitly.
-                        folderNeedsReview = snapshot
-                    }
+                if (folderAccess.authorizedTrees().isEmpty()) {
+                    // One-time parent folder permission. Reading the original
+                    // audio and writing metadata happen after track transition.
+                    pendingFolder = snapshot
+                    folderPicker.launch(null)
                 } else {
-                    writeLyrics(snapshot, target)
+                    writeLyrics(snapshot)
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
