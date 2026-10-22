@@ -115,17 +115,18 @@ class LyricsHeldWordWaveTest {
         assertEquals(LyricsHeldWordPose(), wave.pose(0, 9100, 45f))
     }
 
-    @Test fun shortEligibleHoldsGetSmallerMountainsThanLongHeldVowels() {
+    @Test fun ordinaryWordsDoNotMakeSmallWavesButLongHoldsProjectForward() {
         val short = LyricsHeldWordWave(listOf(
             LyricsHeldWordUnit("short", 1000, 2250, 0f, 90f)
         ))
         val long = LyricsHeldWordWave(listOf(
             LyricsHeldWordUnit("long", 1000, 6000, 0f, 90f)
         ))
-        val shortPeak = abs(short.pose(0, 1550, 45f).liftDp)
-        val longPeak = abs(long.pose(0, 3200, 45f).liftDp)
-        assertTrue(shortPeak > 0.1f)
-        assertTrue(longPeak > shortPeak * 2f)
+        assertEquals(LyricsHeldWordPose(), short.pose(0, 1550, 45f))
+        val crest = long.pose(0, 3200, 45f)
+        assertTrue(crest.liftDp < -2.5f)
+        assertTrue("3D crest must protrude toward screen", crest.depth > 0.3f)
+        assertTrue(crest.scaleY > 1.01f)
     }
 
     @Test fun pauseAndBackwardSeekReproduceExactlyTheSamePose() {
@@ -177,6 +178,43 @@ class LyricsHeldWordWaveTest {
         assertEquals(LyricsHeldWordPose(), wave.pose(1, 5800, 80f))
         val middle = wave.pose(1, 3200, 80f)
         repeat(10) { assertEquals(middle, wave.pose(1, 3200, 80f)) }
+    }
+
+    @Test fun fastAdjacentWordsNeverDevelopPulsingDepthOrParallax() {
+        val words = LyricsHeldWordWave(listOf(
+            LyricsHeldWordUnit("hello ", 1000, 1480, 0f, 65f),
+            LyricsHeldWordUnit("there ", 1480, 2100, 70f, 130f),
+            LyricsHeldWordUnit("again", 2100, 2990, 140f, 206f)
+        ))
+        for (time in 0..3600 step 8) {
+            for (index in 0..2) {
+                val pose = words.pose(index, time, index * 70f + 30f)
+                assertEquals(LyricsHeldWordPose(), pose)
+            }
+        }
+    }
+
+    @Test fun forwardProjectionIsFrameStableAndReversibleWithSeek() {
+        val wave = phrase()
+        for (hz in listOf(60, 90, 120)) {
+            var previousDepth = 0f
+            var previousParallax = 0f
+            for (i in 0..hz * 8) {
+                val now = (i * 1000.0 / hz).toInt()
+                val pose = wave.pose(2, now, 172f)
+                assertTrue(pose.depth in 0f..1f)
+                assertTrue("foreground depth jumped at $hz Hz",
+                    abs(pose.depth - previousDepth) < 0.014f)
+                assertTrue("horizontal parallax jumped at $hz Hz",
+                    abs(pose.parallaxXDp - previousParallax) < 0.033f)
+                previousDepth = pose.depth
+                previousParallax = pose.parallaxXDp
+            }
+        }
+        val saved = wave.pose(2, 4400, 172f)
+        wave.pose(2, 6500, 172f)
+        assertEquals(saved, wave.pose(2, 4400, 172f))
+        assertEquals(0f, wave.pose(2, 7000, 172f).depth, 0f)
     }
 
 }
