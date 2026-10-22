@@ -161,6 +161,8 @@ import com.yohandeku32.nusamusic.data.portraitPrefetchArtists
 import com.yohandeku32.nusamusic.data.MusicRepository
 import com.yohandeku32.nusamusic.data.MediaStoreCheckpoint
 import com.yohandeku32.nusamusic.data.LyricsRepository
+import com.yohandeku32.nusamusic.data.LyricsPendingSaveQueue
+import com.yohandeku32.nusamusic.data.SongLyrics
 import com.yohandeku32.nusamusic.model.PlayerPresentationMode
 import com.yohandeku32.nusamusic.model.LibraryContentState
 import com.yohandeku32.nusamusic.model.Song
@@ -232,6 +234,7 @@ class MainActivity : ComponentActivity() {
     private var lyricsMetadataGeneration by mutableIntStateOf(0)
     private var isPlaying by mutableStateOf(false)
     private var lyricsPlaybackEpoch by mutableIntStateOf(0)
+    private val pendingLyricSaves by lazy { LyricsPendingSaveQueue(applicationContext) }
     private val playbackPositionState = mutableLongStateOf(0L)
     private var positionMs by playbackPositionState
     private var durationMs by mutableLongStateOf(0L)
@@ -592,6 +595,7 @@ class MainActivity : ComponentActivity() {
                     durationMs = c.duration.coerceAtLeast(0L)
                     persistPlaybackState(c, force = true)
                     scheduleArtworkLookahead(c)
+                    schedulePendingLyricCommit()
                 }
 
                 override fun onTimelineChanged(
@@ -621,6 +625,7 @@ class MainActivity : ComponentActivity() {
             syncCurrentSong(c)
             lifecycleScope.launch {
                 restorePlaybackStateIfNeeded(c)
+                schedulePendingLyricCommit()
             }
         }, mainExecutor)
 
@@ -670,6 +675,8 @@ class MainActivity : ComponentActivity() {
                     onPlayNext = ::queueSongNext,
                     onDeleteSong = ::requestPermanentSongDeletion,
                     onTogglePlay = ::togglePlay,
+                    onQueueLyrics = { song, uri, lyrics -> pendingLyricSaves.enqueue(song, uri, lyrics) },
+                    isLyricsQueued = { song -> pendingLyricSaves.isQueued(song.id) },
                     customTitleFontPath = customTitleFontPath,
                     customTitleFontName = customTitleFontName,
                     onChooseCustomTitleFont = {
@@ -737,6 +744,28 @@ class MainActivity : ComponentActivity() {
         }
 
         window.decorView.post { hideStatusBar() }
+    }
+
+    /**
+     * Media3 must release the previous track before SAF rewrites it. Never
+     * pause the current song and never truncate its currently opened source.
+     * A durable pending request also resumes after reopening NusaMusic.
+     */
+    private fun schedulePendingLyricCommit() {
+        lifecycleScope.launch {
+            // Allow decoder/media source handoff to finish after a transition.
+            delay(1_400L)
+            if (controller == null) return@launch
+            pendingLyricSaves.finishInactive(
+                currentSongId = { controller?.currentMediaItem?.mediaId?.toLongOrNull() },
+                onResult = { _, success, message ->
+                    if (success) lyricsMetadataGeneration++
+                    android.widget.Toast.makeText(
+                        this@MainActivity, message, android.widget.Toast.LENGTH_LONG
+                    ).show()
+                }
+            )
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -1902,6 +1931,8 @@ private fun NusaMusicApp(
     onPlayNext: (Song) -> Unit,
     onDeleteSong: (Song) -> Unit,
     onTogglePlay: () -> Unit,
+    onQueueLyrics: suspend (Song, Uri, SongLyrics) -> Unit,
+    isLyricsQueued: (Song) -> Boolean,
     customTitleFontPath: String?,
     customTitleFontName: String?,
     onChooseCustomTitleFont: () -> Unit,
@@ -2723,11 +2754,8 @@ private fun NusaMusicApp(
                                         onSeek = onSeek,
                                         fontSize = lyricsFontSize,
                                         modifier = lyricsModifier,
-                                        // Avoid playback reading an audio file while its
-                                        // ID3 header is being rewritten through SAF.
-                                        onBeforeEmbed = {
-                                            if (isPlaying) onTogglePlay()
-                                        }
+                                        onQueueLyrics = onQueueLyrics,
+                                        isLyricsQueued = isLyricsQueued
                                     )
                                 },
                                 modifier = Modifier.fillMaxSize()
