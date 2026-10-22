@@ -126,7 +126,7 @@ class LyricsHeldWordWaveTest {
         val crest = long.pose(0, 3200, 45f)
         assertTrue(crest.liftDp < -2.5f)
         assertTrue("3D crest must protrude toward screen", crest.depth > 0.65f)
-        assertTrue(crest.scaleY > 1.04f)
+        assertTrue(crest.scaleY > 1.006f)
     }
 
     @Test fun pauseAndBackwardSeekReproduceExactlyTheSamePose() {
@@ -225,7 +225,7 @@ class LyricsHeldWordWaveTest {
         // Previously a double duration gate at >=2s produced ZERO motion.
         // The 1.8-second vowel should now visibly protrude instead.
         assertTrue("normal sustained vowels must be visually eligible", middle.depth > 0.45f)
-        assertTrue(middle.scaleY > 1.029f)
+        assertTrue(middle.scaleY > 1.004f)
         assertEquals(LyricsHeldWordPose(), word.pose(0, 2_000, 45f))
         assertEquals(LyricsHeldWordPose(), word.pose(0, 3_800, 45f))
     }
@@ -263,7 +263,7 @@ class LyricsHeldWordWaveTest {
                         previous - pose.depth < 0.018f)
                     // Both face scale and 3D camera use pose.depth, so a
                     // strictly decaying depth cannot create a sudden grow-back.
-                    assertEquals(1f + 0.065f * pose.depth, pose.scaleY, 0.000001f)
+                    assertEquals(1f + 0.008f * pose.depth, pose.scaleY, 0.000001f)
                     previous = pose.depth
                 }
                 assertEquals(0f, wave.pose(2, 7_000, center).depth, 0f)
@@ -305,6 +305,38 @@ class LyricsHeldWordWaveTest {
                 previous = next
             }
         }
+    }
+
+    @Test fun heldWaveCurvesUpWithoutHorizontallyDisturbingLetterSpacing() {
+        val wave = LyricsHeldWordWave(listOf(
+            LyricsHeldWordUnit("se", 1_000, 1_280, 0f, 28f),
+            LyricsHeldWordUnit("la", 1_280, 1_610, 28f, 56f),
+            LyricsHeldWordUnit("ma", 1_610, 1_900, 56f, 84f),
+            LyricsHeldWordUnit("nya", 1_900, 7_000, 84f, 112f)
+        ))
+        for (hz in listOf(60, 90, 120)) {
+            for (frame in 0..hz * 8) {
+                val now = (frame * 1000f / hz).toInt()
+                for (index in 0..3) {
+                    val pose = wave.pose(index, now, 14f + 28f * index)
+                    assertEquals("no sideways drift means no syllable crowding",
+                        0f, pose.parallaxXDp, 0f)
+                    assertTrue("wave must not stretch glyph heights",
+                        pose.scaleY in 1f..1.009f)
+                    assertTrue("perspective roll should stay understated",
+                        kotlin.math.abs(pose.rotationDegrees) < 0.66f)
+                    assertTrue("the curve should travel upwards, never bounce down",
+                        pose.liftDp in -8.11f..0f)
+                }
+            }
+        }
+        val duringHold = (0..3).map { index ->
+            wave.pose(index, 4_200, 14f + 28f * index).liftDp
+        }
+        assertTrue("a visible rounded hill rises in the middle",
+            minOf(duringHold[1], duringHold[2]) < -6.2f)
+        assertTrue(duringHold[1] < duringHold[0] - 1.5f)
+        assertTrue(duringHold[2] < duringHold[3] - 1.5f)
     }
 
 }
