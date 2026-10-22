@@ -8,6 +8,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -111,6 +112,7 @@ internal class SyllableLyricsPainter(
         val fill = MovingLyricsGradient(false)
         val sheen = MovingLyricsGradient(true)
         val mountainGlow = MovingLyricsMountainGlow()
+        val perspective = LyricsPerspectiveProjection()
         val pathEndDp = pathStartDp + widthDp
 
         // Transform the complete measured syllable as ONE intact text run.
@@ -236,10 +238,25 @@ internal class SyllableLyricsPainter(
         // A shallow foreground projection makes the held crest appear to
         // swell *out of the screen*, not merely slide upwards. Scale
         // originates around the baseline, and returns continuously to 1.
-        val scaleX = (1f + 0.11f * pose.depth) * glyph.bubble.scaleX
+        // Strength should be readable on a phone: about 20% forward
+        // magnification at the peak, plus actual X/Y perspective from
+        // Android Camera (ordinary 2D scale alone looked flat).
+        val scaleX = (1f + 0.20f * pose.depth) * glyph.bubble.scaleX
         val scaleY = pose.scaleY * glyph.bubble.scaleY
         val width = glyph.width
-        withTransform({
+        val native = drawContext.canvas.nativeCanvas
+        val saved = if (pose.depth > 0.0001f) native.save() else -1
+        try {
+            if (saved >= 0) {
+                glyph.perspective.apply(
+                    native,
+                    pivotX = position.x + width * 0.5f,
+                    pivotY = position.y + result.size.height * 0.75f,
+                    depth = pose.depth,
+                    slope = pose.perspectiveSlope
+                )
+            }
+            withTransform({
             val pivot = position + Offset(width / 2f, result.size.height * 0.8f)
             rotate(pose.rotationDegrees, pivot)
             scale(scaleX, scaleY, pivot)
@@ -287,14 +304,14 @@ internal class SyllableLyricsPainter(
                 // A softly arched spotlight travels over the LONG vowel.
                 // Unlike a flat left-to-right band, its luminous center
                 // follows the raised hill and spans adjacent syllables.
-                if (pose.intensity > 0.04f) {
+                if (pose.intensity > 0.025f) {
                     // A secondary blurred depth layer suggests a soft
                     // foreground volume without clipping shaped characters
                     // or allocating new shaders on each 120Hz frame.
                     if (pose.depth > 0.06f) {
                         drawText(result, brush = glyph.fill.brush,
-                            topLeft = position + Offset(0f, 2f * density * pose.depth),
-                            alpha = 0.13f * glow * pose.depth,
+                            topLeft = position + Offset(0f, 3.5f * density * pose.depth),
+                            alpha = 0.20f * glow * pose.depth,
                             shadow = glowPalette.outer(glow * pose.depth),
                             drawStyle = Fill)
                     }
@@ -307,7 +324,7 @@ internal class SyllableLyricsPainter(
                     )
                     drawText(result, brush = glyph.mountainGlow.brush,
                         topLeft = position,
-                        alpha = 0.24f * glow * pose.intensity,
+                        alpha = 0.34f * glow * pose.intensity,
                         shadow = glowPalette.outer(glow * pose.intensity * 0.7f),
                         drawStyle = Fill)
                 }
@@ -359,6 +376,9 @@ internal class SyllableLyricsPainter(
                         alpha = 0.45f * glow, shadow = Shadow.None, drawStyle = Fill)
                 }
             }
+        }
+        } finally {
+            if (saved >= 0) native.restoreToCount(saved)
         }
     }
 }
