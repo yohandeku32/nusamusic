@@ -1,6 +1,7 @@
 package com.yohandeku32.nusamusic.ui
 
 import android.graphics.LinearGradient
+import android.graphics.RadialGradient
 import android.graphics.Matrix
 import android.graphics.Shader
 import androidx.compose.ui.geometry.Offset
@@ -26,6 +27,28 @@ private class MovingLyricsGradient(sheen: Boolean) {
     fun move(start: Float, end: Float) {
         matrix.setScale(end - start, 1f)
         matrix.postTranslate(start, 0f)
+        shader.setLocalMatrix(matrix)
+    }
+}
+
+/**
+ * Elliptical hill-shaped illumination for held notes. The crest follows the
+ * word's measured text path in X and its slow mountain rise in Y, replacing
+ * the former purely horizontal shimmer as the main sustained-vowel accent.
+ * Shader and matrix are cached per syllable; no per-frame allocations.
+ */
+private class MovingLyricsMountainGlow {
+    private val shader = RadialGradient(
+        0f, 0f, 1f,
+        intArrayOf(0xFFFFFFFF.toInt(), 0xBFFFFFFF.toInt(), 0x00FFFFFF),
+        floatArrayOf(0f, 0.35f, 1f), Shader.TileMode.CLAMP
+    )
+    val brush = ShaderBrush(shader)
+    private val matrix = Matrix()
+
+    fun move(centerX: Float, centerY: Float, radiusX: Float, radiusY: Float) {
+        matrix.setScale(radiusX.coerceAtLeast(1f), radiusY.coerceAtLeast(1f))
+        matrix.postTranslate(centerX, centerY)
         shader.setLocalMatrix(matrix)
     }
 }
@@ -87,6 +110,7 @@ internal class SyllableLyricsPainter(
         val feather = minOf(5f * density, width * 0.2f).coerceAtLeast(0.5f)
         val fill = MovingLyricsGradient(false)
         val sheen = MovingLyricsGradient(true)
+        val mountainGlow = MovingLyricsMountainGlow()
         val pathEndDp = pathStartDp + widthDp
 
         // Transform the complete measured syllable as ONE intact text run.
@@ -257,6 +281,24 @@ internal class SyllableLyricsPainter(
                     alpha = 0.18f * breathingGlow,
                     shadow = glowPalette.tight(breathingGlow), drawStyle = Fill)
 
+                // A softly arched spotlight travels over the LONG vowel.
+                // Unlike a flat left-to-right band, its luminous center
+                // follows the raised hill and spans adjacent syllables.
+                if (pose.intensity > 0.04f) {
+                    glyph.mountainGlow.move(
+                        centerX = (pose.crestDp - glyph.pathStartDp) * density,
+                        centerY = result.size.height * 0.46f +
+                            pose.liftDp * density * 0.11f,
+                        radiusX = maxOf(width * 0.56f, 16f * density),
+                        radiusY = maxOf(result.size.height * 0.82f, 12f * density)
+                    )
+                    drawText(result, brush = glyph.mountainGlow.brush,
+                        topLeft = position,
+                        alpha = 0.24f * glow * pose.intensity,
+                        shadow = glowPalette.outer(glow * pose.intensity * 0.7f),
+                        drawStyle = Fill)
+                }
+
                 val edge = glyph.bubble.edgeExpansion
                 if (edge > 0.005f) {
                     // Soft, slightly enlarged outline BEHIND the sharp main
@@ -285,7 +327,10 @@ internal class SyllableLyricsPainter(
                         alpha = strength * 0.85f, shadow = Shadow.None, drawStyle = Fill)
                 }
                 val unit = glyph.layout.syllable
-                val shimmer = lyricShimmer(unit.start, unit.end, now)
+                // On held vocals, the curving mountain glow should lead;
+                // keep only a faint conventional horizontal sheen.
+                val shimmer = lyricShimmer(unit.start, unit.end, now) *
+                    (1f - 0.82f * pose.intensity)
                 val sungWidth = (width * progress - glyph.feather).coerceAtLeast(0f)
                 if (shimmer > 0f && sungWidth >= 1f) {
                     val band = minOf(width * 0.3f + 4f * density, sungWidth / 2f)
