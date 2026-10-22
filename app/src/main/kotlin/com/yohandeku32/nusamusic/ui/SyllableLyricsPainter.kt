@@ -112,7 +112,7 @@ internal class SyllableLyricsPainter(
         val fill = MovingLyricsGradient(false)
         val sheen = MovingLyricsGradient(true)
         val mountainGlow = MovingLyricsMountainGlow()
-        val perspective = LyricsPerspectiveProjection()
+        val perspective by lazy(LazyThreadSafetyMode.NONE) { LyricsPerspectiveProjection() }
         val pathEndDp = pathStartDp + widthDp
 
         // Transform the complete measured syllable as ONE intact text run.
