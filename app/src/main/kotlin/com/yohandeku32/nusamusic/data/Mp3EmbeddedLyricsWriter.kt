@@ -39,15 +39,15 @@ internal object Mp3EmbeddedLyricsWriter {
             if (hasId3) {
                 version = first[3].toInt() and 0xFF
                 require(version in 3..4) {
-                    "Only standard MP3 ID3v2.3 and ID3v2.4 tags can be edited safely."
+                    "This song uses an ID3 tag version that cannot be edited safely."
                 }
                 val flags = first[5].toInt() and 0xFF
                 require(flags == 0) {
-                    "This MP3 uses ID3 flags that need a specialized tag editor."
+                    "This song uses metadata flags that require a specialized tag editor."
                 }
                 val bytes = syncsafeRead(first, 6)
                 require(bytes in 0..MAX_TAG_BYTES && bytes.toLong() <= source.length() - 10L) {
-                    "Invalid or oversized MP3 metadata."
+                    "This song has invalid or oversized metadata."
                 }
                 val tag = ByteArray(bytes)
                 source.readFully(tag)
@@ -61,7 +61,7 @@ internal object Mp3EmbeddedLyricsWriter {
                     }
                     require(++frames <= 4096) { "Too many ID3 frames." }
                     val name = tag.copyOfRange(p, p + 4).toString(Charsets.ISO_8859_1)
-                    require(id.matches(name)) { "Unsupported MP3 metadata frame layout." }
+                    require(id.matches(name)) { "This song has an unsupported metadata frame layout." }
                     val size = if (version == 4) syncsafeRead(tag, p + 4) else
                         ((tag[p + 4].toInt() and 255) shl 24) or
                         ((tag[p + 5].toInt() and 255) shl 16) or
@@ -81,7 +81,7 @@ internal object Mp3EmbeddedLyricsWriter {
                 audioOffset = 0L
                 require((first[0].toInt() and 255) == 255 &&
                     (first[1].toInt() and 0xE0) == 0xE0) {
-                    "This is not an MP3 file."
+                    "This song has an unsupported audio header."
                 }
             }
 
@@ -105,7 +105,7 @@ internal object Mp3EmbeddedLyricsWriter {
                     plain.toByteArray(Charsets.UTF_16)
             }, version)
             val payload = tagPayload.toByteArray()
-            require(payload.size < MAX_TAG_BYTES) { "The combined MP3 metadata is too large." }
+            require(payload.size < MAX_TAG_BYTES) { "The combined song metadata is too large." }
             FileOutputStream(output).use { destination ->
                 destination.write(byteArrayOf(
                     'I'.code.toByte(), 'D'.code.toByte(), '3'.code.toByte(),
