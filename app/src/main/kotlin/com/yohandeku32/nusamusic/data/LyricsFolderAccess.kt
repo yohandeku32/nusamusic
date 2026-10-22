@@ -286,5 +286,3 @@ internal fun lyricsSubfoldersUnderParent(relativePath: String, treeDocumentId: S
     if (!parent.indices.all { parent[it].equals(location[it], ignoreCase = true) }) return null
     return location.drop(parent.size)
 }
-
-}
