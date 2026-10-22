@@ -31,6 +31,26 @@ internal class LyricsPendingSaveQueue(context: Context) {
 
     fun isQueued(songId: Long): Boolean = pending[songId] == true
 
+    /**
+     * A Save becomes readable in NusaMusic immediately. It is NOT yet embedded
+     * in the original file: that part still waits for Media3 to release it.
+     * Read the durable authored lyric directly, without rereading active audio.
+     */
+    suspend fun savedForPlayback(song: Song): String? = mutex.withLock {
+        if (pending[song.id] != true) return@withLock null
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val item = JSONObject(
+                    AtomicFile(File(folder, song.id.toString() + ".json"))
+                        .readFully().toString(Charsets.UTF_8)
+                )
+                if (item.optLong("songId") != song.id ||
+                    item.optString("songUri") != song.uri) null
+                else item.optString("authored").takeIf { it.isNotBlank() }
+            }.getOrNull()
+        }
+    }
+
     suspend fun enqueue(song: Song, lyrics: SongLyrics) {
         val raw = lyrics.stored.content
         require(raw.isNotBlank() && raw.toByteArray(Charsets.UTF_8).size <= LyricsDecoder.MAX_BYTES) {
