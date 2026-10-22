@@ -226,14 +226,6 @@ internal fun PlayerSettingsContent(
                             modifier = Modifier.weight(1f)
                         )
                         SettingModeTile(
-                            label = "Vinyl",
-                            icon = Icons.Default.GraphicEq,
-                            selected = playerPresentationMode == PlayerPresentationMode.VINYL,
-                            enabled = PlayerPresentationMode.VINYL.isAvailable,
-                            onClick = { onPresentationSelected(PlayerPresentationMode.VINYL) },
-                            modifier = Modifier.weight(1f)
-                        )
-                        SettingModeTile(
                             label = settingsText("Imersif", "Immersive"),
                             icon = Icons.Default.CropOriginal,
                             selected = playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK,
