@@ -103,46 +103,54 @@ animated artwork enabled. JVM tests and an APK build do not measure device frame
 Format references: https://id3.org/id3v2.3.0 and
 https://www.xiph.org/vorbis/doc/v-comment.html
 
-## Embed downloaded lyrics into the original audio file
+## Embed online lyrics into the ORIGINAL MP3, FLAC or M4A
 
-When a track has online lyrics with better timing than its original MP3,
-a small Lucide Save icon appears at the **top right** of Immersive Lyrics.
-This includes songs that already have plain or line-synced embedded lyrics
-when online word/syllable karaoke is available. Tap once to upgrade the
-original MP3. There is **no Choose MP3 dialog** or per-song selection.
+A Lucide Save button appears at the top right of Immersive Lyrics when a
+downloaded lyric is better synced than the source file's embedded lyrics
+(including an authored word/syllable upgrade). The playing **file type is
+preserved**. There is no conversion to MP3, no audio re-encoding, and no
+per-song file picker.
 
-**First use only:** select a single parent directory such as `Music` in
-Android's system folder picker, rather than opening each `Artist/Album`
-directory. NusaMusic persistently requests read/write access to the selected
-parent and **all of its descendants**. The first Save resumes automatically;
-later songs anywhere below that parent save directly without another picker.
-Existing persistent library folder grants are reused.
+First use: choose the single parent Music folder once with Android's SAF
+OpenDocumentTree dialog. The persisted read/write tree grant covers MP3, FLAC
+and M4A originals inside any nested Artist/Album directory. NusaMusic tries
+the exact MediaStore path and safely scans descendants as a fallback; a
+whole-file SHA-256 comparison against the playing URI must match before an
+original is modified. Android may refuse permission to the root storage
+volume itself; grant access to the highest permitted music parent instead.
 
-For MediaStore-indexed songs, NusaMusic uses the original file's
-`RELATIVE_PATH` to walk straight to its nested directory under the authorized
-parent. A bounded recursive search of the same authorized subtree remains as a
-fallback for providers that do not expose this path. A whole-file SHA-256
-checksum is still mandatory before editing, so two MP3s with the same filename
-cannot be confused. A different directory outside the selected tree needs a
-separate one-time grant.
+Per-format metadata writers:
 
-Android 11+ may not allow the SAF picker to grant the literal root of internal
-storage or the `Download` directory. Choose the highest permitted **music
-parent folder** instead. NusaMusic does not request unrestricted device storage
-or bypass Android's system picker.
+- **MP3**: retain MPEG frames, artwork and unrelated ID3 fields; store plain
+  text in USLT:NusaMusic and authored TTML/Enhanced LRC in TXXX:LYRICS.
+  Only standard, safely supported ID3v2.3/2.4 layouts can be changed.
+- **FLAC**: preserve STREAMINFO, audio frames, artwork and all unrelated
+  metadata blocks/comments; store timed content as NUSAMUSIC_LYRICS Vorbis
+  comment. Add standard LYRICS plain text when no ordinary lyric field exists.
+  Reject malformed or unsafe metadata instead of modifying it.
+- **M4A**: preserve original audio byte positions, all existing atoms,
+  artwork and third-party lyrics; use Apple-readable ©lyr (if absent) and a
+  NusaMusic-owned com.nusamusic:LYRICS freeform atom for authored timing.
+  For fast-start files, replace the original moov location with same-size
+  free padding and append the updated moov at EOF, leaving all existing
+  audio sample offsets unchanged. Fragmented/protected/unusual layouts may be
+  rejected for safety.
 
-A temporary byte-for-byte backup and fully staged edited MP3 are made before
-writing. The staged copy is read back with the embedded lyrics decoder, then
-the original is overwritten through its authorized SAF URI and verified by
-checksum. MPEG audio and unrelated ID3 frames (including cover art) are
-preserved. USLT stores readable lyric text, and TXXX:LYRICS stores the authored
-TTML or Enhanced LRC for NusaMusic's syllable animation. A failed write
-attempts restoration; on a failed rollback, an untouched recovery copy is
-retained in the app cache.
+Every writer first generates a complete staged file and confirms that
+EmbeddedLyricsReader can read back the new synchronized content. Playback
+pauses immediately before the SAF write. After overwriting, the original is
+compared byte-for-byte by SHA-256 with the staged file. A full untouched
+temporary backup is kept for rollback if writing or verification fails;
+if rollback itself fails, the backup is retained for manual recovery.
 
-The Save icon hides immediately after a verified write of the richer
-timing. It stays hidden after refresh when the file contains timing at least
-as detailed as the online version; an online syllable/word version will still
-offer Save if the original has only plain or line-synced lyrics. Other files
-are evaluated independently. Important originals should still be backed up
-separately. FLAC, M4A, Opus and other formats are not edited by this feature.
+Only after verified success does the Save icon disappear. The app does not
+request broad storage permission. Other formats (OGG, Opus, WAV, etc.) remain
+read-only for embedding until safe writers exist for them.
+
+### Device verification
+
+Test a real song of each format from a nested Music folder on Android.
+Check saved lyrics after closing/relaunching NusaMusic and reading the file
+in an independent tag editor. Confirm that audio playback, length, artwork,
+and existing tags remain unchanged. JVM fixtures verify metadata roundtrips
+but are not a replacement for physical-device SAF testing.
