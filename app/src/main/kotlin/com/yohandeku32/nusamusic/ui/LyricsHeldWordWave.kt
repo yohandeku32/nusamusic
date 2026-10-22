@@ -151,13 +151,17 @@ internal class LyricsHeldWordWave(units: List<LyricsHeldWordUnit>) {
         val depthShape = 0.72f + 0.28f *
             (1f - heldWordEase(centeredDistance / 0.65f))
         val depth = (holdWeight * sizeEnvelope * depthShape).coerceIn(0f, 1f)
+        // A restrained 3D *arc*, not an expanding / ballooning word.
+        // The rising baseline remains the visible wave. Keep glyph widths
+        // and horizontal anchoring stable so kerning and adjacent syllables
+        // never crowd each other as the crest passes through the phrase.
         return LyricsHeldWordPose(
-            liftDp = -7.5f * strength,
-            scaleY = 1f + 0.065f * depth,
+            liftDp = -8.1f * strength,
+            scaleY = 1f + 0.008f * depth,
             depth = depth,
-            parallaxXDp = -2.7f * tangent * depth,
+            parallaxXDp = 0f,
             perspectiveSlope = tangent,
-            rotationDegrees = -2.2f * tangent * strength,
+            rotationDegrees = -0.65f * tangent * strength,
             intensity = strength,
             crestDp = word.left + (word.right - word.left) * crest
         )
