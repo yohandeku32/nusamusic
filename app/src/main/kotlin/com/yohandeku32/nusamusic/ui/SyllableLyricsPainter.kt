@@ -67,6 +67,14 @@ private class LyricsGlowPalette(density: Float) {
     private val outer = Array(65) { energy ->
         Shadow(Color.White.copy(alpha = 0.42f * energy / 64f), Offset.Zero, 14f * density)
     }
+    // Sustain-only lighting: a broad soft aura and a tight brilliant crest.
+    // Quantised once per density; no new blur objects during playback frames.
+    private val heldAura = Array(65) { energy ->
+        Shadow(Color.White.copy(alpha = 0.70f * energy / 64f), Offset.Zero, 21f * density)
+    }
+    private val heldCore = Array(65) { energy ->
+        Shadow(Color.White.copy(alpha = 0.78f * energy / 64f), Offset.Zero, 6f * density)
+    }
     // A thin bright contour is a safe alternative to shader-displacing
     // portions of a shaped glyph (previously caused visible broken strokes).
     private val edgeStrokes = Array(33) { step ->
@@ -75,6 +83,8 @@ private class LyricsGlowPalette(density: Float) {
     fun broad(energy: Float, bloom: Float) = broad[(energy * 64f).roundToInt().coerceIn(0, 64)][(bloom * 8f).roundToInt().coerceIn(0, 8)]
     fun tight(energy: Float) = tight[(energy * 64f).roundToInt().coerceIn(0, 64)]
     fun outer(energy: Float) = outer[(energy * 64f).roundToInt().coerceIn(0, 64)]
+    fun heldAura(energy: Float) = heldAura[(energy * 64f).roundToInt().coerceIn(0, 64)]
+    fun heldCore(energy: Float) = heldCore[(energy * 64f).roundToInt().coerceIn(0, 64)]
     fun edgeStroke(energy: Float) = edgeStrokes[(energy * 32f).roundToInt().coerceIn(0, 32)]
 }
 
@@ -305,19 +315,19 @@ internal class SyllableLyricsPainter(
                     alpha = 0.18f * breathingGlow,
                     shadow = glowPalette.tight(breathingGlow), drawStyle = Fill)
 
-                // A softly arched spotlight travels over the LONG vowel.
-                // Unlike a flat left-to-right band, its luminous center
-                // follows the raised hill and spans adjacent syllables.
-                if (pose.depth > 0f) {
-                    // A secondary blurred depth layer suggests a soft
-                    // foreground volume without clipping shaped characters
-                    // or allocating new shaders on each 120Hz frame.
-                    // No 6% depth threshold: that cutoff appeared as a
-                    // disappearing halo on the last frames of shrink.
+                // Let the LONG held vowel shine more strongly while the
+                // already-approved size/3D release remains untouched.
+                // The extra aura is driven by exactly the same depth value,
+                // so neither its onset nor its fade can pop at word boundaries.
+                val heldLight = heldVocalGlowEnergy(pose.depth, glow)
+                if (heldLight > 0f) {
+                    // Soft 21dp halo behind the crisp existing karaoke face.
+                    // This replaces the former faint 14dp displaced layer,
+                    // preserving the same number of text draw calls.
                     drawText(result, brush = glyph.fill.brush,
                         topLeft = position + Offset(0f, 3.5f * density * pose.depth),
-                        alpha = 0.20f * glow * pose.depth,
-                        shadow = glowPalette.outer(glow * pose.depth),
+                        alpha = 0.29f * heldLight,
+                        shadow = glowPalette.heldAura(heldLight),
                         drawStyle = Fill)
                     glyph.mountainGlow.move(
                         centerX = (pose.crestDp - glyph.pathStartDp) * density,
@@ -326,10 +336,13 @@ internal class SyllableLyricsPainter(
                         radiusX = maxOf(width * 0.56f, 16f * density),
                         radiusY = maxOf(result.size.height * 0.82f, 12f * density)
                     )
+                    // Sharper luminous crest follows the arched vocal path;
+                    // the wider aura provides volume without whitening all
+                    // upcoming words or introducing a per-syllable flash.
                     drawText(result, brush = glyph.mountainGlow.brush,
                         topLeft = position,
-                        alpha = 0.34f * glow * pose.depth,
-                        shadow = glowPalette.outer(glow * pose.depth * 0.7f),
+                        alpha = 0.60f * heldLight,
+                        shadow = glowPalette.heldCore(heldLight),
                         drawStyle = Fill)
                 }
 
@@ -386,6 +399,15 @@ internal class SyllableLyricsPainter(
         }
     }
 }
+
+/**
+ * Stronger sustained-only glow, sampled from the very same smooth forward
+ * depth envelope as the 3D size. It stays visible during a long vowel even
+ * as the original syllable halo gently recedes, then fades to exactly zero
+ * at the authored end. No extra clock, thresholds or release keyframes.
+ */
+internal fun heldVocalGlowEnergy(depth: Float, syllableGlow: Float): Float =
+    depth.coerceIn(0f, 1f) * (0.55f + 0.45f * syllableGlow.coerceIn(0f, 1f))
 
 /** Testable duration-weighted halo; painters cache the same profile with their layouts. */
 internal fun syllableGlowEnvelope(start: Int, end: Int, now: Int): Float {
