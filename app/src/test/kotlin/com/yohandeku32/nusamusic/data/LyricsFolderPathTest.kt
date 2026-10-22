@@ -43,4 +43,54 @@ class LyricsFolderPathTest {
             lyricsSubfoldersUnderParent("music/Artist/", "primary:Music")
         )
     }
+
+    @Test fun candidatePathsUseDeepRelativeOrAbsoluteMusicLocation() {
+        val absolute = "/storage/emulated/0/Music/Genre/Artist/Album/Track.mp3"
+        assertEquals("Music/Genre/Artist/Album", lyricsPathFromAbsolute(absolute))
+        assertEquals(
+            listOf(listOf("Genre", "Artist", "Album")),
+            lyricsCandidateParentPaths("Music/Genre/Artist/Album/", absolute, "primary:Music")
+        )
+        assertEquals(
+            listOf(listOf("Genre", "Artist", "Album")),
+            lyricsCandidateParentPaths(null, absolute, "primary:Music")
+        )
+        assertEquals(
+            listOf(listOf("Artist", "Album")),
+            lyricsCandidateParentPaths(
+                "Music/Genre/Artist/Album/", absolute, "primary:Music/Genre"
+            )
+        )
+    }
+
+    @Test fun removableSdMusicTreeGetsSameNestedPaths() {
+        val absolute = "/storage/ABCD-1234/Music/Rock/Live/2024/song.mp3"
+        assertEquals(
+            listOf(listOf("Rock", "Live", "2024")),
+            lyricsCandidateParentPaths(null, absolute, "ABCD-1234:Music")
+        )
+        assertEquals(
+            listOf(listOf("Rock", "Live", "2024")),
+            lyricsCandidateParentPaths("Music/Rock/Live/2024/", absolute, "ABCD-1234:Music")
+        )
+    }
+
+    @Test fun unrelatedGrantCannotAccidentallyUseMediaPath() {
+        assertEquals(
+            emptyList<List<String>>(),
+            lyricsCandidateParentPaths(
+                "Download/Artist/", "/storage/emulated/0/Download/Artist/track.mp3",
+                "primary:Music"
+            )
+        )
+        assertNull(lyricsPathFromAbsolute("/private/app/Music/Artist/track.mp3"))
+        assertNull(lyricsPathFromAbsolute("/storage/emulated/0/Music/../Download/song.mp3"))
+    }
+
+    @Test fun equivalentUnicodeFilenamesMatchWithoutLooseTitleGuess() {
+        assertEquals(true, lyricsSameName("Cafe\u0301.mp3", "Café.mp3"))
+        assertEquals(true, lyricsSameName("TRACK.MP3", "track.mp3"))
+        assertEquals(false, lyricsSameName("Other.mp3", "track.mp3"))
+    }
+
 }
