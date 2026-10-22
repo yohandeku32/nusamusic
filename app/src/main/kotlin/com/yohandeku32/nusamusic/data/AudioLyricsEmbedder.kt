@@ -17,7 +17,7 @@ import java.io.IOException
 import java.security.MessageDigest
 import kotlin.coroutines.coroutineContext
 
-/** SAF write to a user-selected original MP3, never a silent permission escalation. */
+/** SAF metadata writes for MP3, FLAC and M4A; never broad device permissions. */
 internal class AudioLyricsEmbedder(private val context: Context) {
     companion object {
         private const val MAX_AUDIO_BYTES = 384L * 1024 * 1024
@@ -35,9 +35,8 @@ internal class AudioLyricsEmbedder(private val context: Context) {
         )?.use { cursor ->
             if (cursor.moveToFirst()) cursor.getString(0) else null
         } ?: throw IOException("Cannot identify the selected file.")
-        require(name.endsWith(".mp3", ignoreCase = true)) {
-            "Embedding currently supports MP3 files with standard ID3 tags."
-        }
+        val format = EmbeddedAudioFormat.fromFilename(name)
+            ?: throw IOException("Save Lyrics supports MP3, FLAC and M4A files.")
         val raw = lyric.stored.content
         require(raw.isNotBlank()) { "There are no lyrics to embed." }
         val plain = readableLyrics(lyric)
@@ -51,12 +50,12 @@ internal class AudioLyricsEmbedder(private val context: Context) {
         // We keep both an untouched backup and a separate fully constructed
         // output until completion. Rewriting without these can corrupt a song
         // when Android or its DocumentsProvider interrupts the operation.
-        val requiredSpace = fileSize * 2 + 32L * 1024 * 1024
+        val requiredSpace = fileSize * 2 + 128L * 1024 * 1024
         require(context.cacheDir.usableSpace > requiredSpace) {
             "Not enough free space to back up the song before embedding."
         }
-        val backup = File.createTempFile("nusa-lyrics-original-", ".mp3", context.cacheDir)
-        val updated = File.createTempFile("nusa-lyrics-updated-", ".mp3", context.cacheDir)
+        val backup = File.createTempFile("nusa-lyrics-original-", format.extension, context.cacheDir)
+        val updated = File.createTempFile("nusa-lyrics-updated-", format.extension, context.cacheDir)
         var preserveBackup = false
         try {
             val chosenHash = resolver.openInputStream(selectedUri)?.use { source ->
@@ -72,7 +71,11 @@ internal class AudioLyricsEmbedder(private val context: Context) {
                 "Please select the original file for the currently playing song."
             }
 
-            Mp3EmbeddedLyricsWriter.write(backup, updated, raw, plain)
+            when (format) {
+                EmbeddedAudioFormat.MP3 -> Mp3EmbeddedLyricsWriter.write(backup, updated, raw, plain)
+                EmbeddedAudioFormat.FLAC -> FlacEmbeddedLyricsWriter.write(backup, updated, raw, plain)
+                EmbeddedAudioFormat.M4A -> M4aEmbeddedLyricsWriter.write(backup, updated, raw, plain)
+            }
             verifyLyricsInFile(updated, raw)
             // Keep playback paused for the very short replacement phase.
             withContext(Dispatchers.Main) { beforeWrite() }
@@ -157,7 +160,7 @@ internal class AudioLyricsEmbedder(private val context: Context) {
                 if (count <= 0) byteArrayOf() else buffer.copyOf(count)
             }.read()
             check(raw in found) {
-                "The staged MP3 did not retain synchronized lyrics."
+                "The staged audio did not retain synchronized lyrics."
             }
         }
     }
@@ -171,3 +174,12 @@ internal fun readableLyrics(value: SongLyrics): String =
             else -> ""
         }
     }?.takeIf { it.isNotBlank() } ?: value.stored.content
+
+internal enum class EmbeddedAudioFormat(val extension: String) {
+    MP3(".mp3"), FLAC(".flac"), M4A(".m4a");
+
+    companion object {
+        fun fromFilename(filename: String): EmbeddedAudioFormat? =
+            entries.firstOrNull { filename.endsWith(it.extension, ignoreCase = true) }
+    }
+}
