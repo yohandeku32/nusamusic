@@ -67,13 +67,13 @@ private class LyricsGlowPalette(density: Float) {
     private val outer = Array(65) { energy ->
         Shadow(Color.White.copy(alpha = 0.42f * energy / 64f), Offset.Zero, 14f * density)
     }
-    // Sustain-only lighting: a broad soft aura and a tight brilliant crest.
-    // Quantised once per density; no new blur objects during playback frames.
+    // Restrained sustain-only lighting: avoid a broad white cloud obscuring
+    // the real edges of neighbouring glyphs. Prebuilt for smooth 120 Hz draw.
     private val heldAura = Array(65) { energy ->
-        Shadow(Color.White.copy(alpha = 0.70f * energy / 64f), Offset.Zero, 21f * density)
+        Shadow(Color.White.copy(alpha = 0.48f * energy / 64f), Offset.Zero, 15f * density)
     }
     private val heldCore = Array(65) { energy ->
-        Shadow(Color.White.copy(alpha = 0.78f * energy / 64f), Offset.Zero, 6f * density)
+        Shadow(Color.White.copy(alpha = 0.62f * energy / 64f), Offset.Zero, 4f * density)
     }
     // A thin bright contour is a safe alternative to shader-displacing
     // portions of a shaped glyph (previously caused visible broken strokes).
@@ -246,16 +246,11 @@ internal class SyllableLyricsPainter(
         )
         // A single intact measured text run tilts and rises with the local
         // mountain, never distorting glyphs with separately clipped slices.
-        // A shallow foreground projection makes the held crest appear to
-        // swell *out of the screen*, not merely slide upwards. Scale
-        // originates around the baseline, and returns continuously to 1.
-        // Strength should be readable on a phone: about 20% forward
-        // magnification at the peak, plus actual X/Y perspective from
-        // Android Camera (ordinary 2D scale alone looked flat).
-        // A SINGLE release envelope drives every geometric component.
-        // Multiplying by the bubble's unrelated sine scale made the letters
-        // momentarily grow again while the 3D wave was shrinking.
-        val scaleX = 1f + 0.20f * pose.depth
+        // The lyric travels upward along a shallow ribbon. Its *horizontal*
+        // glyph width stays exactly as measured, keeping letters and syllable
+        // spacing intact. Depth is expressed by the moving arc, tiny tilt,
+        // perspective and soft light — not by inflating each word.
+        val scaleX = 1f
         val scaleY = pose.scaleY
         val width = glyph.width
         val native = drawContext.canvas.nativeCanvas
@@ -321,12 +316,11 @@ internal class SyllableLyricsPainter(
                 // so neither its onset nor its fade can pop at word boundaries.
                 val heldLight = heldVocalGlowEnergy(pose.depth, glow)
                 if (heldLight > 0f) {
-                    // Soft 21dp halo behind the crisp existing karaoke face.
-                    // This replaces the former faint 14dp displaced layer,
-                    // preserving the same number of text draw calls.
+                    // A compact soft halo follows the crest without moving
+                    // the readable outline or overpowering adjacent words.
                     drawText(result, brush = glyph.fill.brush,
-                        topLeft = position + Offset(0f, 3.5f * density * pose.depth),
-                        alpha = 0.29f * heldLight,
+                        topLeft = position + Offset(0f, 1.2f * density * pose.depth),
+                        alpha = 0.18f * heldLight,
                         shadow = glowPalette.heldAura(heldLight),
                         drawStyle = Fill)
                     glyph.mountainGlow.move(
@@ -341,30 +335,11 @@ internal class SyllableLyricsPainter(
                     // upcoming words or introducing a per-syllable flash.
                     drawText(result, brush = glyph.mountainGlow.brush,
                         topLeft = position,
-                        alpha = 0.60f * heldLight,
+                        alpha = 0.36f * heldLight,
                         shadow = glowPalette.heldCore(heldLight),
                         drawStyle = Fill)
                 }
 
-                val edge = glyph.bubble.edgeExpansion
-                if (edge > 0.005f) {
-                    // Soft, slightly enlarged outline BEHIND the sharp main
-                    // text. No per-character clipping, path displacement,
-                    // layout changes or duplicate opaque glyph interiors.
-                    // Slow phase/position variation is supplied by the
-                    // already-sampled audio-time envelope.
-                    withTransform({
-                        scale(
-                            1f + 0.012f * edge, 1f + 0.016f * edge,
-                            position + Offset(width / 2f, result.size.height * 0.8f)
-                        )
-                    }) {
-                        drawText(result, brush = glyph.fill.brush,
-                            topLeft = position, alpha = 0.18f * edge,
-                            shadow = Shadow.None,
-                            drawStyle = glowPalette.edgeStroke(edge))
-                    }
-                }
             } else {
                 if (progress >= 1f) {
                     drawText(result, color = Color.White, topLeft = position,
