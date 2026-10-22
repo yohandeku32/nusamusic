@@ -36,3 +36,33 @@ internal class LyricsFollowMotion {
         return movement
     }
 }
+
+/**
+ * A settled lyric list must not briefly reverse while audio time is moving
+ * forward. The spring may otherwise correct a one-pixel overshoot by scrolling
+ * backwards, which looks like an extra karaoke loop at 90/120 Hz.
+ *
+ * New instance per follow session (seek/manual-resume): backward rejoining
+ * is intentionally allowed until the actual playback row is centered.
+ */
+internal class LyricsFollowDirectionGuard {
+    private var settled = false
+
+    fun markSettled() {
+        settled = true
+    }
+
+    fun isReverseCorrection(error: Float): Boolean = settled && error < -0.5f
+
+    fun step(requested: Float, error: Float): Float {
+        if (abs(error) <= 0.5f) {
+            settled = true
+            return 0f
+        }
+        if (isReverseCorrection(error)) return 0f
+        // The spring carries velocity from the preceding frame. Never let
+        // that stale velocity move beyond or away from the current anchor.
+        if (requested * error <= 0f) return 0f
+        return requested.coerceIn(minOf(0f, error), maxOf(0f, error))
+    }
+}
