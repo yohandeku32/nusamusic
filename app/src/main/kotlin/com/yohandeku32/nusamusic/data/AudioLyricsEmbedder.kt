@@ -29,6 +29,17 @@ internal class AudioLyricsEmbedder(private val context: Context) {
         selectedUri: Uri,
         lyric: SongLyrics,
         beforeWrite: suspend () -> Unit = {}
+    ) = embedPrepared(
+        song.uri, selectedUri, lyric.stored.content, readableLyrics(lyric), beforeWrite
+    )
+
+    /** Called only when this track is no longer Media3's current audio source. */
+    suspend fun embedPrepared(
+        songUri: String,
+        selectedUri: Uri,
+        raw: String,
+        plain: String,
+        beforeWrite: suspend () -> Unit = {}
     ) = withContext(Dispatchers.IO) {
         val name = context.contentResolver.query(
             selectedUri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null
@@ -37,9 +48,7 @@ internal class AudioLyricsEmbedder(private val context: Context) {
         } ?: throw IOException("Cannot identify the selected file.")
         val format = EmbeddedAudioFormat.fromFilename(name)
             ?: throw IOException("This song format cannot store lyrics yet.")
-        val raw = lyric.stored.content
         require(raw.isNotBlank()) { "There are no lyrics to embed." }
-        val plain = readableLyrics(lyric)
         val resolver = context.contentResolver
         val fileSize = resolver.openFileDescriptor(selectedUri, "r")?.use {
             it.statSize
@@ -64,7 +73,7 @@ internal class AudioLyricsEmbedder(private val context: Context) {
             // A SAF document URI is not the same as a MediaStore content URI.
             // Match ALL original bytes, not merely filename/size/cover art,
             // before modifying the selected document.
-            val libraryHash = resolver.openInputStream(Uri.parse(song.uri))?.use { source ->
+            val libraryHash = resolver.openInputStream(Uri.parse(songUri))?.use { source ->
                 copyAndHash(source, null, MAX_AUDIO_BYTES)
             } ?: throw IOException("The currently playing song cannot be verified.")
             require(chosenHash.contentEquals(libraryHash)) {
@@ -77,7 +86,8 @@ internal class AudioLyricsEmbedder(private val context: Context) {
                 EmbeddedAudioFormat.M4A -> M4aEmbeddedLyricsWriter.write(backup, updated, raw, plain)
             }
             verifyLyricsInFile(updated, raw)
-            // Keep playback paused for the very short replacement phase.
+            // No pause/play toggle: callers wait until Media3 has moved to
+            // another song. Recheck immediately before writing the original.
             withContext(Dispatchers.Main) { beforeWrite() }
 
             var attemptedWrite = false
@@ -159,8 +169,8 @@ internal class AudioLyricsEmbedder(private val context: Context) {
                 val count = input.read(buffer)
                 if (count <= 0) byteArrayOf() else buffer.copyOf(count)
             }.read()
-            check(raw in found) {
-                "The staged audio did not retain synchronized lyrics."
+            check(stagedLyricsMatch(raw, found)) {
+                "Lyrics could not be verified for this song. The original audio was not changed."
             }
         }
     }
