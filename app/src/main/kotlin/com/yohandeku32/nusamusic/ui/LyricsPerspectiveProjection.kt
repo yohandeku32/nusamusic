@@ -17,9 +17,9 @@ import android.graphics.Matrix
  */
 internal class LyricsPerspectiveProjection {
     private val camera = Camera().apply {
-        // Android Camera location units are inches; 8" gives a moderate
-        // perspective rather than sharply skewing the text like a card flip.
-        setLocation(0f, 0f, -8f)
+        // Further camera distance prevents exaggerated foreshortening that
+        // scrambles a word's spacing, while retaining subtle 3D curvature.
+        setLocation(0f, 0f, -14f)
     }
     private val matrix = Matrix()
 
@@ -34,10 +34,11 @@ internal class LyricsPerspectiveProjection {
         if (amount <= 0.0001f) return
 
         camera.save()
-        // Both axes rotate in perspective; opposite sides of a held word
-        // follow opposite tangents of its shared mountain wave.
-        camera.rotateX(11f * amount)
-        camera.rotateY((-17f * slope.coerceIn(-1f, 1f)) * amount)
+        // Gentle 3D angles only: the upward arc carries the visible motion.
+        // The old 11/17-degree tilts looked like separate letters twisting
+        // forward at different sizes rather than one coherent sung word.
+        camera.rotateX(4f * amount)
+        camera.rotateY((-4.5f * slope.coerceIn(-1f, 1f)) * amount)
         camera.getMatrix(matrix)
         camera.restore()
 
