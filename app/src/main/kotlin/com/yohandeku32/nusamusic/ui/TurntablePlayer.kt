@@ -1,15 +1,10 @@
 package com.yohandeku32.nusamusic.ui
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -18,7 +13,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -33,24 +27,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
@@ -62,13 +48,10 @@ import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlin.math.PI
-import kotlin.math.sin
 
 data class TurntableLabels(
     val play: String,
@@ -85,7 +68,11 @@ data class TurntableLabels(
     val seek: String
 )
 
-/** Vinyl playback surface inspired by the approved black/red mobile prototype. */
+/**
+ * Vinyl Now Playing mirrors the supplied Pinterest turntable reference:
+ * warm paper, an oversized left-clipped record, and a long silver-white tonearm.
+ * Player callbacks and existing rotating VinylRecord are supplied by the caller.
+ */
 @Composable
 fun TurntablePlayer(
     title: String,
@@ -116,292 +103,179 @@ fun TurntablePlayer(
     emptyState: @Composable () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val page = Color(0xFF0B0B0F)
-    val panel = Color(0xFF111115)
-    val accent = accentColor
-    // Scope light-colored controls and pre-existing callback content to Vinyl only.
+    val paper = Color(0xFFFAF9F4)
+    val ink = Color(0xFF292A29)
+    val muted = Color(0xFF898A87)
     MaterialTheme(
-        colorScheme = androidx.compose.material3.darkColorScheme(
-            background = page,
-            onBackground = Color(0xFFF6F6F8),
-            surface = panel,
-            onSurface = Color(0xFFF6F6F8),
-            surfaceVariant = Color(0xFF222229),
-            onSurfaceVariant = Color(0xFFB6B8C1),
-            primary = accent,
+        colorScheme = androidx.compose.material3.lightColorScheme(
+            background = paper,
+            onBackground = ink,
+            surface = paper,
+            onSurface = ink,
+            surfaceVariant = Color(0xFFF0F0EB),
+            onSurfaceVariant = muted,
+            primary = ink,
             onPrimary = Color.White
         )
     ) {
-        BoxWithConstraints(modifier.fillMaxWidth().background(page)) {
-            // Wider than the panel's inner content, but constrained on short devices.
-            val discSize = minOf(
-                (maxWidth * 1.12f).coerceAtLeast(0.dp),
-                (viewportHeight * 0.60f).coerceAtLeast(240.dp)
+        BoxWithConstraints(
+            modifier = modifier.fillMaxWidth().height(viewportHeight)
+                .background(paper)
+                .clipToBounds()
+        ) {
+            // The record bleeds beyond the left edge, as in the reference.
+            // Short phones reserve enough room for usable playback controls below.
+            val stageHeight = minOf(
+                maxWidth * 1.26f,
+                (viewportHeight - 250.dp).coerceAtLeast(maxWidth * 0.78f)
             )
+            val discDiameter = maxWidth * 1.31f
+            val discX = maxWidth * 0.265f - discDiameter / 2f
             Column(
-                modifier = Modifier.fillMaxWidth().height(viewportHeight)
+                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
                     .navigationBarsPadding(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // No brand or mode labels above the record: all attention goes to the disc.
-                Spacer(Modifier.height(22.dp))
-
-                // A slightly lowered, oversize disc peeks out by roughly half its diameter.
-                // The rest remains hidden under the dark playback console.
                 Box(
-                    modifier = Modifier.fillMaxWidth()
-                        .height(discSize * 0.55f)
-                        .clipToBounds(),
-                    contentAlignment = Alignment.TopCenter
+                    modifier = Modifier.fillMaxWidth().height(stageHeight).clipToBounds()
                 ) {
-                    record(Modifier.size(discSize).offset(y = discSize * 0.07f))
-                }
-
-                // A stationary dark control surface conceals the lower vinyl.
-                // It replaces the previous paper sleeve and does not rotate.
-                Column(
-                    modifier = Modifier.fillMaxWidth()
-                        .weight(1f)
-                        .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(
-                                    androidx.compose.ui.graphics.lerp(Color(0xFF17171D), accent, 0.075f),
-                                    panel,
-                                    Color(0xFF08080B)
-                                )
-                            )
-                        )
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 20.dp, vertical = 16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    VinylWaveform(
-                        accentColor = accent,
-                        isPlaying = isPlaying,
-                        isVisible = isVisible,
+                    // Real vinyl and artwork label rotate together; the arm stays on top.
+                    record(
+                        Modifier.size(discDiameter)
+                            .offset(x = discX, y = 28.dp)
+                    )
+                    VinylTonearm(
+                        isPlaying = isPlaying && isVisible,
                         hasSong = hasSong,
                         positionMsState = positionMsState,
                         durationMs = durationMs,
-                        modifier = Modifier.fillMaxWidth().height(108.dp)
+                        modifier = Modifier.matchParentSize()
                     )
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        text = title,
-                        fontFamily = titleFontFamily,
-                        fontSize = (titleFontSize * 0.78f).coerceIn(18f, 27f).sp,
-                        lineHeight = (titleFontSize * 0.88f).coerceIn(22f, 31f).sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        color = Color.White,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = artist,
-                        color = Color(0xFFA3A3AE),
-                        fontSize = 14.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Box(modifier = Modifier.align(Alignment.Start)) { quality() }
-                    Spacer(Modifier.height(14.dp))
-
-                    TurntableProgress(
-                        positionMsState, durationMs, hasSong, labels.seek, onSeek,
-                        accentColor = accent
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        DeckSwitch(
-                            Icons.Default.Shuffle, labels.shuffle,
-                            if (shuffleEnabled) labels.shuffleOn else labels.shuffleOff,
-                            shuffleEnabled, hasSong, onShuffle, accent
-                        )
-                        TurntableTransportButton(
-                            Icons.Default.SkipPrevious, labels.previous, onPrevious, hasSong,
-                            realisticControls, Modifier.size(48.dp), 25.dp, accent
-                        )
-                        TurntableTransportButton(
-                            if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            if (isPlaying) labels.pause else labels.play,
-                            onPlayPause, true,
-                            realisticControls, Modifier.size(70.dp), 30.dp, accent, primary = true
-                        )
-                        TurntableTransportButton(
-                            Icons.Default.SkipNext, labels.next, onNext, hasSong,
-                            realisticControls, Modifier.size(48.dp), 25.dp, accent
-                        )
-                        DeckSwitch(
-                            if (repeatMode == 1) Icons.Default.RepeatOne else Icons.Default.Repeat,
-                            labels.repeat,
-                            when (repeatMode) {
-                                1 -> labels.repeatOne
-                                2 -> labels.repeatAll
-                                else -> labels.repeatOff
-                            },
-                            repeatMode != 0, hasSong, onRepeat, accent
-                        )
-                    }
-                    Spacer(Modifier.height(18.dp))
-                    footer()
-                    emptyState()
                 }
+
+                Spacer(Modifier.height(20.dp))
+                Text(
+                    text = title,
+                    fontFamily = titleFontFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = (titleFontSize * 0.78f).coerceIn(22f, 31f).sp,
+                    lineHeight = (titleFontSize * 0.91f).coerceIn(27f, 35f).sp,
+                    color = ink,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 30.dp)
+                )
+                Spacer(Modifier.height(5.dp))
+                Text(
+                    text = artist,
+                    fontSize = 14.sp,
+                    color = muted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 30.dp)
+                )
+                Spacer(Modifier.height(10.dp))
+                Box(Modifier.fillMaxWidth().padding(horizontal = 30.dp)) { quality() }
+                Spacer(Modifier.height(11.dp))
+                TurntableProgress(positionMsState, durationMs, hasSong, labels.seek, onSeek)
+                Spacer(Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TurntableModeButton(
+                        Icons.Default.Shuffle, labels.shuffle,
+                        if (shuffleEnabled) labels.shuffleOn else labels.shuffleOff,
+                        shuffleEnabled, hasSong, onShuffle
+                    )
+                    TurntableButton(
+                        Icons.Default.SkipPrevious, labels.previous, onPrevious, hasSong,
+                        modifier = Modifier.size(52.dp), size = 25.dp
+                    )
+                    TurntableButton(
+                        if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        if (isPlaying) labels.pause else labels.play,
+                        onPlayPause, true,
+                        modifier = Modifier.size(68.dp), size = 31.dp, primary = true
+                    )
+                    TurntableButton(
+                        Icons.Default.SkipNext, labels.next, onNext, hasSong,
+                        modifier = Modifier.size(52.dp), size = 25.dp
+                    )
+                    TurntableModeButton(
+                        if (repeatMode == 1) Icons.Default.RepeatOne else Icons.Default.Repeat,
+                        labels.repeat,
+                        when (repeatMode) {
+                            1 -> labels.repeatOne
+                            2 -> labels.repeatAll
+                            else -> labels.repeatOff
+                        }, repeatMode != 0, hasSong, onRepeat
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+                footer()
+                emptyState()
+                Spacer(Modifier.height(24.dp))
             }
         }
     }
 }
 
-/**
- * Lightweight visualizer-style movement, not a fabricated representation
- * of the song's actual decoded frequency spectrum.
- */
 @Composable
-private fun VinylWaveform(
-    accentColor: Color,
-    isPlaying: Boolean,
-    isVisible: Boolean,
-    hasSong: Boolean,
-    positionMsState: State<Long>,
-    durationMs: Long,
-    modifier: Modifier = Modifier
-) {
-    val phase = remember { Animatable(0f) }
-    LaunchedEffect(isPlaying, isVisible, hasSong) {
-        if (isPlaying && isVisible && hasSong) {
-            phase.snapTo(0f)
-            phase.animateTo(
-                (2 * PI).toFloat(),
-                infiniteRepeatable(tween(2700, easing = LinearEasing), RepeatMode.Restart)
-            )
-        } else {
-            phase.stop()
-            phase.snapTo(0f)
-        }
-    }
-    val position by positionMsState
-    val fraction = if (durationMs > 0L) {
-        (position.toFloat() / durationMs).coerceIn(0f, 1f)
-    } else 0f
-    val accent = accentColor
-    Canvas(modifier) {
-        val count = 70
-        val step = size.width / count
-        val center = size.height / 2f
-        for (i in 0 until count) {
-            val x = (i + 0.5f) * step
-            val envelope = 0.14f + 0.86f *
-                kotlin.math.abs(sin(i * 0.109f) * sin(i * 0.047f + 0.7f))
-            val pulse = if (isPlaying && isVisible && hasSong) {
-                0.82f + 0.18f * sin(phase.value + i * 0.22f)
-            } else 0.82f
-            val half = (size.height * 0.44f * envelope * pulse).coerceAtLeast(1.5f)
-            val nearPlayhead = kotlin.math.abs((i + 0.5f) / count - fraction) < 0.037f
-            drawLine(
-                color = if (nearPlayhead) accent else Color(0xFFE8E8EF).copy(alpha = 0.79f),
-                start = Offset(x, center - half),
-                end = Offset(x, center + half),
-                strokeWidth = (step * 0.31f).coerceAtLeast(1.dp.toPx()),
-                cap = StrokeCap.Round
-            )
-        }
-        val cursorX = (fraction * size.width).coerceIn(0f, size.width)
-        drawLine(
-            accent.copy(alpha = 0.95f),
-            Offset(cursorX, size.height * 0.06f),
-            Offset(cursorX, size.height * 0.94f),
-            strokeWidth = 1.4.dp.toPx(),
-            cap = StrokeCap.Round
-        )
-        drawCircle(accent, radius = 3.5.dp.toPx(), center = Offset(cursorX, size.height * 0.06f))
-    }
-}
-
-@Composable
-private fun DeckSwitch(
+private fun TurntableModeButton(
     icon: ImageVector,
     label: String,
     state: String,
     active: Boolean,
     enabled: Boolean,
-    onClick: () -> Unit,
-    accent: Color
+    onClick: () -> Unit
 ) {
-    val tint = if (active) accent else Color(0xFFC5C6CE)
+    val ink = Color(0xFF363936)
     IconButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier.size(42.dp).semantics { stateDescription = state }
+        modifier = Modifier.size(40.dp).semantics { stateDescription = state }
     ) {
         Icon(
             icon, label, Modifier.size(21.dp),
-            tint = tint.copy(alpha = if (enabled) 1f else 0.35f)
+            tint = ink.copy(alpha = if (!enabled) 0.3f else if (active) 1f else 0.55f)
         )
     }
 }
 
 @Composable
-private fun TurntableTransportButton(
+private fun TurntableButton(
     icon: ImageVector,
     label: String,
     onClick: () -> Unit,
     enabled: Boolean,
-    realistic: Boolean,
     modifier: Modifier,
-    iconSize: Dp,
-    accent: Color,
+    size: Dp,
     primary: Boolean = false
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val pressed by interactionSource.collectIsPressedAsState()
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
     val scale by animateFloatAsState(
-        if (pressed) 0.94f else 1f, tween(140), label = "turntableButtonPress"
+        if (pressed) 0.95f else 1f, tween(140), label = "paperVinylButton"
     )
     Surface(
         onClick = onClick,
         enabled = enabled,
-        interactionSource = interactionSource,
+        interactionSource = source,
         shape = CircleShape,
-        color = if (primary) androidx.compose.ui.graphics.lerp(Color(0xFF19191F), accent, 0.18f) else Color.Transparent,
-        border = if (primary) BorderStroke(2.dp, accent) else null,
+        color = if (primary) Color(0xFF292B2B) else Color.Transparent,
+        border = if (primary) BorderStroke(1.dp, Color(0xFF292B2B)) else null,
         modifier = modifier.graphicsLayer { scaleX = scale; scaleY = scale }
     ) {
         Box(contentAlignment = Alignment.Center) {
             Icon(
-                icon, label, Modifier.size(iconSize),
-                tint = Color.White.copy(alpha = if (enabled) 1f else 0.34f)
+                icon,
+                label,
+                Modifier.size(size),
+                tint = if (primary) Color.White
+                    else Color(0xFF303332).copy(alpha = if (enabled) 0.9f else 0.3f)
             )
-        }
-    }
-}
-
-@Composable
-private fun PlaybackActivity(active: Boolean) {
-    val phase = remember { Animatable(0f) }
-    LaunchedEffect(active) {
-        if (active) {
-            phase.snapTo(0f)
-            phase.animateTo(
-                (2 * PI).toFloat(),
-                infiniteRepeatable(tween(1700, easing = LinearEasing), RepeatMode.Restart)
-            )
-        }
-    }
-    val ink = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
-    Canvas(Modifier.size(width = 60.dp, height = 30.dp)) {
-        // A playback activity animation, independent of the music's audio spectrum.
-        for (index in 0..5) {
-            val amplitude = 0.30f + 0.55f * ((sin(phase.value + index * 1.9f) + 1f) / 2f)
-            val halfHeight = size.height * amplitude / 2f
-            val x = (index + 0.5f) * size.width / 6f
-            drawLine(ink, Offset(x, size.height / 2f - halfHeight), Offset(x, size.height / 2f + halfHeight), 2.5.dp.toPx(), StrokeCap.Round)
         }
     }
 }
@@ -412,20 +286,19 @@ private fun TurntableProgress(
     durationMs: Long,
     hasSong: Boolean,
     label: String,
-    onSeek: (Long) -> Unit,
-    accentColor: Color
+    onSeek: (Long) -> Unit
 ) {
     val positionMs by positionMsState
     val enabled = hasSong && durationMs > 0L
-    val fraction = if (durationMs > 0L) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
-    val ink = Color(0xFFE9E9EF)
-    val accent = accentColor
+    val fraction = if (durationMs > 0L) {
+        (positionMs.toFloat() / durationMs).coerceIn(0f, 1f)
+    } else 0f
     fun time(ms: Long): String {
-        val seconds = ms.coerceAtLeast(0L) / 1000L
-        return "${seconds / 60}:${(seconds % 60).toString().padStart(2, '0')}"
+        val sec = ms.coerceAtLeast(0L) / 1000L
+        return "${sec / 60}:${(sec % 60).toString().padStart(2, '0')}"
     }
     Canvas(
-        Modifier.fillMaxWidth().padding(horizontal = 38.dp).height(30.dp)
+        Modifier.fillMaxWidth().padding(horizontal = 30.dp).height(28.dp)
             .semantics {
                 contentDescription = label
                 progressBarRangeInfo = ProgressBarRangeInfo(fraction, 0f..1f)
@@ -444,7 +317,9 @@ private fun TurntableProgress(
             }
             .pointerInput(enabled, durationMs, onSeek) {
                 if (enabled) detectHorizontalDragGestures(
-                    onDragStart = { offset -> onSeek(((offset.x / size.width).coerceIn(0f, 1f) * durationMs).toLong()) },
+                    onDragStart = { offset ->
+                        onSeek(((offset.x / size.width).coerceIn(0f, 1f) * durationMs).toLong())
+                    },
                     onHorizontalDrag = { change, _ ->
                         change.consume()
                         onSeek(((change.position.x / size.width).coerceIn(0f, 1f) * durationMs).toLong())
@@ -452,31 +327,25 @@ private fun TurntableProgress(
                 )
             }
     ) {
-        val stroke = 3.dp.toPx()
-        val start = Offset(stroke / 2f, size.height / 2f)
-        val end = Offset((size.width - stroke / 2f).coerceAtLeast(start.x), start.y)
-        drawLine(ink.copy(alpha = 0.20f), start, end, stroke, StrokeCap.Round)
-        if (fraction > 0f) drawLine(accent, start, Offset(start.x + (end.x - start.x) * fraction, start.y), stroke, StrokeCap.Round)
+        val start = Offset(0f, size.height / 2f)
+        val end = Offset(size.width, size.height / 2f)
+        drawLine(
+            Color(0xFF303230).copy(alpha = 0.15f),
+            start, end, 3.dp.toPx(), StrokeCap.Round
+        )
+        if (fraction > 0f) {
+            drawLine(
+                Color(0xFF333633),
+                start, Offset(size.width * fraction, start.y),
+                3.dp.toPx(), StrokeCap.Round
+            )
+        }
     }
-    // Compact timestamps at the left and right ends, just below the seek bar.
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 38.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 30.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(
-            text = time(positionMs),
-            fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.Medium,
-            fontSize = 12.sp,
-            color = ink.copy(alpha = 0.70f)
-        )
-        Text(
-            text = time(durationMs),
-            fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.Medium,
-            fontSize = 12.sp,
-            color = ink.copy(alpha = 0.70f)
-        )
+        Text(time(positionMs), fontSize = 12.sp, color = Color(0xFF818481))
+        Text(time(durationMs), fontSize = 12.sp, color = Color(0xFF818481))
     }
 }
