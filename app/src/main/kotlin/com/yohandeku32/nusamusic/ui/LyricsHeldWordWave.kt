@@ -43,6 +43,12 @@ internal fun heldWordEase(value: Float): Float {
     return t * t * t * (t * (6f * t - 15f) + 10f)
 }
 
+/** Smoothstep is gentler through the middle than quintic on the size release. */
+internal fun heldWordSizeRelease(value: Float): Float {
+    val t = value.coerceIn(0f, 1f)
+    return 1f - t * t * (3f - 2f * t)
+}
+
 internal class LyricsHeldWordWave(units: List<LyricsHeldWordUnit>) {
     private data class Word(
         val left: Float,
@@ -127,12 +133,24 @@ internal class LyricsHeldWordWave(units: List<LyricsHeldWordUnit>) {
         val holdWeight = heldWordEase((duration - 1_000f) / 1_500f)
         val strength = (envelope * mountain * holdWeight).coerceIn(0f, 1f)
 
-        // Unlike uniform 2D scale, perspective depth now directly follows
-        // the sung note's single smooth envelope. No second attenuation!
-        // Opposite slopes make the word's left and right wings curl toward
-        // and away from the viewer, with the crest projecting furthest.
+        // Spatial crest still travels for the arch and perspective tilt.
+        // The FONT SIZE must not follow the passing crest: previously the
+        // mountain multiplied depth, so each glyph rapidly contracted as
+        // the crest passed it, even when the singer kept holding the note.
+        // A spatially fixed depth profile and a single authored-time size
+        // envelope give a truly continuous big -> small return.
         val tangent = ((center - crest) / 0.65f).coerceIn(-1f, 1f)
-        val depth = strength
+        val sizeEnvelope = if (progress <= peakAt) {
+            heldWordEase(progress / peakAt)
+        } else {
+            // An extended, critically smooth 58% release. No frame jobs,
+            // bounce, hard clamp, or discontinuity at the vocal's end.
+            heldWordSizeRelease((progress - peakAt) / (1f - peakAt))
+        }
+        val centeredDistance = abs(center - 0.5f)
+        val depthShape = 0.72f + 0.28f *
+            (1f - heldWordEase(centeredDistance / 0.65f))
+        val depth = (holdWeight * sizeEnvelope * depthShape).coerceIn(0f, 1f)
         return LyricsHeldWordPose(
             liftDp = -7.5f * strength,
             scaleY = 1f + 0.065f * depth,
