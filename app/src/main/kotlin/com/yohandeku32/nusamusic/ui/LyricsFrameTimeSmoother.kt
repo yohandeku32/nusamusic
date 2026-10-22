@@ -1,10 +1,12 @@
 package com.yohandeku32.nusamusic.ui
 
 /**
- * Audio-time sampling for syllable highlight and animation.
- * Ignore only tiny backward jitter within the same playback epoch. An explicit
- * Media3 position discontinuity changes the revision and reanchors at once,
- * even for a seek of one millisecond.
+ * A word/syllable shader never samples an earlier moment in the same
+ * playback revision. Only an explicit seek/track discontinuity resets it.
+ *
+ * Media3's reported clock can be corrected by >24ms on real hardware.
+ * A 24ms-only filter allowed a brief reverse replay ("tiny loop") on
+ * sustained karaoke words and on the moving mountain glow.
  */
 internal class LyricsFrameTimeSmoother {
     private var revision = Int.MIN_VALUE
@@ -14,12 +16,9 @@ internal class LyricsFrameTimeSmoother {
         if (playbackRevision != revision) {
             revision = playbackRevision
             lastSample = positionMs
-            return positionMs
+        } else if (positionMs > lastSample) {
+            lastSample = positionMs
         }
-        val stable = if (lastSample != Int.MIN_VALUE &&
-            positionMs < lastSample && lastSample.toLong() - positionMs <= 24L
-        ) lastSample else positionMs
-        lastSample = stable
-        return stable
+        return lastSample
     }
 }
