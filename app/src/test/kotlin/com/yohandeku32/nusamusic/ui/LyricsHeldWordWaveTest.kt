@@ -67,7 +67,7 @@ class LyricsHeldWordWaveTest {
                 assertTrue("lift jump at $hz Hz, $now ms",
                     abs(pose.liftDp - before.liftDp) < 0.15f)
                 assertTrue("scale jump at $hz Hz, $now ms",
-                    abs(pose.scaleY - before.scaleY) < 0.0005f)
+                    abs(pose.scaleY - before.scaleY) < 0.0012f)
                 assertTrue("tilt jump at $hz Hz, $now ms",
                     abs(pose.rotationDegrees - before.rotationDegrees) < 0.03f)
                 before = pose
@@ -125,8 +125,8 @@ class LyricsHeldWordWaveTest {
         assertEquals(LyricsHeldWordPose(), short.pose(0, 1550, 45f))
         val crest = long.pose(0, 3200, 45f)
         assertTrue(crest.liftDp < -2.5f)
-        assertTrue("3D crest must protrude toward screen", crest.depth > 0.3f)
-        assertTrue(crest.scaleY > 1.01f)
+        assertTrue("3D crest must protrude toward screen", crest.depth > 0.65f)
+        assertTrue(crest.scaleY > 1.04f)
     }
 
     @Test fun pauseAndBackwardSeekReproduceExactlyTheSamePose() {
@@ -215,6 +215,33 @@ class LyricsHeldWordWaveTest {
         wave.pose(2, 6500, 172f)
         assertEquals(saved, wave.pose(2, 4400, 172f))
         assertEquals(0f, wave.pose(2, 7000, 172f).depth, 0f)
+    }
+
+    @Test fun typicalOnePointEightSecondSustainGetsVisibleForwardDepth() {
+        val word = LyricsHeldWordWave(listOf(
+            LyricsHeldWordUnit("loooove", 2_000, 3_800, 0f, 90f)
+        ))
+        val middle = word.pose(0, 2_760, 45f)
+        // Previously a double duration gate at >=2s produced ZERO motion.
+        // The 1.8-second vowel should now visibly protrude instead.
+        assertTrue("normal sustained vowels must be visually eligible", middle.depth > 0.45f)
+        assertTrue(middle.scaleY > 1.029f)
+        assertEquals(LyricsHeldWordPose(), word.pose(0, 2_000, 45f))
+        assertEquals(LyricsHeldWordPose(), word.pose(0, 3_800, 45f))
+    }
+
+    @Test fun forwardWaveHasOpposingPerspectiveSlopesAcrossSyllables() {
+        val word = LyricsHeldWordWave(listOf(
+            LyricsHeldWordUnit("ca", 500, 800, 0f, 30f),
+            LyricsHeldWordUnit("hu", 800, 1100, 30f, 60f),
+            LyricsHeldWordUnit("aaa", 1100, 5200, 60f, 90f)
+        ))
+        val left = word.pose(0, 3_150, 15f)
+        val right = word.pose(2, 3_150, 75f)
+        assertTrue(left.depth > 0.05f)
+        assertTrue(right.depth > 0.05f)
+        assertTrue("3D wave must actually bend in perspective",
+            left.perspectiveSlope * right.perspectiveSlope < 0f)
     }
 
 }
