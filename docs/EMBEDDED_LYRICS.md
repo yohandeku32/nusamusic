@@ -136,16 +136,28 @@ Per-format metadata writers:
   audio sample offsets unchanged. Fragmented/protected/unusual layouts may be
   rejected for safety.
 
-Every writer first generates a complete staged file and confirms that
-EmbeddedLyricsReader can read back the new synchronized content. Playback
-pauses immediately before the SAF write. After overwriting, the original is
-compared byte-for-byte by SHA-256 with the staged file. A full untouched
-temporary backup is kept for rollback if writing or verification fails;
-if rollback itself fails, the backup is retained for manual recovery.
+**Save without playback interruption:** tapping Save writes a small,
+durable request in NusaMusic's private app storage, not the currently playing
+audio file. A clock icon indicates **queued** rather than **saved**. When
+Media3 advances to a different track (or after relaunch if the queued track
+is no longer active), NusaMusic resolves the original file in the authorized
+Music tree, performs its full hash check, constructs a staged tagged copy,
+and commits it while the old song is no longer in use. Playback is **never
+paused or toggled** by Save, and large original-file scans no longer run while
+the song being saved is playing. If users leave the same track playing, the
+request remains queued until a different song is selected.
 
-Only after verified success does the Save icon disappear. The app does not
-request broad storage permission. Other formats (OGG, Opus, WAV, etc.) remain
-read-only for embedding until safe writers exist for them.
+Every writer confirms EmbeddedLyricsReader can read the staged authored
+timing, normalizing only the same harmless surrounding whitespace, BOM, and
+CR/LF differences the reader discards. Missing or altered timestamps never
+pass verification. After overwriting, the original is compared byte-for-byte
+by SHA-256 with the staged output. An untouched temporary backup is kept for
+rollback; on failed rollback the backup is retained for manual recovery.
+
+After **verified success**, the queued indicator clears. Failure never reports
+success or marks the song embedded. The app does not request broad storage
+permission. Other formats (OGG, Opus, WAV, etc.) remain read-only for embedding
+until safe writers exist for them.
 
 ### Device verification
 
