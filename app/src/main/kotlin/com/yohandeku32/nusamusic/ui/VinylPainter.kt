@@ -91,6 +91,33 @@ internal class VinylPainter(size: Size) {
         start = discCenter - Offset(radius, radius),
         end = discCenter + Offset(radius, radius)
     )
+    // Directional, off-axis light grazing the microscopic groove walls.
+    // This layer rotates with the vinyl: its highlight rolls across the surface
+    // while the cast shadow under the record stays fixed to the turntable.
+    private val movingSpecular = Brush.sweepGradient(
+        0f to Color.Transparent,
+        0.07f to Color.White.copy(alpha = 0.012f),
+        0.15f to Color.White.copy(alpha = 0.085f),
+        0.205f to Color.White.copy(alpha = 0.14f),
+        0.245f to Color.White.copy(alpha = 0.025f),
+        0.31f to Color.Transparent,
+        0.51f to Color.Transparent,
+        0.62f to Color.White.copy(alpha = 0.045f),
+        0.69f to Color.White.copy(alpha = 0.080f),
+        0.76f to Color.Transparent,
+        1f to Color.Transparent,
+        center = discCenter
+    )
+    private val grooveIridescence = Brush.sweepGradient(
+        0f to Color(0xFF687986).copy(alpha = 0.015f),
+        0.18f to Color.White.copy(alpha = 0.11f),
+        0.24f to Color(0xFF9AA9B4).copy(alpha = 0.018f),
+        0.48f to Color.Transparent,
+        0.68f to Color.White.copy(alpha = 0.052f),
+        0.83f to Color.Transparent,
+        1f to Color(0xFF687986).copy(alpha = 0.015f),
+        center = discCenter
+    )
     // A visible steel pin and bevel, proportional to the record on every screen.
     private val spindleRadius = radius * 0.035f
     private val spindleShadowCenter = discCenter + Offset(spindleRadius * 0.22f, spindleRadius * 0.32f)
@@ -171,6 +198,19 @@ internal class VinylPainter(size: Size) {
     }
 
     fun DrawScope.drawReflections() {
+        // Specular light should skim the groove walls, not cover the album label.
+        // Both shaders are cached at this record size and rotate as one layer.
+        clipPath(recordedArea) {
+            drawCircle(movingSpecular, faceRadius, discCenter)
+            for ((index, groove) in grooves.withIndex()) {
+                if (index % 2 == 0) {
+                    drawCircle(
+                        grooveIridescence, groove.radius, discCenter,
+                        style = Stroke((groove.width * 0.78f).coerceAtLeast(0.35f))
+                    )
+                }
+            }
+        }
         drawLightPool(reflection)
         drawLightPool(counterLight)
 
