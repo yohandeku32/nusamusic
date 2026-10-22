@@ -81,9 +81,14 @@ class ImmersiveLyricsState(private val repository: LyricsRepository) {
                     // separate from the online version chosen for display.
                     // A line-synced file (2) can upgrade to syllable TTML (3).
                     if (state.generation == generation) {
-                        state.embeddedLyricsQuality = maxOf(
-                            lyricQuality(local), state.confirmedEmbeddedQuality
-                        )
+                        // A durable in-app Save is not yet an embedded
+                        // metadata write. Keep the pending clock until the
+                        // original audio has been verified after playback.
+                        if (local.stored.source != "saved-in-app") {
+                            state.embeddedLyricsQuality = maxOf(
+                                lyricQuality(local), state.confirmedEmbeddedQuality
+                            )
+                        }
                         state.data = local
                     }
                 }
