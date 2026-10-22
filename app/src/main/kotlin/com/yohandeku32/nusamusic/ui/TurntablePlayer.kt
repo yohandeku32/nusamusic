@@ -15,6 +15,8 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -107,6 +109,7 @@ fun TurntablePlayer(
     onShuffle: () -> Unit,
     onRepeat: () -> Unit,
     record: @Composable (Modifier) -> Unit,
+    accentColor: Color,
     sleeve: @Composable (Modifier) -> Unit,
     quality: @Composable () -> Unit,
     footer: @Composable () -> Unit,
@@ -115,7 +118,7 @@ fun TurntablePlayer(
 ) {
     val page = Color(0xFF0B0B0F)
     val panel = Color(0xFF111115)
-    val accent = Color(0xFFF33F60)
+    val accent = accentColor
     // Scope light-colored controls and pre-existing callback content to Vinyl only.
     MaterialTheme(
         colorScheme = androidx.compose.material3.darkColorScheme(
@@ -130,58 +133,51 @@ fun TurntablePlayer(
         )
     ) {
         BoxWithConstraints(modifier.fillMaxWidth().background(page)) {
+            // Wider than the panel's inner content, but constrained on short devices.
             val discSize = minOf(
-                (maxWidth - 24.dp).coerceAtLeast(0.dp),
-                (viewportHeight * 0.51f).coerceAtLeast(200.dp)
+                (maxWidth * 1.12f).coerceAtLeast(0.dp),
+                (viewportHeight * 0.60f).coerceAtLeast(240.dp)
             )
             Column(
-                modifier = Modifier.fillMaxWidth().heightIn(min = viewportHeight)
+                modifier = Modifier.fillMaxWidth().height(viewportHeight)
                     .navigationBarsPadding(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Spacer(Modifier.height(16.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 26.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        "NusaMusic", color = Color(0xFFF7F7F8),
-                        fontSize = 18.sp, fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        "VINYL", color = accent, fontSize = 10.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 2.sp
-                    )
-                }
+                // No brand or mode labels above the record: all attention goes to the disc.
                 Spacer(Modifier.height(22.dp))
 
-                // Only the upper part of the physical record is exposed.
-                // VinylRecord already handles continuous play/pause rotation.
+                // A slightly lowered, oversize disc peeks out by roughly half its diameter.
+                // The rest remains hidden under the dark playback console.
                 Box(
                     modifier = Modifier.fillMaxWidth()
-                        .height(discSize * 0.57f)
+                        .height(discSize * 0.55f)
                         .clipToBounds(),
                     contentAlignment = Alignment.TopCenter
                 ) {
-                    record(Modifier.size(discSize))
+                    record(Modifier.size(discSize).offset(y = discSize * 0.07f))
                 }
 
                 // A stationary dark control surface conceals the lower vinyl.
                 // It replaces the previous paper sleeve and does not rotate.
                 Column(
                     modifier = Modifier.fillMaxWidth()
+                        .weight(1f)
                         .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                         .background(
                             Brush.verticalGradient(
-                                listOf(Color(0xFF17171D), panel, Color(0xFF08080B))
+                                listOf(
+                                    androidx.compose.ui.graphics.lerp(Color(0xFF17171D), accent, 0.075f),
+                                    panel,
+                                    Color(0xFF08080B)
+                                )
                             )
                         )
+                        .verticalScroll(rememberScrollState())
                         .padding(horizontal = 20.dp, vertical = 16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     VinylWaveform(
+                        accentColor = accent,
                         isPlaying = isPlaying,
                         isVisible = isVisible,
                         hasSong = hasSong,
@@ -215,7 +211,8 @@ fun TurntablePlayer(
                     Spacer(Modifier.height(14.dp))
 
                     TurntableProgress(
-                        positionMsState, durationMs, hasSong, labels.seek, onSeek
+                        positionMsState, durationMs, hasSong, labels.seek, onSeek,
+                        accentColor = accent
                     )
                     Spacer(Modifier.height(10.dp))
                     Row(
@@ -226,17 +223,17 @@ fun TurntablePlayer(
                         DeckSwitch(
                             Icons.Default.Shuffle, labels.shuffle,
                             if (shuffleEnabled) labels.shuffleOn else labels.shuffleOff,
-                            shuffleEnabled, hasSong, onShuffle
+                            shuffleEnabled, hasSong, onShuffle, accent
                         )
                         TurntableTransportButton(
                             Icons.Default.SkipPrevious, labels.previous, onPrevious, hasSong,
-                            realisticControls, Modifier.size(48.dp), 25.dp
+                            realisticControls, Modifier.size(48.dp), 25.dp, accent
                         )
                         TurntableTransportButton(
                             if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                             if (isPlaying) labels.pause else labels.play,
                             onPlayPause, true,
-                            realisticControls, Modifier.size(70.dp), 30.dp, primary = true
+                            realisticControls, Modifier.size(70.dp), 30.dp, accent, primary = true
                         )
                         TurntableTransportButton(
                             Icons.Default.SkipNext, labels.next, onNext, hasSong,
@@ -250,7 +247,7 @@ fun TurntablePlayer(
                                 2 -> labels.repeatAll
                                 else -> labels.repeatOff
                             },
-                            repeatMode != 0, hasSong, onRepeat
+                            repeatMode != 0, hasSong, onRepeat, accent
                         )
                     }
                     Spacer(Modifier.height(18.dp))
@@ -268,6 +265,7 @@ fun TurntablePlayer(
  */
 @Composable
 private fun VinylWaveform(
+    accentColor: Color,
     isPlaying: Boolean,
     isVisible: Boolean,
     hasSong: Boolean,
@@ -292,7 +290,7 @@ private fun VinylWaveform(
     val fraction = if (durationMs > 0L) {
         (position.toFloat() / durationMs).coerceIn(0f, 1f)
     } else 0f
-    val accent = Color(0xFFF33F60)
+    val accent = accentColor
     Canvas(modifier) {
         val count = 70
         val step = size.width / count
@@ -333,9 +331,10 @@ private fun DeckSwitch(
     state: String,
     active: Boolean,
     enabled: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    accent: Color
 ) {
-    val tint = if (active) Color(0xFFF33F60) else Color(0xFFC5C6CE)
+    val tint = if (active) accent else Color(0xFFC5C6CE)
     IconButton(
         onClick = onClick,
         enabled = enabled,
@@ -357,6 +356,7 @@ private fun TurntableTransportButton(
     realistic: Boolean,
     modifier: Modifier,
     iconSize: Dp,
+    accent: Color,
     primary: Boolean = false
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -369,8 +369,8 @@ private fun TurntableTransportButton(
         enabled = enabled,
         interactionSource = interactionSource,
         shape = CircleShape,
-        color = if (primary) Color(0xFF21131A) else Color.Transparent,
-        border = if (primary) BorderStroke(2.dp, Color(0xFFF33F60)) else null,
+        color = if (primary) androidx.compose.ui.graphics.lerp(Color(0xFF19191F), accent, 0.18f) else Color.Transparent,
+        border = if (primary) BorderStroke(2.dp, accent) else null,
         modifier = modifier.graphicsLayer { scaleX = scale; scaleY = scale }
     ) {
         Box(contentAlignment = Alignment.Center) {
@@ -407,12 +407,19 @@ private fun PlaybackActivity(active: Boolean) {
 }
 
 @Composable
-private fun TurntableProgress(positionMsState: State<Long>, durationMs: Long, hasSong: Boolean, label: String, onSeek: (Long) -> Unit) {
+private fun TurntableProgress(
+    positionMsState: State<Long>,
+    durationMs: Long,
+    hasSong: Boolean,
+    label: String,
+    onSeek: (Long) -> Unit,
+    accentColor: Color
+) {
     val positionMs by positionMsState
     val enabled = hasSong && durationMs > 0L
     val fraction = if (durationMs > 0L) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
     val ink = Color(0xFFE9E9EF)
-    val accent = Color(0xFFF33F60)
+    val accent = accentColor
     fun time(ms: Long): String {
         val seconds = ms.coerceAtLeast(0L) / 1000L
         return "${seconds / 60}:${(seconds % 60).toString().padStart(2, '0')}"
