@@ -106,6 +106,7 @@ fun TurntablePlayer(
     onShuffle: () -> Unit,
     onRepeat: () -> Unit,
     record: @Composable (Modifier) -> Unit,
+    sleeve: @Composable (Modifier) -> Unit,
     quality: @Composable () -> Unit,
     footer: @Composable () -> Unit,
     emptyState: @Composable () -> Unit,
@@ -129,12 +130,42 @@ fun TurntablePlayer(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Spacer(Modifier.height(12.dp))
-                // Center the record across the entire player width, with no tonearm or fake chassis.
-                // VinylRecord already draws its own physically grounded shadow.
+                // The sleeve is a stationary square album jacket behind the rotating disc.
+                // Both elements share one centered stage, preserving the record's screen alignment.
                 Box(
                     modifier = Modifier.fillMaxWidth().height(stageSize),
                     contentAlignment = Alignment.Center
                 ) {
+                    Box(
+                        modifier = Modifier
+                            .size(stageSize * 0.72f)
+                            .offset(x = -stageSize * 0.13f, y = -stageSize * 0.14f)
+                            .graphicsLayer { rotationZ = -3f }
+                            .shadow(
+                                elevation = 8.dp,
+                                shape = RoundedCornerShape(2.dp),
+                                clip = false,
+                                ambientColor = Color.Black.copy(alpha = 0.17f),
+                                spotColor = Color.Black.copy(alpha = 0.23f)
+                            )
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(Color(0xFFE4E2DB))
+                    ) {
+                        // Album cover is outside the record's rotation layer: it never spins.
+                        sleeve(Modifier.matchParentSize())
+                        Box(
+                            Modifier.matchParentSize().background(
+                                Brush.linearGradient(
+                                    listOf(
+                                        Color.White.copy(alpha = 0.12f),
+                                        Color.Transparent,
+                                        Color.Black.copy(alpha = 0.09f)
+                                    )
+                                )
+                            )
+                        )
+                    }
+                    // The vinyl and its small center label alone rotate during playback.
                     record(Modifier.size(stageSize * 0.88f))
                 }
                 // Secondary playback modes remain accessible, but do not crowd the disc.
