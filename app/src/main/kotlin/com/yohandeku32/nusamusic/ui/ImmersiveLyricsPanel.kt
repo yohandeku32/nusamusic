@@ -107,7 +107,7 @@ fun ImmersiveLyricsPanel(
                         "The playing song changed. Save its lyrics again."
                     }
                     val target = folderAccess.find(snapshot.song)
-                        ?: error("This folder does not contain the original MP3. Select its actual music folder.")
+                        ?: error("The song is not in this folder tree. Select the parent Music folder containing all your albums.")
                     writeLyrics(snapshot, target)
                 } catch (cancelled: CancellationException) {
                     throw cancelled
@@ -131,9 +131,9 @@ fun ImmersiveLyricsPanel(
                 }
                 val target = folderAccess.find(snapshot.song)
                 if (target == null) {
-                    // First time only (or another folder outside existing
-                    // grants): Android's folder picker grants durable access.
-                    // Automatically finish this same save after selection.
+                    // Choose the parent Music folder once, not a separate Artist/Album
+                    // folder for every song. The persisted SAF grant includes all
+                    // descendants, and this Save resumes automatically.
                     pendingFolder = snapshot
                     folderPicker.launch(null)
                 } else {
