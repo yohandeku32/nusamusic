@@ -41,76 +41,93 @@ internal class LyricsFolderAccess(private val context: Context) {
             .toList()
     }
 
-    /**
-     * A single SAF grant to the parent Music directory covers every descendant.
-     * The MediaStore relative path lets us locate deep songs without walking
-     * thousands of unrelated artists, folders or files on each Save.
-     */
+    /** Prefer the exact MP3 location inside a persisted parent-folder grant. */
     suspend fun find(song: Song): Uri? = withContext(Dispatchers.IO) {
         val trees = authorizedTrees()
         if (trees.isEmpty()) return@withContext null
-        val (name, relativePath) = indexedLocation(song)
-        if (name == null || !name.endsWith(".mp3", ignoreCase = true)) {
-            return@withContext null
-        }
+        val location = indexedLocation(song)
+        val filename = location.filename?.takeIf { it.endsWith(".mp3", ignoreCase = true) }
+            ?: throw IOException("The playing file is not a recognized MP3.")
 
-        // The digest is an identity check, never a filename-based guess.
-        val original = resolver.openInputStream(Uri.parse(song.uri))?.use {
-            digest(it)
-        } ?: throw IOException("Cannot read the currently playing MP3.")
+        // Compare bytes from the playing MediaStore URI against the exact SAF
+        // document before writing. A matching filename is never sufficient.
+        val original = resolver.openInputStream(Uri.parse(song.uri))?.use { digest(it) }
+            ?: throw IOException("Cannot read the currently playing MP3.")
         for (tree in trees) {
             coroutineContext.ensureActive()
             val direct = sourceDocumentWithinTree(song, tree)
             if (direct != null && matches(direct, original)) return@withContext direct
 
-            // Fast path for regular MediaStore audio, including nested album
-            // directories and libraries containing more than 8,000 files.
-            val located = relativePath?.let { findAtMediaStorePath(tree, it, name, original) }
-            if (located != null) return@withContext located
+            val rootId = runCatching { DocumentsContract.getTreeDocumentId(tree) }
+                .getOrNull() ?: continue
+            val parentOptions = lyricsCandidateParentPaths(
+                location.relativePath, location.absolutePath, rootId
+            )
+            for (subfolders in parentOptions) {
+                coroutineContext.ensureActive()
+                // Android ExternalStorageProvider uses stable path-based IDs,
+                // even for Music/Genre/Artist/Album deeply nested in the tree.
+                // This avoids a multi-thousand-file directory walk.
+                val directPath = documentUriForNestedSong(tree, rootId, subfolders, filename)
+                if (directPath != null && matches(directPath, original))
+                    return@withContext directPath
 
-            // Providers without RELATIVE_PATH, or virtual providers with
-            // unusual IDs, still work using the user-authorized subtree only.
-            val scanned = findByFilenameRecursively(tree, name, original)
+                // SAF providers can use opaque IDs or case-different names:
+                // enumerate each directory by name without guessing IDs.
+                val nested = findAtMediaStorePath(tree, rootId, subfolders, filename, original)
+                if (nested != null) return@withContext nested
+            }
+
+            // The selected tree remains the only scope of fallback discovery;
+            // no unrestricted filesystem access and no permission escalation.
+            val scanned = findByFilenameRecursively(tree, filename, original)
             if (scanned != null) return@withContext scanned
         }
         null
     }
 
-    private fun indexedLocation(song: Song): Pair<String?, String?> {
-        val uri = Uri.parse(song.uri)
-        val mediaStoreInfo = if (android.os.Build.VERSION.SDK_INT >= 29 &&
-            uri.scheme == "content" && uri.authority == "media"
-        ) runCatching {
-            resolver.query(uri, arrayOf(
-                OpenableColumns.DISPLAY_NAME, MediaStore.MediaColumns.RELATIVE_PATH
-            ), null, null, null)?.use { cursor ->
-                if (!cursor.moveToFirst()) null else {
-                    val filenameColumn = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                    val locationColumn = cursor.getColumnIndex(MediaStore.MediaColumns.RELATIVE_PATH)
-                    val filename = if (filenameColumn >= 0 && !cursor.isNull(filenameColumn))
-                        cursor.getString(filenameColumn) else null
-                    val location = if (locationColumn >= 0 && !cursor.isNull(locationColumn))
-                        cursor.getString(locationColumn) else null
-                    filename to location
-                }
-            }
-        }.getOrNull() else null
+    private data class IndexedLocation(
+        val filename: String?, val relativePath: String?, val absolutePath: String?
+    )
 
-        val filename = mediaStoreInfo?.first ?: runCatching {
+    private fun indexedLocation(song: Song): IndexedLocation {
+        val uri = Uri.parse(song.uri)
+        // Android's media provider can return RELATIVE_PATH (the directory)
+        // and DATA (a location hint only; never open this filesystem path).
+        // Query separately: some OEM providers reject either column.
+        val displayName = runCatching {
             resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
-                ?.use { if (it.moveToFirst()) it.getString(0) else null }
-        }.getOrNull() ?: uri.lastPathSegment?.substringAfterLast('/')
-        return filename to mediaStoreInfo?.second
+                ?.use { c -> if (c.moveToFirst() && !c.isNull(0)) c.getString(0) else null }
+        }.getOrNull()
+        fun mediaColumn(column: String): String? {
+            if (uri.scheme != "content" || uri.authority != "media") return null
+            return runCatching {
+                resolver.query(uri, arrayOf(column), null, null, null)
+                    ?.use { c -> if (c.moveToFirst() && !c.isNull(0)) c.getString(0) else null }
+            }.getOrNull()
+        }
+        val absolute = mediaColumn(MediaStore.MediaColumns.DATA)
+        val relative = mediaColumn(MediaStore.MediaColumns.RELATIVE_PATH)
+        // Missing DISPLAY_NAME must not force a folder picker for every song.
+        val name = displayName ?: absolute?.substringAfterLast('/')
+            ?: uri.lastPathSegment?.substringAfterLast('/')
+        return IndexedLocation(name, relative, absolute)
+    }
+
+    private fun documentUriForNestedSong(
+        tree: Uri, rootId: String, subfolders: List<String>, filename: String
+    ): Uri? {
+        if (tree.authority != "com.android.externalstorage.documents") return null
+        val path = (listOf(rootId) + subfolders + filename).joinToString("/")
+        return runCatching {
+            DocumentsContract.buildDocumentUriUsingTree(tree, path)
+        }.getOrNull()
     }
 
     private suspend fun findAtMediaStorePath(
-        tree: Uri, relativePath: String, filename: String, original: Signature
+        tree: Uri, root: String, subfolders: List<String>,
+        filename: String, original: Signature
     ): Uri? {
-        val root = runCatching { DocumentsContract.getTreeDocumentId(tree) }.getOrNull()
-            ?: return null
-        // A Music grant is a prefix of Music/Artist/Album, not merely an
-        // unrelated directory with the same name as a track.
-        val subfolders = lyricsSubfoldersUnderParent(relativePath, root) ?: return null
         var parent = root
         for (folder in subfolders) {
             coroutineContext.ensureActive()
@@ -133,7 +150,7 @@ internal class LyricsFolderAccess(private val context: Context) {
                     if (cursor.getString(2) != DocumentsContract.Document.MIME_TYPE_DIR) continue
                     val foundName = cursor.getString(1) ?: continue
                     if (foundName == name) return@use cursor.getString(0)
-                    if (caseInsensitive == null && foundName.equals(name, ignoreCase = true)) {
+                    if (caseInsensitive == null && lyricsSameName(foundName, name)) {
                         caseInsensitive = cursor.getString(0)
                     }
                 }
@@ -159,7 +176,7 @@ internal class LyricsFolderAccess(private val context: Context) {
             while (it.moveToNext()) {
                 coroutineContext.ensureActive()
                 if (it.getString(2) == DocumentsContract.Document.MIME_TYPE_DIR ||
-                    !filename.equals(it.getString(1), ignoreCase = true)) continue
+                    !lyricsSameName(filename, it.getString(1))) continue
                 val size = if (it.isNull(3)) -1L else it.getLong(3)
                 if (size < 0 || size == original.size) {
                     val id = it.getString(0) ?: continue
@@ -253,7 +270,7 @@ internal class LyricsFolderAccess(private val context: Context) {
                     val id = it.getString(0) ?: continue
                     if (it.getString(2) == DocumentsContract.Document.MIME_TYPE_DIR) {
                         queue.add(id)
-                    } else if (filename.equals(it.getString(1), ignoreCase = true)) {
+                    } else if (lyricsSameName(filename, it.getString(1))) {
                         val size = if (it.isNull(3)) -1L else it.getLong(3)
                         if (size < 0 || size == original.size) {
                             candidates.add(DocumentsContract.buildDocumentUriUsingTree(tree, id))
@@ -286,3 +303,46 @@ internal fun lyricsSubfoldersUnderParent(relativePath: String, treeDocumentId: S
     if (!parent.indices.all { parent[it].equals(location[it], ignoreCase = true) }) return null
     return location.drop(parent.size)
 }
+
+/** Candidate subdirectory chains relative to the SAF folder the user picked. */
+internal fun lyricsCandidateParentPaths(
+    mediaRelativePath: String?, mediaAbsolutePath: String?, rootDocumentId: String
+): List<List<String>> {
+    val candidates = ArrayList<List<String>>(2)
+    for (path in listOfNotNull(mediaRelativePath, lyricsPathFromAbsolute(mediaAbsolutePath))) {
+        val subfolders = lyricsSubfoldersUnderParent(path, rootDocumentId) ?: continue
+        if (subfolders !in candidates) candidates.add(subfolders)
+    }
+    return candidates
+}
+
+/** Only use DATA as a directory hint for known Android external-storage mounts. */
+internal fun lyricsPathFromAbsolute(path: String?): String? {
+    val clean = path?.replace('\\', '/') ?: return null
+    if (clean.split('/').any { it == "." || it == ".." }) return null
+    val storage = when {
+        clean.startsWith("/storage/emulated/") -> {
+            val rest = clean.removePrefix("/storage/emulated/")
+            if (!rest.startsWith("0/")) return null
+            rest.removePrefix("0/")
+        }
+        clean.startsWith("/storage/") -> {
+            val rest = clean.removePrefix("/storage/")
+            if (!rest.contains('/')) return null
+            rest.substringAfter('/')
+        }
+        clean.startsWith("/mnt/media_rw/") -> {
+            val rest = clean.removePrefix("/mnt/media_rw/")
+            if (!rest.contains('/')) return null
+            rest.substringAfter('/')
+        }
+        else -> return null
+    }
+    return storage.substringBeforeLast('/', "").takeIf { it.isNotBlank() }
+}
+
+internal fun lyricsSameName(a: String?, b: String?): Boolean =
+    a != null && b != null &&
+        java.text.Normalizer.normalize(a, java.text.Normalizer.Form.NFC)
+            .equals(java.text.Normalizer.normalize(b, java.text.Normalizer.Form.NFC),
+                ignoreCase = true)
