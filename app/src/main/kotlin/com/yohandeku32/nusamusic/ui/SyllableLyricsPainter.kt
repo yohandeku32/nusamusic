@@ -246,30 +246,36 @@ internal class SyllableLyricsPainter(
         )
         // A single intact measured text run tilts and rises with the local
         // mountain, never distorting glyphs with separately clipped slices.
-        // The lyric travels upward along a shallow ribbon. Its *horizontal*
-        // glyph width stays exactly as measured, keeping letters and syllable
-        // spacing intact. Depth is expressed by the moving arc, tiny tilt,
-        // perspective and soft light — not by inflating each word.
-        val scaleX = 1f
+        // Expand every syllable as part of ONE word-shaped surface:
+        // measured text and kerning remain intact, with a shared scale and
+        // shared pivot so no neighbouring syllable grows/shrinks alone.
+        // The mountain-like effect comes from the local vertical lift.
+        val scaleX = 1f + 0.105f * pose.depth
         val scaleY = pose.scaleY
         val width = glyph.width
+        val pivot = Offset(
+            x = if (pose.depth > 0f) heldWordPivotX(
+                glyph.position.x, glyph.pathStartDp, pose.wordCenterDp, density
+            ) else glyph.position.x + width / 2f,
+            y = glyph.position.y + result.size.height * 0.8f
+        )
         val native = drawContext.canvas.nativeCanvas
         val saved = if (pose.depth > 0.0001f) native.save() else -1
         try {
             if (saved >= 0) {
                 glyph.perspective.apply(
                     native,
-                    pivotX = position.x + width * 0.5f,
-                    pivotY = position.y + result.size.height * 0.75f,
+                    pivotX = pivot.x,
+                    pivotY = pivot.y,
                     depth = pose.depth,
                     slope = pose.perspectiveSlope
                 )
             }
             withTransform({
-            val pivot = position + Offset(width / 2f, result.size.height * 0.8f)
-            rotate(pose.rotationDegrees, pivot)
-            scale(scaleX, scaleY, pivot)
-        }) {
+                // No separate per-syllable pivot, micro-bounce or stroke
+                // splitting: one transform for the whole shaped word.
+                scale(scaleX, scaleY, pivot)
+            }) {
             // TextLayoutResult reuses AndroidTextPaint: a null drawStyle retains
             // the last Stroke. Reset every ordinary pass explicitly to Fill.
             if (!halo) {
