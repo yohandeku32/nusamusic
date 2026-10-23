@@ -64,6 +64,32 @@ internal fun heldWordPivotX(
     density: Float
 ): Float = glyphX + (wordCenterDp - glyphPathStartDp) * density
 
+/**
+ * A restrained forward bulge rides along the existing travelling mountain.
+ * The word still has ONE horizontal scale and pivot to protect typography.
+ * Only vertical projection receives a small local swell as the crest crosses
+ * each measured syllable; no per-character clipping, kerning changes or loops.
+ *
+ * Both inputs are sampled from authored word time and ease to zero at the
+ * beginning/end of the hold, including when playback seeks or pauses.
+ */
+internal data class HeldWordForwardBulge(
+    val scaleY: Float,
+    val cameraDepth: Float
+)
+
+internal fun heldWordForwardBulge(
+    wordDepth: Float,
+    crestIntensity: Float
+): HeldWordForwardBulge {
+    val depth = wordDepth.coerceIn(0f, 1f)
+    val crest = crestIntensity.coerceIn(0f, 1f)
+    return HeldWordForwardBulge(
+        scaleY = 1f + 0.055f * depth + 0.032f * crest,
+        cameraDepth = (0.78f * depth + 0.22f * crest).coerceIn(0f, 1f)
+    )
+}
+
 internal class LyricsHeldWordWave(units: List<LyricsHeldWordUnit>) {
     private data class Word(
         val left: Float,
@@ -159,11 +185,10 @@ internal class LyricsHeldWordWave(units: List<LyricsHeldWordUnit>) {
             // bounce, hard clamp, or discontinuity at the vocal's end.
             heldWordSizeRelease((progress - peakAt) / (1f - peakAt))
         }
-        // ONE expansion envelope for the complete word, independent of
-        // position. The mountain only changes the vertical baseline + light,
-        // never the font size of individual measured syllables. All glyphs
-        // share the same perspective/scale pivot in the painter, preserving
-        // their spacing and shaped letter proportions.
+        // ONE horizontal expansion envelope for the complete word protects
+        // letter spacing. A small travelling VERTICAL bulge is added only
+        // by the painter as the mountain passes each shaped syllable. All
+        // measured runs retain a shared pivot and their native glyph shaping.
         val depth = (holdWeight * sizeEnvelope).coerceIn(0f, 1f)
         return LyricsHeldWordPose(
             liftDp = -8.1f * strength,
