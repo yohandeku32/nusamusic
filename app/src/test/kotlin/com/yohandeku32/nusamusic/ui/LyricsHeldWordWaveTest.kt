@@ -408,4 +408,40 @@ class LyricsHeldWordWaveTest {
         assertEquals(LyricsHeldWordPose(), wave.pose(1, 7_100, 120f))
     }
 
+    @Test fun travellingForwardBulgeFollowsHeldMountainWithoutChangingHorizontalTypography() {
+        val wave = LyricsHeldWordWave(listOf(
+            LyricsHeldWordUnit("se", 1000, 1300, 0f, 30f),
+            LyricsHeldWordUnit("la", 1300, 1600, 30f, 60f),
+            LyricsHeldWordUnit("ma", 1600, 1900, 60f, 90f),
+            LyricsHeldWordUnit("nya", 1900, 7000, 90f, 120f)
+        ))
+        fun bulge(index: Int, at: Int) = wave.pose(index, at, 15f + 30f * index).let {
+            heldWordForwardBulge(it.depth, it.intensity)
+        }
+        // The bulge starts on the left and travels to the right, while the
+        // unmodified word-depth remains shared by all measured text runs.
+        assertTrue(bulge(0, 2800).scaleY > bulge(3, 2800).scaleY)
+        assertTrue(bulge(3, 5650).scaleY > bulge(0, 5650).scaleY)
+        assertEquals(wave.pose(0, 4200, 15f).depth, wave.pose(3, 4200, 105f).depth, 0f)
+        assertEquals(HeldWordForwardBulge(1f, 0f), bulge(0, 1000))
+        assertEquals(HeldWordForwardBulge(1f, 0f), bulge(3, 7000))
+
+        // No position-dependent horizontal scale or per-character slices.
+        // At 120 Hz the projection and release do not jump or restart.
+        for (hz in listOf(60, 90, 120)) {
+            var previous = bulge(2, 0)
+            for (frame in 1..hz * 8) {
+                val at = (frame * 1000.0 / hz).toInt()
+                val current = bulge(2, at)
+                assertTrue("vertical growth jumped at $hz Hz, $at ms",
+                    abs(current.scaleY - previous.scaleY) < 0.0025f)
+                assertTrue("camera projection jumped at $hz Hz, $at ms",
+                    abs(current.cameraDepth - previous.cameraDepth) < 0.025f)
+                assertTrue("forward growth exceeds restrained limits",
+                    current.scaleY in 1f..1.088f)
+                previous = current
+            }
+        }
+    }
+
 }
