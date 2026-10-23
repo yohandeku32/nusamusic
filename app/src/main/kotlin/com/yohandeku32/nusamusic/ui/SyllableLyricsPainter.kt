@@ -249,9 +249,14 @@ internal class SyllableLyricsPainter(
         // Expand every syllable as part of ONE word-shaped surface:
         // measured text and kerning remain intact, with a shared scale and
         // shared pivot so no neighbouring syllable grows/shrinks alone.
-        // The mountain-like effect comes from the local vertical lift.
+        // The mountain travels through local lift and a restrained Y bulge.
+        // A travelling, restrained forward swell follows the arched crest.
+        // Horizontal magnification remains shared to protect word spacing.
+        // Local vertical scale and camera depth make the leading syllables
+        // approach the viewer before the trailing ones, without clipped glyphs.
+        val forwardBulge = heldWordForwardBulge(pose.depth, pose.intensity)
         val scaleX = 1f + 0.105f * pose.depth
-        val scaleY = pose.scaleY
+        val scaleY = forwardBulge.scaleY
         val width = glyph.width
         val pivot = Offset(
             x = if (pose.depth > 0f) heldWordPivotX(
@@ -267,7 +272,7 @@ internal class SyllableLyricsPainter(
                     native,
                     pivotX = pivot.x,
                     pivotY = pivot.y,
-                    depth = pose.depth,
+                    depth = forwardBulge.cameraDepth,
                     slope = pose.perspectiveSlope
                 )
             }
