@@ -56,6 +56,8 @@ internal fun PlayerSettingsContent(
     hasLyricsSong: Boolean,
     lyricsLoading: Boolean,
     onRetryLyrics: () -> Unit,
+    onlineLyricsEnabled: Boolean,
+    onOnlineLyricsChange: (Boolean) -> Unit,
     titleFontSize: Float,
     onTitleFontSizeChange: (Float) -> Unit,
     onTitleFontSizeChangeFinished: () -> Unit,
@@ -320,6 +322,17 @@ internal fun PlayerSettingsContent(
             }
             if (LYRICS_ENABLED && playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) item(key = "lyrics") {
                 SettingsSection(settingsText("Lirik", "Lyrics")) {
+                    SettingToggle(
+                        title = settingsText("Lirik online", "Online lyrics"),
+                        subtitle = settingsText(
+                            "Cari lirik TTML dan backing vocal dari internet. Jika mati, hanya gunakan lirik yang tersimpan di perangkat.",
+                            "Find TTML and backing vocals online. When off, use only lyrics stored on your device."
+                        ),
+                        checked = onlineLyricsEnabled,
+                        onCheckedChange = onOnlineLyricsChange,
+                        icon = Icons.Default.CloudDownload
+                    )
+                    SettingsDivider()
                     Surface(
                         shape = RoundedCornerShape(18.dp),
                         color = colors.primary.copy(alpha = 0.08f)
