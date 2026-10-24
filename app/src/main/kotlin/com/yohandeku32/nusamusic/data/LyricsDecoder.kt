@@ -25,7 +25,8 @@ private data class TtmlVoiceEntry(val start: Int, val content: String, val agent
 private data class NormalizedTtml(
     val xml: String,
     val lineOnly: Set<Pair<Int, String>>,
-    val voices: List<TtmlVoiceEntry>
+    val voices: List<TtmlVoiceEntry>,
+    val declaredAgents: List<String>
 )
 
 /** Adapts common local-file dialects to Accompanist's timed model. */
@@ -43,9 +44,11 @@ object LyricsDecoder {
         val duration = durationMs.coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
         val inferredEnds = mutableSetOf<LyricsUnitKey>()
         var taggedVoices: List<TtmlVoiceEntry> = emptyList()
+        var declaredAgents: List<String> = emptyList()
         val parsed = if (content.startsWith('<')) {
             val normalized = normalizeTtml(content, duration, inferredEnds)
             taggedVoices = normalized.voices
+            declaredAgents = normalized.declaredAgents
             val ttml = TTMLParser.parse(normalized.xml)
             ttml.copy(lines = ttml.lines.map { line ->
                 if (line is KaraokeLine && (line.start to line.syllables.joinToString("") { it.content }.trim()) in normalized.lineOnly)
@@ -83,7 +86,13 @@ object LyricsDecoder {
         // TTML agent tags identify vocalists; don't guess duet sides from
         // alternating lines or accompaniment timing. Match by actual sung
         // onset and content after the parser normalizes timing and sorts rows.
-        val agentIds = taggedVoices.map { it.agentId }.distinct()
+        // Use stable TTML metadata declaration order, not the order in which
+        // each singer first starts singing. Otherwise verses that begin with
+        // singer 2 swap the left/right assignment on each song.
+        val heardAgents = taggedVoices.map { it.agentId }.distinct()
+        val agentIds = (
+            declaredAgents.filter { it in heardAgents } + heardAgents
+        ).distinct()
         val duetRight = if (agentIds.size >= 2) {
             val secondSinger = agentIds[1]
             val used = BooleanArray(taggedVoices.size)
@@ -218,9 +227,25 @@ object LyricsDecoder {
         require(Regex("\\bbegin\\s*=").containsMatchIn(content)) { "TTML has no timed lyrics" }
         val lineOnly = mutableSetOf<Pair<Int, String>>()
         val taggedVoices = ArrayList<TtmlVoiceEntry>()
+        // Metadata declares the singer identities independently of who
+        // happens to sing first. Keep its order stable through sorted lines.
+        val declaredAgents = buildList {
+            val children = root.getElementsByTagName("*")
+            for (index in 0 until children.length) {
+                val child = children.item(index) as? Element ?: continue
+                if (child.localName != "agent" ||
+                    child.namespaceURI != "http://www.w3.org/ns/ttml#metadata"
+                ) continue
+                val id = child.getAttribute("xml:id").ifBlank {
+                    child.getAttribute("id")
+                }.trim().removePrefix("#")
+                if (id.isNotBlank() && id !in this) add(id)
+            }
+        }
         // Resolve the nearest TTML metadata ttm:agent, plus commonly exported
         // speaker/voice attributes. A one-singer TTML remains left aligned.
         fun speaker(element: Element): String {
+            // Explicit paragraph voice has priority over an inherited voice.
             var cursor: Node? = element
             while (cursor is Element) {
                 val attrs = cursor.attributes
@@ -229,11 +254,27 @@ object LyricsDecoder {
                     val name = (attr.localName ?: attr.nodeName.substringAfter(':')).lowercase()
                     if (name in setOf("agent", "voice", "speaker") &&
                         attr.nodeValue.isNotBlank()
-                    ) return attr.nodeValue.trim()
+                    ) return attr.nodeValue.trim().removePrefix("#")
                 }
                 cursor = cursor.parentNode
             }
-            return ""
+            // Some word-timed TTML tags only label their spans. Treat the
+            // paragraph as one singer only if all its tagged spans agree.
+            val speakers = mutableSetOf<String>()
+            val spans = element.getElementsByTagName("*")
+            for (i in 0 until spans.length) {
+                val span = spans.item(i) as? Element ?: continue
+                if (span.localName != "span") continue
+                val attrs = span.attributes
+                for (j in 0 until attrs.length) {
+                    val attr = attrs.item(j)
+                    val name = (attr.localName ?: attr.nodeName.substringAfter(':')).lowercase()
+                    if (name in setOf("agent", "voice", "speaker") &&
+                        attr.nodeValue.isNotBlank()
+                    ) speakers += attr.nodeValue.trim().removePrefix("#")
+                }
+            }
+            return speakers.singleOrNull().orEmpty()
         }
         var nodes = 0
         fun escaped(text: String) = text.replace("&", "&amp;").replace("<", "&lt;")
@@ -289,6 +330,6 @@ object LyricsDecoder {
             return "<$name$attributes>$children</$name>"
         }
         val rendered = render(root, 0, duration, 0)
-        return NormalizedTtml(rendered, lineOnly, taggedVoices)
+        return NormalizedTtml(rendered, lineOnly, taggedVoices, declaredAgents)
     }
 }
