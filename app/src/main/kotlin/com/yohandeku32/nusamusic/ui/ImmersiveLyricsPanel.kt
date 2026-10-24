@@ -13,8 +13,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
@@ -270,27 +268,6 @@ fun ImmersiveLyricsPanel(
             data, entry?.embeddedLyricsQuality ?: 0,
             entry?.embeddedHasBackingVocals ?: false
         ))
-        // One-tap direct metadata refresh for M4A files edited in another
-        // app. No MediaStore rescan, app restart or online re-download.
-        if (song != null) {
-            IconButton(
-                onClick = {
-                    state.load(
-                        song, scope, onlineEnabled = onlineLyricsEnabled,
-                        refreshEmbeddedOnly = true
-                    )
-                },
-                modifier = Modifier.align(Alignment.TopEnd)
-                    .padding(top = 2.dp, end = if (saveVisible) 64.dp else 16.dp)
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.42f))
-            ) {
-                Icon(Icons.Default.Refresh, contentDescription = "Refresh embedded lyrics",
-                    tint = Color.White)
-            }
-        }
-
         // Offer one-tap Save for a missing lyric OR a richer online version.
         if (saveVisible && song != null) {
             val queued = queuedForSong
