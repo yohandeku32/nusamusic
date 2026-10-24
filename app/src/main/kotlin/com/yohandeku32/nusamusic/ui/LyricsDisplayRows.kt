@@ -12,7 +12,12 @@ internal class LyricsDisplayRows(lines: List<ISyncedLine>) {
     init {
         val mains = lines.indices.filter { !(lines[it] as? KaraokeLine)?.isAccompaniment.orFalse() }
         if (mains.isEmpty()) {
-            rows = if (lines.isEmpty()) emptyList() else listOf(LyricsDisplayRow(null, 0, lines.mapIndexedNotNull { index, line -> (line as? KaraokeLine)?.let { IndexedValue(index, it) } }))
+            rows = if (lines.isEmpty()) emptyList() else listOf(LyricsDisplayRow(
+                null, 0,
+                lines.mapIndexedNotNull { index, line ->
+                    (line as? KaraokeLine)?.let { IndexedValue(index, it) }
+                }.distinctBy { it.value }
+            ))
         } else {
             val backing = List(mains.size) { ArrayList<IndexedValue<KaraokeLine>>() }
             lines.forEachIndexed { index, line ->
@@ -26,7 +31,14 @@ internal class LyricsDisplayRows(lines: List<ISyncedLine>) {
                 val owner = if (line is KaraokeLine && line.isAccompaniment) (low - 1).coerceAtLeast(0)
                     else mains.binarySearch(index)
                 lineToRow[index] = owner
-                if (line is KaraokeLine && line.isAccompaniment) backing[owner] += IndexedValue(index, line)
+                if (line is KaraokeLine && line.isAccompaniment &&
+                    backing[owner].none { it.value == line }
+                ) {
+                    // An identical timed backing line can be present twice in
+                    // imported metadata. Preserve both source-to-row mappings
+                    // but draw it only once; distinct harmonies stay separate.
+                    backing[owner] += IndexedValue(index, line)
+                }
             }
             rows = mains.mapIndexed { row, index -> LyricsDisplayRow(lines[index], index, backing[row]) }
         }
