@@ -14,6 +14,7 @@ internal class EmbeddedLyricsReader(
     private val lyricists = LinkedHashSet<String>()
     private var bytesRead = 0
     private var atomsRead = 0
+    private var preferredPlainLyrics: String? = null
     private val lyricKeys = setOf("LYRICS", "UNSYNCEDLYRICS", "UNSYNCED LYRICS", "SYNCEDLYRICS",
         "SYNCED LYRICS", "SYNCHRONIZEDLYRICS", "SYLT", "USLT", "LRC", "ENHANCED LRC", "TTML",
         "NUSAMUSIC_LYRICS")
@@ -38,7 +39,10 @@ internal class EmbeddedLyricsReader(
             magic.text(4, 4) == "ftyp" -> isolate { atoms(start, length, 0, false) }
             magic.text(0, 4) in setOf("RIFF", "FORM") -> isolate { riff(start, magic.text(0, 4) == "RIFF") }
         }
-        return EmbeddedLyricsMetadata(candidates.toList(), SongCredits(composers.toList(), lyricists.toList()))
+        return EmbeddedLyricsMetadata(
+            candidates.toList(), SongCredits(composers.toList(), lyricists.toList()),
+            preferredPlainLyrics
+        )
     }
 
     private inline fun isolate(block: () -> Unit) {
@@ -247,13 +251,27 @@ internal class EmbeddedLyricsReader(
         for (atom in atomList(start, end)) isolate {
             when {
                 atom.name in setOf("moov", "udta", "ilst") -> atoms(atom.start, atom.end, depth + 1, atom.name == "ilst")
-                atom.name == "meta" -> atoms(atom.start + 4, atom.end, depth + 1, false)
+                atom.name == "meta" -> {
+                    // iTunes uses a 4-byte version/flags prefix; QuickTime
+                    // editors also write meta as a plain container without it.
+                    // Probe headers instead of silently losing those lyrics.
+                    val withFullBoxHeader = runCatching {
+                        atomList(atom.start + 4, atom.end).any {
+                            it.name in setOf("ilst", "hdlr", "keys", "meta")
+                        }
+                    }.getOrDefault(false)
+                    atoms(
+                        if (withFullBoxHeader) atom.start + 4 else atom.start,
+                        atom.end, depth + 1, false
+                    )
+                }
                 atom.name == "ID32" && atom.end - atom.start <= MAX_TAG -> {
                     val data = bytes(atom.start, (atom.end - atom.start).toInt())
                     val index = (0..minOf(16, data.size - 3)).firstOrNull { data.text(it, 3) == "ID3" }
                     if (index != null) id3(data.copyOfRange(index, data.size))
                 }
-                inIlst && atom.name in setOf("©lyr", "©wrt", "----") -> {
+                (inIlst || atom.name == "©lyr") &&
+                    atom.name in setOf("©lyr", "©wrt", "----") -> {
                     val children = atomList(atom.start, atom.end)
                     val name = children.firstOrNull { it.name == "name" }?.let {
                         if (it.end - it.start in 4..256) bytes(it.start + 4, (it.end - it.start - 4).toInt()).toString(Charsets.UTF_8) else ""
@@ -264,7 +282,16 @@ internal class EmbeddedLyricsReader(
                             if (it.end - it.start in 8..LyricsDecoder.MAX_BYTES + 8L) {
                                 val data = bytes(it.start, (it.end - it.start).toInt())
                                 val type = data.be(0, 4).toInt() and 0xFFFFFF
-                                if (type in 0..2) field(key, decode(data.copyOfRange(8, data.size), if (type == 2) 2 else 3))
+                                if (type in 0..2) {
+                                    val decoded = decode(
+                                        data.copyOfRange(8, data.size),
+                                        if (type == 2) 2 else 3
+                                    )
+                                    field(key, decoded)
+                                    if (atom.name == "©lyr" && decoded.isNotBlank()) {
+                                        preferredPlainLyrics = decoded
+                                    }
+                                }
                             }
                         }
                     }
