@@ -442,7 +442,17 @@ object LyricsDecoder {
                 val spans = node.getElementsByTagName("*")
                 val voiceId = speaker(node)
                 val leadText = mainText(node).trim()
-                val right = explicitRight(node)
+                // A few providers put the positioning style on each word
+                // span instead of its enclosing paragraph. Respect it only
+                // when all explicitly aligned main-vocal spans agree.
+                val right = explicitRight(node) ?: buildSet {
+                    for (i in 0 until spans.length) {
+                        val span = spans.item(i) as? Element ?: continue
+                        if (span.localName != "span" || span.textContent.isBlank() ||
+                            withinBacking(span, node)) continue
+                        explicitRight(span)?.let { add(it) }
+                    }
+                }.singleOrNull()
                 if (leadText.isNotBlank() && (voiceId.isNotBlank() || right != null)) {
                     // The lead and nested backing singer can differ. Match
                     // only the lead's own vocal text and onset here.
