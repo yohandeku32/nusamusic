@@ -128,7 +128,7 @@ object LyricsDecoder {
                         // a valid second voice when v1 is temporarily silent.
                         val right = voice.explicitRight ?: (
                             (secondSinger != null && voice.agentId == secondSinger) ||
-                                (secondSinger == null && declaredAgents.isEmpty() &&
+                                (secondSinger == null &&
                                     Regex("(?i)^(?:v|voice|agent|singer|speaker|person)[-_]?0*2$")
                                         .matches(voice.agentId))
                         )
