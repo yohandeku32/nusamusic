@@ -218,9 +218,11 @@ internal fun selectLatestEmbeddedLyrics(
         }
     }?.takeIf { it.isNotBlank() } ?: selected.stored.content
 
-    // Compare actual words, ignoring timestamp markup, line breaks and case.
-    // Do NOT choose stale timed lyrics if the third-party editor changed words.
-    return if (normalizeLyricsTag(userFacing) != normalizeLyricsTag(allTimedText)) plain else selected
+    // The standard ©lyr field is the user-editable version. Preserve
+    // punctuation and capitalization changes too; only normalize spacing
+    // because the timed engine joins separate lines with spaces.
+    fun visibleText(value: String) = value.trim().replace(Regex("\\s+"), " ")
+    return if (visibleText(userFacing) != visibleText(allTimedText)) plain else selected
 }
 
 /** Accompaniment must be *decoded*, not merely mentioned in untrusted XML text. */
