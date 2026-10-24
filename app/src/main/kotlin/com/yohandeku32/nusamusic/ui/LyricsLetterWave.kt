@@ -67,10 +67,10 @@ internal class LyricsLetterWave(units: List<LyricsHeldWordUnit>) {
         if (elapsed <= 0f || elapsed >= 410f) return 0f
 
         // Slow acceleration/deceleration has zero velocity at both ends.
-        // 160ms up, 250ms down, max 2.35dp: restrained but visible.
+        // 160ms up, 250ms down, max 1.55dp: softer, with enough movement to remain perceptible.
         val rise = heldWordEase(elapsed / 160f)
         val fall = 1f - heldWordEase((elapsed - 160f) / 250f)
-        return -2.35f * rise * fall
+        return -1.55f * rise * fall
     }
 }
 
