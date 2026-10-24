@@ -67,6 +67,48 @@ internal class LyricsVocalWindows(line: ISyncedLine) {
             else add(start to end)
         }
     }
+    companion object {
+        /** Preview begins 700ms before a backing vocal actually sings. */
+        const val BACKING_PREVIEW_MS = 700
+        private const val BACKING_RELEASE_MS = 380
+    }
+
+    /**
+     * Visual pre-roll only. The lyric text is visible before its first
+     * syllable, but karaoke fills still use the original authored time.
+     * This is a continuous envelope through the exact vocal onset (1 -> 1)
+     * and through gaps / final release, with no extra time shifting.
+     */
+    fun previewPresence(now: Int, resetAt: Int): Float {
+        if (windows.isEmpty()) return 0f
+        var low = 0
+        var high = windows.size
+        while (low < high) {
+            val mid = (low + high) / 2
+            if (windows[mid].first <= now) low = mid + 1 else high = mid
+        }
+        fun windowOpacity(window: Pair<Int, Int>): Float {
+            val (start, end) = window
+            if (now.toLong() < start.toLong() - BACKING_PREVIEW_MS ||
+                now.toLong() >= end.toLong() + BACKING_RELEASE_MS ||
+                (resetAt >= end && now >= end)) return 0f
+            if (now < start) return lyricEase(
+                ((now.toLong() - start.toLong() + BACKING_PREVIEW_MS) /
+                    BACKING_PREVIEW_MS.toFloat()).coerceIn(0f, 1f)
+            )
+            if (now < end) return 1f
+            return 1f - lyricEase(
+                ((now.toLong() - end.toLong()) /
+                    BACKING_RELEASE_MS.toFloat()).coerceIn(0f, 1f)
+            )
+        }
+        return maxOf(
+            windows.getOrNull(low - 2)?.let(::windowOpacity) ?: 0f,
+            windows.getOrNull(low - 1)?.let(::windowOpacity) ?: 0f,
+            windows.getOrNull(low)?.let(::windowOpacity) ?: 0f
+        )
+    }
+
     fun presence(now: Int, resetAt: Int): Float {
         var low = 0
         var high = windows.size

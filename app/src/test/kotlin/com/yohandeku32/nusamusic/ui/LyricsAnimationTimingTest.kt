@@ -76,6 +76,40 @@ class LyricsAnimationTimingTest {
             previous = value
         }
     }
+    @Test fun backingPreviewBeginsBeforeVocalButKeepsAuthoredHighlightTime() {
+        val vocal = KaraokeLine(
+            listOf(KaraokeSyllable("Hello", 5000, 6100)),
+            null, true, KaraokeAlignment.Start, 5000, 6100
+        )
+        val windows = LyricsVocalWindows(vocal)
+        assertEquals(0f, windows.previewPresence(4299, 0), 0f)
+        assertEquals(0f, windows.previewPresence(4300, 0), 0f)
+        assertTrue(windows.previewPresence(4650, 0) in 0.49f..0.51f)
+        assertEquals(1f, windows.previewPresence(4999, 0), 0.0001f)
+        assertEquals(1f, windows.previewPresence(5000, 0), 0f)
+        assertEquals(1f, windows.previewPresence(5800, 0), 0f)
+        assertTrue(windows.previewPresence(6290, 0) in 0.49f..0.51f)
+        assertEquals(0f, windows.previewPresence(6480, 0), 0f)
+        assertEquals(0f, vocal.syllables.single().progress(4650), 0f)
+        assertEquals(0f, vocal.syllables.single().progress(4999), 0f)
+    }
+
+    @Test fun backingPreviewCrossesSmallGapsWithoutVisiblePops() {
+        val vocal = KaraokeLine(listOf(
+            KaraokeSyllable("One", 1000, 1200),
+            KaraokeSyllable("Two", 1750, 2050)
+        ), null, true, KaraokeAlignment.Start, 1000, 2050)
+        val windows = LyricsVocalWindows(vocal)
+        var last = 0f
+        for (ms in 300..2500 step 10) {
+            val current = windows.previewPresence(ms, 0)
+            assertTrue(current in 0f..1f)
+            assertTrue("Backing preview jumped at ${ms}ms",
+                kotlin.math.abs(current - last) < 0.09f)
+            last = current
+        }
+    }
+
     @Test fun voiceWindowsRepairOrderingAndMergeOverlapsWithoutInventingUnits() {
         val line = KaraokeLine(listOf(KaraokeSyllable("later", 3000, 5000), KaraokeSyllable("early", 1000, 4000)),
             null, true, KaraokeAlignment.Start, 1000, 5000)

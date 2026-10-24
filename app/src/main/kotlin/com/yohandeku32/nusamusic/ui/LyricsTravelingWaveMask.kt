@@ -1,5 +1,7 @@
 package com.yohandeku32.nusamusic.ui
 
+import kotlin.math.abs
+
 /**
  * Measured vocal path in lyric-reading order. Positions are calculated once
  * from the existing SyllableLayout glyph bounds, not from assumed word widths.
@@ -21,6 +23,33 @@ internal class LyricsTravelingWaveMask(spans: List<LyricsVocalSpan>) {
     private val timed = spans
         .filter { it.endMs > it.startMs && it.endDp > it.startDp }
         .sortedWith(compareBy<LyricsVocalSpan> { it.startMs }.thenBy { it.endMs })
+
+    // One shared entrance for a continuous phrase, not one per syllable.
+    private val phraseStarts = buildList {
+        var farthestEnd = Long.MIN_VALUE
+        for (span in timed) {
+            if (farthestEnd == Long.MIN_VALUE ||
+                span.startMs.toLong() - farthestEnd > 260L) add(span.startMs)
+            farthestEnd = maxOf(farthestEnd, span.endMs.toLong())
+        }
+    }
+
+    /**
+     * C1-smooth wave on a whole SHAPED WORD. All its syllables share a center
+     * and rise together; the crest moves continuously across adjacent words.
+     * It never restarts per letter, per syllable, or at a normal word boundary.
+     */
+    fun coherentInfluence(front: LyricsVocalFront?, wordCenterDp: Float, playbackMs: Int): Float {
+        if (front == null || front.intensity <= 0f) return 0f
+        val onset = phraseStarts.lastOrNull { it <= playbackMs } ?: return 0f
+        val entrance = lyricEase((playbackMs.toLong() - onset) / 260f)
+        val delta = wordCenterDp - front.positionDp
+        // Soft, wide leading shoulder and slightly longer trailing descent.
+        val rangeDp = if (delta >= 0f) 60f else 92f
+        val distance = (abs(delta) / rangeDp).coerceIn(0f, 1f)
+        return (entrance * front.intensity * (1f - lyricEase(distance)))
+            .coerceIn(0f, 1f)
+    }
 
     /**
      * One playhead for the whole row. The timestamp is the same media clock
@@ -132,4 +161,27 @@ internal class LyricsTravelingWaveMask(spans: List<LyricsVocalSpan>) {
         return (front.intensity * attack * release).coerceIn(0f, 1f)
     }
 
+}
+
+/** Same pivot for all the shaped syllables making up a word. */
+internal fun lyricCoherentWordCenters(units: List<LyricsHeldWordUnit>): FloatArray {
+    val centers = FloatArray(units.size)
+    var index = 0
+    while (index < units.size) {
+        val first = index
+        while (index + 1 < units.size) {
+            val current = units[index]
+            val next = units[index + 1]
+            if (current.content.lastOrNull()?.isWhitespace() != false ||
+                next.content.firstOrNull()?.isWhitespace() != false ||
+                current.content.trim().any(Char::isWhitespace) ||
+                next.content.trim().any(Char::isWhitespace) ||
+                next.pathStartDp - current.pathEndDp > 2.5f) break
+            index++
+        }
+        val center = (units[first].pathStartDp + units[index].pathEndDp) * 0.5f
+        for (part in first..index) centers[part] = center
+        index++
+    }
+    return centers
 }

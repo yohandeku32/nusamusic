@@ -12,6 +12,36 @@ class LyricsTravelingWaveMaskTest {
     )
     private val mask = LyricsTravelingWaveMask(spans)
 
+    @Test fun oneWaveMovesWholeWordsWithoutRestartAtSyllableBoundary() {
+        val waves = LyricsTravelingWaveMask(listOf(
+            LyricsVocalSpan(1000, 1270, 0f, 45f),
+            LyricsVocalSpan(1270, 1510, 45f, 90f),
+            LyricsVocalSpan(1510, 1810, 100f, 150f)
+        ))
+        val units = listOf(
+            LyricsHeldWordUnit("ba", 1000, 1270, 0f, 20f),
+            LyricsHeldWordUnit("ru ", 1270, 1510, 20f, 45f),
+            LyricsHeldWordUnit("lagi", 1510, 1810, 100f, 150f)
+        )
+        val centers = lyricCoherentWordCenters(units)
+        assertEquals(22.5f, centers[0], 0f)
+        assertEquals(22.5f, centers[1], 0f)
+        assertEquals(125f, centers[2], 0f)
+        var previous = 0f
+        for (time in 1000..2070 step 8) {
+            val current = waves.coherentInfluence(waves.front(time), centers[0], time)
+            assertTrue(current in 0f..1f)
+            assertTrue("Jolt at ${time}ms", abs(current - previous) < 0.09f)
+            previous = current
+        }
+        val before = waves.coherentInfluence(waves.front(1269), centers[0], 1269)
+        val after = waves.coherentInfluence(waves.front(1270), centers[0], 1270)
+        assertTrue(abs(before - after) < 0.04f)
+        assertEquals(0f, waves.coherentInfluence(waves.front(950), centers[0], 950), 0f)
+        assertTrue(waves.coherentInfluence(waves.front(1400), centers[0], 1400) > 0f)
+        assertEquals(0f, waves.coherentInfluence(waves.front(2100), centers[0], 2100), 0f)
+    }
+
     @Test fun ordinaryShortSyllablesReceiveASmoothPassingWave() {
         val fast = LyricsTravelingWaveMask(listOf(
             LyricsVocalSpan(1000, 1270, 0f, 45f),

@@ -185,7 +185,7 @@ internal class SyllableLyricsPainter(
 
     // Every word is independent: only authored, reliably timed long notes
     // produce a mountain wave. Completed words remain completely stationary.
-    private val heldWords = LyricsHeldWordWave(glyphs.map { glyph ->
+    private val heldWordUnits = glyphs.map { glyph ->
         LyricsHeldWordUnit(
             content = glyph.layout.syllable.content,
             startMs = glyph.layout.syllable.start,
@@ -194,7 +194,9 @@ internal class SyllableLyricsPainter(
             pathEndDp = glyph.pathEndDp,
             reliableHold = glyph.expression.breathing > 0f
         )
-    })
+    }
+    private val heldWords = LyricsHeldWordWave(heldWordUnits)
+    private val coherentWordCenters = lyricCoherentWordCenters(heldWordUnits)
     // Every authored unit participates, even 150-300ms words.
     private val travelingPass = LyricsTravelingWaveMask(glyphs.map { glyph ->
         LyricsVocalSpan(glyph.layout.syllable.start, glyph.layout.syllable.end,
@@ -215,9 +217,8 @@ internal class SyllableLyricsPainter(
         val strength = focus.coerceIn(0f, 1f)
         val movingFront = travelingPass.front(frameTime)
 
-        // Sample ONCE from the Media3 clock. A fast "aku cinta" stays still;
-        // only a long, explicitly authored "kamu" receives the moving arch.
-        // Existing karaoke fill and glow timings are not modified.
+        // One smooth wave travels across ordinary words; held-note expression
+        // stays separate. All motion samples the same Media3 playback clock.
         for ((index, glyph) in glyphs.withIndex()) {
             glyph.wavePose = heldWords.pose(
                 index, frameTime, (glyph.pathStartDp + glyph.pathEndDp) * 0.5f
@@ -225,9 +226,9 @@ internal class SyllableLyricsPainter(
             glyph.controller.update(frameTime)
             // The same media clock moves a smooth shallow crest across
             // ordinary words without slicing, clipping or displacing letters.
-            glyph.passingInfluence = travelingPass.glyphInfluence(
-                movingFront, glyph.pathStartDp, glyph.pathEndDp
-            ) * strength
+            glyph.passingInfluence = travelingPass.coherentInfluence(
+                movingFront, coherentWordCenters[index], frameTime
+            ) * strength * (1f - 0.75f * glyph.wavePose.depth)
             glyph.passingLiftDp = lyricPassingLiftDp(glyph.passingInfluence)
             // Keep the old bubble as a LIGHT-only accent. Its independent
             // sinusoidal position/scale must never re-enlarge a letter while
