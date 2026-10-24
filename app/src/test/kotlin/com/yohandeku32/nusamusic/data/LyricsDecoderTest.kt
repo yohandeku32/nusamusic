@@ -316,4 +316,72 @@ class LyricsDecoderTest {
         assertEquals(setOf(1), decoded.duetRightLines)
     }
 
+    @Test fun duetLineTimedTtmlPreservesSidesAfterKaraokeIsConvertedToPlainLine() {
+        val content = """
+            <tt xmlns="http://www.w3.org/ns/ttml"
+                xmlns:ttm="http://www.w3.org/ns/ttml#metadata">
+                <head><metadata>
+                    <ttm:agent xml:id="left" type="person"/>
+                    <ttm:agent xml:id="right" type="person"/>
+                </metadata></head>
+                <body><div>
+                    <p begin="1s" end="2s" ttm:agent="right">First on right</p>
+                    <p begin="2s" end="3s" ttm:agent="left">Then on left</p>
+                </div></body>
+            </tt>
+        """.trimIndent()
+        val decoded = LyricsDecoder.decodeWithTiming(content, 5_000)
+        assertEquals(2, decoded.lyrics.lines.size)
+        assertTrue(decoded.lyrics.lines.all { it is SyncedLine })
+        assertEquals(setOf(0), decoded.duetRightLines)
+    }
+
+    @Test fun ttmlSingerAssignmentIgnoresFormattingWhitespaceBetweenWordSpans() {
+        val content = """
+            <tt xmlns="http://www.w3.org/ns/ttml"
+                xmlns:ttm="http://www.w3.org/ns/ttml#metadata">
+                <head><metadata>
+                    <ttm:agent xml:id="left" type="person"/>
+                    <ttm:agent xml:id="right" type="person"/>
+                </metadata></head>
+                <body><div>
+                    <p begin="1s" end="2s" ttm:agent="right">
+                        <span begin="1s" end="1.4s">Good</span>
+                        <span begin="1.4s" end="2s">morning</span>
+                    </p>
+                    <p begin="2s" end="3s" ttm:agent="left">
+                        <span begin="2s" end="3s">Hello</span>
+                    </p>
+                </div></body>
+            </tt>
+        """.trimIndent()
+        val decoded = LyricsDecoder.decodeWithTiming(content, 5_000)
+        assertEquals(2, decoded.lyrics.lines.size)
+        assertEquals(setOf(0), decoded.duetRightLines)
+    }
+
+    @Test fun untaggedLineDoesNotInventSecondSingerAlignment() {
+        val content = """
+            <tt xmlns="http://www.w3.org/ns/ttml"
+                xmlns:ttm="http://www.w3.org/ns/ttml#metadata">
+                <head><metadata>
+                    <ttm:agent xml:id="left" type="person"/>
+                    <ttm:agent xml:id="right" type="person"/>
+                </metadata></head>
+                <body><div>
+                    <p begin="1s" end="2s">Unassigned</p>
+                    <p begin="2s" end="3s" ttm:agent="right">
+                        <span begin="2s" end="3s">Right</span>
+                    </p>
+                    <p begin="3s" end="4s" ttm:agent="left">
+                        <span begin="3s" end="4s">Left</span>
+                    </p>
+                </div></body>
+            </tt>
+        """.trimIndent()
+        val decoded = LyricsDecoder.decodeWithTiming(content, 5_000)
+        assertEquals(3, decoded.lyrics.lines.size)
+        assertEquals(setOf(1), decoded.duetRightLines)
+    }
+
 }
