@@ -74,39 +74,35 @@ internal class LyricsVocalWindows(line: ISyncedLine) {
     }
 
     /**
-     * Visual pre-roll only. The lyric text is visible before its first
-     * syllable, but karaoke fills still use the original authored time.
-     * This is a continuous envelope through the exact vocal onset (1 -> 1)
-     * and through gaps / final release, with no extra time shifting.
+     * Backing vocals have ONE visual lifetime per lyric line, not one lifetime
+     * per timed syllable. The old per-window max() faded a row out during a
+     * vocal rest, removed its layout, then recreated the same row at the next
+     * syllable. That looked like duplicate popup lyrics.
+     *
+     * The preview still begins 700 ms before the first actual vocal. After
+     * that, keep the row fully present through every rest until the LAST
+     * audible syllable completes; only then use a single 380 ms fade out.
+     * Individual karaoke highlighting retains the original word timestamps.
      */
     fun previewPresence(now: Int, resetAt: Int): Float {
         if (windows.isEmpty()) return 0f
-        var low = 0
-        var high = windows.size
-        while (low < high) {
-            val mid = (low + high) / 2
-            if (windows[mid].first <= now) low = mid + 1 else high = mid
-        }
-        fun windowOpacity(window: Pair<Int, Int>): Float {
-            val (start, end) = window
-            if (now.toLong() < start.toLong() - BACKING_PREVIEW_MS ||
-                now.toLong() >= end.toLong() + BACKING_RELEASE_MS ||
-                (resetAt >= end && now >= end)) return 0f
-            if (now < start) return lyricEase(
-                ((now.toLong() - start.toLong() + BACKING_PREVIEW_MS) /
-                    BACKING_PREVIEW_MS.toFloat()).coerceIn(0f, 1f)
+        val firstVocal = windows.first().first
+        val lastVocalEnd = windows.last().second
+        if (now.toLong() < firstVocal.toLong() - BACKING_PREVIEW_MS ||
+            now.toLong() >= lastVocalEnd.toLong() + BACKING_RELEASE_MS ||
+            (resetAt >= lastVocalEnd && now >= lastVocalEnd)
+        ) return 0f
+
+        return when {
+            now < firstVocal -> lyricEase(
+                (now.toLong() - firstVocal.toLong() + BACKING_PREVIEW_MS) /
+                    BACKING_PREVIEW_MS.toFloat()
             )
-            if (now < end) return 1f
-            return 1f - lyricEase(
-                ((now.toLong() - end.toLong()) /
-                    BACKING_RELEASE_MS.toFloat()).coerceIn(0f, 1f)
+            now < lastVocalEnd -> 1f
+            else -> 1f - lyricEase(
+                (now.toLong() - lastVocalEnd) / BACKING_RELEASE_MS.toFloat()
             )
         }
-        return maxOf(
-            windows.getOrNull(low - 2)?.let(::windowOpacity) ?: 0f,
-            windows.getOrNull(low - 1)?.let(::windowOpacity) ?: 0f,
-            windows.getOrNull(low)?.let(::windowOpacity) ?: 0f
-        )
     }
 
     fun presence(now: Int, resetAt: Int): Float {
