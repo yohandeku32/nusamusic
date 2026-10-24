@@ -61,10 +61,22 @@ class LyricsDisplayRowsTest {
         }
     }
 
-    @Test fun identicalBackingMetadataStillHasDistinctStableSourceKeys() {
+    @Test fun duplicateBackingRowsRenderOnceButKeepSourceToRowMapping() {
         val back = backing()
-        val rows = LyricsDisplayRows(listOf(main(0), back, back))
+        val duplicate = backing()
+        val rows = LyricsDisplayRows(listOf(main(0), back, duplicate))
+        assertEquals(listOf(1), rows.rows.single().backing.map { it.index })
+        assertEquals(listOf(back), rows.rows.single().backing.map { it.value })
+        assertArrayEquals(intArrayOf(0, 0, 0), rows.lineToRow)
+    }
+
+    @Test fun differentTimedBackingLyricsAreNotDeduplicated() {
+        val first = backing(1000, 3000)
+        val later = backing(3001, 4500)
+        val rows = LyricsDisplayRows(listOf(main(0), first, later))
         assertEquals(listOf(1, 2), rows.rows.single().backing.map { it.index })
-        assertEquals(listOf(back, back), rows.rows.single().backing.map { it.value })
+        val backingOnly = LyricsDisplayRows(listOf(first, backing(1000, 3000), later))
+        assertEquals(listOf(0, 2), backingOnly.rows.single().backing.map { it.index })
+        assertArrayEquals(intArrayOf(0, 0, 0), backingOnly.lineToRow)
     }
 }
