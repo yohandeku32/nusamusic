@@ -1,6 +1,8 @@
 package com.yohandeku32.nusamusic.data
 
 import android.content.Context
+import android.net.Uri
+import android.system.Os
 import android.util.AtomicFile
 import androidx.compose.runtime.mutableStateMapOf
 import com.yohandeku32.nusamusic.model.Song
@@ -22,6 +24,31 @@ internal class LyricsPendingSaveQueue(context: Context) {
     private val mutex = Mutex()
     private val pending = mutableStateMapOf<Long, Boolean>()
 
+    // An external tag editor may modify an M4A while our Save still waits for
+    // Media3 to release the track. Never preview old queued text over that
+    // edit, and never overwrite a newer file with the older queued content.
+    private data class AudioRevision(val token: String, val changedAtMs: Long)
+
+    private fun audioRevision(uriText: String): AudioRevision? = runCatching {
+        app.contentResolver.openFileDescriptor(Uri.parse(uriText), "r")?.use { descriptor ->
+            val stat = Os.fstat(descriptor.fileDescriptor)
+            if (stat.st_size <= 0L) null else AudioRevision(
+                "${stat.st_dev}:${stat.st_ino}:${stat.st_size}:${stat.st_mtime}:${stat.st_ctime}",
+                maxOf(stat.st_mtime, stat.st_ctime) * 1000L
+            )
+        }
+    }.getOrNull()
+
+    private fun pendingWasSuperseded(file: File, item: JSONObject): Boolean {
+        val current = audioRevision(item.optString("songUri")) ?: return false
+        return queuedLyricsSourceChanged(
+            recordedRevision = item.optString("sourceRevision").takeIf { it.isNotBlank() },
+            latestRevision = current.token,
+            queueWrittenAtMs = file.lastModified(),
+            sourceChangedAtMs = current.changedAtMs
+        )
+    }
+
     init {
         folder.listFiles()?.filter { it.isFile && it.name.endsWith(".json") }
             ?.forEach { file ->
@@ -37,17 +64,24 @@ internal class LyricsPendingSaveQueue(context: Context) {
      * Read the durable authored lyric directly, without rereading active audio.
      */
     suspend fun savedForPlayback(song: Song): String? = withContext(Dispatchers.IO) {
-        // The playback LyricsRepository and the Activity may have different
-        // queue instances. Their in-memory maps are NOT shared, so inspect the
-        // actual AtomicFile saved by the button rather than a stale map.
-        val file = File(folder, song.id.toString() + ".json")
-        if (!file.isFile) return@withContext null
-        runCatching {
-            val item = JSONObject(AtomicFile(file).readFully().toString(Charsets.UTF_8))
-            if (item.optLong("songId") != song.id ||
-                item.optString("songUri") != song.uri) null
-            else item.optString("authored").takeIf { it.isNotBlank() }
-        }.getOrNull()
+        // Separate repository/activity instances inspect the same durable queue.
+        mutex.withLock {
+            val file = File(folder, song.id.toString() + ".json")
+            if (!file.isFile) return@withLock null
+            runCatching {
+                val item = JSONObject(AtomicFile(file).readFully().toString(Charsets.UTF_8))
+                if (item.optLong("songId") != song.id ||
+                    item.optString("songUri") != song.uri) return@runCatching null
+                if (pendingWasSuperseded(file, item)) {
+                    // An editor has already saved newer bytes. Discard the
+                    // pending preview as well as the future overwrite.
+                    file.delete()
+                    pending.remove(song.id)
+                    return@runCatching null
+                }
+                item.optString("authored").takeIf { it.isNotBlank() }
+            }.getOrNull()
+        }
     }
 
     suspend fun enqueue(song: Song, lyrics: SongLyrics) {
@@ -55,9 +89,11 @@ internal class LyricsPendingSaveQueue(context: Context) {
         require(raw.isNotBlank() && raw.toByteArray(Charsets.UTF_8).size <= LyricsDecoder.MAX_BYTES) {
             "Lyrics are empty or too large to save."
         }
+        val revision = withContext(Dispatchers.IO) { audioRevision(song.uri) }
         val payload = JSONObject()
             .put("songId", song.id)
             .put("songUri", song.uri)
+            .put("sourceRevision", revision?.token.orEmpty())
             .put("authored", raw)
             .put("plain", readableLyrics(lyrics))
         mutex.withLock {
@@ -104,6 +140,13 @@ internal class LyricsPendingSaveQueue(context: Context) {
                 onResult(id, false, "Queued lyrics could not be read. Try Save again.")
                 continue
             }
+            if (withContext(Dispatchers.IO) { pendingWasSuperseded(file, item) }) {
+                withContext(Dispatchers.IO) { file.delete() }
+                pending.remove(id)
+                onResult(id, false,
+                    "Lyrics changed in another app. Previous queued Save was canceled.")
+                continue
+            }
             try {
                 // Resolve the original SAF document AND hash its contents
                 // only after Media3 has moved away. Large FLAC files no longer
@@ -124,6 +167,9 @@ internal class LyricsPendingSaveQueue(context: Context) {
                     beforeWrite = {
                         check(currentSongId() != id) {
                             "This song is playing again. Save will resume after the next song."
+                        }
+                        check(!pendingWasSuperseded(file, item)) {
+                            "Lyrics changed in another app. Queued Save will not overwrite them."
                         }
                     }
                 )
@@ -147,3 +193,19 @@ internal class LyricsPendingSaveQueue(context: Context) {
 /** A queued original is never writable while it remains Media3's active track. */
 internal fun mayCommitQueuedLyrics(songId: Long, activeSongId: Long?): Boolean =
     songId != activeSongId
+
+/**
+ * New queued Saves store the source inode/size/time signature. Existing queues
+ * from older app versions have no signature: only a later file modification
+ * invalidates them. A missing provider stat never proves that a file changed.
+ */
+internal fun queuedLyricsSourceChanged(
+    recordedRevision: String?,
+    latestRevision: String?,
+    queueWrittenAtMs: Long,
+    sourceChangedAtMs: Long
+): Boolean = when {
+    latestRevision.isNullOrBlank() -> false
+    !recordedRevision.isNullOrBlank() -> recordedRevision != latestRevision
+    else -> sourceChangedAtMs > queueWrittenAtMs + 1_000L
+}
