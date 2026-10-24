@@ -253,7 +253,9 @@ internal class SyllableLyricsPainter(
             for (letter in glyph.letterSlices) {
                 letter.liftPx = if (letter.whitespace) 0f else
                     letterWave.liftDp(index, letter.centerPathDp, frameTime) * density * amplitude
-                if (kotlin.math.abs(letter.liftPx) > 0.012f) {
+                // Sub-pixel shifts below the visual threshold are not drawn
+                // separately; this also avoids unnecessary GPU clip passes.
+                if (kotlin.math.abs(letter.liftPx) > 0.18f * density) {
                     glyph.letterMotionActive = true
                 }
             }
@@ -271,37 +273,52 @@ internal class SyllableLyricsPainter(
     }
 
     /**
-     * Clip along the measured grapheme advances, not arbitrary 20px strips.
-     * Original text layout/kerning and X positions remain unchanged. Draw
-     * each *shaped* cluster at a slightly different Y without remeasuring.
-     * Nonanimated and complex-script rows keep the fast single draw path.
+     * Keep one text layout for the entire syllable. Neighbouring letters whose
+     * offsets differ by less than 0.32px share a single clip/draw operation.
+     * Previously every character re-rendered the WHOLE TextLayoutResult twice
+     * per video frame, even if 95% of characters were stationary. Grouping
+     * quiet/near-equal letters reduces nativeCanvas saves, clips and drawText
+     * work significantly without changing the audio-clock wave timing.
      */
     private inline fun DrawScope.drawWithLetterWave(
         glyph: Glyph,
         position: Offset,
         render: DrawScope.(Offset) -> Unit
     ) {
-        if (!glyph.letterMotionActive || glyph.letterSlices.isEmpty()) {
+        val letters = glyph.letterSlices
+        if (!glyph.letterMotionActive || letters.isEmpty()) {
             render(position)
             return
         }
+        val tolerance = 0.32f * density
+        // Most frames contain an almost-flat word. Draw those frames once.
+        val baseline = letters[0].liftPx
+        if (letters.all { kotlin.math.abs(it.liftPx - baseline) <= tolerance }) {
+            render(position + Offset(0f, baseline))
+            return
+        }
         val native = drawContext.canvas.nativeCanvas
-        val pad = 0.35f * density
-        for (part in glyph.letterSlices) {
+        val pad = 0.30f * density
+        val top = position.y - 36f * density
+        val bottom = position.y + glyph.layout.textLayoutResult.size.height + 36f * density
+        var first = 0
+        while (first < letters.size) {
+            val shift = letters[first].liftPx
+            var last = first
+            while (last + 1 < letters.size &&
+                kotlin.math.abs(letters[last + 1].liftPx - shift) <= tolerance
+            ) last++
             val saved = native.save()
             try {
-                // Only X is clipped. The full ascent/descent and glow have
-                // vertical headroom while each letter gently rises.
                 native.clipRect(
-                    position.x + part.leftPx - pad,
-                    position.y - 40f * density,
-                    position.x + part.rightPx + pad,
-                    position.y + glyph.layout.textLayoutResult.size.height + 40f * density
+                    position.x + letters[first].leftPx - pad, top,
+                    position.x + letters[last].rightPx + pad, bottom
                 )
-                render(position + Offset(0f, part.liftPx))
+                render(position + Offset(0f, shift))
             } finally {
                 native.restoreToCount(saved)
             }
+            first = last + 1
         }
     }
 
