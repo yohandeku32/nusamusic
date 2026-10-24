@@ -159,7 +159,7 @@ internal class OnlineLyricsService(
         val rows = lyrics.optJSONArray("lines") ?: return null
         if (rows.length() !in 1..800) return null
         val wordSync = lyrics.optString("sync") == "word"
-        val xml = StringBuilder("<tt><body>")
+        val xml = StringBuilder("<tt xmlns:ttm=\"http://www.w3.org/ns/ttml#metadata\"><body>")
         var count = 0
         for (index in 0 until rows.length()) {
             val row = rows.optJSONObject(index) ?: continue
@@ -167,7 +167,7 @@ internal class OnlineLyricsService(
             val end = row.second("end") ?: continue
             if (end <= begin) continue
             val words = if (wordSync) row.optJSONArray("words") else null
-            val pieces = ArrayList<Triple<String, Double, Double>>()
+            val pieces = ArrayList<TimedJsonSyllable>()
             if (words != null) {
                 for (w in 0 until minOf(words.length(), 100)) {
                     val word = words.optJSONArray(w) ?: continue
@@ -179,7 +179,7 @@ internal class OnlineLyricsService(
                         if (text.isBlank() || b <= a || a < begin || b > end + 0.2) continue
                         val gap = if (k == word.length() - 1 && w < words.length() - 1)
                             " " else ""
-                        pieces.add(Triple(text + gap, a, b))
+                        pieces.add(TimedJsonSyllable(text + gap, a, b, syllable.isBackingVocal()))
                     }
                 }
             }
@@ -187,17 +187,45 @@ internal class OnlineLyricsService(
             if (pieces.isEmpty() && lineText.isBlank()) continue
             xml.append("<p begin=\"").append(begin).append("s\" end=\"")
                 .append(end).append("s\">")
+            // Preserve authored accompaniment metadata in JSON fallback.
+            // For an entire backing row, wrap the shaped syllables into a
+            // single role-tagged span (same TTML dialect as Apple-style x-bg).
+            val backingRow = row.isBackingVocal()
+            if (backingRow) xml.append("<span ttm:role=\"x-bg\">")
             if (pieces.isEmpty()) xml.append(escapeXml(lineText))
-            else for ((text, a, b) in pieces) {
-                xml.append("<span begin=\"").append(a).append("s\" end=\"")
-                    .append(b).append("s\">").append(escapeXml(text)).append("</span>")
+            else for (piece in pieces) {
+                xml.append("<span begin=\"").append(piece.begin).append("s\" end=\"")
+                    .append(piece.end).append("s\"")
+                if (piece.backing && !backingRow) {
+                    xml.append(" ttm:role=\"x-bg\"")
+                }
+                xml.append(">").append(escapeXml(piece.text)).append("</span>")
             }
+            if (backingRow) xml.append("</span>")
             xml.append("</p>")
             count++
         }
         xml.append("</body></tt>")
         return if (count > 0) xml.toString() else null
     }
+}
+
+private data class TimedJsonSyllable(
+    val text: String,
+    val begin: Double,
+    val end: Double,
+    val backing: Boolean
+)
+
+/** Only explicit vocalist role flags classify a line as backing vocals. */
+private fun JSONObject.isBackingVocal(): Boolean {
+    if (optBoolean("isBackground", false) || optBoolean("isAccompaniment", false) ||
+        optBoolean("background", false) || optBoolean("backing", false)) return true
+    return listOf("role", "type", "kind", "vocalRole", "ttm:role")
+        .any { key ->
+            optString(key).trim().lowercase(Locale.ROOT) in
+                setOf("x-bg", "background", "backing", "backing-vocal", "background-vocal", "accompaniment")
+        }
 }
 
 private fun JSONObject.second(key: String): Double? =
