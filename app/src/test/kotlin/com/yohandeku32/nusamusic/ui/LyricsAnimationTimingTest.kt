@@ -196,4 +196,49 @@ class LyricsAnimationTimingTest {
         }
     }
 
+    @Test fun backingRemainsVisibleThroughoutLongSilenceInsideTheSameLine() {
+        val vocal = KaraokeLine(listOf(
+            KaraokeSyllable("Ooh", 1000, 1400),
+            KaraokeSyllable(" ", 1400, 5600),
+            KaraokeSyllable("ah", 5600, 6100)
+        ), null, true, KaraokeAlignment.Start, 1000, 6100)
+        val windows = LyricsVocalWindows(vocal)
+        assertEquals(0f, windows.previewPresence(299, 0), 0f)
+        assertTrue(windows.previewPresence(650, 0) in 0.49f..0.51f)
+        assertEquals(1f, windows.previewPresence(1000, 0), 0f)
+        assertEquals(1f, windows.previewPresence(1500, 0), 0f)
+        assertEquals(1f, windows.previewPresence(4000, 0), 0f)
+        assertEquals(1f, windows.previewPresence(5599, 0), 0f)
+        assertEquals(1f, windows.previewPresence(6099, 0), 0f)
+        assertTrue(windows.previewPresence(6290, 0) in 0.49f..0.51f)
+        assertEquals(0f, windows.previewPresence(6480, 0), 0f)
+        // A seek into the gap must not launch a second preview animation.
+        assertEquals(1f, windows.previewPresence(4000, 4000), 0f)
+        assertEquals(0f, windows.previewPresence(6500, 6500), 0f)
+    }
+
+    @Test fun backingLayoutNeverClosesOrOpensAgainBetweenSungWords() {
+        val vocal = KaraokeLine(listOf(
+            KaraokeSyllable("Ah", 1000, 1200),
+            KaraokeSyllable("oh", 4000, 4300),
+            KaraokeSyllable("hmm", 7800, 8200)
+        ), null, true, KaraokeAlignment.Start, 1000, 8200)
+        val windows = LyricsVocalWindows(vocal)
+        for (time in 1000..8200 step 8) {
+            assertEquals("Backing disappeared at $time", 1f,
+                windows.previewPresence(time, 0), 0f)
+            assertEquals("Backing slot collapsed at $time", 48,
+                vocalLayoutHeight(48, windows.previewPresence(time, 0)))
+        }
+        var previous = 1f
+        for (time in 8200..8580 step 8) {
+            val current = windows.previewPresence(time, 0)
+            assertTrue("Backing exit jumped at $time",
+                kotlin.math.abs(current - previous) < 0.05f)
+            assertTrue(current <= previous)
+            previous = current
+        }
+        assertEquals(0f, windows.previewPresence(8580, 0), 0f)
+    }
+
 }
