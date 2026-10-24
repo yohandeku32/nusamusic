@@ -258,12 +258,16 @@ object LyricsDecoder {
         // Namespaced tts:textAlign may be placed directly on p/span or
         // declared by a referenced <style xml:id="..."> element.
         val styleElements = HashMap<String, Element>()
+        val regionElements = HashMap<String, Element>()
         val allElements = root.getElementsByTagName("*")
         for (i in 0 until allElements.length) {
             val el = allElements.item(i) as? Element ?: continue
-            if (el.localName != "style") continue
+            if (el.localName != "style" && el.localName != "region") continue
             val id = el.getAttribute("xml:id").ifBlank { el.getAttribute("id") }
-            if (id.isNotBlank()) styleElements[id.trim()] = el
+            if (id.isNotBlank()) {
+                if (el.localName == "style") styleElements[id.trim()] = el
+                else regionElements[id.trim()] = el
+            }
         }
         fun explicitRight(element: Element): Boolean? {
             val seen = HashSet<String>()
@@ -283,6 +287,16 @@ object LyricsDecoder {
                 for (ref in refs.asReversed()) {
                     val target = styleElements[ref] ?: continue
                     if (seen.add(ref)) value(target)?.let { return it }
+                }
+                // A right-aligned duet lyric may be positioned by a TTML
+                // region instead of an inline style. Resolve its reference
+                // and any style linked from that region.
+                val regionId = el.getAttribute("region").trim()
+                if (regionId.isNotBlank()) {
+                    val region = regionElements[regionId]
+                    if (region != null && seen.add("region:$regionId")) {
+                        value(region)?.let { return it }
+                    }
                 }
                 return null
             }
