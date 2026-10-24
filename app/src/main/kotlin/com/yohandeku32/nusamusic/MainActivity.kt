@@ -1991,10 +1991,15 @@ private fun NusaMusicApp(
     LaunchedEffect(currentSong?.uri, lyricsMetadataGeneration, onlineLyricsEnabled) {
         val activeSong = currentSong ?: return@LaunchedEffect
         if (!LYRICS_ENABLED || lyricsMetadataGeneration == 0) return@LaunchedEffect
-        // ContentObserver changes arrive in bursts when another tag editor
-        // saves. Coalesce writes, then bypass both parsed + on-disk caches.
+        // File changes from other tag editors (especially M4A) may not
+        // increment MediaStore generation or file size. Re-read the audio's
+        // actual metadata on every foreground return / notification without
+        // forcing a slow network request or discarding online cache.
         delay(420L)
-        lyricsState.load(activeSong, this, retry = true, onlineEnabled = onlineLyricsEnabled)
+        lyricsState.load(
+            activeSong, this, onlineEnabled = onlineLyricsEnabled,
+            refreshEmbeddedOnly = true
+        )
     }
     val artistPageStates = remember { androidx.collection.LruCache<String, ImmersiveArtistPageState>(8) }
     val artistPageState = remember(artistKey) {
