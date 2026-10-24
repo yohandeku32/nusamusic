@@ -21,4 +21,17 @@ class LyricsPendingSaveQueueTest {
         assertFalse(mayCommitQueuedLyrics(10L, 10L))
         assertTrue(mayCommitQueuedLyrics(10L, 12L))
     }
+    @Test fun newQueueNeverOverwritesExternallyEditedM4a() {
+        assertFalse(queuedLyricsSourceChanged("same-m4a", "same-m4a", 10_000L, 11_000L))
+        assertTrue(queuedLyricsSourceChanged("old-tag-bytes", "new-tag-bytes", 10_000L, 11_000L))
+        // If a provider can't report a revision we should not invent one.
+        assertFalse(queuedLyricsSourceChanged("old", null, 10_000L, 15_000L))
+    }
+
+    @Test fun legacyQueueUsesAudioModificationTimeForSafeFallback() {
+        assertFalse(queuedLyricsSourceChanged(null, "current", 10_000L, 9_000L))
+        assertFalse(queuedLyricsSourceChanged(null, "current", 10_000L, 10_800L))
+        assertTrue(queuedLyricsSourceChanged(null, "current", 10_000L, 12_000L))
+    }
+
 }
