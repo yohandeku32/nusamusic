@@ -11,9 +11,9 @@ class LyricsLetterWaveTest {
         ))
         val first = wave.liftDp(0, 12f, 1180)
         val last = wave.liftDp(0, 108f, 1180)
-        assertTrue(first < -2.0f)
+        assertTrue(first < -1.3f)
         assertEquals(0f, last, 0f)
-        assertTrue(wave.liftDp(0, 108f, 1660) < -2.0f)
+        assertTrue(wave.liftDp(0, 108f, 1660) < -1.3f)
         assertTrue(wave.liftDp(0, 12f, 1660) > first)
     }
 
@@ -24,7 +24,7 @@ class LyricsLetterWaveTest {
         var previous = 0f
         for (ms in 900..1800 step 8) {
             val lift = wave.liftDp(0, 40f, ms)
-            assertTrue(lift in -2.35f..0f)
+            assertTrue(lift in -1.55f..0f)
             assertTrue("Jump at $ms: $previous -> $lift", abs(lift - previous) < 0.29f)
             previous = lift
         }
