@@ -246,6 +246,24 @@ internal class EmbeddedLyricsReader(
         return result
     }
 
+    // QuickTime user-data ©lyr atoms can contain a 16-bit byte count and
+    // language code followed by text, rather than an iTunes nested data box.
+    // Only accept a well-formed length and printable UTF-8, never audio bytes.
+    private fun quickTimeCopyrightText(start: Long, end: Long): String? {
+        val length = end - start
+        if (length !in 5L..(LyricsDecoder.MAX_BYTES + 4).toLong()) return null
+        val raw = bytes(start, length.toInt())
+        if (raw.size < 5) return null
+        val textLength = ((raw[0].toInt() and 255) shl 8) or (raw[1].toInt() and 255)
+        if (textLength <= 0 || textLength > raw.size - 4) return null
+        val value = raw.copyOfRange(4, textLength + 4).toString(Charsets.UTF_8)
+            .trim('\uFEFF', '\u0000', ' ', '\r', '\n')
+        if (value.isEmpty() || value.any {
+                it == '\uFFFD' || (it.isISOControl() && it !in setOf('\n', '\r', '\t'))
+            }) return null
+        return value
+    }
+
     private fun atoms(start: Long, end: Long, depth: Int, inIlst: Boolean) {
         require(depth <= 12)
         for (atom in atomList(start, end)) isolate {
@@ -272,7 +290,16 @@ internal class EmbeddedLyricsReader(
                 }
                 (inIlst || atom.name == "©lyr") &&
                     atom.name in setOf("©lyr", "©wrt", "----") -> {
-                    val children = atomList(atom.start, atom.end)
+                    val children = runCatching { atomList(atom.start, atom.end) }.getOrNull()
+                    if (children == null) {
+                        if (atom.name == "©lyr") {
+                            quickTimeCopyrightText(atom.start, atom.end)?.let { value ->
+                                add(value)
+                                preferredPlainLyrics = value
+                            }
+                        }
+                        return@isolate
+                    }
                     val name = children.firstOrNull { it.name == "name" }?.let {
                         if (it.end - it.start in 4..256) bytes(it.start + 4, (it.end - it.start - 4).toInt()).toString(Charsets.UTF_8) else ""
                     }
