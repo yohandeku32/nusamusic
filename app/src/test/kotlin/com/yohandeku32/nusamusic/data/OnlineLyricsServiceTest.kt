@@ -302,4 +302,48 @@ class OnlineLyricsServiceTest {
         assertEquals(remote, preferLyrics(remote, local))
     }
 
+    @Test fun externallyEditedEmbeddedWordsAreNotMaskedByCachedOnlineKaraoke() {
+        val updated = EmbeddedLyricsSelector.select(
+            listOf("[00:01]Aku sudah mengubah lirik ini"), song.durationMs
+        )
+        val stale = EmbeddedLyricsSelector.select(listOf(ttml), song.durationMs)
+            .copy(stored = EmbeddedLyricsSelector.select(listOf(ttml), song.durationMs)
+                .stored.copy(source = "lrc.red"))
+        assertEquals(2, lyricQuality(updated))
+        assertEquals(3, lyricQuality(stale))
+        assertEquals(updated, preferLyrics(updated, stale))
+        assertEquals("aku sudah mengubah lirik ini", mainLyricsText(updated))
+    }
+
+    @Test fun externallyEditedSyllableLyricsWinOverUnrelatedOnlineBackingVocals() {
+        val current = EmbeddedLyricsSelector.select(
+            listOf("[00:01]<00:01>Lirik <00:02>baru<00:05>"), song.durationMs
+        )
+        val olderRemote = EmbeddedLyricsSelector.select(listOf(
+            """<tt xmlns:ttm="http://www.w3.org/ns/ttml#metadata"><body>
+                <p begin="1s" end="5s"><span begin="1s" end="3s">Lirik </span>
+                <span begin="3s" end="5s">lama</span>
+                <span ttm:role="x-bg" begin="3s" end="5s">
+                <span begin="3s" end="5s">Oh</span></span></p></body></tt>"""
+        ), song.durationMs).let {
+            it.copy(stored = it.stored.copy(source = "lrc.red"))
+        }
+        assertTrue(hasBackingVocals(olderRemote))
+        assertEquals(current, preferLyrics(current, olderRemote))
+    }
+
+    @Test fun sameMainWordsCanStillUpgradeToTtmlWithBackingVocal() {
+        val current = EmbeddedLyricsSelector.select(listOf(ttml), song.durationMs)
+        val richer = EmbeddedLyricsSelector.select(listOf(
+            """<tt xmlns:ttm="http://www.w3.org/ns/ttml#metadata"><body>
+                <p begin="1s" end="5s"><span begin="1s" end="2s">Aku </span>
+                <span begin="2s" end="5s">cinta kamu</span>
+                <span ttm:role="x-bg" begin="2s" end="5s">
+                    <span begin="2s" end="5s">Oh</span>
+                </span></p></body></tt>"""
+        ), song.durationMs).let { it.copy(stored = it.stored.copy(source = "lrc.red")) }
+        assertEquals(mainLyricsText(current), mainLyricsText(richer))
+        assertEquals(richer, preferLyrics(current, richer))
+    }
+
 }
