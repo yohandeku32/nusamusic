@@ -263,7 +263,8 @@ fun ImmersiveLyricsPanel(
         // Offer one-tap Save for a missing lyric OR a richer online version.
         // Local plain/line lyrics must not hide an available syllable upgrade.
         if (song != null && (queuedForSong || lyricsNeedEmbedding(
-                data, entry?.embeddedLyricsQuality ?: 0
+                data, entry?.embeddedLyricsQuality ?: 0,
+                entry?.embeddedHasBackingVocals ?: false
             ))
         ) {
             val queued = queuedForSong
