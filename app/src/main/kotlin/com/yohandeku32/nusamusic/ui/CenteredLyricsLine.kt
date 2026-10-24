@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -69,7 +70,11 @@ internal fun CenteredKaraokeLine(
                 if (readable) contentDescription = line.syllables.joinToString("") { it.content }
             }) {
                 val now = visualTime()
-                val focus = lyricPresence(line.start, line.end, now, motion.resetAt)
+                // Backing vocal must use its OWN 380ms fade rather than the
+                // main lyric's 160ms release. The row alpha is already driven
+                // by voices.presence; don't fade its highlight a second time.
+                val focus = if (line.isAccompaniment) 1f
+                    else lyricPresence(line.start, line.end, now, motion.resetAt)
                 // Raw playback time drives the whole-line wave even when a
                 // syllable is inactive. visualTime retains the old syllable
                 // highlight/seek logic, so the two animations stay separate.
@@ -114,7 +119,9 @@ internal fun TimedVocalContent(
         derivedStateOf(structuralEqualityPolicy()) { voices.presence(time(), motion.resetAt) }
     }
     val present by remember(extent) { derivedStateOf { extent.value > 0f } }
-    if (present) Column(Modifier.fillMaxWidth().layout { measurable, constraints ->
+    // Clip to the animating layout height; without it the full-height backing
+    // row is drawn outside a nearly zero-height slot and seems to pop on/off.
+    if (present) Column(Modifier.fillMaxWidth().clipToBounds().layout { measurable, constraints ->
         val child = measurable.measure(constraints.copy(minHeight = 0))
         val height = vocalLayoutHeight(child.height, extent.value)
         layout(child.width, height) { child.placeRelative(0, 0) }
