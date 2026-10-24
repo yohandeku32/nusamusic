@@ -168,7 +168,9 @@ internal class LyricsPendingSaveQueue(context: Context) {
                         check(currentSongId() != id) {
                             "This song is playing again. Save will resume after the next song."
                         }
-                        check(!pendingWasSuperseded(file, item)) {
+                        check(!withContext(Dispatchers.IO) {
+                            pendingWasSuperseded(file, item)
+                        }) {
                             "Lyrics changed in another app. Queued Save will not overwrite them."
                         }
                     }
