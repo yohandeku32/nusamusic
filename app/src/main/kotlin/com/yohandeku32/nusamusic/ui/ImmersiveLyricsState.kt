@@ -120,8 +120,10 @@ class ImmersiveLyricsState(private val repository: LyricsRepository) {
                             state.embeddedLyricsQuality = maxOf(
                                 lyricQuality(local), state.confirmedEmbeddedQuality
                             )
-                            state.embeddedHasBackingVocals =
-                                state.embeddedHasBackingVocals || hasBackingVocals(local)
+                            // An external editor may remove/replace older
+                            // backing-vocal tags; do not carry the previous
+                            // file's metadata flags into the refreshed result.
+                            state.embeddedHasBackingVocals = hasBackingVocals(local)
                         }
                         state.data = local
                     }
