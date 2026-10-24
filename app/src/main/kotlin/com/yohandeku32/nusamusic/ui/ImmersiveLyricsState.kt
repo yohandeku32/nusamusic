@@ -68,12 +68,13 @@ class ImmersiveLyricsState(private val repository: LyricsRepository) {
         song: Song,
         scope: CoroutineScope,
         retry: Boolean = false,
-        onlineEnabled: Boolean = true
+        onlineEnabled: Boolean = true,
+        refreshEmbeddedOnly: Boolean = false
     ) {
         val state = forSong(song)
         val settingChanged = state.lastOnlineEnabled != null &&
             state.lastOnlineEnabled != onlineEnabled
-        val reload = retry || settingChanged
+        val reload = retry || settingChanged || refreshEmbeddedOnly
         state.lastOnlineEnabled = onlineEnabled
         // Offline means that a previously displayed online-only result must
         // not linger until the next song or until a local metadata read finishes.
@@ -102,7 +103,12 @@ class ImmersiveLyricsState(private val repository: LyricsRepository) {
         state.attempted = true
         state.job = scope.launch {
             try {
-                val result = repository.load(song, reload, onlineEnabled) { local ->
+                val result = repository.load(
+                    song,
+                    retry = retry || settingChanged,
+                    onlineEnabled = onlineEnabled,
+                    forceEmbeddedRefresh = refreshEmbeddedOnly
+                ) { local ->
                     // Keep the embedded version's actual timing quality
                     // separate from the online version chosen for display.
                     // A line-synced file (2) can upgrade to syllable TTML (3).
