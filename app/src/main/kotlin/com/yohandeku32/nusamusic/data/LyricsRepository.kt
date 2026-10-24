@@ -273,11 +273,31 @@ internal fun mainLyricsText(value: SongLyrics): String {
     return normalizeLyricsTag(main)
 }
 
+/**
+ * Compare the visible words exactly, including punctuation and case.
+ * Search-key normalization is useful for finding the song, but can erase
+ * a user's latest edits ("Hello!" vs "hello") and revive cached online
+ * karaoke that no longer matches the text embedded by an external editor.
+ */
+internal fun visibleMainLyrics(value: SongLyrics): String {
+    val text = value.synced?.lines?.filterNot {
+        it is KaraokeLine && it.isAccompaniment
+    }?.joinToString(" ") { line ->
+        when (line) {
+            is KaraokeLine -> line.syllables.joinToString("") { it.content }
+            is com.mocharealm.accompanist.lyrics.core.model.synced.SyncedLine -> line.content
+            else -> ""
+        }
+    }?.takeIf { it.isNotBlank() } ?: value.stored.content
+    return text.trim().replace(Regex("\\s+"), " ")
+}
+
 internal fun preferLyrics(local: SongLyrics, remote: SongLyrics): SongLyrics {
     val localQuality = lyricQuality(local)
     val remoteQuality = lyricQuality(remote)
     val canUpgrade = localQuality == 0 ||
-        (mainLyricsText(local).isNotBlank() && mainLyricsText(local) == mainLyricsText(remote))
+        (visibleMainLyrics(local).isNotBlank() &&
+            visibleMainLyrics(local) == visibleMainLyrics(remote))
     val improvesTiming = remoteQuality > localQuality
     val addsBacking = remoteQuality == localQuality &&
         hasBackingVocals(remote) && !hasBackingVocals(local)
