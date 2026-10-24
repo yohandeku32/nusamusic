@@ -13,8 +13,8 @@ class LyricsLetterWaveTest {
         val last = wave.liftDp(0, 108f, 1180)
         assertTrue(first < -2.0f)
         assertEquals(0f, last, 0f)
-        assertTrue(wave.liftDp(0, 108f, 1320) < -2.0f)
-        assertTrue(wave.liftDp(0, 12f, 1320) > first)
+        assertTrue(wave.liftDp(0, 108f, 1660) < -2.0f)
+        assertTrue(wave.liftDp(0, 12f, 1660) > first)
     }
 
     @Test fun eachLetterRisesAndFallsWithoutFrameJumpsAt120Hz() {
