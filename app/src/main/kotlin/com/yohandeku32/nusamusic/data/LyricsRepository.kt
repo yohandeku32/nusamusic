@@ -301,7 +301,14 @@ internal fun preferLyrics(local: SongLyrics, remote: SongLyrics): SongLyrics {
     val improvesTiming = remoteQuality > localQuality
     val addsBacking = remoteQuality == localQuality &&
         hasBackingVocals(remote) && !hasBackingVocals(local)
-    return if (canUpgrade && (improvesTiming || addsBacking)) remote.copy(
+    // A richer online file without speaker agents must not erase reliable
+    // left/right assignments read from an embedded duet TTML. Retain the
+    // source with singer identities until an online file preserves them too.
+    val losesDuetIdentity = local.duetRightLines.isNotEmpty() &&
+        remote.duetRightLines.isEmpty()
+    return if (canUpgrade && !losesDuetIdentity &&
+        (improvesTiming || addsBacking)
+    ) remote.copy(
         // Local composer/lyricist credits always survive a valid online upgrade.
         stored = remote.stored.copy(credits = local.stored.credits)
     ) else local
