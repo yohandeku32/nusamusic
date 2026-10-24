@@ -230,4 +230,76 @@ class OnlineLyricsServiceTest {
         assertEquals(timed, preferLyrics(plain, timed))
         assertEquals(karaoke, preferLyrics(karaoke, timed))
     }
+    @Test fun jsonWordSyncPreservesBackingVocalRoleAndSeparateTiming() = runBlocking {
+        fun lyricRow(text: String, a: Double, b: Double, role: String? = null): JSONObject =
+            JSONObject().put("text", text).put("begin", a).put("end", b)
+                .put("words", JSONArray().put(JSONArray().put(
+                    JSONObject().put("text", text)
+                        .put("begin", a).put("end", b)
+                ))).apply { if (role != null) put("role", role) }
+
+        val response = record().put("lyrics",
+            JSONObject().put("sync", "word").put("lines", JSONArray()
+                .put(lyricRow("Main ", 1.0, 4.0))
+                .put(lyricRow("Oh", 1.6, 3.8, "x-bg"))
+                .put(lyricRow("Next", 5.0, 8.0))
+            )
+        )
+        val service = OnlineLyricsService { url ->
+            when {
+                url.contains("/match.json") -> hits(hit())
+                url.endsWith(".ttml") -> null
+                url.endsWith(".song.json") -> response.toString()
+                else -> error("unexpected fallback: $url")
+            }
+        }
+        val lyric = service.lookup(song).result!!.content
+        assertTrue(lyric.contains("xmlns:ttm="))
+        assertTrue(lyric.contains("ttm:role=\\"x-bg\\""))
+        val decoded = LyricsDecoder.decode(lyric, song.durationMs)
+        assertTrue("Backing vocal should be a separate accompaniment line",
+            decoded.lines.filterIsInstance<com.mocharealm.accompanist.lyrics.core.model.karaoke.KaraokeLine>()
+                .any { it.isAccompaniment })
+    }
+
+    @Test fun jsonExplicitBackingFlagsArePreservedOnTimedSyllables() = runBlocking {
+        val line = JSONObject().put("text", "Main oh").put("begin", 1.0).put("end", 5.0)
+            .put("words", JSONArray().put(JSONArray()
+                .put(JSONObject().put("text", "Main ").put("begin", 1.0).put("end", 2.0))
+                .put(JSONObject().put("text", "oh").put("begin", 2.0).put("end", 5.0)
+                    .put("isAccompaniment", true))))
+        val service = OnlineLyricsService { url ->
+            when {
+                url.contains("/match.json") -> hits(hit())
+                url.endsWith(".ttml") -> null
+                url.endsWith(".song.json") -> record().put("lyrics",
+                    JSONObject().put("sync", "word").put("lines", JSONArray().put(line))).toString()
+                else -> error("Unexpected URL")
+            }
+        }
+        val content = service.lookup(song).result!!.content
+        assertTrue(content.contains("ttm:role=\\"x-bg\\""))
+        assertTrue(content.contains("oh"))
+    }
+
+    @Test fun richerBackingTtmlCanUpgradeEqualQualityLocalKaraoke() {
+        val local = EmbeddedLyricsSelector.select(listOf(ttml), song.durationMs)
+        val remote = EmbeddedLyricsSelector.select(listOf(
+            """<tt xmlns:ttm="http://www.w3.org/ns/ttml#metadata"><body>
+                <p begin="1s" end="5s"><span begin="1s" end="2s">Aku </span>
+                <span begin="2s" end="5s">cinta kamu</span>
+                <span ttm:role="x-bg" begin="2s" end="5s"><span begin="2s" end="5s">Oh</span></span></p>
+                </body></tt>"""
+        ), song.durationMs)
+        assertEquals(3, lyricQuality(local))
+        assertEquals(3, lyricQuality(remote))
+        assertFalse(hasBackingVocals(local))
+        assertTrue(hasBackingVocals(remote))
+        assertTrue(shouldLookupOnlineLyrics(local, true))
+        assertFalse(shouldLookupOnlineLyrics(local, false))
+        assertFalse(shouldLookupOnlineLyrics(remote, true))
+        assertEquals(remote, preferLyrics(local, remote))
+        assertEquals(remote, preferLyrics(remote, local))
+    }
+
 }
