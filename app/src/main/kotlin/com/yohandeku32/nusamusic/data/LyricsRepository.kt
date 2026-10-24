@@ -144,26 +144,33 @@ class LyricsRepository(context: Context) {
                 buffer.array().copyOf(buffer.position())
             }.readMetadata()
 
-        // Different Android providers expose different AssetFileDescriptor
-        // length/offset semantics. Always try a full seekable descriptor if
-        // the bounded asset view yielded no lyrics. No full file copy/scanning.
+        // Open a NEW full-file descriptor first on EVERY embedded refresh.
+        // Content providers can serve a stale/bounded AssetFileDescriptor
+        // even when another editor has already replaced the M4A metadata.
+        // The actual descriptor channel size is authoritative: MediaStore's
+        // database SIZE and an AssetFileDescriptor's declared length can lag.
+        // Do not read the active Media3 player descriptor or scan mdat audio.
         val primary = try {
-            resolver.openAssetFileDescriptor(uri, "r")?.use { asset ->
-                asset.createInputStream().use { input ->
-                    val length = if (asset.declaredLength >= 0) asset.declaredLength
-                        else input.channel.size() - asset.startOffset
-                    readAt(input.channel, asset.startOffset, length)
+            resolver.openFileDescriptor(uri, "r")?.use { descriptor ->
+                FileInputStream(descriptor.fileDescriptor).use { input ->
+                    val length = input.channel.size().takeIf { it > 0L }
+                        ?: descriptor.statSize.coerceAtLeast(0L)
+                    readAt(input.channel, 0L, length)
                 }
             }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) { null }
 
+        // Some SAF providers support only the bounded asset interface.
+        // Fall back only if the full-file descriptor has no readable lyrics.
         val metadata = if (primary != null && primary.lyrics.isNotEmpty()) primary else try {
-            resolver.openFileDescriptor(uri, "r")?.use { descriptor ->
-                FileInputStream(descriptor.fileDescriptor).use { input ->
-                    val length = descriptor.statSize.takeIf { it >= 0L } ?: input.channel.size()
-                    readAt(input.channel, 0L, length)
+            resolver.openAssetFileDescriptor(uri, "r")?.use { asset ->
+                asset.createInputStream().use { input ->
+                    val size = input.channel.size()
+                    val length = if (asset.declaredLength > 0) asset.declaredLength
+                        else (size - asset.startOffset).coerceAtLeast(0L)
+                    readAt(input.channel, asset.startOffset, length)
                 }
             } ?: primary ?: EmbeddedLyricsMetadata(emptyList())
         } catch (cancelled: CancellationException) {
