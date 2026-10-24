@@ -50,7 +50,9 @@ internal fun SyncedLyricsView(
 ) {
     val clock = remember { LyricsPlaybackClock(position, visible) }
     SideEffect { clock.update(position, visible) }
-    val display = remember(lyrics) { LyricsDisplayRows(lyrics.lines) }
+    val display = remember(lyrics, duetRightLines) {
+        LyricsDisplayRows(lyrics.lines, duetRightLines)
+    }
     val firstVocalRow = remember(display) { display.rows.indexOfFirst { it.main != null }.coerceAtLeast(0) }
     // Analyze all timed syllables on Default, not during the first Compose
     // frame of the Lyrics panel. Pure CPU results are published once.
