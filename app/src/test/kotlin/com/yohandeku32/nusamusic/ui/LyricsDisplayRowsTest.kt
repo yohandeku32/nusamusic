@@ -34,7 +34,9 @@ class LyricsDisplayRowsTest {
         assertTrue(nextTop(1060) in 61..107)
         assertEquals(108, nextTop(1500))
         assertTrue(nextTop(3080) in 61..107)
-        assertEquals(60, nextTop(3160))
+        // The updated backing-vocal release lasts 380ms, not 160ms.
+        assertTrue(nextTop(3160) in 61..107)
+        assertEquals(60, nextTop(3380))
         assertEquals(60, nextTop(9000))
     }
     @Test fun layoutFreezeAndSeekDoNotReplayOldExpansion() {
