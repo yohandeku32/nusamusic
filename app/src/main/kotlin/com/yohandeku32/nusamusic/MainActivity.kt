@@ -269,11 +269,12 @@ class MainActivity : ComponentActivity() {
             super.onChange(selfChange, uri)
 
             if (!permissionGranted) return
-            // Notify cached embedded-lyrics state even if this media index
-            // change is otherwise handled by an incremental library scan.
-            if (uri == null || currentSong?.uri == uri.toString()) {
-                lyricsMetadataGeneration++
-            }
+            // Android can notify the audio collection URI (not the song's
+            // item URI) when an external editor changes M4A/MP3 tags. An exact
+            // URI comparison misses those notifications and leaves Lyrics stale.
+            // A generation change refreshes only the current song's small
+            // metadata reader, NOT the whole audio payload or entire library.
+            if (currentSong != null) lyricsMetadataGeneration++
             if (isScanningMusic) {
                 // Never lose a change event received during a running scan.
                 mediaStoreRefreshPending = true
