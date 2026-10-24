@@ -149,7 +149,7 @@ internal class SyllableLyricsPainter(
             val result = layout.textLayoutResult
             val pieces = lyricGraphemeRanges(text)
             if (rtl || text != result.layoutInput.text.text ||
-                pieces.size !in 2..24) emptyList()
+                pieces.size !in 1..24) emptyList()
             else pieces.mapNotNull { range ->
                 val left = result.getHorizontalPosition(range.first, true)
                 val right = result.getHorizontalPosition(range.last + 1, true)
