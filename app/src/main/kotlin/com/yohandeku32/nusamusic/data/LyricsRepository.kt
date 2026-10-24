@@ -56,9 +56,10 @@ class LyricsRepository(context: Context) {
         song: Song,
         retry: Boolean = false,
         onlineEnabled: Boolean = true,
+        forceEmbeddedRefresh: Boolean = false,
         onLocalResult: suspend (SongLyrics) -> Unit = {}
     ): SongLyrics = withContext(Dispatchers.IO) {
-        val local = loadEmbedded(song, retry)
+        val local = loadEmbedded(song, retry || forceEmbeddedRefresh)
         withContext(Dispatchers.Main) { onLocalResult(local) }
         if (!shouldLookupOnlineLyrics(local, onlineEnabled)) return@withContext local
 
@@ -120,10 +121,13 @@ class LyricsRepository(context: Context) {
         if (uri.scheme !in setOf("content", "file"))
             return EmbeddedLyricsSelector.select(emptyList(), song.durationMs)
         val key = cacheKey(song) + "\u0000" + fingerprint(uri)
-        // MediaStore's size/DATE_MODIFIED can remain stale after an in-place
-        // M4A tag edit. M4A metadata lives in small indexed atoms: re-read it
-        // on entry instead of trusting an old successful/negative disk cache.
-        if (!retry && !song.uri.substringBefore('?').endsWith(".m4a", ignoreCase = true))
+        // Content URIs often have no .m4a suffix; Android's MediaStore can
+        // retain stale SIZE / DATE_MODIFIED after another editor writes tags.
+        // Never trust the persisted embedded cache for content URIs or M4A.
+        // This read is bounded, positional and runs off the UI thread.
+        val localFileWithReliableCache = uri.scheme == "file" &&
+            !uri.path.orEmpty().endsWith(".m4a", ignoreCase = true)
+        if (!retry && localFileWithReliableCache)
             embedded.read(key)?.let { entry ->
             return EmbeddedLyricsSelector.select(listOf(entry.content), song.durationMs, entry.credits)
         }
@@ -153,7 +157,7 @@ class LyricsRepository(context: Context) {
         }
         val result = selectLatestEmbeddedLyrics(metadata, song.durationMs)
         coroutineContext.ensureActive()
-        runCatching { embedded.write(key, result.stored) }
+        if (localFileWithReliableCache) runCatching { embedded.write(key, result.stored) }
         return result
     }
 
