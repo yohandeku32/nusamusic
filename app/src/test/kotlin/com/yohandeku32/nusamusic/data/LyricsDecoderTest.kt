@@ -593,4 +593,105 @@ class LyricsDecoderTest {
         assertEquals(setOf(0), decoded.duetRightLines)
     }
 
+    @Test fun appleMultiVocalTtmlExcludesV2000OtherAndPlacesV2V4V6OnRight() {
+        // Reproduces the user's supplied Apple-style header and real line
+        // positions, including an 'other' agent between v1 and v2.
+        val xml = """
+            <tt xmlns="http://www.w3.org/ns/ttml"
+                xmlns:itunes="http://music.apple.com/lyric-ttml-internal"
+                xmlns:ttm="http://www.w3.org/ns/ttml#metadata"
+                itunes:timing="Word" xml:lang="en">
+                <head><metadata>
+                    <ttm:agent type="person" xml:id="v1"/>
+                    <ttm:agent type="other" xml:id="v2000"/>
+                    <ttm:agent type="person" xml:id="v2"/>
+                    <ttm:agent type="person" xml:id="v3"/>
+                    <ttm:agent type="person" xml:id="v4"/>
+                    <ttm:agent type="person" xml:id="v5"/>
+                    <ttm:agent type="person" xml:id="v6"/>
+                </metadata></head>
+                <body dur="5:44.571" ttm:agent="v5">
+                    <div begin="0.000" end="1.558" itunes:songPart="Intro" ttm:agent="v1">
+                        <p begin="0.000" end="0.341" itunes:key="L1" ttm:agent="v5">
+                            <span begin="0.000" end="0.100">I</span>
+                            <span begin="0.100" end="0.207">need</span>
+                            <span begin="0.207" end="0.341">that</span>
+                        </p>
+                        <p begin="0.341" end="0.771" itunes:key="L2" ttm:agent="v1">
+                            <span begin="0.341" end="0.441">I</span>
+                            <span begin="0.441" end="0.548">need</span>
+                            <span begin="0.548" end="0.771">that</span>
+                        </p>
+                        <p begin="0.771" end="1.217" itunes:key="L3" ttm:agent="v2">
+                            <span begin="0.771" end="0.871">I</span>
+                            <span begin="0.871" end="0.978">need</span>
+                            <span begin="0.978" end="1.217">that</span>
+                        </p>
+                        <p begin="1.217" end="1.558" itunes:key="L4" ttm:agent="v3">
+                            <span begin="1.217" end="1.317">I</span>
+                            <span begin="1.317" end="1.424">need</span>
+                            <span begin="1.424" end="1.558">that</span>
+                        </p>
+                    </div>
+                    <div itunes:songPart="Verse">
+                        <p begin="1:37.659" end="1:39.363" itunes:key="L69" ttm:agent="v4">
+                            <span begin="1:37.659" end="1:38.004">Money</span>
+                            <span begin="1:38.004" end="1:39.363">in my briefcase</span>
+                        </p>
+                        <p begin="1:50.926" end="1:51.299" itunes:key="L77" ttm:agent="v2000">
+                            <span begin="1:50.926" end="1:51.299">Yah!</span>
+                        </p>
+                        <p begin="2:31.165" end="2:32.163" itunes:key="L98" ttm:agent="v2">
+                            <span begin="2:31.165" end="2:31.288">I</span>
+                            <span begin="2:31.288" end="2:31.411">need</span>
+                            <span begin="2:31.411" end="2:32.163">that</span>
+                        </p>
+                        <p begin="3:27.696" end="3:28.750" itunes:key="L133" ttm:agent="v3">
+                            <span begin="3:27.696" end="3:28.320">Check</span>
+                            <span begin="3:28.320" end="3:28.750">check</span>
+                        </p>
+                        <p begin="4:32.488" end="4:33.778" itunes:key="L170" ttm:agent="v6">
+                            <span begin="4:32.488" end="4:33.778">Oerrrr!</span>
+                        </p>
+                    </div>
+                </body>
+            </tt>
+        """.trimIndent()
+        val parsed = LyricsDecoder.decodeWithTiming(xml, 344_571)
+        fun index(timeMs: Int): Int = parsed.lyrics.lines.indexOfFirst {
+            it.start == timeMs
+        }.also { assertTrue("Missing user example lyric at $timeMs", it >= 0) }
+        // Three alternating right singers, not only second declaration v2000.
+        assertTrue(index(771) in parsed.duetRightLines) // v2 / L3
+        assertTrue(index(151165) in parsed.duetRightLines) // v2 / L98
+        assertTrue(index(97659) in parsed.duetRightLines) // v4 / L69
+        assertTrue(index(272488) in parsed.duetRightLines) // v6 / L170
+        assertFalse(index(0) in parsed.duetRightLines) // v5
+        assertFalse(index(341) in parsed.duetRightLines) // v1
+        assertFalse(index(1217) in parsed.duetRightLines) // v3
+        assertFalse(index(110926) in parsed.duetRightLines) // v2000, 'other'
+        assertFalse(index(207696) in parsed.duetRightLines) // v3
+    }
+
+    @Test fun untypedAndNamedSingersPreserveTraditionalTwoSingerAlternation() {
+        val xml = """
+            <tt xmlns:ttm="http://www.w3.org/ns/ttml#metadata">
+                <head><metadata>
+                    <ttm:agent xml:id="singerLead" type="person"/>
+                    <ttm:agent xml:id="singerGuest" type="person"/>
+                </metadata></head>
+                <body>
+                    <p begin="1s" end="2s" ttm:agent="singerGuest">
+                        <span begin="1s" end="2s">Guest on right</span>
+                    </p>
+                    <p begin="2s" end="3s" ttm:agent="singerLead">
+                        <span begin="2s" end="3s">Lead on left</span>
+                    </p>
+                </body>
+            </tt>
+        """.trimIndent()
+        val result = LyricsDecoder.decodeWithTiming(xml, 4000)
+        assertEquals(setOf(0), result.duetRightLines)
+    }
+
 }
