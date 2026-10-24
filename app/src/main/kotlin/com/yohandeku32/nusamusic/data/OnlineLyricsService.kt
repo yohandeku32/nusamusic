@@ -159,7 +159,8 @@ internal class OnlineLyricsService(
         val rows = lyrics.optJSONArray("lines") ?: return null
         if (rows.length() !in 1..800) return null
         val wordSync = lyrics.optString("sync") == "word"
-        val xml = StringBuilder("<tt xmlns:ttm=\"http://www.w3.org/ns/ttml#metadata\"><body>")
+        val xml = StringBuilder("<tt xmlns:ttm=\"http://www.w3.org/ns/ttml#metadata\" " +
+            "xmlns:tts=\"http://www.w3.org/ns/ttml#styling\"><body>")
         var count = 0
         for (index in 0 until rows.length()) {
             val row = rows.optJSONObject(index) ?: continue
@@ -186,7 +187,17 @@ internal class OnlineLyricsService(
             val lineText = row.optString("text")
             if (pieces.isEmpty() && lineText.isBlank()) continue
             xml.append("<p begin=\"").append(begin).append("s\" end=\"")
-                .append(end).append("s\">")
+                .append(end).append("s\"")
+            // The JSON fallback previously threw away voice/side metadata.
+            // Preserve it when converting provider rows to timed TTML, or
+            // the duet decoder cannot distinguish right from left at all.
+            row.lyricAgentId()?.let { agent ->
+                xml.append(" ttm:agent=\"").append(escapeXml(agent)).append("\"")
+            }
+            row.lyricTextAlign()?.let { side ->
+                xml.append(" tts:textAlign=\"").append(side).append("\"")
+            }
+            xml.append(">")
             // Preserve authored accompaniment metadata in JSON fallback.
             // For an entire backing row, wrap the shaped syllables into a
             // single role-tagged span (same TTML dialect as Apple-style x-bg).
@@ -209,6 +220,35 @@ internal class OnlineLyricsService(
         xml.append("</body></tt>")
         return if (count > 0) xml.toString() else null
     }
+}
+
+/** Accept the common singer/voice attributes in word-synced provider JSON.
+ * Unknown metadata is ignored rather than guessing the singer from turn order.
+ */
+private fun JSONObject.lyricAgentId(): String? {
+    val keys = listOf("agent", "agentId", "ttm:agent", "speaker", "speakerId",
+        "voice", "voiceId", "singer", "singerId")
+    for (key in keys) {
+        val raw = optString(key).trim().takeIf {
+            it.isNotBlank() && it != "null" && it.length <= 64
+        } ?: continue
+        return if (raw.all(Char::isDigit)) "v$raw"
+            else raw.removePrefix("#")
+    }
+    return null
+}
+
+/** The lyric provider can author sides independently of agent IDs. */
+private fun JSONObject.lyricTextAlign(): String? {
+    if (optBoolean("isRight", false) || optBoolean("rightAligned", false)) return "right"
+    for (key in listOf("textAlign", "tts:textAlign", "align", "alignment", "side",
+        "vocalSide", "position")) {
+        when (optString(key).trim().lowercase(Locale.ROOT)) {
+            "right", "end", "secondary", "second", "v2" -> return "right"
+            "left", "start", "primary", "first", "v1" -> return "left"
+        }
+    }
+    return null
 }
 
 private data class TimedJsonSyllable(
