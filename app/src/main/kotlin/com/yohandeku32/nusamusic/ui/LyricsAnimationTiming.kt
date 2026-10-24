@@ -138,7 +138,7 @@ internal class LyricsVocalWindows(line: ISyncedLine) {
 
 /** A subtle but visible continuous wave, including ordinary fast words. */
 internal fun lyricPassingLiftDp(influence: Float): Float =
-    -2.7f * lyricEase(influence.coerceIn(0f, 1f))
+    -1.8f * lyricEase(influence.coerceIn(0f, 1f))
 
 /** Critically damped spring response evaluated from audio time: no wall-clock animator or repeated bounce. */
 internal fun syllableExpression(start: Int, end: Int, now: Int, resetAt: Int): Float {
