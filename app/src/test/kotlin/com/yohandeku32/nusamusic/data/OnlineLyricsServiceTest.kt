@@ -358,4 +358,49 @@ class OnlineLyricsServiceTest {
         assertEquals(richer, preferLyrics(current, richer))
     }
 
+    @Test fun onlineBackingUpgradeCannotEraseEmbeddedTtmlDuetSideAssignment() {
+        val localTtml = """
+            <tt xmlns="http://www.w3.org/ns/ttml"
+                xmlns:ttm="http://www.w3.org/ns/ttml#metadata">
+                <head><metadata>
+                    <ttm:agent xml:id="singer1" type="person"/>
+                    <ttm:agent xml:id="singer2" type="person"/>
+                </metadata></head>
+                <body><div>
+                    <p begin="1s" end="2s" ttm:agent="singer1">
+                        <span begin="1s" end="2s">Hello </span>
+                    </p>
+                    <p begin="2s" end="3s" ttm:agent="singer2">
+                        <span begin="2s" end="3s">world</span>
+                    </p>
+                </div></body>
+            </tt>
+        """.trimIndent()
+        val local = EmbeddedLyricsSelector.select(listOf(localTtml), song.durationMs)
+        assertEquals(setOf(1), local.duetRightLines)
+        val backing = com.mocharealm.accompanist.lyrics.core.model.karaoke.KaraokeLine(
+            listOf(com.mocharealm.accompanist.lyrics.core.model.karaoke.KaraokeSyllable(
+                "Ah", 1400, 1900
+            )),
+            null, true,
+            com.mocharealm.accompanist.lyrics.core.model.karaoke.KaraokeAlignment.Start,
+            1400, 1900
+        )
+        val onlineWithoutAgents = local.copy(
+            synced = requireNotNull(local.synced).copy(
+                lines = requireNotNull(local.synced).lines + backing
+            ),
+            duetRightLines = emptySet(),
+            stored = local.stored.copy(source = "lrc.red")
+        )
+        assertTrue(hasBackingVocals(onlineWithoutAgents))
+        assertEquals(visibleMainLyrics(local), visibleMainLyrics(onlineWithoutAgents))
+        assertEquals(local, preferLyrics(local, onlineWithoutAgents))
+        // A provider that actually retains singer identity can still upgrade.
+        val onlineWithAgents = onlineWithoutAgents.copy(
+            duetRightLines = local.duetRightLines
+        )
+        assertEquals(onlineWithAgents, preferLyrics(local, onlineWithAgents))
+    }
+
 }
