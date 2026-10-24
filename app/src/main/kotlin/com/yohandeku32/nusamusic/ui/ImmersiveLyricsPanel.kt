@@ -13,6 +13,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
@@ -151,15 +153,17 @@ fun ImmersiveLyricsPanel(
     val queuedForSong = song?.let { isLyricsQueued(it) } ?: false
     LaunchedEffect(song?.uri, queuedForSong, onlineLyricsEnabled) {
         if (song != null) {
-            // Toggle changes re-read embedded metadata and cancel any running
-            // online lookup. OFF cannot reuse a previously fetched online lyric.
+            // The panel mounts anew whenever Lyrics is opened; refresh the
+            // actual M4A metadata instead of restoring stale in-memory lines.
+            // Keep the online cache for fast background-vocal upgrades.
             val stalePreview = entry?.data?.stored?.source == "saved-in-app"
             state.load(
                 song, scope,
                 retry = queuedForSong || stalePreview ||
                     (entry?.lastOnlineEnabled != null &&
                         entry.lastOnlineEnabled != onlineLyricsEnabled),
-                onlineEnabled = onlineLyricsEnabled
+                onlineEnabled = onlineLyricsEnabled,
+                refreshEmbeddedOnly = true
             )
         }
     }
@@ -262,13 +266,34 @@ fun ImmersiveLyricsPanel(
             }
         }
 
+        val saveVisible = song != null && (queuedForSong || lyricsNeedEmbedding(
+            data, entry?.embeddedLyricsQuality ?: 0,
+            entry?.embeddedHasBackingVocals ?: false
+        ))
+        // One-tap direct metadata refresh for M4A files edited in another
+        // app. No MediaStore rescan, app restart or online re-download.
+        if (song != null) {
+            IconButton(
+                onClick = {
+                    state.load(
+                        song, scope, onlineEnabled = onlineLyricsEnabled,
+                        refreshEmbeddedOnly = true
+                    )
+                },
+                enabled = entry?.loading != true,
+                modifier = Modifier.align(Alignment.TopEnd)
+                    .padding(top = 2.dp, end = if (saveVisible) 64.dp else 16.dp)
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.42f))
+            ) {
+                Icon(Icons.Default.Refresh, contentDescription = "Refresh embedded lyrics",
+                    tint = Color.White)
+            }
+        }
+
         // Offer one-tap Save for a missing lyric OR a richer online version.
-        // Local plain/line lyrics must not hide an available syllable upgrade.
-        if (song != null && (queuedForSong || lyricsNeedEmbedding(
-                data, entry?.embeddedLyricsQuality ?: 0,
-                entry?.embeddedHasBackingVocals ?: false
-            ))
-        ) {
+        if (saveVisible && song != null) {
             val queued = queuedForSong
             IconButton(
                 onClick = {
