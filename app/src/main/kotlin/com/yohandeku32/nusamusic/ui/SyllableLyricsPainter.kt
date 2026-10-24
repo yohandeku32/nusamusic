@@ -144,7 +144,7 @@ internal class SyllableLyricsPainter(
         // Measure each Unicode grapheme once from the ORIGINAL shaped layout.
         // Its horizontal coordinate never changes; only its Y position does.
         // Complex RTL shaping falls back to the intact run, never sliced.
-        val letterSlices: List<LetterSlice> = run {
+        val letterSlices: List<LetterSlice> by lazy(LazyThreadSafetyMode.NONE) {
             val text = layout.syllable.content
             val result = layout.textLayoutResult
             val pieces = lyricGraphemeRanges(text)
@@ -250,7 +250,7 @@ internal class SyllableLyricsPainter(
             glyph.controller.update(frameTime)
             val amplitude = strength * (1f - 0.88f * glyph.wavePose.depth)
             glyph.letterMotionActive = false
-            for (letter in glyph.letterSlices) {
+            if (letterWave.isAnimating(index, frameTime)) for (letter in glyph.letterSlices) {
                 letter.liftPx = if (letter.whitespace) 0f else
                     letterWave.liftDp(index, letter.centerPathDp, frameTime) * density * amplitude
                 // Sub-pixel shifts below the visual threshold are not drawn
@@ -285,8 +285,12 @@ internal class SyllableLyricsPainter(
         position: Offset,
         render: DrawScope.(Offset) -> Unit
     ) {
+        if (!glyph.letterMotionActive) {
+            render(position)
+            return
+        }
         val letters = glyph.letterSlices
-        if (!glyph.letterMotionActive || letters.isEmpty()) {
+        if (letters.isEmpty()) {
             render(position)
             return
         }
@@ -368,11 +372,7 @@ internal class SyllableLyricsPainter(
                     slope = pose.perspectiveSlope
                 )
             }
-            withTransform({
-                // No separate per-syllable pivot, micro-bounce or stroke
-                // splitting: one transform for the whole shaped word.
-                scale(scaleX, scaleY, pivot)
-            }) {
+            withLyricsScale(scaleX, scaleY, pivot) {
             // TextLayoutResult reuses AndroidTextPaint: a null drawStyle retains
             // the last Stroke. Reset every ordinary pass explicitly to Fill.
             if (!halo) {
@@ -381,13 +381,13 @@ internal class SyllableLyricsPainter(
                         topLeft = at, shadow = Shadow.None, drawStyle = Fill)
                 }
             }
-            if (strength <= 0f || progress <= 0f) return@withTransform
+            if (strength <= 0f || progress <= 0f) return@withLyricsScale
             val distance = (width + 2f * glyph.feather) * progress - glyph.feather
             val edge = if (glyph.rtl) width - distance else distance
             val direction = if (glyph.rtl) -1f else 1f
             glyph.fill.move(edge - direction * glyph.feather, edge + direction * glyph.feather)
             if (halo) {
-                if (glow <= 0f) return@withTransform
+                if (glow <= 0f) return@withLyricsScale
                 // The approved bright tight/mid halos still use the
                 // original progressive gradient. A visual-only crescendo
                 // lifts them up to ~1.5x, with the existing bubble breath.
@@ -481,6 +481,13 @@ internal class SyllableLyricsPainter(
         } finally {
             if (saved >= 0) native.restoreToCount(saved)
         }
+    }
+
+    private inline fun DrawScope.withLyricsScale(
+        scaleX: Float, scaleY: Float, pivot: Offset, draw: DrawScope.() -> Unit
+    ) {
+        if (scaleX == 1f && scaleY == 1f) draw()
+        else withTransform({ scale(scaleX, scaleY, pivot) }) { draw() }
     }
 }
 

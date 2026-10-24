@@ -3,6 +3,8 @@ package com.yohandeku32.nusamusic.ui
 import java.text.BreakIterator
 import java.util.Locale
 
+internal const val LYRICS_DETAIL_MIN_MS = 650L
+
 /**
  * Every visible letter follows its own gentle crest, delayed by its measured
  * position within the word. Unlike a per-letter bounce, this is one single
@@ -16,7 +18,10 @@ internal class LyricsLetterWave(units: List<LyricsHeldWordUnit>) {
         val start: Int,
         val end: Int,
         val leftDp: Float,
-        val rightDp: Float
+        val rightDp: Float,
+        val amplitudeDp: Float,
+        val travelMs: Float,
+        val cycleMs: Float
     )
 
     private val byUnit = arrayOfNulls<Word>(units.size)
@@ -39,12 +44,19 @@ internal class LyricsLetterWave(units: List<LyricsHeldWordUnit>) {
             val group = units.subList(first, index + 1)
             val start = group.minOf { it.startMs }
             val end = group.maxOf { it.endMs }
-            if (end > start) {
+            val duration = end.toLong() - start
+            if (duration > LYRICS_DETAIL_MIN_MS &&
+                group.none { it.content.trim().any(Char::isWhitespace) }) {
+                val travel = (duration * 0.45f).coerceIn(240f, 640f)
                 val word = Word(
                     start = start,
                     end = end,
                     leftDp = group.first().pathStartDp,
-                    rightDp = group.last().pathEndDp
+                    rightDp = group.last().pathEndDp,
+                    amplitudeDp = 0.85f * heldWordEase((duration - LYRICS_DETAIL_MIN_MS) / 550f)
+                        .coerceIn(0f, 1f),
+                    travelMs = travel,
+                    cycleMs = minOf(410f, duration - travel)
                 )
                 for (part in first..index) byUnit[part] = word
             }
@@ -52,25 +64,28 @@ internal class LyricsLetterWave(units: List<LyricsHeldWordUnit>) {
         }
     }
 
+    fun isAnimating(unitIndex: Int, nowMs: Int): Boolean {
+        val word = byUnit.getOrNull(unitIndex) ?: return false
+        return nowMs > word.start && nowMs < word.end &&
+            nowMs.toDouble() < word.start.toDouble() + word.travelMs + word.cycleMs
+    }
+
     /** A completed letter never springs up again during the same word. */
     fun liftDp(unitIndex: Int, letterCenterDp: Float, nowMs: Int): Float {
         val word = byUnit.getOrNull(unitIndex) ?: return 0f
-        val duration = (word.end.toLong() - word.start).toFloat()
+        if (nowMs <= word.start || nowMs >= word.end) return 0f
         val fraction = ((letterCenterDp - word.leftDp) /
             (word.rightDp - word.leftDp).coerceAtLeast(1f)).coerceIn(0f, 1f)
 
-        // Spread letter peaks over the word, but never rush through a 180ms
-        // lyric like separate 30ms jumps. The tail can overlap the next word.
-        val travelMs = (duration * 0.55f).coerceIn(240f, 640f)
-        val onset = word.start.toDouble() + fraction * travelMs
+        val onset = word.start.toDouble() + fraction * word.travelMs
         val elapsed = (nowMs - onset).toFloat()
-        if (elapsed <= 0f || elapsed >= 410f) return 0f
+        if (elapsed <= 0f || elapsed >= word.cycleMs) return 0f
 
-        // Slow acceleration/deceleration has zero velocity at both ends.
-        // 160ms up, 250ms down, max 1.55dp: softer, with enough movement to remain perceptible.
-        val rise = heldWordEase(elapsed / 160f)
-        val fall = 1f - heldWordEase((elapsed - 160f) / 250f)
-        return -1.55f * rise * fall
+        // Finish even the last letter's release before the next word starts.
+        val attack = word.cycleMs * 0.39f
+        val rise = heldWordEase(elapsed / attack)
+        val fall = 1f - heldWordEase((elapsed - attack) / (word.cycleMs - attack))
+        return -word.amplitudeDp * (rise * fall).coerceIn(0f, 1f)
     }
 }
 

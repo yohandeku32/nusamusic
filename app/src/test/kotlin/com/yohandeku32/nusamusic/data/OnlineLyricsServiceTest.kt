@@ -441,7 +441,7 @@ class OnlineLyricsServiceTest {
                         JSONObject().put("text", "Right only")
                             .put("begin", 1.0).put("end", 2.0)
                     )))
-            ))
+            )))
         val service = OnlineLyricsService { url ->
             when {
                 url.contains("/match.json") -> hits(hit())

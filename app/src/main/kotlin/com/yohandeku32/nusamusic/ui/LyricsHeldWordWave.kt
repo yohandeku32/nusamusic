@@ -99,6 +99,7 @@ internal class LyricsHeldWordWave(units: List<LyricsHeldWordUnit>) {
     )
 
     private val words: Array<Word?> = arrayOfNulls(units.size)
+    private val restingPose = LyricsHeldWordPose()
 
     init {
         var index = 0
@@ -137,10 +138,10 @@ internal class LyricsHeldWordWave(units: List<LyricsHeldWordUnit>) {
     }
 
     fun pose(index: Int, playbackMs: Int, centerDp: Float): LyricsHeldWordPose {
-        val word = words.getOrNull(index) ?: return LyricsHeldWordPose()
+        val word = words.getOrNull(index) ?: return restingPose
         val duration = (word.holdEndMs.toLong() - word.holdStartMs).toFloat()
         if (duration <= 0f || playbackMs <= word.holdStartMs ||
-            playbackMs >= word.holdEndMs) return LyricsHeldWordPose()
+            playbackMs >= word.holdEndMs) return restingPose
 
         val elapsed = (playbackMs.toLong() - word.holdStartMs).toFloat()
         val progress = (elapsed / duration).coerceIn(0f, 1f)
