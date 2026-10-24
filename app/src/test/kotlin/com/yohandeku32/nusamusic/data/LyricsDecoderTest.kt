@@ -240,4 +240,80 @@ class LyricsDecoderTest {
         assertEquals(setOf(1), result.duetRightLines)
     }
 
+    @Test fun ttmlDuetAlwaysUsesDeclaredSingersEvenWhenRightSingerStartsFirst() {
+        val content = """
+            <tt xmlns="http://www.w3.org/ns/ttml"
+                xmlns:ttm="http://www.w3.org/ns/ttml#metadata">
+                <head><metadata>
+                    <ttm:agent xml:id="leftLead" type="person"/>
+                    <ttm:agent xml:id="rightSinger" type="person"/>
+                </metadata></head>
+                <body><div>
+                    <p begin="1s" end="2s" ttm:agent="rightSinger">
+                        <span begin="1s" end="2s">Right opens</span>
+                    </p>
+                    <p begin="2s" end="3s" ttm:agent="leftLead">
+                        <span begin="2s" end="3s">Left replies</span>
+                    </p>
+                    <p begin="3s" end="4s" ttm:agent="rightSinger">
+                        <span begin="3s" end="4s">Right returns</span>
+                    </p>
+                    <p begin="4s" end="5s" ttm:agent="leftLead">
+                        <span begin="4s" end="5s">Left returns</span>
+                    </p>
+                </div></body>
+            </tt>
+        """.trimIndent()
+        val decoded = LyricsDecoder.decodeWithTiming(content, 6_000)
+        assertEquals(listOf(1000, 2000, 3000, 4000),
+            decoded.lyrics.lines.map { it.start })
+        assertEquals(setOf(0, 2), decoded.duetRightLines)
+    }
+
+    @Test fun ttmlDuetKeepsSecondSingerOnRightWhenOnlySpansCarryAgent() {
+        val content = """
+            <tt xmlns="http://www.w3.org/ns/ttml"
+                xmlns:ttm="http://www.w3.org/ns/ttml#metadata">
+                <head><metadata>
+                    <ttm:agent xml:id="left" type="person"/>
+                    <ttm:agent xml:id="right" type="person"/>
+                </metadata></head>
+                <body><div>
+                    <p begin="1s" end="2s">
+                        <span begin="1s" end="2s" ttm:agent="right">Hi</span>
+                    </p>
+                    <p begin="2s" end="3s">
+                        <span begin="2s" end="3s" ttm:agent="left">Hello</span>
+                    </p>
+                </div></body>
+            </tt>
+        """.trimIndent()
+        val decoded = LyricsDecoder.decodeWithTiming(content, 4_000)
+        assertEquals(2, decoded.lyrics.lines.size)
+        assertEquals(setOf(0), decoded.duetRightLines)
+    }
+
+    @Test fun ttmlDuetAlignsIdenticalSimultaneousTextUsingSourceIdentity() {
+        val content = """
+            <tt xmlns="http://www.w3.org/ns/ttml"
+                xmlns:ttm="http://www.w3.org/ns/ttml#metadata">
+                <head><metadata>
+                    <ttm:agent xml:id="left" type="person"/>
+                    <ttm:agent xml:id="right" type="person"/>
+                </metadata></head>
+                <body><div>
+                    <p begin="1s" end="3s" ttm:agent="left">
+                        <span begin="1s" end="3s">Together</span>
+                    </p>
+                    <p begin="1s" end="3s" ttm:agent="right">
+                        <span begin="1s" end="3s">Together</span>
+                    </p>
+                </div></body>
+            </tt>
+        """.trimIndent()
+        val decoded = LyricsDecoder.decodeWithTiming(content, 4_000)
+        assertEquals(2, decoded.lyrics.lines.size)
+        assertEquals(setOf(1), decoded.duetRightLines)
+    }
+
 }
