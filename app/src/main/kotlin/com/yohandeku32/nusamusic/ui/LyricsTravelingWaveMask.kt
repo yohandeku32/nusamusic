@@ -185,3 +185,56 @@ internal fun lyricCoherentWordCenters(units: List<LyricsHeldWordUnit>): FloatArr
     }
     return centers
 }
+
+
+/**
+ * Independent, shallow motion for each authored word. It never uses the
+ * sentence-wide travelling front: neighbouring words only move when their
+ * own timed vocal window starts. Syllables belonging to the SAME word share
+ * one envelope, protecting letter spacing and preventing a staccato bounce.
+ *
+ * The lift rises smoothly and releases over 200 ms after the word ends.
+ * Playback time is the sole clock, so pause/seek cannot restart an animator.
+ */
+internal class LyricsTimedWordPulse(units: List<LyricsHeldWordUnit>) {
+    private data class Word(val startMs: Int, val endMs: Int)
+    private val byUnit = arrayOfNulls<Word>(units.size)
+
+    init {
+        var i = 0
+        while (i < units.size) {
+            val first = i
+            while (i + 1 < units.size) {
+                val current = units[i]
+                val next = units[i + 1]
+                if (current.content.lastOrNull()?.isWhitespace() != false ||
+                    next.content.firstOrNull()?.isWhitespace() != false ||
+                    current.content.trim().any(Char::isWhitespace) ||
+                    next.content.trim().any(Char::isWhitespace) ||
+                    next.pathStartDp - current.pathEndDp > 2.5f
+                ) break
+                i++
+            }
+            val group = units.subList(first, i + 1)
+            val start = group.minOf { it.startMs }
+            val end = group.maxOf { it.endMs }
+            if (end > start) {
+                val word = Word(start, end)
+                for (part in first..i) byUnit[part] = word
+            }
+            i++
+        }
+    }
+
+    fun influence(unitIndex: Int, playbackMs: Int): Float {
+        val word = byUnit.getOrNull(unitIndex) ?: return 0f
+        if (playbackMs <= word.startMs ||
+            playbackMs.toLong() >= word.endMs.toLong() + 200L) return 0f
+        val duration = (word.endMs.toLong() - word.startMs).toFloat()
+        val riseMs = (duration * 0.55f).coerceIn(95f, 180f)
+        val rise = heldWordEase((playbackMs.toLong() - word.startMs) / riseMs)
+        val release = if (playbackMs < word.endMs) 1f
+            else 1f - heldWordEase((playbackMs.toLong() - word.endMs) / 200f)
+        return (rise * release).coerceIn(0f, 1f)
+    }
+}
