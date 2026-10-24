@@ -539,4 +539,43 @@ class LyricsDecoderTest {
         assertEquals(setOf(0), result.duetRightLines)
     }
 
+    @Test fun providerRegionDefinesRightDuetPositionEvenWithoutAgentMetadata() {
+        val xml = """
+            <tt xmlns="http://www.w3.org/ns/ttml"
+                xmlns:tts="http://www.w3.org/ns/ttml#styling">
+                <head>
+                  <styling><style xml:id="right" tts:textAlign="end"/></styling>
+                  <layout>
+                    <region xml:id="rightSide" style="right"/>
+                    <region xml:id="leftSide" tts:textAlign="start"/>
+                  </layout>
+                </head>
+                <body><div>
+                    <p region="rightSide" begin="1s" end="2s">
+                        <span begin="1s" end="2s">Right verse</span>
+                    </p>
+                    <p region="leftSide" begin="2s" end="3s">
+                        <span begin="2s" end="3s">Left verse</span>
+                    </p>
+                </div></body>
+            </tt>
+        """.trimIndent()
+        val decoded = LyricsDecoder.decodeWithTiming(xml, 4000)
+        assertEquals(2, decoded.lyrics.lines.size)
+        assertEquals(setOf(0), decoded.duetRightLines)
+    }
+
+    @Test fun declaredOnlySecondAgentStillRespectsItsRecognizableId() {
+        val xml = """
+            <tt xmlns:ttm="http://www.w3.org/ns/ttml#metadata">
+                <head><metadata><ttm:agent xml:id="v2" type="person"/></metadata></head>
+                <body><p begin="1s" end="2s" ttm:agent="v2">
+                    <span begin="1s" end="2s">Second</span>
+                </p></body>
+            </tt>
+        """.trimIndent()
+        val decoded = LyricsDecoder.decodeWithTiming(xml, 3000)
+        assertEquals(setOf(0), decoded.duetRightLines)
+    }
+
 }
