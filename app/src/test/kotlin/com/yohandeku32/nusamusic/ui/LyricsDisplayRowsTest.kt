@@ -79,4 +79,38 @@ class LyricsDisplayRowsTest {
         assertEquals(listOf(0, 2), backingOnly.rows.single().backing.map { it.index })
         assertArrayEquals(intArrayOf(0, 0, 0), backingOnly.lineToRow)
     }
+    @Test fun simultaneousIdenticalBackingFromDifferentSingersRetainsBothSides() {
+        val sameLyrics = backing(1000, 3000)
+        val rows = LyricsDisplayRows(
+            listOf(main(0), sameLyrics, backing(1000, 3000)),
+            duetRightLines = setOf(2)
+        )
+        assertEquals(listOf(1, 2),
+            rows.rows.single().backing.map { it.index })
+        assertArrayEquals(intArrayOf(0, 0, 0), rows.lineToRow)
+        assertTrue(rows.rows.single().backing[0].index !in setOf(2))
+        assertTrue(rows.rows.single().backing[1].index in setOf(2))
+    }
+
+    @Test fun sameSideDuplicateDoesNotCreateDuplicateDuetLines() {
+        val rows = LyricsDisplayRows(
+            listOf(main(0), backing(), backing(), backing()),
+            duetRightLines = setOf(2, 3)
+        )
+        // One left and one right. The third entry is a same-side duplicate.
+        assertEquals(listOf(1, 2),
+            rows.rows.single().backing.map { it.index })
+        assertArrayEquals(intArrayOf(0, 0, 0, 0), rows.lineToRow)
+    }
+
+    @Test fun simultaneousIdenticalBackingOnlyRowsRetainBothSingers() {
+        val rows = LyricsDisplayRows(
+            listOf(backing(), backing()),
+            duetRightLines = setOf(1)
+        )
+        assertEquals(listOf(0, 1),
+            rows.rows.single().backing.map { it.index })
+        assertArrayEquals(intArrayOf(0, 0), rows.lineToRow)
+    }
+
 }
