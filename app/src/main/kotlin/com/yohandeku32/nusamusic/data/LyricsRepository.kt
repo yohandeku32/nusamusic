@@ -50,15 +50,17 @@ class LyricsRepository(context: Context) {
     /**
      * The callback publishes local lyrics immediately before a potentially
      * slow online lookup. Called on Main and never after cancellation.
+     * When onlineEnabled is false, even the online disk cache is skipped.
      */
     suspend fun load(
         song: Song,
         retry: Boolean = false,
+        onlineEnabled: Boolean = true,
         onLocalResult: suspend (SongLyrics) -> Unit = {}
     ): SongLyrics = withContext(Dispatchers.IO) {
         val local = loadEmbedded(song, retry)
         withContext(Dispatchers.Main) { onLocalResult(local) }
-        if (lyricQuality(local) >= 3) return@withContext local
+        if (!shouldLookupOnlineLyrics(local, onlineEnabled)) return@withContext local
 
         val key = onlineKey(song)
         if (!retry) online.read(key)?.let { cached ->
@@ -165,6 +167,18 @@ class LyricsRepository(context: Context) {
     }
 }
 
+/** Accompaniment must be *decoded*, not merely mentioned in untrusted XML text. */
+internal fun hasBackingVocals(value: SongLyrics): Boolean =
+    value.synced?.lines?.any { it is KaraokeLine && it.isAccompaniment } == true
+
+/**
+ * Even authored local karaoke may be missing the accompanying singer.
+ * One cached lookup can provide a genuine richer TTML rendition, while
+ * turning Online Lyrics off strictly prevents network and online cache reads.
+ */
+internal fun shouldLookupOnlineLyrics(local: SongLyrics, onlineEnabled: Boolean): Boolean =
+    onlineEnabled && (lyricQuality(local) < 3 || !hasBackingVocals(local))
+
 /** Preserve richer timing and avoid replacing valid local lyrics with plain online text. */
 internal fun lyricQuality(value: SongLyrics): Int = when {
     value.synced?.lines?.any {
@@ -176,7 +190,10 @@ internal fun lyricQuality(value: SongLyrics): Int = when {
 }
 
 internal fun preferLyrics(local: SongLyrics, remote: SongLyrics): SongLyrics =
-    if (lyricQuality(remote) > lyricQuality(local)) remote.copy(
+    if (lyricQuality(remote) > lyricQuality(local) ||
+        (lyricQuality(remote) == lyricQuality(local) &&
+            hasBackingVocals(remote) && !hasBackingVocals(local))
+    ) remote.copy(
         // Remote text must not erase composer / lyricist credits authored
         // in the locally owned audio metadata.
         stored = remote.stored.copy(credits = local.stored.credits)
