@@ -302,6 +302,18 @@ class OnlineLyricsServiceTest {
         assertEquals(remote, preferLyrics(remote, local))
     }
 
+    @Test fun aCaseOrPunctuationEditMustNotBeReplacedByOldOnlineTiming() {
+        val local = EmbeddedLyricsSelector.select(
+            listOf("[00:01]Hello, WORLD!"), song.durationMs
+        )
+        val remote = EmbeddedLyricsSelector.select(
+            listOf("[00:01]<00:01>hello <00:02>world<00:05>"), song.durationMs
+        ).let { it.copy(stored = it.stored.copy(source = "lrc.red")) }
+        assertEquals(mainLyricsText(local), mainLyricsText(remote))
+        assertTrue(visibleMainLyrics(local) != visibleMainLyrics(remote))
+        assertEquals(local, preferLyrics(local, remote))
+    }
+
     @Test fun externallyEditedEmbeddedWordsAreNotMaskedByCachedOnlineKaraoke() {
         val updated = EmbeddedLyricsSelector.select(
             listOf("[00:01]Aku sudah mengubah lirik ini"), song.durationMs
