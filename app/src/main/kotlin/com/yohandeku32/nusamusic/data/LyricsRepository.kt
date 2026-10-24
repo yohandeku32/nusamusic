@@ -189,15 +189,38 @@ internal fun lyricQuality(value: SongLyrics): Int = when {
     else -> 0
 }
 
-internal fun preferLyrics(local: SongLyrics, remote: SongLyrics): SongLyrics =
-    if (lyricQuality(remote) > lyricQuality(local) ||
-        (lyricQuality(remote) == lyricQuality(local) &&
-            hasBackingVocals(remote) && !hasBackingVocals(local))
-    ) remote.copy(
-        // Remote text must not erase composer / lyricist credits authored
-        // in the locally owned audio metadata.
+/**
+ * Compare only the main sung lyrics, not TTML background vocals or karaoke
+ * timestamps. Online timing may enrich the *same* song text, but must never
+ * mask edits made by an external tag editor to embedded lyrics. This remains
+ * true after force-close because both sources can be restored from disk.
+ */
+internal fun mainLyricsText(value: SongLyrics): String {
+    val main = value.synced?.lines?.filterNot {
+        it is KaraokeLine && it.isAccompaniment
+    }?.joinToString(" ") { line ->
+        when (line) {
+            is KaraokeLine -> line.syllables.joinToString("") { it.content }
+            is com.mocharealm.accompanist.lyrics.core.model.synced.SyncedLine -> line.content
+            else -> ""
+        }
+    }?.takeIf { it.isNotBlank() } ?: value.stored.content
+    return normalizeLyricsTag(main)
+}
+
+internal fun preferLyrics(local: SongLyrics, remote: SongLyrics): SongLyrics {
+    val localQuality = lyricQuality(local)
+    val remoteQuality = lyricQuality(remote)
+    val canUpgrade = localQuality == 0 ||
+        (mainLyricsText(local).isNotBlank() && mainLyricsText(local) == mainLyricsText(remote))
+    val improvesTiming = remoteQuality > localQuality
+    val addsBacking = remoteQuality == localQuality &&
+        hasBackingVocals(remote) && !hasBackingVocals(local)
+    return if (canUpgrade && (improvesTiming || addsBacking)) remote.copy(
+        // Local composer/lyricist credits always survive a valid online upgrade.
         stored = remote.stored.copy(credits = local.stored.credits)
     ) else local
+}
 
 internal object EmbeddedLyricsSelector {
     private val timed = Regex("(?m)^\\s*\\[\\d+:|^\\s*<(?:\\w+:)?tt(?:\\s|>)")
