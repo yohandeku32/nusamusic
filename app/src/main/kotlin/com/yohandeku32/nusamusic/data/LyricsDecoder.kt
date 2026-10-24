@@ -22,7 +22,7 @@ data class DecodedLyrics(
 )
 
 private data class TtmlVoiceEntry(
-    val start: Int, val content: String, val agentId: String,
+    val start: Int, val isAccompaniment: Boolean, val agentId: String,
     val explicitRight: Boolean? = null
 )
 private data class NormalizedTtml(
@@ -64,6 +64,16 @@ object LyricsDecoder {
         } else {
             parseLrc(content, duration, inferredEnds)
         }
+        // Bind source rows before trimming whitespace or replacing container
+        // onsets with sung onsets. Core keeps source order for equal starts.
+        val voicesByStart = taggedVoices.groupBy { it.start to it.isAccompaniment }
+            .mapValues { (_, voices) -> ArrayDeque(voices) }
+        val voiceByLine = java.util.IdentityHashMap<ISyncedLine, TtmlVoiceEntry>()
+        parsed.lines.forEach { line ->
+            voicesByStart[line.start to ((line as? KaraokeLine)?.isAccompaniment == true)]
+                ?.removeFirstOrNull()?.let { voiceByLine[line] = it }
+        }
+        val sourceVoices = ArrayList<TtmlVoiceEntry?>()
         val lines = parsed.lines.sortedBy { it.start }.filter { line ->
             when (line) {
                 is SyncedLine -> line.content.isNotBlank()
@@ -72,7 +82,7 @@ object LyricsDecoder {
             }
         }.map { line ->
             fun start(time: Int) = time.coerceIn(0, Int.MAX_VALUE - 1)
-            when (line) {
+            val normalizedLine = when (line) {
                 is KaraokeLine -> {
                     val syllables = line.syllables.map { syllable ->
                         val begin = start(syllable.start)
@@ -86,7 +96,11 @@ object LyricsDecoder {
                 is SyncedLine -> line.copy(start = start(line.start), end = line.end.coerceAtLeast(start(line.start) + 1))
                 else -> line
             }
-        }.sortedBy { it.start }
+            sourceVoices += voiceByLine[line]
+            normalizedLine
+        }
+        val sortedIndices = lines.indices.sortedBy { lines[it].start }
+        val sortedLines = sortedIndices.map { lines[it] }
         require(lines.isNotEmpty() && lines.size <= 8_000) { "No supported timed lyrics" }
 
         // Apple lyric TTML is allowed to declare MANY voices. Its metadata
@@ -120,35 +134,13 @@ object LyricsDecoder {
             val declaredIndex = singerIds.indexOf(voice.agentId)
             return declaredIndex >= 0 && declaredIndex % 2 == 1
         }
-        val duetRight = if (taggedVoices.isNotEmpty()) {
-            val used = BooleanArray(taggedVoices.size)
-            buildSet {
-                lines.forEachIndexed { index, line ->
-                    val contentText = when (line) {
-                        is KaraokeLine -> line.syllables.joinToString("") { it.content }
-                        is SyncedLine -> line.content
-                        else -> ""
-                    }.let(::voiceTextKey)
-                    val match = taggedVoices.indices.firstOrNull { candidate ->
-                        val entry = taggedVoices[candidate]
-                        !used[candidate] && entry.start == line.start &&
-                            voiceTextKey(entry.content) == contentText
-                    }
-                    if (match != null) {
-                        used[match] = true
-                        if (isRightVoice(taggedVoices[match])) add(index)
-                    }
-                }
+        val duetRight = buildSet {
+            sortedIndices.forEachIndexed { index, sourceIndex ->
+                sourceVoices[sourceIndex]?.let { if (isRightVoice(it)) add(index) }
             }
-        } else emptySet()
-        return DecodedLyrics(parsed.copy(lines = lines), inferredEnds.toSet(), duetRight)
+        }
+        return DecodedLyrics(parsed.copy(lines = sortedLines), inferredEnds.toSet(), duetRight)
     }
-
-    // TTML parsers may drop insignificant XML indentation between adjacent
-    // word spans. Ignore only whitespace for matching source paragraphs back
-    // to parsed timed rows, without guessing identities from alternating lines.
-    private fun voiceTextKey(text: String): String =
-        text.filterNot(Char::isWhitespace)
 
     private fun time(match: MatchResult): Int = (
         match.groupValues[1].toLong() * 60_000 + match.groupValues[2].toLong() * 1_000 +
@@ -354,8 +346,7 @@ object LyricsDecoder {
             return false
         }
 
-        // A nested x-bg span is a separate parsed backing-vocal row. It
-        // must not become part of the lead singer's text matching key.
+        // Keep nested backing vocals out of line-only content classification.
         fun mainText(node: Node): String = when {
             node is Element && isBacking(node) -> ""
             node.nodeType == Node.TEXT_NODE || node.nodeType == Node.CDATA_SECTION_NODE ->
@@ -367,16 +358,18 @@ object LyricsDecoder {
             }
         }
 
-        fun firstSungStart(container: Element, fallback: Int, mainOnly: Boolean): Int {
-            val descendants = container.getElementsByTagName("*")
-            return (0 until descendants.length).mapNotNull { i ->
-                val span = descendants.item(i) as? Element ?: return@mapNotNull null
-                if (span.localName != "span" || span.textContent.isBlank() ||
-                    (mainOnly && withinBacking(span, container))
-                ) return@mapNotNull null
-                span.getAttribute("begin").takeIf { it.isNotBlank() }?.let(::ttmlTime)
-            }.minOrNull() ?: fallback
-        }
+        fun hasSungSpans(container: Element): Boolean =
+            (0 until container.childNodes.length).any { i ->
+                val span = container.childNodes.item(i) as? Element
+                    ?: return@any false
+                val hasExcludedRole = (0 until span.attributes.length).any { j ->
+                    val attr = span.attributes.item(j)
+                    attr.nodeName.endsWith(":role") &&
+                        attr.nodeValue in setOf("x-bg", "x-translation")
+                }
+                span.localName == "span" &&
+                    span.textContent.replace("  ", "").isNotEmpty() && !hasExcludedRole
+            }
 
         // Resolve the nearest TTML metadata ttm:agent, plus commonly exported
         // speaker/voice attributes. A one-singer TTML remains left aligned.
@@ -437,16 +430,11 @@ object LyricsDecoder {
             var children = buildString {
                 for (i in 0 until node.childNodes.length) append(render(node.childNodes.item(i), start, end, depth + 1))
             }
-            if (name == "span" && isBacking(node)) {
+            if (name == "span" && isBacking(node) &&
+                (node.parentNode as? Element)?.localName == "p" && hasSungSpans(node)) {
                 val voiceId = speaker(node)
-                val text = node.textContent.trim()
                 val right = explicitRight(node)
-                if (text.isNotBlank() && (voiceId.isNotBlank() || right != null)) {
-                    taggedVoices += TtmlVoiceEntry(
-                        firstSungStart(node, start, mainOnly = false),
-                        text, voiceId, right
-                    )
-                }
+                taggedVoices += TtmlVoiceEntry(start, true, voiceId, right)
             }
             if (name == "p") {
                 val spans = node.getElementsByTagName("*")
@@ -463,13 +451,11 @@ object LyricsDecoder {
                         explicitRight(span)?.let { add(it) }
                     }
                 }.singleOrNull()
-                if (leadText.isNotBlank() && (voiceId.isNotBlank() || right != null)) {
-                    // The lead and nested backing singer can differ. Match
-                    // only the lead's own vocal text and onset here.
-                    taggedVoices += TtmlVoiceEntry(
-                        firstSungStart(node, start, mainOnly = true),
-                        leadText, voiceId, right
-                    )
+                val plainParagraph = (0 until node.childNodes.length).none {
+                    node.childNodes.item(it) is Element
+                }
+                if (hasSungSpans(node) || (plainParagraph && leadText.isNotEmpty())) {
+                    taggedVoices += TtmlVoiceEntry(start, false, voiceId, right)
                 }
                 val hasTimedUnit = (0 until spans.length).any { index ->
                     val element = spans.item(index) as Element

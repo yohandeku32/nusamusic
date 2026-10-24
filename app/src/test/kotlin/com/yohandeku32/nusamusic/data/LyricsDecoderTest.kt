@@ -6,6 +6,57 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class LyricsDecoderTest {
+    @Test fun rightSingerSurvivesInlineTranslationAndEarlierContainerOnset() {
+        val xml = """
+            <tt xmlns:ttm="http://www.w3.org/ns/ttml#metadata"><body>
+                <p begin="1s" end="4s" ttm:agent="v2">
+                    <span begin="2s" end="3s">Guest</span>
+                    <span ttm:role="x-translation" xml:lang="id">Tamu</span>
+                </p>
+                <p begin="4s" end="6s" ttm:agent="v1">
+                    <span begin="4s" end="5s">Lead</span>
+                </p>
+            </body></tt>
+        """.trimIndent()
+        val result = LyricsDecoder.decodeWithTiming(xml, 7000)
+        assertEquals(setOf(0), result.duetRightLines)
+        assertEquals(2000, result.lyrics.lines[0].start)
+        assertEquals("Tamu", (result.lyrics.lines[0] as KaraokeLine).translation)
+    }
+
+    @Test fun sourceSideSurvivesCoreXmlEntityDecoding() {
+        val xml = """
+            <tt xmlns:ttm="http://www.w3.org/ns/ttml#metadata"><body>
+                <p begin="1s" end="3s" ttm:agent="v2">
+                    <span begin="1s" end="3s">A &amp;lt; B</span>
+                </p>
+            </body></tt>
+        """.trimIndent()
+        assertEquals(setOf(0), LyricsDecoder.decodeWithTiming(xml, 4000).duetRightLines)
+    }
+
+    @Test fun simultaneousUntaggedLeadAndTranslatedRightBackingKeepTheirSides() {
+        val xml = """
+            <tt xmlns:ttm="http://www.w3.org/ns/ttml#metadata"><body>
+                <p begin="1s" end="4s">
+                    <span begin="2s" end="3s">Same</span>
+                    <span ttm:role="x-bg" ttm:agent="v2" begin="1s" end="4s">
+                        <span begin="2s" end="3s">Same</span>
+                        <span ttm:role="x-translation">Terjemahan</span>
+                    </span>
+                </p>
+                <p begin="1s" end="4s" ttm:agent="v2">
+                    <span begin="2s" end="3s">Same</span>
+                </p>
+            </body></tt>
+        """.trimIndent()
+        val result = LyricsDecoder.decodeWithTiming(xml, 5000)
+        assertEquals(3, result.lyrics.lines.size)
+        assertEquals(setOf(1, 2), result.duetRightLines)
+        assertTrue((result.lyrics.lines[1] as KaraokeLine).isAccompaniment)
+        assertEquals("Terjemahan", (result.lyrics.lines[1] as KaraokeLine).translation)
+    }
+
     @Test fun appleMusicM4aTtmlAcceptsBareDecimalSecondsFromEmbeddedLyrics() {
         // Same timing dialect and metadata namespaces as the supplied M4A:
         // some units have bare decimal seconds, later ones use m:ss.mmm.
