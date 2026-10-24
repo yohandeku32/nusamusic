@@ -403,4 +403,58 @@ class OnlineLyricsServiceTest {
         assertEquals(onlineWithAgents, preferLyrics(local, onlineWithAgents))
     }
 
+    @Test fun jsonSongFallbackPreservesRightDuetSingerInsteadOfMovingAllLyricsLeft() = runBlocking {
+        fun lyric(text: String, start: Double, voice: String, side: String) =
+            JSONObject().put("text", text).put("begin", start).put("end", start + 1.0)
+                .put("agentId", voice).put("side", side)
+                .put("words", JSONArray().put(JSONArray().put(
+                    JSONObject().put("text", text).put("begin", start)
+                        .put("end", start + 1.0)
+                )))
+        val response = record().put("lyrics", JSONObject().put("sync", "word")
+            .put("lines", JSONArray()
+                .put(lyric("Right first", 1.0, "v2", "right"))
+                .put(lyric("Left next", 2.0, "v1", "left"))
+            ))
+        val service = OnlineLyricsService { url ->
+            when {
+                url.contains("/match.json") -> hits(hit())
+                url.endsWith(".ttml") -> null
+                url.endsWith(".song.json") -> response.toString()
+                else -> null
+            }
+        }
+        val result = requireNotNull(service.lookup(song).result)
+        assertTrue(result.content.contains("ttm:agent=\"v2\""))
+        assertTrue(result.content.contains("tts:textAlign=\"right\""))
+        val decoded = LyricsDecoder.decodeWithTiming(result.content, song.durationMs)
+        assertEquals(setOf(0), decoded.duetRightLines)
+    }
+
+    @Test fun jsonSongFallbackPreservesProviderRightAlignmentWithoutVocalistId() = runBlocking {
+        val response = record().put("lyrics", JSONObject().put("sync", "word")
+            .put("lines", JSONArray().put(
+                JSONObject().put("text", "Right only")
+                    .put("begin", 1.0).put("end", 2.0)
+                    .put("alignment", "end")
+                    .put("words", JSONArray().put(JSONArray().put(
+                        JSONObject().put("text", "Right only")
+                            .put("begin", 1.0).put("end", 2.0)
+                    )))
+            ))
+        val service = OnlineLyricsService { url ->
+            when {
+                url.contains("/match.json") -> hits(hit())
+                url.endsWith(".ttml") -> null
+                url.endsWith(".song.json") -> response.toString()
+                else -> null
+            }
+        }
+        val result = requireNotNull(service.lookup(song).result)
+        assertTrue(result.content.contains("tts:textAlign=\"right\""))
+        assertEquals(setOf(0), LyricsDecoder.decodeWithTiming(
+            result.content, song.durationMs
+        ).duetRightLines)
+    }
+
 }
