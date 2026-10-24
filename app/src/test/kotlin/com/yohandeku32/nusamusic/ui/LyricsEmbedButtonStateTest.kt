@@ -61,4 +61,17 @@ class LyricsEmbedButtonStateTest {
         assertFalse(lyricsNeedEmbedding(online(plain), lyricQuality(lineSync)))
         assertFalse(lyricsNeedEmbedding(online(syllableSync), lyricQuality(syllableSync)))
     }
+    @Test fun onlineBackingVocalsOfferSaveEvenAtEqualKaraokeQuality() {
+        val richer = EmbeddedLyricsSelector.select(listOf(
+            """<tt xmlns:ttm="http://www.w3.org/ns/ttml#metadata"><body>
+            <p begin="1s" end="5s"><span begin="1s" end="2s">Aku </span>
+            <span begin="2s" end="5s">cinta </span>
+            <span ttm:role="x-bg" begin="2s" end="5s"><span begin="2s" end="5s">Oh</span></span>
+            </p></body></tt>"""
+        ), duration).let(::online)
+        assertEquals(3, lyricQuality(richer))
+        assertTrue(lyricsNeedEmbedding(richer, 3, embeddedHasBackingVocals = false))
+        assertFalse(lyricsNeedEmbedding(richer, 3, embeddedHasBackingVocals = true))
+    }
+
 }
