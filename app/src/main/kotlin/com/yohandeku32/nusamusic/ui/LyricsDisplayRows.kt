@@ -6,7 +6,10 @@ import com.mocharealm.accompanist.lyrics.core.model.karaoke.KaraokeLine
 internal data class LyricsDisplayRow(val main: ISyncedLine?, val sourceIndex: Int, val backing: List<IndexedValue<KaraokeLine>>)
 
 /** One lazy item per main line: backing expands below it without moving the main anchor. */
-internal class LyricsDisplayRows(lines: List<ISyncedLine>) {
+internal class LyricsDisplayRows(
+    lines: List<ISyncedLine>,
+    duetRightLines: Set<Int> = emptySet()
+) {
     val rows: List<LyricsDisplayRow>
     val lineToRow = IntArray(lines.size)
     init {
@@ -16,7 +19,7 @@ internal class LyricsDisplayRows(lines: List<ISyncedLine>) {
                 null, 0,
                 lines.mapIndexedNotNull { index, line ->
                     (line as? KaraokeLine)?.let { IndexedValue(index, it) }
-                }.distinctBy { it.value }
+                }.distinctBy { it.value to (it.index in duetRightLines) }
             ))
         } else {
             val backing = List(mains.size) { ArrayList<IndexedValue<KaraokeLine>>() }
@@ -32,11 +35,14 @@ internal class LyricsDisplayRows(lines: List<ISyncedLine>) {
                     else mains.binarySearch(index)
                 lineToRow[index] = owner
                 if (line is KaraokeLine && line.isAccompaniment &&
-                    backing[owner].none { it.value == line }
+                    backing[owner].none {
+                        it.value == line &&
+                            (it.index in duetRightLines) == (index in duetRightLines)
+                    }
                 ) {
-                    // An identical timed backing line can be present twice in
-                    // imported metadata. Preserve both source-to-row mappings
-                    // but draw it only once; distinct harmonies stay separate.
+                    // Suppress only duplicate content on the SAME singer side.
+                    // Two TTML duet singers can sing identical synchronized
+                    // backing words; they must each retain their own side.
                     backing[owner] += IndexedValue(index, line)
                 }
             }
