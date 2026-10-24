@@ -110,6 +110,7 @@ internal fun SyncedLyricsView(
         }
         LaunchedEffect(visible, interaction.canFollow, fontSize, maxHeight, maxWidth, motionState.revision) {
             val motion = LyricsFollowMotion()
+            val directionGuard = LyricsFollowDirectionGuard()
             val interactionGeneration = interaction.generation
             if (!visible || !interaction.canFollow) return@LaunchedEffect
             snapshotFlow { listState.layoutInfo.totalItemsCount }.first { it == display.rows.size + if (credits.isEmpty) 0 else 1 }
@@ -175,10 +176,12 @@ internal fun SyncedLyricsView(
                     // One initial placement on opening; seeks and manual resumption never repeat this snap.
                     listState.scrollToItem(rejoinRow(), requestedOffset())
                     positioned = true
+                    directionGuard.markSettled()
                 } else if (now.toLong() < followEnd &&
                     listState.layoutInfo.visibleItemsInfo.none { it.index == rejoinRow() }) {
                     // One cancellable rejoin for distant seeks/browsing, owned by this same effect.
                     listState.animateScrollToItem(rejoinRow(), requestedOffset())
+                    directionGuard.markSettled()
                 }
                 while (isActive && interaction.canFollow) {
                     withFrameNanos { }
@@ -187,7 +190,8 @@ internal fun SyncedLyricsView(
                     if (audio.toLong() >= followEnd) break
                     if (!updateTarget(audio)) continue
                     val error = targetError()
-                    if (abs(error) <= 0.5f ||
+                    if (abs(error) <= 0.5f) directionGuard.markSettled()
+                    if (abs(error) <= 0.5f || directionGuard.isReverseCorrection(error) ||
                         (error > 0 && !listState.canScrollForward) || (error < 0 && !listState.canScrollBackward)) {
                         motion.reset()
                         continue
@@ -204,9 +208,15 @@ internal fun SyncedLyricsView(
                             if (latest.toLong() >= followEnd) break
                             if (!updateTarget(latest)) break
                             val error = targetError()
-                            if (abs(error) <= 0.5f) break
+                            if (abs(error) <= 0.5f) {
+                                directionGuard.markSettled()
+                                break
+                            }
+                            if (directionGuard.isReverseCorrection(error)) break
                             val limit = (listState.layoutInfo.viewportSize.height / 6f).coerceAtLeast(1f)
-                            val step = motion.step(error, deltaMs, targetResponse).coerceIn(-limit, limit)
+                            val proposed = motion.step(error, deltaMs, targetResponse).coerceIn(-limit, limit)
+                            val step = directionGuard.step(proposed, error)
+                            if (step == 0f) break
                             val consumed = scrollBy(step)
                             if (abs(step - consumed) > 0.5f) break
                         }

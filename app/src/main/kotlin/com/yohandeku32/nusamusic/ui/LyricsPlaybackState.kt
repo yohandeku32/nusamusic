@@ -3,7 +3,14 @@ package com.yohandeku32.nusamusic.ui
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.snapshots.Snapshot
 
-/** One publisher and one reset per player discontinuity, never inferred from a slow display frame. */
+/**
+ * Stable lyric playback cursor. Media3 may return a briefly *older* position
+ * after a device-clock rebase or playback-speed correction. That must never
+ * replay a syllable, visual-focus transition or scroll target.
+ *
+ * Only the explicit playback epoch may re-anchor backwards. A seek updates
+ * that epoch in MainActivity; pause retains the last sampled position.
+ */
 internal class LyricsPlaybackState(initial: Long, initialEpoch: Int) {
     val position = mutableLongStateOf(clamp(initial))
     val motion = LyricsMotionState(clamp(initial).toInt())
@@ -11,7 +18,14 @@ internal class LyricsPlaybackState(initial: Long, initialEpoch: Int) {
 
     fun publish(value: Long, playbackEpoch: Int) {
         val now = clamp(value)
-        if (playbackEpoch == epoch) { position.longValue = now; return }
+        if (playbackEpoch == epoch) {
+            // All lyric consumers (fill, glow AND line follow) share this
+            // monotonic position. A private painter-only jitter filter left
+            // the list focus moving backwards even when its glow was stable.
+            val previous = position.longValue
+            if (now > previous) position.longValue = now
+            return
+        }
         Snapshot.withMutableSnapshot {
             if (playbackEpoch != epoch) {
                 epoch = playbackEpoch

@@ -14,8 +14,13 @@ internal class EmbeddedLyricsReader(
     private val lyricists = LinkedHashSet<String>()
     private var bytesRead = 0
     private var atomsRead = 0
+    private var preferredPlainLyrics: String? = null
+    // MP4/QuickTime "mdta" indexes their text fields through keys + numeric
+    // ilst entries rather than iTunes ©lyr. Many external taggers use this.
+    private var indexedMetadataKeys: Map<Long, String> = emptyMap()
     private val lyricKeys = setOf("LYRICS", "UNSYNCEDLYRICS", "UNSYNCED LYRICS", "SYNCEDLYRICS",
-        "SYNCED LYRICS", "SYNCHRONIZEDLYRICS", "SYLT", "USLT", "LRC", "ENHANCED LRC", "TTML")
+        "SYNCED LYRICS", "SYNCHRONIZEDLYRICS", "SYLT", "USLT", "LRC", "ENHANCED LRC", "TTML",
+        "NUSAMUSIC_LYRICS")
 
     fun read(): List<String> = readMetadata().lyrics
 
@@ -37,7 +42,10 @@ internal class EmbeddedLyricsReader(
             magic.text(4, 4) == "ftyp" -> isolate { atoms(start, length, 0, false) }
             magic.text(0, 4) in setOf("RIFF", "FORM") -> isolate { riff(start, magic.text(0, 4) == "RIFF") }
         }
-        return EmbeddedLyricsMetadata(candidates.toList(), SongCredits(composers.toList(), lyricists.toList()))
+        return EmbeddedLyricsMetadata(
+            candidates.toList(), SongCredits(composers.toList(), lyricists.toList()),
+            preferredPlainLyrics
+        )
     }
 
     private inline fun isolate(block: () -> Unit) {
@@ -241,29 +249,126 @@ internal class EmbeddedLyricsReader(
         return result
     }
 
+    // QuickTime user-data ©lyr atoms can contain a 16-bit byte count and
+    // language code followed by text, rather than an iTunes nested data box.
+    // Only accept a well-formed length and printable UTF-8, never audio bytes.
+    private fun quickTimeCopyrightText(start: Long, end: Long): String? {
+        val length = end - start
+        if (length !in 5L..(LyricsDecoder.MAX_BYTES + 4).toLong()) return null
+        val raw = bytes(start, length.toInt())
+        if (raw.size < 5) return null
+        val textLength = ((raw[0].toInt() and 255) shl 8) or (raw[1].toInt() and 255)
+        if (textLength <= 0 || textLength > raw.size - 4) return null
+        val value = raw.copyOfRange(4, textLength + 4).toString(Charsets.UTF_8)
+            .trim('\uFEFF', '\u0000', ' ', '\r', '\n')
+        if (value.isEmpty() || value.any {
+                it == '\uFFFD' || (it.isISOControl() && it !in setOf('\n', '\r', '\t'))
+            }) return null
+        return value
+    }
+
+    private fun readIndexedMetadataKeys(start: Long, end: Long) {
+        if (end - start < 8) return
+        val header = bytes(start, 8)
+        if (header.size != 8) return
+        val count = header.be(4, 4)
+        if (count !in 1L..256L) return
+        var cursor = start + 8
+        val discovered = LinkedHashMap<Long, String>()
+        for (index in 1..count.toInt()) {
+            if (cursor + 8 > end) return
+            val entry = bytes(cursor, 8)
+            if (entry.size != 8) return
+            val size = entry.be(0, 4)
+            if (size < 8 || size > end - cursor) return
+            if (entry.text(4, 4) == "mdta" && size <= 520) {
+                val name = bytes(cursor + 8, (size - 8).toInt()).toString(Charsets.UTF_8)
+                if (name.isNotBlank() && name.none { it == '\uFFFD' }) {
+                    discovered[index.toLong()] = name
+                }
+            }
+            cursor += size
+        }
+        indexedMetadataKeys = discovered
+    }
+
+    private fun indexedMetadataField(type: String): String? {
+        if (type.length != 4) return null
+        val index = type.fold(0L) { value, char ->
+            (value shl 8) or (char.code.toLong() and 0xFF)
+        }
+        return indexedMetadataKeys[index]
+            ?.substringAfterLast('.')
+            ?.substringAfterLast(':')
+    }
+
     private fun atoms(start: Long, end: Long, depth: Int, inIlst: Boolean) {
         require(depth <= 12)
         for (atom in atomList(start, end)) isolate {
+            val indexedField = if (inIlst) indexedMetadataField(atom.name) else null
             when {
                 atom.name in setOf("moov", "udta", "ilst") -> atoms(atom.start, atom.end, depth + 1, atom.name == "ilst")
-                atom.name == "meta" -> atoms(atom.start + 4, atom.end, depth + 1, false)
+                atom.name == "meta" -> {
+                    // iTunes uses a 4-byte version/flags prefix; QuickTime
+                    // editors also write meta as a plain container without it.
+                    // Probe headers instead of silently losing those lyrics.
+                    val withFullBoxHeader = runCatching {
+                        atomList(atom.start + 4, atom.end).any {
+                            it.name in setOf("ilst", "hdlr", "keys", "meta")
+                        }
+                    }.getOrDefault(false)
+                    val bodyStart = if (withFullBoxHeader) atom.start + 4 else atom.start
+                    // Decode keys before ilst: QuickTime does not require keys
+                    // to appear earlier than the indexed values.
+                    atomList(bodyStart, atom.end)
+                        .firstOrNull { it.name == "keys" }
+                        ?.let { readIndexedMetadataKeys(it.start, it.end) }
+                    atoms(bodyStart, atom.end, depth + 1, false)
+                }
                 atom.name == "ID32" && atom.end - atom.start <= MAX_TAG -> {
                     val data = bytes(atom.start, (atom.end - atom.start).toInt())
                     val index = (0..minOf(16, data.size - 3)).firstOrNull { data.text(it, 3) == "ID3" }
                     if (index != null) id3(data.copyOfRange(index, data.size))
                 }
-                inIlst && atom.name in setOf("©lyr", "©wrt", "----") -> {
-                    val children = atomList(atom.start, atom.end)
+                (inIlst && (atom.name in setOf("©lyr", "©wrt", "----") ||
+                    indexedField != null)) || atom.name == "©lyr" -> {
+                    val children = runCatching { atomList(atom.start, atom.end) }.getOrNull()
+                    if (children == null) {
+                        if (atom.name == "©lyr") {
+                            quickTimeCopyrightText(atom.start, atom.end)?.let { value ->
+                                add(value)
+                                preferredPlainLyrics = value
+                            }
+                        }
+                        return@isolate
+                    }
                     val name = children.firstOrNull { it.name == "name" }?.let {
                         if (it.end - it.start in 4..256) bytes(it.start + 4, (it.end - it.start - 4).toInt()).toString(Charsets.UTF_8) else ""
                     }
-                    val key = when (atom.name) { "©lyr" -> "LYRICS"; "©wrt" -> "COMPOSER"; else -> name.orEmpty() }
+                    val key = when (atom.name) {
+                        "©lyr" -> "LYRICS"
+                        "©wrt" -> "COMPOSER"
+                        "----" -> name.orEmpty().substringAfterLast('.').substringAfterLast(':')
+                        else -> indexedField.orEmpty()
+                    }
                     if (key.uppercase(Locale.ROOT) in lyricKeys + setOf("COMPOSER", "LYRICIST")) {
                         children.filter { it.name == "data" }.forEach {
                             if (it.end - it.start in 8..LyricsDecoder.MAX_BYTES + 8L) {
                                 val data = bytes(it.start, (it.end - it.start).toInt())
                                 val type = data.be(0, 4).toInt() and 0xFFFFFF
-                                if (type in 0..2) field(key, decode(data.copyOfRange(8, data.size), if (type == 2) 2 else 3))
+                                if (type in 0..2) {
+                                    val decoded = decode(
+                                        data.copyOfRange(8, data.size),
+                                        if (type == 2) 2 else 3
+                                    )
+                                    field(key, decoded)
+                                    if ((atom.name == "©lyr" ||
+                                        indexedField?.uppercase(Locale.ROOT) in
+                                            setOf("LYRICS", "UNSYNCEDLYRICS", "UNSYNCED LYRICS")) &&
+                                        decoded.isNotBlank()) {
+                                        preferredPlainLyrics = decoded
+                                    }
+                                }
                             }
                         }
                     }

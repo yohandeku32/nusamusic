@@ -4,6 +4,12 @@ import android.content.Context
 import android.net.Uri
 import com.yohandeku32.nusamusic.model.Song
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -36,13 +42,20 @@ internal object SpotifyCanvasArtworkLoader {
     private const val MAX_RESPONSE_CHARS = 128_000
     private const val POSITIVE_TTL = 6 * 60 * 60 * 1000L
     private const val NEGATIVE_TTL = 5 * 60 * 1000L
-    private const val FAILURE_TTL = 30_000L
+    private const val FAILURE_TTL = 12_000L
     // Unlike in-memory URL lookups, persisted positive Canvas matches survive
     // closing/reopening NusaMusic, avoiding repeat calls to the slow resolver.
     private const val DISK_POSITIVE_TTL = 3L * 24 * 60 * 60 * 1_000
     private const val MAX_DISK_ENTRIES = 150
     private const val DISK_PREFS = "spotify_canvas_urls_v1"
     private val cache = LinkedHashMap<String, CacheEntry>(32, 0.75f, true)
+    // Share a network lookup between the player and predictive prefetch for
+    // the same track. Each distinct track can still resolve independently.
+    private val inFlight = HashMap<String, CompletableDeferred<String?>>()
+    // Resolution outlives a speculative prefetch: when the same song starts
+    // playing, the visible lookup must never inherit a cancelled request.
+    private val resolverScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val resolverPermits = Semaphore(3)
 
     private data class CacheEntry(val url: String?, val expires: Long)
     private data class LookupResult(val videoUrl: String?, val temporaryFailure: Boolean)
@@ -73,23 +86,53 @@ internal object SpotifyCanvasArtworkLoader {
         }
 
         currentCoroutineContext().ensureActive()
-        // Request a confident text search and the video in a single call.
-        // The public service returns track metadata with its Canvas candidates.
-        val query = Uri.encode("$artist - $title")
-        val result = fetchAndValidate(
-            "$API_ORIGIN/api/canvas?track=$query&results=1", title, artist
-        )
-        val ttl = when {
-            result.videoUrl != null -> POSITIVE_TTL
-            result.temporaryFailure -> FAILURE_TTL
-            else -> NEGATIVE_TTL
+        // Coalesce all lookups for this track in a bounded background scope.
+        // Cancelling an offscreen prefetch only cancels its await, not the
+        // resolver needed by a player that became visible a moment later.
+        val request: CompletableDeferred<String?>
+        val leader: Boolean
+        synchronized(inFlight) {
+            val existing = inFlight[key]
+            if (existing != null) {
+                request = existing
+                leader = false
+            } else {
+                request = CompletableDeferred()
+                inFlight[key] = request
+                leader = true
+            }
         }
-        synchronized(cache) {
-            cache[key] = CacheEntry(result.videoUrl, System.currentTimeMillis() + ttl)
-            while (cache.size > MAX_ITEMS) cache.remove(cache.entries.first().key)
+        if (leader) {
+            val app = context.applicationContext
+            resolverScope.launch {
+                try {
+                    val result = resolverPermits.withPermit {
+                        val query = Uri.encode("$artist - $title")
+                        fetchAndValidate("$API_ORIGIN/api/canvas?track=$query&results=1", title, artist)
+                    }
+                    val ttl = when {
+                        result.videoUrl != null -> POSITIVE_TTL
+                        result.temporaryFailure -> FAILURE_TTL
+                        else -> NEGATIVE_TTL
+                    }
+                    synchronized(cache) {
+                        cache[key] = CacheEntry(result.videoUrl, System.currentTimeMillis() + ttl)
+                        while (cache.size > MAX_ITEMS) cache.remove(cache.entries.first().key)
+                    }
+                    if (result.videoUrl != null) saveUrl(app, key, result.videoUrl)
+                    request.complete(result.videoUrl)
+                } catch (_: Exception) {
+                    // Never strand a foreground waiter if an unexpected
+                    // resolver or cache error interrupts the lookup.
+                    request.complete(null)
+                } finally {
+                    synchronized(inFlight) {
+                        if (inFlight[key] === request) inFlight.remove(key)
+                    }
+                }
+            }
         }
-        if (result.videoUrl != null) saveUrl(context, key, result.videoUrl)
-        result.videoUrl
+        request.await()
     }
 
     private fun diskKey(key: String): String = MessageDigest.getInstance("SHA-256")

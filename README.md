@@ -8,7 +8,7 @@ The current version is **3.13.4** (`versionCode 46`). It runs on Android 10 and 
 
 - A vinyl-style player with rotating artwork and reflections, a moving tonearm, and playback controls.
 - A dark CD player with rotating album artwork inside a clear jewel case, a tick-mark seek bar, and a swipeable row of discs. The case, reflections, and centre clip stay still while the disc rotates. Choose **CD** under **Player presentation** in settings, then swipe the bottom row and tap a disc to play that song. It uses the library's current sort order and the existing playback queue; the selected mode is saved between launches.
-- Immersive artwork with a dominant edge-to-edge cover, a softly blurred colour backdrop, left-aligned song details, and compact playback controls. Artist, lyrics, library, and share actions sit together in one large centred glass pill. The layout adapts to short screens, landscape, and larger text. Animated covers are optional, with local artwork as the fallback.
+- Immersive artwork with a dominant edge-to-edge cover, a softly blurred colour backdrop, left-aligned song details, and compact playback controls. Artist has its own round profile icon beside the Lyrics, Library, and Settings pill (and is also reachable with a right swipe). The layout adapts to short screens, landscape, and larger text. Animated covers are optional, with local artwork as the fallback.
 - Background playback, notification controls, shuffle, and repeat through AndroidX Media3.
 - Crossfade from 1 to 12 seconds, with a default of 5 seconds when enabled.
 - A local library with album artwork, A–Z navigation, and sorting by title, artist, album, date added, or duration.
@@ -101,11 +101,19 @@ Lyrics are available only in Immersive mode. The Lyrics button opens a rounded
 bottom sheet at 50% of the window height, with an artwork-derived background.
 Close, swipe down, or tap outside to dismiss. Settings → Lyrics controls font size.
 
-Lyrics and credits come only from the current local audio file. The bounded
-reader supports ID3 USLT/SYLT/TXXX, FLAC and Ogg Vorbis/Opus comments, MP4/M4A
-lyrics atoms, and ID3 chunks in WAV/AIFF. Plain text stays unsynchronised;
-LRC/TTML line timing never becomes invented word or syllable timing.
-Enhanced LRC and TTML authored units drive the progressive syllable fill.
+Lyrics first load from the current local audio file. The bounded reader
+supports ID3 USLT/SYLT/TXXX, FLAC and Ogg Vorbis/Opus comments, MP4/M4A lyrics
+atoms, and ID3 chunks in WAV/AIFF. Fully-timed embedded karaoke wins. If the
+file has only line-synced, plain or missing lyrics, NusaMusic tries the public
+lrc.red community API, matching the song by title and artist before fetching
+the documented ISRC-based .ttml file first. Structured per-word JSON or the
+documented .lrc file is used if TTML is unavailable. When lrc.red is offline
+or has no suitable track, LRCLIB can supply line-synced lyrics as a fallback. Local
+text displays immediately while these network requests run.
+Online hits are cached separately on-device; misses expire after 6 hours.
+No login, API key, WebView, song audio upload or automatic timestamps.
+An offline/network failure keeps the original local lyrics unchanged.
+A manual Lyrics reload also refreshes the online lookup.
 
 Syllable duration continuously controls the existing glow and motion. Notes
 under 250 ms use only progressive highlighting; 250–600 ms notes have minimal
@@ -119,11 +127,11 @@ slow breathing keep their global phase across syllable boundaries. Glow and
 sharp text share one intact glyph transform. Measured glyphs retain their
 gradients, matrices, expression profiles and shadow palette across frames.
 Audio-time effects freeze on pause and evaluate the new phase directly on seeks.
-During an evidenced long closing vowel, the entire lyric phrase (including
-earlier syllables and wrapped rows) blends into one shared floating/breathing
-transform. This keeps the complete last word and sentence moving together;
-the individual progressive fills and glow timing remain unchanged. Short
-endings and inferred metadata tails retain their adaptive treatment.
+When a word has a reliably timed held vocal, only that word receives the
+smooth, word-local mountain wave, rising through ~42% of its authored hold and
+releasing gently through ~58%. Earlier words remain still; neighboring lines
+keep their original highlighting. Short notes and uncertain metadata tails
+never trigger an invented held-vowel animation.
 
 The V13 dynamic engine keeps timing, phrase analysis, expression and visual
 focus separate. `LyricsTimeline` retains the authored active windows;

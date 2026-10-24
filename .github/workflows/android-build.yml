@@ -40,9 +40,9 @@ jobs:
 
       # Keep failing unit tests visible, but don't block the requested debug
       # APK. This build is separate from release gating and is not test-passed.
-      - name: Assemble debug APK for main, manual, or NusaMusic PR 176
+      - name: Assemble debug APK for main, manual, or NusaMusic PR 176/178
         id: apk
-        if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request' && github.event.pull_request.number == 176)) }}
+        if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request' && github.event.pull_request.number == 176 || github.event.pull_request.number == 178)) }}
         run: |
           ./gradlew :app:assembleDebug --no-daemon --stacktrace
 

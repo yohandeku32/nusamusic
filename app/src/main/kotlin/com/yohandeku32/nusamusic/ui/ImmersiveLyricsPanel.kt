@@ -1,17 +1,35 @@
 package com.yohandeku32.nusamusic.ui
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.widget.Toast
+import com.yohandeku32.nusamusic.data.LyricsFolderAccess
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Save
+import com.composables.icons.lucide.Clock3
+import com.yohandeku32.nusamusic.data.SongLyrics
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
@@ -29,6 +47,8 @@ import kotlinx.coroutines.isActive
  * parent supplies the left margin; synced rows retain their 16dp padding
  * for the glow and plain lines use the same horizontal start.
  */
+private data class PendingLyricsEmbed(val song: Song, val lyrics: SongLyrics)
+
 @Composable
 fun ImmersiveLyricsPanel(
     song: Song?,
@@ -41,11 +61,110 @@ fun ImmersiveLyricsPanel(
     state: ImmersiveLyricsState,
     onSeek: (Long) -> Unit,
     fontSize: Float,
-    modifier: Modifier = Modifier
+    onlineLyricsEnabled: Boolean,
+    modifier: Modifier = Modifier,
+    onQueueLyrics: suspend (Song, SongLyrics) -> Unit,
+    isLyricsQueued: (Song) -> Boolean
 ) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val folderAccess = remember(context) { LyricsFolderAccess(context.applicationContext) }
+    var pendingFolder by remember { mutableStateOf<PendingLyricsEmbed?>(null) }
+    var folderNeedsReview by remember { mutableStateOf<PendingLyricsEmbed?>(null) }
+    var embedBusy by remember { mutableStateOf(false) }
+    val activeSong by rememberUpdatedState(song)
+
+    suspend fun writeLyrics(snapshot: PendingLyricsEmbed) {
+        check(activeSong?.uri == snapshot.song.uri) {
+            "The playing song changed. Open Lyrics and save it again."
+        }
+        // Rewriting Media3's active source can freeze playback or truncate
+        // frames under its open descriptor. Persist this Save request only.
+        // The MainActivity queue embeds it when a different song starts.
+        onQueueLyrics(snapshot.song, snapshot.lyrics)
+        // The original file is untouched while Media3 reads it, but the
+        // authored lyrics are immediately durable and visible offline.
+        state.load(snapshot.song, scope, retry = true, onlineEnabled = onlineLyricsEnabled)
+        Toast.makeText(context,
+            "Lyrics saved in NusaMusic. File embedding completes when playback releases this song.",
+            Toast.LENGTH_LONG).show()
+    }
+
+    val folderPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        val snapshot = pendingFolder
+        pendingFolder = null
+        if (uri == null || snapshot == null) {
+            embedBusy = false
+        } else {
+            scope.launch {
+                try {
+                    folderAccess.rememberFolder(uri)
+                    check(activeSong?.uri == snapshot.song.uri) {
+                        "The playing song changed. Save its lyrics again."
+                    }
+                    // No expensive SAF traversal or whole-song hashing on
+                    // the currently-playing audio source.
+                    writeLyrics(snapshot)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Exception) {
+                    Toast.makeText(context, error.message ?: "Unable to embed lyrics",
+                        Toast.LENGTH_LONG).show()
+                } finally {
+                    embedBusy = false
+                }
+            }
+        }
+    }
+
+    fun saveWithFolderAccess(snapshot: PendingLyricsEmbed) {
+        if (embedBusy) return
+        embedBusy = true
+        scope.launch {
+            try {
+                check(activeSong?.uri == snapshot.song.uri) {
+                    "The playing song changed. Save its lyrics again."
+                }
+                if (folderAccess.authorizedTrees().isEmpty()) {
+                    // One-time parent folder permission. Reading the original
+                    // audio and writing metadata happen after track transition.
+                    pendingFolder = snapshot
+                    folderPicker.launch(null)
+                } else {
+                    writeLyrics(snapshot)
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                // An unavailable folder picker should not leave Save disabled.
+                pendingFolder = null
+                Toast.makeText(context, error.message ?: "Unable to embed lyrics",
+                    Toast.LENGTH_LONG).show()
+            } finally {
+                if (pendingFolder == null) embedBusy = false
+            }
+        }
+    }
     val entry = song?.let { state.forSong(it) }
-    LaunchedEffect(song) { if (song != null) state.load(song, scope) }
+    val queuedForSong = song?.let { isLyricsQueued(it) } ?: false
+    LaunchedEffect(song?.uri, queuedForSong, onlineLyricsEnabled) {
+        if (song != null) {
+            // The panel mounts anew whenever Lyrics is opened; refresh the
+            // actual M4A metadata instead of restoring stale in-memory lines.
+            // Keep the online cache for fast background-vocal upgrades.
+            val stalePreview = entry?.data?.stored?.source == "saved-in-app"
+            state.load(
+                song, scope,
+                retry = queuedForSong || stalePreview ||
+                    (entry?.lastOnlineEnabled != null &&
+                        entry.lastOnlineEnabled != onlineLyricsEnabled),
+                onlineEnabled = onlineLyricsEnabled,
+                refreshEmbeddedOnly = true
+            )
+        }
+    }
 
     // Retain the original frame-clock driver. Pause freezes all renderers,
     // while Media3 seeks update the epoch and re-anchor lyric follow motion.
@@ -76,7 +195,8 @@ fun ImmersiveLyricsPanel(
     Box(modifier) {
         val data = entry?.data
         when {
-            entry != null && (entry.loading || !entry.attempted) && data == null ->
+            entry != null && !entry.localReadComplete && (entry.loading || !entry.attempted) &&
+                data?.stored?.content.isNullOrBlank() ->
                 CircularProgressIndicator(
                     modifier = Modifier.align(Alignment.Center).size(24.dp),
                     color = Color.White,
@@ -121,12 +241,101 @@ fun ImmersiveLyricsPanel(
                 }
             }
 
-            else -> Text(
-                "No embedded lyrics available",
+            else -> Column(
                 Modifier.align(Alignment.Center).padding(28.dp),
-                color = Color.White.copy(alpha = 0.7f),
-                fontSize = 16.sp
-            )
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    data?.onlineNotice ?: if (entry?.loading == true && entry.localReadComplete) "Checking online lyrics…" else "No synchronized lyrics found",
+                    color = Color.White.copy(alpha = 0.76f),
+                    fontSize = 16.sp
+                )
+                // A transient provider error should not require leaving the
+                // lyrics page and finding Reload inside Settings.
+                if (song != null) TextButton(
+                    onClick = {
+                        state.load(song, scope, retry = true, onlineEnabled = onlineLyricsEnabled)
+                    },
+                    enabled = entry?.loading != true
+                ) {
+                    Text("Try again", color = Color.White)
+                }
+            }
         }
+
+        val saveVisible = song != null && (queuedForSong || lyricsNeedEmbedding(
+            data, entry?.embeddedLyricsQuality ?: 0,
+            entry?.embeddedHasBackingVocals ?: false
+        ))
+        // Offer one-tap Save for a missing lyric OR a richer online version.
+        if (saveVisible && song != null) {
+            val queued = queuedForSong
+            IconButton(
+                onClick = {
+                    data?.let { available ->
+                        saveWithFolderAccess(PendingLyricsEmbed(song, available))
+                    }
+                },
+                enabled = !embedBusy && !queued,
+                modifier = Modifier.align(Alignment.TopEnd)
+                    .padding(top = 2.dp, end = 16.dp)
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.42f))
+            ) {
+                if (embedBusy) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        color = Color.White,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Icon(
+                        imageVector = if (queued) Lucide.Clock3 else Lucide.Save,
+                        contentDescription = if (queued)
+                            "Lyrics saved in NusaMusic; waiting to embed into original file"
+                        else "Save lyrics to this song",
+                        tint = Color.White,
+                        modifier = Modifier.size(21.dp)
+                    )
+                }
+            }
+        }
+    }
+
+
+    if (folderNeedsReview != null) {
+        AlertDialog(
+            onDismissRequest = { folderNeedsReview = null },
+            title = { Text("Music folder access") },
+            text = {
+                Text(
+                    "This song could not be found inside the authorized folder. " +
+                        "If it is stored elsewhere, choose the highest Music folder " +
+                        "that contains all your artists and albums. " +
+                        "NusaMusic will remember that folder for future saves."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val snapshot = folderNeedsReview ?: return@TextButton
+                    folderNeedsReview = null
+                    pendingFolder = snapshot
+                    embedBusy = true
+                    try {
+                        folderPicker.launch(null)
+                    } catch (error: Exception) {
+                        pendingFolder = null
+                        embedBusy = false
+                        Toast.makeText(context, error.message ?: "Cannot open folder picker",
+                            Toast.LENGTH_LONG).show()
+                    }
+                }) { Text("Choose music folder") }
+            },
+            dismissButton = {
+                TextButton(onClick = { folderNeedsReview = null }) { Text("Cancel") }
+            }
+        )
     }
 }

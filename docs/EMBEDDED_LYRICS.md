@@ -1,4 +1,4 @@
-# Embedded Lyrics (Immersive only)
+# Lyrics: Embedded and Online (Immersive only)
 
 Tap Lyrics in the Immersive Now Playing controls. CD and Vinyl do not expose this feature.
 The modal has one open anchor at half the window height, full width, 28dp top corners,
@@ -7,8 +7,26 @@ or a downward swipe. The existing player remains visible behind it.
 
 ## Sources and timing
 
-LyricsRepository opens only the current local audio URI on Dispatchers.IO. It never
-queries a lyric service, opens a sidecar, or reads previous imported/remote lyric caches.
+LyricsRepository first reads the current local audio URI on Dispatchers.IO.
+If the file has valid authored word/syllable-timed karaoke, that embedded version
+wins and no online request is made. Otherwise NusaMusic searches lrc.red via
+https://lrc.red/match.json or https://lrc.red/search.json, then downloads
+https://lrc.red/s/{ISRC}.ttml first, tries .song.json for explicitly timed
+word/line segments if needed, and finally .lrc for line-synced lyrics.
+If lrc.red cannot supply a result, a bounded LRCLIB API search is the final
+fallback. Title, artist, and duration checks avoid incorrect-song matches.
+
+The original embedded version can render immediately while online lookup runs.
+Only a more precisely synchronized online version replaces it. Plain or
+malformed online responses never displace valid embedded lyrics; offline failure
+keeps local lyrics. No API token, user sign-in, WebView, Apple private endpoint,
+sidecar file, audio upload, or invented word timing is used.
+
+A separate bounded online cache at cacheDir/lyrics/online-lrcred-v2 stores up to 120
+successful matches, including provider attribution in cache metadata.
+Confirmed misses expire after 6 hours; network errors do not become misses.
+Settings > Lyrics > Reload lyrics forces a fresh embedded/online lookup.
+Queries share local file title, artist, album and duration with public providers.
 
 | Container | Embedded metadata |
 | --- | --- |
@@ -84,3 +102,84 @@ animated artwork enabled. JVM tests and an APK build do not measure device frame
 
 Format references: https://id3.org/id3v2.3.0 and
 https://www.xiph.org/vorbis/doc/v-comment.html
+
+## Embed online lyrics into the ORIGINAL MP3, FLAC or M4A
+
+A Lucide Save button appears at the top right of Immersive Lyrics when a
+downloaded lyric is better synced than the source file's embedded lyrics
+(including an authored word/syllable upgrade). The playing **file type is
+preserved**. There is no conversion to MP3, no audio re-encoding, and no
+per-song file picker.
+
+First use: choose the single parent Music folder once with Android's SAF
+OpenDocumentTree dialog. The persisted read/write tree grant covers MP3, FLAC
+and M4A originals inside any nested Artist/Album directory. NusaMusic tries
+the exact MediaStore path and safely scans descendants as a fallback; a
+whole-file SHA-256 comparison against the playing URI must match before an
+original is modified. Android may refuse permission to the root storage
+volume itself; grant access to the highest permitted music parent instead.
+
+Per-format metadata writers:
+
+- **MP3**: retain MPEG frames, artwork and unrelated ID3 fields; store plain
+  text in USLT:NusaMusic and authored TTML/Enhanced LRC in TXXX:LYRICS.
+  Only standard, safely supported ID3v2.3/2.4 layouts can be changed.
+- **FLAC**: preserve STREAMINFO, audio frames, artwork and all unrelated
+  metadata blocks/comments; store timed content as NUSAMUSIC_LYRICS Vorbis
+  comment. Add standard LYRICS plain text when no ordinary lyric field exists.
+  Reject malformed or unsafe metadata instead of modifying it.
+- **M4A**: preserve original audio byte positions, all existing atoms,
+  artwork and third-party lyrics; use Apple-readable ©lyr (if absent) and a
+  NusaMusic-owned com.nusamusic:LYRICS freeform atom for authored timing.
+  For fast-start files, replace the original moov location with same-size
+  free padding and append the updated moov at EOF, leaving all existing
+  audio sample offsets unchanged. Fragmented/protected/unusual layouts may be
+  rejected for safety.
+
+**Save without playback interruption:** tapping Save instantly commits
+the authored lyrics to durable NusaMusic private storage. The on-screen
+lyrics are refreshed from that stored copy immediately; reopening Lyrics or
+restarting the app does not require internet or pressing Next to view the
+saved lyrics. A clock icon accurately indicates that the lyrics are already
+saved **in NusaMusic**, but are still **queued for embedding into the original
+song file**. This is distinct from completed file metadata editing.
+
+When Media3 advances naturally or manually to a different song (or after
+relaunch if the queued track is no longer the active source), NusaMusic
+locates the original in the authorized Music tree, checks the full content
+hash, constructs a staged tagged copy and commits it. Save never pauses or
+toggles playback; searches and checksums of the playing file are also deferred
+to avoid I/O contention with the decoder. Rewriting a still-open SAF audio
+file during playback is intentionally prohibited because it may freeze the
+song or corrupt its currently open audio frames.
+
+Every writer confirms EmbeddedLyricsReader can read the staged authored
+timing, normalizing only the same harmless surrounding whitespace, BOM, and
+CR/LF differences the reader discards. Missing or altered timestamps never
+pass verification. After overwriting, the original is compared byte-for-byte
+by SHA-256 with the staged output. An untouched temporary backup is kept for
+rollback; on failed rollback the backup is retained for manual recovery.
+
+After **verified success**, the queued indicator clears. Failure never reports
+success or marks the song embedded. The app does not request broad storage
+permission. Other formats (OGG, Opus, WAV, etc.) remain read-only for embedding
+until safe writers exist for them.
+
+### Immersive syllable wave tuning
+
+Ordinary, fast and moderately paced words keep their progressive karaoke
+highlight without per-word looping shimmer or miniature rise/fall effects.
+Only authored held syllables lasting at least 2 seconds qualify for the
+expressive ribbon. Longer holds produce a moving hill with a synchronized
+foreground depth scale (up to roughly 11%), restrained X-axis parallax, a
+soft depth halo, and smooth easing to the original baseline. The intact
+measured glyph runs are transformed as wholes, without slicing letter strokes
+or introducing additional timing clocks. Seek/pause remain deterministic.
+
+### Device verification
+
+Test a real song of each format from a nested Music folder on Android.
+Check saved lyrics after closing/relaunching NusaMusic and reading the file
+in an independent tag editor. Confirm that audio playback, length, artwork,
+and existing tags remain unchanged. JVM fixtures verify metadata roundtrips
+but are not a replacement for physical-device SAF testing.

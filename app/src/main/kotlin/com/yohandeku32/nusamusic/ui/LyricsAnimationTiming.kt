@@ -67,6 +67,44 @@ internal class LyricsVocalWindows(line: ISyncedLine) {
             else add(start to end)
         }
     }
+    companion object {
+        /** Preview begins 700ms before a backing vocal actually sings. */
+        const val BACKING_PREVIEW_MS = 700
+        private const val BACKING_RELEASE_MS = 380
+    }
+
+    /**
+     * Backing vocals have ONE visual lifetime per lyric line, not one lifetime
+     * per timed syllable. The old per-window max() faded a row out during a
+     * vocal rest, removed its layout, then recreated the same row at the next
+     * syllable. That looked like duplicate popup lyrics.
+     *
+     * The preview still begins 700 ms before the first actual vocal. After
+     * that, keep the row fully present through every rest until the LAST
+     * audible syllable completes; only then use a single 380 ms fade out.
+     * Individual karaoke highlighting retains the original word timestamps.
+     */
+    fun previewPresence(now: Int, resetAt: Int): Float {
+        if (windows.isEmpty()) return 0f
+        val firstVocal = windows.first().first
+        val lastVocalEnd = windows.last().second
+        if (now.toLong() < firstVocal.toLong() - BACKING_PREVIEW_MS ||
+            now.toLong() >= lastVocalEnd.toLong() + BACKING_RELEASE_MS ||
+            (resetAt >= lastVocalEnd && now >= lastVocalEnd)
+        ) return 0f
+
+        return when {
+            now < firstVocal -> lyricEase(
+                (now.toLong() - firstVocal.toLong() + BACKING_PREVIEW_MS) /
+                    BACKING_PREVIEW_MS.toFloat()
+            )
+            now < lastVocalEnd -> 1f
+            else -> 1f - lyricEase(
+                (now.toLong() - lastVocalEnd) / BACKING_RELEASE_MS.toFloat()
+            )
+        }
+    }
+
     fun presence(now: Int, resetAt: Int): Float {
         var low = 0
         var high = windows.size
@@ -74,10 +112,29 @@ internal class LyricsVocalWindows(line: ISyncedLine) {
             val middle = (low + high) / 2
             if (windows[middle].first <= now) low = middle + 1 else high = middle
         }
-        val interval = windows.getOrNull(low - 1) ?: return 0f
-        return lyricPresence(interval.first, interval.second, now, resetAt)
+        // Soft 220-420ms attack and 380ms release for backing-vocal rows.
+        // Adjacent authored syllables overlap naturally instead of popping.
+        fun smooth(interval: Pair<Int, Int>): Float {
+            val (start, end) = interval
+            if (now < start || now.toLong() >= end.toLong() + 380L ||
+                (resetAt >= end && now >= end)) return 0f
+            val duration = (end.toLong() - start).toFloat()
+            val attackMs = (duration * 0.40f).coerceIn(220f, 420f)
+            val attack = if (resetAt >= start) 1f
+                else lyricEase((now.toLong() - start) / attackMs)
+            val release = if (now < end) 1f
+                else 1f - lyricEase((now.toLong() - end) / 380f)
+            return (attack * release).coerceIn(0f, 1f)
+        }
+        val current = windows.getOrNull(low - 1)?.let(::smooth) ?: 0f
+        val prior = windows.getOrNull(low - 2)?.let(::smooth) ?: 0f
+        return maxOf(current, prior)
     }
 }
+
+/** A subtle but visible continuous wave, including ordinary fast words. */
+internal fun lyricPassingLiftDp(influence: Float): Float =
+    -1.8f * lyricEase(influence.coerceIn(0f, 1f))
 
 /** Critically damped spring response evaluated from audio time: no wall-clock animator or repeated bounce. */
 internal fun syllableExpression(start: Int, end: Int, now: Int, resetAt: Int): Float {

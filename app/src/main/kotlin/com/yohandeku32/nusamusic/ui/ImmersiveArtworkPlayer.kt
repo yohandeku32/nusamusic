@@ -1,30 +1,50 @@
 package com.yohandeku32.nusamusic.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.animateColorAsState
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.*
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.Animatable
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.selected
@@ -34,9 +54,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 import java.util.Locale
 
 private fun immersiveText(id: String, en: String) =
@@ -52,6 +76,7 @@ internal fun ImmersiveArtworkPlayer(
     titleFontSize: Float,
     hasSong: Boolean,
     isPlaying: Boolean,
+    lightMode: Boolean = false,
     isFavorite: Boolean,
     shuffleEnabled: Boolean,
     repeatMode: Int,
@@ -65,6 +90,17 @@ internal fun ImmersiveArtworkPlayer(
     onFavorite: () -> Unit,
     onLyrics: () -> Unit,
     onArtist: () -> Unit,
+    artistOpen: Boolean = false,
+    canCloseArtistBySwipe: () -> Boolean = { true },
+    onArtistClose: () -> Unit = {},
+    artistProfile: @Composable () -> Unit = {},
+    libraryOpen: Boolean = false,
+    libraryLightMode: Boolean = false,
+    liquidGlassEnabled: Boolean = true,
+    glassArtworkColor: Color = Color(0xFF29303B),
+    onLibraryClose: () -> Unit = {},
+    onHome: () -> Unit = {},
+    libraryContent: @Composable (Boolean) -> Unit = {},
     onLibrary: () -> Unit,
     onShare: () -> Unit,
     onSettings: () -> Unit,
@@ -75,7 +111,103 @@ internal fun ImmersiveArtworkPlayer(
     modifier: Modifier = Modifier,
     contentInsets: WindowInsets = WindowInsets.safeDrawing
 ) {
-    BoxWithConstraints(modifier) {
+    var playerBounds by remember { mutableStateOf<Rect?>(null) }
+    var navigationPillBounds by remember { mutableStateOf<Rect?>(null) }
+    var artistButtonBounds by remember { mutableStateOf<Rect?>(null) }
+    // One predictable, non-overshooting timeline moves BOTH the circle and
+    // the four-action pill. Read Animatable only in draw/placement modifiers;
+    // do not recompose the expensive artwork/player on every animation frame.
+    val artistLift = remember { Animatable(0f) }
+    // Animate the navigation bar independently and read its value only in
+    // draw/placement/measure blocks: no per-frame player recomposition.
+    val pillExpansion = remember { Animatable(0f) }
+    // Both content sources are recorded beneath the same small glass
+    // controls: current-player artwork and the currently visible portal.
+    val glassBackdrop = remember { HazeState() }
+    // One liquid material is shared by Home, Artist and Library. Keep live
+    // Haze on the idle Now Playing screen as well, but never re-record a
+    // moving full-screen source while entering or leaving a portal.
+    var portalSettled by remember { mutableStateOf(false) }
+    val dragScope = rememberCoroutineScope()
+    var dragActive by remember { mutableStateOf(false) }
+    var dragFraction by remember { mutableFloatStateOf(1f) }
+    val shownProgress: () -> Float = {
+        if (dragActive) dragFraction else artistLift.value
+    }
+    var portalMounted by remember { mutableStateOf(false) }
+    var lastOverlayIsLibrary by remember { mutableStateOf(false) }
+    val overlayOpen = artistOpen || libraryOpen
+    // Make the first overlay frame part of the tap recomposition, instead
+    // of waiting for LaunchedEffect to mount the portal a frame later.
+    val portalVisible = overlayOpen || portalMounted
+    val presentingLibrary = if (overlayOpen) libraryOpen else lastOverlayIsLibrary
+    // In Library the two lower navigation controls are fully black and
+    // the Artist portal bubble is absent; do not capture that full-screen
+    // list as a Haze source. Artist's elevated bubble keeps its glass.
+    val liveGlassReady = liquidGlassEnabled &&
+        (!portalVisible || (portalSettled && !presentingLibrary))
+    val liveBackdrop = if (liveGlassReady) glassBackdrop else null
+    // Crossfade ONLY the real blur layer. The same refractive satin surface
+    // remains underneath on Home and both portals at every animation frame.
+    val liveGlassAlpha by animateFloatAsState(
+        targetValue = if (liveGlassReady) 1f else 0f,
+        animationSpec = tween(125, easing = FastOutSlowInEasing),
+        label = "continuousLiquidGlassBackdrop"
+    )
+    LaunchedEffect(artistOpen, libraryOpen) {
+        if (overlayOpen) {
+            dragActive = false
+            lastOverlayIsLibrary = libraryOpen
+            portalMounted = true
+            portalSettled = false
+            launch {
+                pillExpansion.animateTo(1f, tween(190, easing = FastOutSlowInEasing))
+            }
+            // Start the animation immediately. Previously awaiting the next
+            // frame added noticeable latency on Library taps; its expensive
+            // metadata indexing is still deferred until the sheet settles.
+            artistLift.animateTo(
+                1f,
+                animationSpec = tween(
+                    if (libraryOpen) 300 else 350,
+                    easing = FastOutSlowInEasing
+                )
+            )
+            portalSettled = true
+        } else {
+            portalSettled = false
+            launch {
+                pillExpansion.animateTo(0f, tween(165, easing = FastOutSlowInEasing))
+            }
+            // Continue closing from the actual finger position, not 100%.
+            if (dragActive) {
+                artistLift.snapTo(dragFraction)
+                dragActive = false
+            }
+            // Touch-down dismiss should not leave a 600ms tail after the
+            // sheet has already followed the finger most of the way.
+            val remainingMs = (225f * artistLift.value)
+                .toInt().coerceIn(75, 225)
+            artistLift.animateTo(
+                0f, animationSpec = tween(remainingMs, easing = FastOutSlowInEasing)
+            )
+            portalMounted = false
+        }
+    }
+    BoxWithConstraints(modifier.onGloballyPositioned { coordinates ->
+        val bounds = coordinates.boundsInRoot()
+        if (playerBounds != bounds) playerBounds = bounds
+    }) {
+        val primaryInk = if (lightMode) Color(0xFF171A20) else Color.White
+        // A restrained album-responsive ink: preserve Apple Music-style high
+        // contrast rather than painting transport controls in dark cover colors.
+        val transportInk by animateColorAsState(
+            targetValue = if (lightMode) primaryInk
+                else lerp(Color.White, glassArtworkColor.copy(alpha = 1f), 0.20f),
+            animationSpec = tween(520, easing = FastOutSlowInEasing),
+            label = "albumResponsiveTransportInk"
+        )
+        val mutedInk = primaryInk.copy(alpha = 0.72f)
         val density = LocalDensity.current
         val viewportHeight = maxHeight
         val layoutDirection = LocalLayoutDirection.current
@@ -148,7 +280,42 @@ internal fun ImmersiveArtworkPlayer(
                 64.dp + addedTransportGap)
                 .coerceIn(maxHeight * 0.45f, maxHeight * 0.80f)
         val heroHeight by animateDpAsState(requestedHero, tween(220), label = "immersiveHeroHeight")
-        artwork(Modifier.matchParentSize(), heroHeight, if (wide) (1f - controlsFraction + 0.06f) else 1f)
+        artwork(
+            Modifier.matchParentSize().then(
+                if (liveGlassReady) Modifier.hazeSource(glassBackdrop) else Modifier
+            ),
+            heroHeight, if (wide) (1f - controlsFraction + 0.06f) else 1f
+        )
+        // Rightward drags on the artwork open Artist; leave vertical scroll,
+        // seeking, and transport-button gestures to their own controls.
+        if (hasSong && !overlayOpen && !lyricsOpen) {
+            Box(Modifier.matchParentSize().pointerInput(onArtist) {
+                var distance = 0f
+                val thresholdPx = 72.dp.toPx()
+                detectHorizontalDragGestures(
+                    onDragStart = { distance = 0f },
+                    onHorizontalDrag = { change, amount ->
+                        distance += amount
+                        change.consume()
+                    },
+                    onDragEnd = {
+                        if (distance >= thresholdPx) onArtist()
+                    },
+                    onDragCancel = { distance = 0f }
+                )
+            })
+        }
+        if (portalVisible) {
+            // Opaque full-screen black underlay, including BELOW the profile.
+            // No blurred cover or colored artwork can leak around the pill.
+            // The actual floating sheet is rendered over the playback controls.
+            Box(Modifier.matchParentSize()
+                .graphicsLayer { alpha = shownProgress() }
+                .background(
+                    if (presentingLibrary) immersiveColors(libraryLightMode).background
+                    else Color.Black
+                ))
+        }
 
         // Dedicated top composer instead of reflowing the large Now Playing
         // title into smaller credits. Both fades are graphics layers only.
@@ -156,7 +323,7 @@ internal fun ImmersiveArtworkPlayer(
             Modifier.align(Alignment.TopStart)
                 .padding(start = horizontal, end = horizontal, top = targetHeaderTop)
                 .graphicsLayer {
-                    alpha = lyricsTransition
+                    alpha = lyricsTransition * (1f - shownProgress())
                     translationY = (1f - lyricsTransition) * 8.dp.toPx()
                 }
         ) {
@@ -203,6 +370,9 @@ internal fun ImmersiveArtworkPlayer(
             }
         }
 
+        // The three-action navigation pill stays centered across transitions.
+        val actionPillWidth = if (lyricsEnabled) 176.dp else 128.dp
+
         // On compact/large-text screens the foreground can scroll rather than
         // clipping transport buttons. The artwork remains a full-screen canvas.
         val foreground: @Composable () -> Unit = {
@@ -216,7 +386,7 @@ internal fun ImmersiveArtworkPlayer(
                 Column(
                     Modifier.fillMaxWidth()
                         .graphicsLayer {
-                            alpha = 1f - lyricsTransition
+                            alpha = (1f - lyricsTransition) * (1f - shownProgress())
                             translationY = -8.dp.toPx() * lyricsTransition
                         }
                 ) {
@@ -242,24 +412,33 @@ internal fun ImmersiveArtworkPlayer(
                             fontSize = expandedTitleSize.sp,
                             lineHeight = expandedLineHeight.sp,
                             textAlign = TextAlign.Start,
-                            color = Color.White,
+                            color = primaryInk,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = artist,
                             fontSize = 16.25f.sp,
-                            color = Color.White.copy(alpha = 0.72f),
+                            color = mutedInk,
                             textAlign = TextAlign.Start,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.fillMaxWidth()
-                                .padding(top = 5.dp)
-                                .clickable(enabled = hasSong && !lyricsOpen, onClick = onArtist)
+                            // Artist opens with a right swipe on the artwork.
+                            // Keep this text free of an extra hidden tap target.
+                            modifier = Modifier.padding(top = 5.dp)
                         )
                         // Still measured, but entirely faded out with the
                         // player title when the composer header becomes active.
-                        Box(Modifier.align(Alignment.Start).padding(top = 4.dp)) {
+                        // Reserve the quality-label row from the very first
+                        // frame. Native FLAC/ALAC inspection may finish later;
+                        // the label fades into this slot instead of moving the
+                        // progress bar and transport controls vertically.
+                        Box(
+                            Modifier.align(Alignment.Start)
+                                .padding(top = 4.dp)
+                                .height(25.dp),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
                             quality()
                         }
                     }
@@ -267,7 +446,7 @@ internal fun ImmersiveArtworkPlayer(
                     // changes to title wrapping on every Lyrics toggle.
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Spacer(Modifier.width(12.dp))
-                        ImmersiveAction(
+                        ImmersiveAction(lightMode, 
                             if (isFavorite) NusaPlayerIcons.HeartFilled else NusaPlayerIcons.Heart,
                             immersiveText("Favorit", "Favorite"), onFavorite, hasSong && !lyricsOpen,
                             active = isFavorite, iconSize = 25.dp
@@ -276,90 +455,111 @@ internal fun ImmersiveArtworkPlayer(
                 }
                 }
                 Column(Modifier.fillMaxWidth()
+                    .graphicsLayer { alpha = 1f - shownProgress() }
                     .onSizeChanged { transportHeightPx = it.height }) {
                 progress(Modifier.fillMaxWidth().padding(top = if (wide) 4.dp else if (compact) 10.dp else 14.dp))
                 Spacer(Modifier.height(progressToTransportGap))
+                // Apple Music-inspired hierarchy: filled transport glyphs,
+                // lighter outline modes and generous, stable touch targets.
+                // Compact sizing avoids horizontal clipping on narrow devices.
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween) {
-                    ImmersiveAction(NusaPlayerIcons.Shuffle,
+                    ImmersiveAction(
+                        lightMode, Lucide.Shuffle,
                         if (shuffleEnabled) immersiveText("Acak aktif", "Shuffle on") else immersiveText("Acak nonaktif", "Shuffle off"),
-                        onShuffle, hasSong, active = shuffleEnabled, iconSize = 26.dp)
-                    IconButton(onClick = onPrevious, enabled = hasSong, modifier = Modifier.size(56.dp)) {
-                        Icon(NusaPlayerIcons.Previous, immersiveText("Sebelumnya", "Previous"),
-                            tint = Color.White.copy(alpha = if (hasSong) 0.94f else 0.3f),
-                            modifier = Modifier.size(38.dp))
-                    }
-                    // Clean, background-free Play/Pause control.
-                    // The larger white glyph stays centred without glass,
-                    // a filled circle, border or drop shadow.
-                    IconButton(
-                        onClick = onPlayPause,
-                        modifier = Modifier.size(if (compact) 72.dp else 76.dp)
-                    ) {
-                        Icon(
-                            if (isPlaying) NusaPlayerIcons.Pause else NusaPlayerIcons.Play,
-                            if (isPlaying) immersiveText("Jeda", "Pause") else immersiveText("Putar", "Play"),
-                            tint = Color.White,
-                            modifier = Modifier.size(if (compact) 44.dp else 47.dp)
-                        )
-                    }
-                    IconButton(onClick = onNext, enabled = hasSong, modifier = Modifier.size(56.dp)) {
-                        Icon(NusaPlayerIcons.Next, immersiveText("Berikutnya", "Next"),
-                            tint = Color.White.copy(alpha = if (hasSong) 0.94f else 0.3f),
-                            modifier = Modifier.size(38.dp))
-                    }
-                    ImmersiveAction(if (repeatMode == 1) NusaPlayerIcons.RepeatOne else NusaPlayerIcons.Repeat,
+                        onShuffle, hasSong, active = shuffleEnabled, iconSize = 25.dp,
+                        iconTint = transportInk, touchSize = if (compact) 48.dp else 50.dp
+                    )
+                    TransportGlyphButton(
+                        icon = NusaPlayerIcons.Previous,
+                        label = immersiveText("Sebelumnya", "Previous"),
+                        onClick = onPrevious, enabled = hasSong, tint = transportInk,
+                        touchSize = if (compact) 50.dp else 54.dp, iconSize = if (compact) 34.dp else 36.dp
+                    )
+                    // Only the central glyph is prominent; the button has no
+                    // circular plate, shadow or new backdrop blur.
+                    TransportGlyphButton(
+                        icon = if (isPlaying) NusaPlayerIcons.Pause else NusaPlayerIcons.Play,
+                        label = if (isPlaying) immersiveText("Jeda", "Pause") else immersiveText("Putar", "Play"),
+                        onClick = onPlayPause, enabled = true, tint = transportInk,
+                        touchSize = if (compact) 68.dp else 74.dp,
+                        iconSize = if (compact) 46.dp else 50.dp,
+                        crossfadeGlyph = true
+                    )
+                    TransportGlyphButton(
+                        icon = NusaPlayerIcons.Next,
+                        label = immersiveText("Berikutnya", "Next"),
+                        onClick = onNext, enabled = hasSong, tint = transportInk,
+                        touchSize = if (compact) 50.dp else 54.dp, iconSize = if (compact) 34.dp else 36.dp
+                    )
+                    ImmersiveAction(
+                        lightMode, if (repeatMode == 1) Lucide.Repeat1 else Lucide.Repeat,
                         when (repeatMode) {
                             1 -> immersiveText("Ulangi satu lagu", "Repeat one")
                             2 -> immersiveText("Ulangi semua", "Repeat all")
                             else -> immersiveText("Ulangi nonaktif", "Repeat off")
-                        }, onRepeat, hasSong, active = repeatMode != 0, iconSize = 26.dp)
+                        }, onRepeat, hasSong, active = repeatMode != 0,
+                        iconSize = 25.dp, iconTint = transportInk,
+                        touchSize = if (compact) 48.dp else 50.dp
+                    )
                 }
-                // Raise title, seek bar and transport together by 12dp while
-                // keeping the bottom artist button and action pill anchored.
-                // Extra spacing is inserted ABOVE the pill, not below it.
+                // Restore the original separate Artist profile circle beside
+                // the Lyrics/Library/Settings pill. Both are 56dp high and
+                // share the same measured row during transitions.
                 Spacer(Modifier.height(transportToPillGap + if (wide) 0.dp else 12.dp))
-                // Keep Artist in its own circular glass target. The remaining
-                // actions share a compact pill, with 48dp minimum tap targets.
-                val actionPillWidth = if (lyricsEnabled) 224.dp else 176.dp
                 Row(
                     Modifier.align(Alignment.CenterHorizontally),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Box(
-                        Modifier.size(56.dp)
-                            .clip(RoundedCornerShape(50))
-                            .background(Color.White.copy(alpha = 0.09f))
-                            .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(50)),
+                        Modifier.size(56.dp).onGloballyPositioned { coordinates ->
+                            val bounds = coordinates.boundsInRoot()
+                            if (artistButtonBounds != bounds) artistButtonBounds = bounds
+                        },
                         contentAlignment = Alignment.Center
                     ) {
-                        ImmersiveAction(NusaPlayerIcons.Artist,
-                            immersiveText("Buka halaman artis", "Open artist page"),
-                            onArtist, hasSong, iconSize = 23.dp)
+                        Box(
+                            Modifier.matchParentSize().graphicsLayer {
+                                alpha = (1f - shownProgress()).coerceIn(0f, 1f)
+                                // The pill expands 48dp. Shift both pieces
+                                // 24dp left to keep their combined group
+                                // visually centered throughout Library reveal.
+                                translationX = if (presentingLibrary) {
+                                    navigationProfileLeftPx(
+                                        0f, 48.dp.toPx(), pillExpansion.value
+                                    )
+                                } else 0f
+                            },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            ContinuousLiquidGlassSurface(
+                                radius = 50.dp,
+                                lightMode = lightMode,
+                                liquidGlassEnabled = liquidGlassEnabled,
+                                hazeState = liveBackdrop,
+                                hazeAlpha = liveGlassAlpha,
+                                artworkTint = glassArtworkColor,
+                                modifier = Modifier.matchParentSize()
+                            )
+                            ImmersiveAction(
+                                lightMode, Lucide.UserRound,
+                                immersiveText("Buka halaman artis", "Open artist page"),
+                                onArtist, hasSong && !artistOpen && !libraryOpen,
+                                iconSize = 23.dp,
+                                iconTint = if (liquidGlassEnabled) Color.White else null,
+                                liquidMotion = liquidGlassEnabled,
+                                inactiveAlpha = 1f
+                            )
+                        }
                     }
-                    Row(
-                        Modifier.width(actionPillWidth)
-                            .height(56.dp)
-                            .clip(RoundedCornerShape(100.dp))
-                            .background(Color.White.copy(alpha = 0.09f))
-                            .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(100.dp)),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceEvenly
-                    ) {
-                    if (lyricsEnabled) ImmersiveAction(NusaPlayerIcons.Lyrics,
-                        if (lyricsOpen) immersiveText("Tutup lirik", "Close lyrics") else immersiveText("Buka lirik", "Open lyrics"),
-                        onLyrics, hasSong, active = lyricsOpen, iconSize = 23.dp)
-                    ImmersiveAction(NusaPlayerIcons.Library,
-                        immersiveText("Perpustakaan", "Library"),
-                        onLibrary, iconSize = 23.dp)
-                    ImmersiveAction(NusaPlayerIcons.Share,
-                        immersiveText("Bagikan lagu", "Share song"),
-                        onShare, hasSong, iconSize = 23.dp)
-                    ImmersiveAction(NusaPlayerIcons.More,
-                        immersiveText("Pengaturan", "Settings"),
-                        onSettings, iconSize = 23.dp)
-                    }
+                    Spacer(
+                        Modifier.width(actionPillWidth).height(56.dp)
+                            .onGloballyPositioned { coordinates ->
+                                val bounds = coordinates.boundsInRoot()
+                                if (navigationPillBounds != bounds) navigationPillBounds = bounds
+                            }
+                    )
                 }
                 }
             }
@@ -379,17 +579,388 @@ internal fun ImmersiveArtworkPlayer(
             Box(Modifier.align(Alignment.BottomCenter)) { foreground() }
         }
 
+        if (portalVisible) ImmersiveArtistPortal(
+            open = overlayOpen,
+            progress = shownProgress,
+            source = artistButtonBounds ?: navigationPillBounds,
+            host = playerBounds,
+            topInsetPx = with(density) { topInset.toPx() },
+            onClose = if (presentingLibrary) onLibraryClose else onArtistClose,
+            onDragFraction = { fraction ->
+                // No suspend call or coroutine per touch movement.
+                dragFraction = fraction
+                dragActive = true
+            },
+            onSwipeCancelled = {
+                val releasedAt = dragFraction
+                dragScope.launch {
+                    artistLift.snapTo(releasedAt)
+                    dragActive = false
+                    artistLift.animateTo(
+                        1f, animationSpec = tween(170, easing = FastOutSlowInEasing)
+                    )
+                }
+            },
+            canSwipeDown = {
+                // Do not interrupt the still-opening Animatable with a
+                // drag snapTo; allow gestures once the sheet has settled.
+                portalSettled &&
+                    (presentingLibrary || canCloseArtistBySwipe())
+            },
+            swipeFromHeaderOnly = presentingLibrary,
+            hazeState = liveBackdrop,
+            profile = {
+                if (presentingLibrary) libraryContent(portalSettled)
+                else artistProfile()
+            },
+            modifier = Modifier.fillMaxSize()
+        )
+
+        // Library keeps the separate Artist circle visible above its sheet.
+        // Now Playing still supports the artwork's right-swipe gesture.
+        val pill = navigationPillBounds
+        val root = playerBounds
+        val bubble = artistButtonBounds
+        if (presentingLibrary && portalVisible && bubble != null && root != null) {
+            Box(
+                Modifier.offset {
+                    IntOffset(
+                        navigationProfileLeftPx(
+                            bubble.left - root.left,
+                            48.dp.toPx(),
+                            pillExpansion.value
+                        ).roundToInt(),
+                        (bubble.top - root.top).roundToInt()
+                    )
+                }.size(56.dp).graphicsLayer {
+                    alpha = shownProgress().coerceIn(0f, 1f)
+                },
+                contentAlignment = Alignment.Center
+            ) {
+                ContinuousLiquidGlassSurface(
+                    radius = 50.dp,
+                    lightMode = lightMode,
+                    liquidGlassEnabled = liquidGlassEnabled,
+                    hazeState = liveBackdrop,
+                    hazeAlpha = liveGlassAlpha,
+                    artworkTint = glassArtworkColor,
+                    modifier = Modifier.matchParentSize()
+                )
+                SolidNavigationOverlay(
+                    radius = 50.dp,
+                    progress = shownProgress,
+                    modifier = Modifier.matchParentSize()
+                )
+                ImmersiveAction(
+                    lightMode, Lucide.UserRound,
+                    immersiveText("Buka profil artis", "Open artist profile"),
+                    onArtist, hasSong && libraryOpen,
+                    iconSize = 23.dp, iconTint = Color.White,
+                    liquidMotion = liquidGlassEnabled,
+                    inactiveAlpha = 1f
+                )
+            }
+        }
+        if (pill != null && root != null) {
+            ImmersiveOverlayActionPill(
+                anchorX = pill.left - root.left,
+                anchorY = pill.top - root.top,
+                progress = shownProgress,
+                fullWidth = actionPillWidth,
+                widthExpansion = { pillExpansion.value },
+                lyricsEnabled = lyricsEnabled,
+                lyricsOpen = lyricsOpen,
+                lightMode = lightMode,
+                libraryOpen = libraryOpen,
+                presentingLibrary = presentingLibrary && portalVisible,
+                overlayOpen = overlayOpen,
+                showSolidPill = portalVisible,
+                hazeState = liveBackdrop,
+                liquidGlassEnabled = liquidGlassEnabled,
+                hazeAlpha = liveGlassAlpha,
+                artworkTint = glassArtworkColor,
+                hasSong = hasSong,
+                onLyrics = onLyrics,
+                onLibrary = onLibrary,
+                onHome = onHome,
+                onSettings = onSettings
+            )
+        }
     }
 }
 
+/**
+ * One measured navigation row on every screen. The backdrop layers fade
+ * smoothly between the Now Playing capsule and Haze's live frosted glass
+ * while the portal settles. This avoids abrupt style swaps on Home.
+ */
+/**
+ * Solid only at full portal reveal; transparency is draw-layer only,
+ * preserving the compositional layout and Home's source-backed glass.
+ */
+@Composable
+private fun SolidNavigationOverlay(
+    radius: Dp,
+    progress: () -> Float,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier.graphicsLayer { alpha = solidNavigationReveal(progress()) }
+            .clip(RoundedCornerShape(radius))
+            .background(Color.Black)
+    )
+}
+
+@Composable
+private fun ImmersiveOverlayActionPill(
+    anchorX: Float,
+    anchorY: Float,
+    progress: () -> Float,
+    fullWidth: Dp,
+    widthExpansion: () -> Float,
+    lyricsEnabled: Boolean,
+    lyricsOpen: Boolean,
+    lightMode: Boolean,
+    libraryOpen: Boolean,
+    presentingLibrary: Boolean,
+    overlayOpen: Boolean,
+    showSolidPill: Boolean,
+    hazeState: HazeState?,
+    liquidGlassEnabled: Boolean,
+    hazeAlpha: Float,
+    artworkTint: Color,
+    hasSong: Boolean,
+    onLyrics: () -> Unit,
+    onLibrary: () -> Unit,
+    onHome: () -> Unit,
+    onSettings: () -> Unit
+) {
+    val density = LocalDensity.current
+    val iconColor by animateColorAsState(
+        targetValue = if (liquidGlassEnabled || overlayOpen) Color.White
+            else if (lightMode) Color(0xFF171A20) else Color.White,
+        animationSpec = tween(390, easing = FastOutSlowInEasing),
+        label = "frostedPillIconColor"
+    )
+    Box(
+        Modifier.offset {
+            // Keep navigation visually centered on BOTH overlays:
+            // - Library shows Artist + 10dp gap + widening pill as one group.
+            // - Artist hides its profile circle, so the pill itself centers.
+            // Distribute the 48dp pill growth equally left and right.
+            val left = navigationPillLeftPx(
+                originalLeft = anchorX,
+                expansionPx = 48.dp.toPx(),
+                profileWithGapPx = 66.dp.toPx(),
+                reveal = widthExpansion(),
+                artistOnly = showSolidPill && !presentingLibrary
+            )
+            IntOffset(left.roundToInt(), anchorY.roundToInt())
+        }.layout { measurable, constraints ->
+            // Measure only the tiny navigation bar, not the full player.
+            // Reading widthExpansion here avoids recomposing the artwork,
+            // transport and entire portal once per animation frame.
+            val expandedPx = (48.dp.toPx() *
+                widthExpansion().coerceIn(0f, 1f)).roundToInt()
+            val targetWidth = (fullWidth.roundToPx() + expandedPx).coerceIn(
+                constraints.minWidth, constraints.maxWidth
+            )
+            val targetHeight = 56.dp.roundToPx().coerceIn(constraints.minHeight, constraints.maxHeight)
+            val placeable = measurable.measure(Constraints.fixed(targetWidth, targetHeight))
+            layout(targetWidth, targetHeight) { placeable.placeRelative(0, 0) }
+        }
+    ) {
+        // The original Home glass remains mounted as black fades out,
+        // preventing the last-frame material swap on return.
+        ContinuousLiquidGlassSurface(
+            radius = 100.dp,
+            lightMode = lightMode,
+            liquidGlassEnabled = liquidGlassEnabled,
+            // Never render live blur underneath an opaque portal pill.
+            hazeState = if (showSolidPill) null else hazeState,
+            hazeAlpha = hazeAlpha,
+            artworkTint = artworkTint,
+            modifier = Modifier.matchParentSize()
+        )
+        if (showSolidPill) {
+            SolidNavigationOverlay(
+                radius = 100.dp,
+                progress = progress,
+                modifier = Modifier.matchParentSize()
+            )
+        }
+        Row(
+            Modifier.fillMaxSize(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            if (lyricsEnabled) ImmersiveAction(
+                lightMode, Lucide.MessageSquareText,
+                if (lyricsOpen) immersiveText("Tutup lirik", "Close lyrics")
+                else immersiveText("Buka lirik", "Open lyrics"),
+                onLyrics, hasSong, active = lyricsOpen, iconSize = 23.dp,
+                iconTint = iconColor, liquidMotion = liquidGlassEnabled
+            )
+            // A single stable 50dp slot morphs Library into Home. Keeping
+            // the same measured slot prevents the entire navigation row from
+            // redistributing its icons in the middle of a page transition.
+            Crossfade(
+                targetState = libraryOpen,
+                animationSpec = tween(95),
+                label = "navigationLibraryHomeGlyph"
+            ) { showingLibraryHome ->
+                ImmersiveAction(
+                    lightMode,
+                    if (showingLibraryHome)
+                        Lucide.House
+                    else Lucide.ListMusic,
+                    if (showingLibraryHome)
+                        immersiveText("Kembali ke pemutar", "Back to Now Playing")
+                    else immersiveText("Perpustakaan", "Library"),
+                    if (showingLibraryHome) onHome else onLibrary,
+                    enabled = showingLibraryHome == libraryOpen,
+                    iconSize = 23.dp, iconTint = iconColor,
+                    liquidMotion = liquidGlassEnabled
+                )
+            }
+            ImmersiveAction(
+                lightMode, Lucide.Settings2,
+                immersiveText("Pengaturan", "Settings"),
+                onSettings, iconSize = 23.dp, iconTint = iconColor,
+                liquidMotion = liquidGlassEnabled
+            )
+            // Artist alone needs the additional Home action. Library
+            // already uses the first, fixed-width slot for its Home button.
+            AnimatedVisibility(
+                visible = overlayOpen && !libraryOpen,
+                enter = fadeIn(tween(110)),
+                exit = fadeOut(tween(90))
+            ) {
+                ImmersiveAction(
+                    lightMode, Lucide.House,
+                    immersiveText("Kembali ke pemutar", "Back to Now Playing"),
+                    onHome, iconSize = 23.dp, iconTint = iconColor,
+                    liquidMotion = liquidGlassEnabled
+                )
+            }
+        }
+    }
+}
+
+
+/**
+ * Filled SF-inspired transport silhouettes built into NusaMusic. This keeps
+ * the design familiar on Android without bundling Apple's licensed SF assets.
+ * Press animations transform only the icon layer, never the row or touch area.
+ */
+@Composable
+private fun TransportGlyphButton(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    enabled: Boolean,
+    tint: Color,
+    touchSize: Dp,
+    iconSize: Dp,
+    crossfadeGlyph: Boolean = false
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val iconScale by animateFloatAsState(
+        targetValue = if (pressed && enabled) 0.91f else 1f,
+        animationSpec = spring(dampingRatio = 0.87f, stiffness = 760f),
+        label = "transportGlyphPress"
+    )
+    IconButton(
+        onClick = onClick,
+        enabled = enabled,
+        interactionSource = interactionSource,
+        modifier = Modifier.size(touchSize)
+    ) {
+        val glyph: @Composable (ImageVector) -> Unit = { vector ->
+            Icon(
+                imageVector = vector,
+                contentDescription = label,
+                tint = tint.copy(alpha = if (enabled) 1f else 0.30f),
+                modifier = Modifier.size(iconSize).graphicsLayer {
+                    scaleX = iconScale
+                    scaleY = iconScale
+                }
+            )
+        }
+        if (crossfadeGlyph) {
+            Crossfade(targetState = icon, animationSpec = tween(135),
+                label = "immersivePlayPauseGlyph") { vector -> glyph(vector) }
+        } else {
+            glyph(icon)
+        }
+    }
+}
+
+
 @Composable
 private fun ImmersiveAction(
+    lightMode: Boolean,
     icon: ImageVector, label: String, onClick: () -> Unit, enabled: Boolean = true,
-    active: Boolean = false, iconSize: Dp = 22.dp
+    active: Boolean = false, iconSize: Dp = 22.dp,
+    iconTint: Color? = null,
+    liquidMotion: Boolean = false,
+    touchSize: Dp = 50.dp,
+    inactiveAlpha: Float = 0.68f
 ) {
-    IconButton(onClick = onClick, enabled = enabled,
-        modifier = Modifier.size(50.dp).semantics { selected = active }) {
-        Icon(icon, label, tint = Color.White.copy(alpha = if (!enabled) 0.26f else if (active) 1f else 0.62f),
+    // iOS-inspired liquid press response is a restrained native Compose
+    // spring, not a screen-wide transform or heavy shader animation.
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val touchScale by animateFloatAsState(
+        targetValue = if (liquidMotion && pressed) 0.945f else 1f,
+        animationSpec = spring(
+            dampingRatio = 0.86f,
+            stiffness = 680f
+        ),
+        label = "liquidNavigationPress"
+    )
+    val pressLight by animateFloatAsState(
+        targetValue = if (liquidMotion && pressed && enabled) 1f else 0f,
+        animationSpec = spring(dampingRatio = 0.87f, stiffness = 750f),
+        label = "liquidPressReflection"
+    )
+    IconButton(
+        onClick = onClick,
+        enabled = enabled,
+        interactionSource = interactionSource,
+        modifier = Modifier.size(touchSize)
+            .graphicsLayer {
+                scaleX = touchScale
+                scaleY = touchScale
+            }
+            // A tiny caustic glint blooms under the finger on touch, then
+            // recedes. Unlike a ripple it stays within the round tap target.
+            .drawWithCache {
+                val highlight = Brush.radialGradient(
+                    listOf(
+                        Color.White.copy(alpha = 0.16f * pressLight),
+                        Color.White.copy(alpha = 0.045f * pressLight),
+                        Color.Transparent
+                    ),
+                    center = Offset(size.width * 0.34f, size.height * 0.26f),
+                    radius = size.width * 0.63f
+                )
+                onDrawWithContent {
+                    drawContent()
+                    if (liquidMotion && pressLight > 0.001f) {
+                        drawCircle(
+                            brush = highlight,
+                            radius = size.width * 0.49f,
+                            center = center
+                        )
+                    }
+                }
+            }
+            .semantics { selected = active }
+    ) {
+        Icon(icon, label, tint = (iconTint ?: if (lightMode) Color(0xFF171A20) else Color.White)
+            .copy(alpha = if (!enabled) 0.26f else if (active) 1f else inactiveAlpha),
             modifier = Modifier.size(iconSize))
     }
 }

@@ -7,17 +7,17 @@ import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.cache.CacheDataSource
-import androidx.media3.datasource.cache.CacheWriter
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.isActive
+import kotlinx.coroutines.ensureActive
 import java.io.File
 
 /**
@@ -35,8 +35,20 @@ internal object SpotifyCanvasVideoCache {
     private const val MAX_BYTES = 64L * 1024 * 1024
     private const val DIR_NAME = "spotify-canvas-video-v1"
     private val initMutex = Mutex()
+    // Speculative requests must not compete with each other during rapid skips.
+    private val prefetchMutex = Mutex()
 
     @Volatile private var store: SimpleCache? = null
+
+    // Give the foreground stream its first frame or rebuffer before a
+    // speculative request can consume the same CDN/cache I/O bandwidth.
+    @Volatile private var foregroundBufferingUrl: String? = null
+
+    fun setForegroundBuffering(url: String, buffering: Boolean) {
+        if (!SpotifyCanvasArtworkLoader.isSpotifyCanvasVideo(url)) return
+        if (buffering) foregroundBufferingUrl = url
+        else if (foregroundBufferingUrl == url) foregroundBufferingUrl = null
+    }
 
     suspend fun prepare(context: Context) {
         if (store != null) return
@@ -81,32 +93,66 @@ internal object SpotifyCanvasVideoCache {
     }
 
     /**
-     * Speculatively cache only the first 512 KiB of the NEXT track, never
-     * download whole albums/playlists. The URL has already been validated by
-     * SpotifyCanvasArtworkLoader. Canceled prefetches don't affect playback.
+     * Cache the entire short Canvas loop whenever it fits within a bounded
+     * byte budget. The previous fixed-length CacheWriter (4 MiB for Next)
+     * could read beyond EOF for a short MP4 and produce a failed prefetch,
+     * making every repeat go back to the third-party CDN.
+     *
+     * An unknown-length DataSpec reads until real EOF. Normal Media3 playback
+     * shares the exact same SimpleCache; cached loops replay without network
+     * buffering. If the clip exceeds the budget it still retains a useful
+     * prefix and falls back to streaming.
      */
-    suspend fun prefetchNext(context: Context, url: String) {
+    suspend fun prefetchNext(
+        context: Context, url: String, immediateNext: Boolean = false
+    ) {
         if (!SpotifyCanvasArtworkLoader.isSpotifyCanvasVideo(url)) return
         prepare(context)
         withContext(Dispatchers.IO) {
-            val factory = dataSourceFactory() ?: return@withContext
-            val spec = DataSpec.Builder()
-                .setUri(url)
-                .setPosition(0)
-                .setLength(512L * 1024)
-                .build()
-            val writer = CacheWriter(factory.createDataSource(), spec, null, null)
-            try {
-                writer.cache()
-            } catch (cancelled: CancellationException) {
-                writer.cancel()
-                throw cancelled
-            } catch (_: Exception) {
-                // Offline, 429, and expired Canvas links should never block
-                // local audio playback; a later normal lookup may retry.
-            } finally {
-                if (!currentCoroutineContext().isActive) writer.cancel()
+            prefetchMutex.withLock {
+                val factory = dataSourceFactory() ?: return@withLock
+                // Up to five prepared tracks but only one low-priority reader.
+                val maxBytes = if (immediateNext) 10L * 1024 * 1024
+                    else 3L * 1024 * 1024
+                val reader = factory.createDataSource()
+                try {
+                    // Foreground video wins at startup or during a stall.
+                    // Do not start a secondary request that competes with it.
+                    if (!waitForForeground()) return@withLock
+                    currentCoroutineContext().ensureActive()
+                    reader.open(DataSpec.Builder().setUri(url).build())
+                    val buffer = ByteArray(32 * 1024)
+                    var readBytes = 0L
+                    while (readBytes < maxBytes) {
+                        currentCoroutineContext().ensureActive()
+                        if (!waitForForeground()) break
+                        val length = minOf(buffer.size.toLong(), maxBytes - readBytes).toInt()
+                        val count = reader.read(buffer, 0, length)
+                        if (count == -1) break
+                        if (count > 0) readBytes += count
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    // A slow or temporarily unavailable CDN does not erase
+                    // the selected provider or previously committed bytes.
+                    currentCoroutineContext().ensureActive()
+                } finally {
+                    // close also when open() failed halfway, otherwise a
+                    // stale upstream connection may hold a cache span lock.
+                    runCatching { reader.close() }
+                }
             }
         }
+    }
+
+    private suspend fun waitForForeground(): Boolean {
+        var elapsed = 0L
+        while (foregroundBufferingUrl != null && elapsed < 6_000L) {
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            delay(100L)
+            elapsed += 100L
+        }
+        return foregroundBufferingUrl == null
     }
 }

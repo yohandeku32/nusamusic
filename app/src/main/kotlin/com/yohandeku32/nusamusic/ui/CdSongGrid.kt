@@ -1,6 +1,7 @@
 package com.yohandeku32.nusamusic.ui
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -13,11 +14,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.yohandeku32.nusamusic.model.Song
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun CdSongGrid(
     songs: List<Song>,
     currentSongId: Long?,
     onPlay: (Song) -> Unit,
+    onRequestDelete: (Song) -> Unit,
     artwork: @Composable (Song?, Modifier) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -30,7 +33,14 @@ internal fun CdSongGrid(
     ) {
         items(count = songs.size, key = { songs[it].id }, contentType = { "cd-song" }) { index ->
             val song = songs[index]
-            Column(Modifier.fillMaxWidth().clickable(onClickLabel = "Putar ${song.title}") { onPlay(song) }) {
+            Column(
+                Modifier.fillMaxWidth().combinedClickable(
+                    onClickLabel = "Play ${song.title}",
+                    onLongClickLabel = "Delete ${song.title} permanently",
+                    onClick = { onPlay(song) },
+                    onLongClick = { onRequestDelete(song) }
+                )
+            ) {
                 Box(Modifier.fillMaxWidth().aspectRatio(1.12f)) {
                     CdJewelCase(
                         modifier = Modifier.matchParentSize(),

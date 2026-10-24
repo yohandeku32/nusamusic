@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -41,7 +42,9 @@ internal fun CenteredKaraokeLine(
     val voices = remember(line) { LyricsVocalWindows(line) }
     val live by remember(line, time, motion) { derivedStateOf {
         val now = time()
-        now >= line.start && now.toLong() < line.end.toLong() + 160 && motion.resetAt < line.end
+        if (line.isAccompaniment) voices.previewPresence(now, motion.resetAt) > 0f
+        else now >= line.start && now.toLong() < line.end.toLong() + 160L &&
+            motion.resetAt < line.end
     } }
     val visualTime = remember(live, time) { { if (live) time() else Int.MIN_VALUE } }
     MotionRow(line, visualTime, motion, voices, line.isAccompaniment, { onSeek(line) }, onMainHeight) {
@@ -57,22 +60,27 @@ internal fun CenteredKaraokeLine(
                 calculateStaticLineLayout(wrapped, false, width, lineHeight, rtl)
             }
             val painter = remember(layouts, density.density, line.start, line.end, expressions, alignEnd, width) {
-                SyllableLyricsPainter(layouts, density.density, line.start, line.end, expressions,
+                SyllableLyricsPainter(layouts, density.density, expressions,
                     alignEnd = alignEnd, viewportWidthPx = width)
             }
             val height = with(density) { (lineHeight * wrapped.size).toDp() } + 8.dp
             val readable by remember(line, voices, visualTime, motion) { derivedStateOf {
-                !line.isAccompaniment || voices.presence(visualTime(), motion.resetAt) > 0f
+                !line.isAccompaniment || voices.previewPresence(visualTime(), motion.resetAt) > 0f
             } }
             Canvas(Modifier.fillMaxWidth().height(height).clearAndSetSemantics {
                 if (readable) contentDescription = line.syllables.joinToString("") { it.content }
             }) {
                 val now = visualTime()
-                val focus = lyricPresence(line.start, line.end, now, motion.resetAt)
+                // Backing vocal must use its OWN 380ms fade rather than the
+                // main lyric's 160ms release. The row alpha is already driven
+                // by voices.presence; don't fade its highlight a second time.
+                val focus = if (line.isAccompaniment) 1f
+                    else lyricPresence(line.start, line.end, now, motion.resetAt)
                 // Raw playback time drives the whole-line wave even when a
                 // syllable is inactive. visualTime retains the old syllable
                 // highlight/seek logic, so the two animations stay separate.
-                painter.draw(this, now, focus, waveTime = time())
+                painter.draw(this, now, focus, waveTime = time(),
+                    playbackRevision = motion.revision)
             }
         }
     }
@@ -88,12 +96,12 @@ private fun MotionRow(
     content: @Composable ColumnScope.() -> Unit
 ) {
     val rowPaddingPx = with(LocalDensity.current) { 16.dp.roundToPx() }
-    val enabled by remember(line, time, motion, mini) { derivedStateOf { !mini || voices.presence(time(), motion.resetAt) > 0f } }
+    val enabled by remember(line, time, motion, mini) { derivedStateOf { !mini || voices.previewPresence(time(), motion.resetAt) > 0f } }
     Column(Modifier.fillMaxWidth().clickable(enabled = enabled, onClick = onSeek)
         .padding(horizontal = 16.dp, vertical = 8.dp).onSizeChanged { onMainHeight(it.height + rowPaddingPx) }.graphicsLayer {
             val now = time()
             val presence = lyricPresence(line.start, line.end, now, motion.resetAt)
-            val vocal = if (mini) voices.presence(now, motion.resetAt) else presence
+            val vocal = if (mini) voices.previewPresence(now, motion.resetAt) else presence
             compositingStrategy = CompositingStrategy.ModulateAlpha
             clip = false
             alpha = if (mini) vocal * 0.75f else 1f
@@ -109,10 +117,12 @@ internal fun TimedVocalContent(
     voices: LyricsVocalWindows, time: () -> Int, motion: LyricsMotionState, content: @Composable () -> Unit
 ) {
     val extent = remember(voices, time, motion) {
-        derivedStateOf(structuralEqualityPolicy()) { voices.presence(time(), motion.resetAt) }
+        derivedStateOf(structuralEqualityPolicy()) { voices.previewPresence(time(), motion.resetAt) }
     }
     val present by remember(extent) { derivedStateOf { extent.value > 0f } }
-    if (present) Column(Modifier.fillMaxWidth().layout { measurable, constraints ->
+    // Clip to the animating layout height; without it the full-height backing
+    // row is drawn outside a nearly zero-height slot and seems to pop on/off.
+    if (present) Column(Modifier.fillMaxWidth().clipToBounds().layout { measurable, constraints ->
         val child = measurable.measure(constraints.copy(minHeight = 0))
         val height = vocalLayoutHeight(child.height, extent.value)
         layout(child.width, height) { child.placeRelative(0, 0) }

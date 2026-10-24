@@ -1,21 +1,48 @@
 package com.yohandeku32.nusamusic.ui
 
-internal data class MiuixPagerVisuals(
-    val translationX: Float,
-    val alpha: Float,
-    val scrimAlpha: Float,
-    val leadingCornerFraction: Float
+import kotlin.math.abs
+import kotlin.math.ceil
+import kotlin.math.round
+
+/**
+ * The pager itself provides the 36dp overlap and native movement, while this
+ * model controls only the front card's clip/shadow. Nothing moves hit regions
+ * with a graphicsLayer translation, crossfade or scaling transform.
+ */
+internal data class MiuixCardVisuals(
+    val cornerRadiusDp: Float,
+    val shadowElevationDp: Float,
+    val edgeShadeAlpha: Float
 )
 
-/** Compensate the native full-page translation to produce quarter-page parallax. */
-internal fun miuixPagerVisuals(relativeDepth: Float, widthPx: Float, isRtl: Boolean): MiuixPagerVisuals {
-    val depth = relativeDepth.takeIf { it.isFinite() } ?: 0f
-    val width = widthPx.takeIf { it.isFinite() && it > 0f } ?: 0f
-    val covered = depth.coerceIn(0f, 1f)
-    return MiuixPagerVisuals(
-        translationX = covered * width * 0.75f * if (isRtl) -1f else 1f,
-        alpha = 1f - covered * 0.1f,
-        scrimAlpha = covered * 0.5f,
-        leadingCornerFraction = (-depth).coerceIn(0f, 1f)
+private val idleCardVisuals = MiuixCardVisuals(0f, 0f, 0f)
+
+// Artist = 0, Now Playing = 1, Library = 2.
+// Fixed stack order works for both swipes and gesture reversals.
+internal fun miuixPageZIndex(page: Int): Float = page.toFloat()
+
+internal fun miuixCardVisuals(
+    page: Int, pagerPosition: Float, scrolling: Boolean
+): MiuixCardVisuals {
+    if (!scrolling || !pagerPosition.isFinite() || page <= 0)
+        return idleCardVisuals
+
+    val frontPage = ceil(pagerPosition.toDouble()).toInt().coerceAtLeast(1)
+    if (page != frontPage) return idleCardVisuals
+
+    val distanceFromRest = abs(pagerPosition - round(pagerPosition))
+        .coerceIn(0f, 0.5f)
+    val progress = (distanceFromRest / 0.085f).coerceIn(0f, 1f)
+    val eased = progress * progress * (3f - 2f * progress)
+    return MiuixCardVisuals(
+        cornerRadiusDp = 26f,
+        shadowElevationDp = 10f * eased,
+        edgeShadeAlpha = 0.16f * eased
     )
 }
+
+internal fun miuixPageAcceptsInput(
+    page: Int, settledPage: Int, currentPage: Int,
+    offsetFraction: Float, scrolling: Boolean
+): Boolean = !scrolling && page == settledPage && page == currentPage &&
+    offsetFraction.isFinite() && abs(offsetFraction) < 0.001f

@@ -1,22 +1,18 @@
 package com.yohandeku32.nusamusic.ui
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -31,23 +27,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
@@ -59,13 +48,10 @@ import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlin.math.PI
-import kotlin.math.sin
 
 data class TurntableLabels(
     val play: String,
@@ -82,7 +68,11 @@ data class TurntableLabels(
     val seek: String
 )
 
-/** The caller supplies real playback state and artwork; the deck owns presentation only. */
+/**
+ * Vinyl Now Playing mirrors the supplied Pinterest turntable reference:
+ * warm paper, an oversized left-clipped record, and a long silver-white tonearm.
+ * Player callbacks and existing rotating VinylRecord are supplied by the caller.
+ */
 @Composable
 fun TurntablePlayer(
     title: String,
@@ -106,285 +96,209 @@ fun TurntablePlayer(
     onShuffle: () -> Unit,
     onRepeat: () -> Unit,
     record: @Composable (Modifier) -> Unit,
+    accentColor: Color,
+    sleeve: @Composable (Modifier) -> Unit,
     quality: @Composable () -> Unit,
     footer: @Composable () -> Unit,
     emptyState: @Composable () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val page = MaterialTheme.colorScheme.background
-    val surface = MaterialTheme.colorScheme.surface
-    val edge = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
-    BoxWithConstraints(modifier.background(page)) {
-        // Keep transport controls in view on compact phones; extra actions can
-        // continue below in the parent list when text scaling needs more room.
-        val deckSize = minOf((maxWidth - 32.dp).coerceAtLeast(0.dp), (viewportHeight - 392.dp).coerceAtLeast(160.dp))
-        Column(
-            modifier = Modifier.fillMaxWidth().heightIn(min = viewportHeight).navigationBarsPadding(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween
+    val paper = Color(0xFFFAF9F4)
+    val ink = Color(0xFF292A29)
+    val muted = Color(0xFF898A87)
+    MaterialTheme(
+        colorScheme = androidx.compose.material3.lightColorScheme(
+            background = paper,
+            onBackground = ink,
+            surface = paper,
+            onSurface = ink,
+            surfaceVariant = Color(0xFFF0F0EB),
+            onSurfaceVariant = muted,
+            primary = ink,
+            onPrimary = Color.White
+        )
+    ) {
+        BoxWithConstraints(
+            modifier = modifier.fillMaxWidth().height(viewportHeight)
+                .background(paper)
+                .clipToBounds()
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                // Keep the original upper spacing and reveal the rear ports above the chassis.
-                val rearInset = 52.dp
-                Box(modifier = Modifier.size(width = deckSize, height = deckSize + rearInset)) {
-                    Canvas(Modifier.matchParentSize()) {
-                        val deckTop = rearInset.toPx()
-                        val powerX = size.width * 0.285f
-                        val audioXs = listOf(size.width * 0.335f, size.width * 0.385f)
-
-                        // Exposed rear connectors only: no cables attached.
-                        // Plug housings sit directly at the rear rim, behind the deck.
-                        val metal = Brush.horizontalGradient(
-                            listOf(Color(0xFF80591F), Color(0xFFEAC16D), Color(0xFFAA762A))
-                        )
-                        val powerWidth = 8.dp.toPx()
-                        drawRoundRect(
-                            brush = Brush.verticalGradient(
-                                listOf(Color(0xFF686C6E), Color(0xFF111518)),
-                                startY = deckTop - 5.dp.toPx(), endY = deckTop + 2.dp.toPx()
-                            ),
-                            topLeft = Offset(powerX - powerWidth / 2f, deckTop - 5.dp.toPx()),
-                            size = Size(powerWidth, 7.dp.toPx()),
-                            cornerRadius = CornerRadius(1.dp.toPx())
-                        )
-                        audioXs.forEach { x ->
-                            drawRoundRect(
-                                color = Color(0xFF3A3227),
-                                topLeft = Offset(x - 2.6.dp.toPx(), deckTop - 3.dp.toPx()),
-                                size = Size(5.2.dp.toPx(), 5.dp.toPx()),
-                                cornerRadius = CornerRadius(0.7.dp.toPx())
-                            )
-                            drawRoundRect(
-                                brush = metal,
-                                topLeft = Offset(x - 1.6.dp.toPx(), deckTop - 7.dp.toPx()),
-                                size = Size(3.2.dp.toPx(), 8.dp.toPx()),
-                                cornerRadius = CornerRadius(0.8.dp.toPx())
-                            )
-                        }
-                    }
-
-                    Box(
-                        modifier = Modifier.align(Alignment.BottomCenter).size(deckSize)
-                        .shadow(
-                            elevation = 16.dp,
-                            shape = RoundedCornerShape(18.dp),
-                            clip = false,
-                            ambientColor = Color.Black.copy(alpha = 0.42f),
-                            spotColor = Color.Black.copy(alpha = 0.55f)
-                        )
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(Brush.linearGradient(listOf(surface, page, surface)))
-                        .border(
-                            1.dp,
-                            Brush.linearGradient(
-                                listOf(Color.White.copy(alpha = 0.20f), edge, Color.Black.copy(alpha = 0.24f))
-                            ),
-                            RoundedCornerShape(18.dp)
-                        )
-                        .drawWithCache {
-                            onDrawBehind {
-                                // Small countersunk fittings remain on the deck surface.
-                                listOf(
-                                    Offset(size.width * 0.075f, size.height * 0.075f),
-                                    Offset(size.width * 0.77f, size.height * 0.075f)
-                                ).forEach { screw ->
-                                    drawCircle(edge, 2.dp.toPx(), screw)
-                                    drawCircle(surface, 1.dp.toPx(), screw - Offset(0.4f, 0.4f))
-                                }
-                            }
-                        }
+            // The record bleeds beyond the left edge, as in the reference.
+            // Short phones reserve enough room for usable playback controls below.
+            val stageHeight = minOf(
+                maxWidth * 1.26f,
+                (viewportHeight - 250.dp).coerceAtLeast(maxWidth * 0.78f)
+            )
+            val discDiameter = maxWidth * 1.31f
+            val discX = maxWidth * 0.265f - discDiameter / 2f
+            Column(
+                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                    .navigationBarsPadding(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Box(
+                    modifier = Modifier.fillMaxWidth().height(stageHeight).clipToBounds()
                 ) {
-                    record(Modifier.size(deckSize * 0.78f).offset(x = deckSize * 0.10f, y = deckSize * 0.12f))
-                    Row(
-                        modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 6.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        DeckSwitch(
-                            icon = Icons.Default.Shuffle,
-                            label = labels.shuffle,
-                            state = if (shuffleEnabled) labels.shuffleOn else labels.shuffleOff,
-                            active = shuffleEnabled,
-                            enabled = hasSong,
-                            onClick = onShuffle
-                        )
-                        DeckSwitch(
-                            icon = if (repeatMode == 1) Icons.Default.RepeatOne else Icons.Default.Repeat,
-                            label = labels.repeat,
-                            state = when (repeatMode) {
-                                1 -> labels.repeatOne
-                                2 -> labels.repeatAll
-                                else -> labels.repeatOff
-                            },
-                            active = repeatMode != 0,
-                            enabled = hasSong,
-                            onClick = onRepeat
-                        )
-                    }
-                    }
+                    // Real vinyl and artwork label rotate together; the arm stays on top.
+                    record(
+                        Modifier.size(discDiameter)
+                            .offset(x = discX, y = 28.dp)
+                    )
+                    VinylTonearm(
+                        isPlaying = isPlaying && isVisible,
+                        hasSong = hasSong,
+                        positionMsState = positionMsState,
+                        durationMs = durationMs,
+                        modifier = Modifier.matchParentSize()
+                    )
                 }
 
-                // Bring title/artist closer to the raised progress controls.
-                Spacer(Modifier.height(28.dp))
+                Spacer(Modifier.height(20.dp))
                 Text(
                     text = title,
                     fontFamily = titleFontFamily,
-                    fontSize = (titleFontSize * 0.68f).sp,
-                    lineHeight = (titleFontSize * 0.79f).sp,
                     fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onBackground,
+                    fontSize = (titleFontSize * 0.78f).coerceIn(22f, 31f).sp,
+                    lineHeight = (titleFontSize * 0.91f).coerceIn(27f, 35f).sp,
+                    color = ink,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 28.dp)
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 30.dp)
                 )
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(5.dp))
                 Text(
                     text = artist,
-                    fontSize = 13.sp,
-                    lineHeight = 18.sp,
-                    textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 14.sp,
+                    color = muted,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 28.dp)
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 30.dp)
                 )
-                Spacer(Modifier.height(8.dp))
-                quality()
-                Spacer(Modifier.height(8.dp))
-            }
-
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 56.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
+                Spacer(Modifier.height(10.dp))
+                Box(Modifier.fillMaxWidth().padding(horizontal = 30.dp)) { quality() }
+                Spacer(Modifier.height(11.dp))
                 TurntableProgress(positionMsState, durationMs, hasSong, labels.seek, onSeek)
+                Spacer(Modifier.height(10.dp))
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    TurntableTransportButton(
-                        Icons.Default.SkipPrevious, labels.previous, onPrevious, hasSong,
-                        realisticControls, Modifier.weight(1f).height(52.dp), 21.dp
+                    TurntableModeButton(
+                        Icons.Default.Shuffle, labels.shuffle,
+                        if (shuffleEnabled) labels.shuffleOn else labels.shuffleOff,
+                        shuffleEnabled, hasSong, onShuffle
                     )
-                    TurntableTransportButton(
+                    TurntableButton(
+                        Icons.Default.SkipPrevious, labels.previous, onPrevious, hasSong,
+                        modifier = Modifier.size(52.dp), size = 25.dp
+                    )
+                    TurntableButton(
                         if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                         if (isPlaying) labels.pause else labels.play,
-                        onPlayPause, true, realisticControls, Modifier.size(76.dp), 32.dp, primary = true
+                        onPlayPause, true,
+                        modifier = Modifier.size(68.dp), size = 31.dp, primary = true
                     )
-                    TurntableTransportButton(
+                    TurntableButton(
                         Icons.Default.SkipNext, labels.next, onNext, hasSong,
-                        realisticControls, Modifier.weight(1f).height(52.dp), 21.dp
+                        modifier = Modifier.size(52.dp), size = 25.dp
+                    )
+                    TurntableModeButton(
+                        if (repeatMode == 1) Icons.Default.RepeatOne else Icons.Default.Repeat,
+                        labels.repeat,
+                        when (repeatMode) {
+                            1 -> labels.repeatOne
+                            2 -> labels.repeatAll
+                            else -> labels.repeatOff
+                        }, repeatMode != 0, hasSong, onRepeat
                     )
                 }
+                Spacer(Modifier.height(12.dp))
                 footer()
                 emptyState()
+                Spacer(Modifier.height(24.dp))
             }
         }
     }
 }
 
 @Composable
-private fun DeckSwitch(icon: ImageVector, label: String, state: String, active: Boolean, enabled: Boolean, onClick: () -> Unit) {
-    val ink = MaterialTheme.colorScheme.onSurfaceVariant
+private fun TurntableModeButton(
+    icon: ImageVector,
+    label: String,
+    state: String,
+    active: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
+    val ink = Color(0xFF363936)
     IconButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier.size(48.dp).semantics { stateDescription = state }
+        modifier = Modifier.size(40.dp).semantics { stateDescription = state }
     ) {
-        Box(
-            modifier = Modifier.size(34.dp).clip(CircleShape)
-                .background(if (active) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent)
-                .border(0.7.dp, ink.copy(alpha = if (active) 0.65f else 0.30f), CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(icon, label, Modifier.size(16.dp), tint = ink.copy(alpha = if (enabled) 0.85f else 0.35f))
-        }
+        Icon(
+            icon, label, Modifier.size(21.dp),
+            tint = ink.copy(alpha = if (!enabled) 0.3f else if (active) 1f else 0.55f)
+        )
     }
 }
 
 @Composable
-private fun TurntableTransportButton(
+private fun TurntableButton(
     icon: ImageVector,
     label: String,
     onClick: () -> Unit,
     enabled: Boolean,
-    realistic: Boolean,
     modifier: Modifier,
-    iconSize: Dp,
+    size: Dp,
     primary: Boolean = false
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val pressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (pressed) 0.95f else 1f, tween(130), label = "turntableButtonPress")
-    val face = MaterialTheme.colorScheme.surface
-    val shade = MaterialTheme.colorScheme.surfaceVariant
-    val ink = MaterialTheme.colorScheme.onSurfaceVariant
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        if (pressed) 0.95f else 1f, tween(140), label = "paperVinylButton"
+    )
     Surface(
         onClick = onClick,
         enabled = enabled,
-        interactionSource = interactionSource,
-        shape = RoundedCornerShape(50),
-        color = if (primary) Color.Black else if (realistic) face else shade,
-        border = if (!primary && realistic) BorderStroke(1.dp, ink.copy(alpha = 0.13f)) else null,
-        shadowElevation = if (realistic && !pressed) 4.dp else 0.dp,
+        interactionSource = source,
+        shape = CircleShape,
+        color = if (primary) Color(0xFF292B2B) else Color.Transparent,
+        border = if (primary) BorderStroke(1.dp, Color(0xFF292B2B)) else null,
         modifier = modifier.graphicsLayer { scaleX = scale; scaleY = scale }
     ) {
-        Box(
-            modifier = Modifier.padding(if (realistic && !primary) 4.dp else 0.dp)
-                .clip(RoundedCornerShape(50))
-                .background(
-                    when {
-                        primary -> Brush.linearGradient(listOf(Color.Black, Color.Black))
-                        realistic -> Brush.linearGradient(listOf(face, lerp(face, shade, 0.35f), face))
-                        else -> Brush.linearGradient(listOf(shade, shade))
-                    }
-                )
-                .border(if (!primary && realistic) 1.dp else 0.dp, ink.copy(alpha = if (!primary && realistic) 0.06f else 0f), RoundedCornerShape(50)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(icon, label, Modifier.size(iconSize), tint = if (primary) Color.White else ink.copy(alpha = if (enabled) 1f else 0.35f))
-        }
-    }
-}
-
-@Composable
-private fun PlaybackActivity(active: Boolean) {
-    val phase = remember { Animatable(0f) }
-    LaunchedEffect(active) {
-        if (active) {
-            phase.snapTo(0f)
-            phase.animateTo(
-                (2 * PI).toFloat(),
-                infiniteRepeatable(tween(1700, easing = LinearEasing), RepeatMode.Restart)
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                icon,
+                label,
+                Modifier.size(size),
+                tint = if (primary) Color.White
+                    else Color(0xFF303332).copy(alpha = if (enabled) 0.9f else 0.3f)
             )
         }
     }
-    val ink = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
-    Canvas(Modifier.size(width = 60.dp, height = 30.dp)) {
-        // A playback activity animation, independent of the music's audio spectrum.
-        for (index in 0..5) {
-            val amplitude = 0.30f + 0.55f * ((sin(phase.value + index * 1.9f) + 1f) / 2f)
-            val halfHeight = size.height * amplitude / 2f
-            val x = (index + 0.5f) * size.width / 6f
-            drawLine(ink, Offset(x, size.height / 2f - halfHeight), Offset(x, size.height / 2f + halfHeight), 2.5.dp.toPx(), StrokeCap.Round)
-        }
-    }
 }
 
 @Composable
-private fun TurntableProgress(positionMsState: State<Long>, durationMs: Long, hasSong: Boolean, label: String, onSeek: (Long) -> Unit) {
+private fun TurntableProgress(
+    positionMsState: State<Long>,
+    durationMs: Long,
+    hasSong: Boolean,
+    label: String,
+    onSeek: (Long) -> Unit
+) {
     val positionMs by positionMsState
     val enabled = hasSong && durationMs > 0L
-    val fraction = if (durationMs > 0L) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
-    val ink = MaterialTheme.colorScheme.onBackground
+    val fraction = if (durationMs > 0L) {
+        (positionMs.toFloat() / durationMs).coerceIn(0f, 1f)
+    } else 0f
     fun time(ms: Long): String {
-        val seconds = ms.coerceAtLeast(0L) / 1000L
-        return "${seconds / 60}:${(seconds % 60).toString().padStart(2, '0')}"
+        val sec = ms.coerceAtLeast(0L) / 1000L
+        return "${sec / 60}:${(sec % 60).toString().padStart(2, '0')}"
     }
     Canvas(
-        Modifier.fillMaxWidth().padding(horizontal = 38.dp).height(30.dp)
+        Modifier.fillMaxWidth().padding(horizontal = 30.dp).height(28.dp)
             .semantics {
                 contentDescription = label
                 progressBarRangeInfo = ProgressBarRangeInfo(fraction, 0f..1f)
@@ -403,7 +317,9 @@ private fun TurntableProgress(positionMsState: State<Long>, durationMs: Long, ha
             }
             .pointerInput(enabled, durationMs, onSeek) {
                 if (enabled) detectHorizontalDragGestures(
-                    onDragStart = { offset -> onSeek(((offset.x / size.width).coerceIn(0f, 1f) * durationMs).toLong()) },
+                    onDragStart = { offset ->
+                        onSeek(((offset.x / size.width).coerceIn(0f, 1f) * durationMs).toLong())
+                    },
                     onHorizontalDrag = { change, _ ->
                         change.consume()
                         onSeek(((change.position.x / size.width).coerceIn(0f, 1f) * durationMs).toLong())
@@ -411,31 +327,25 @@ private fun TurntableProgress(positionMsState: State<Long>, durationMs: Long, ha
                 )
             }
     ) {
-        val stroke = 5.dp.toPx()
-        val start = Offset(stroke / 2f, size.height / 2f)
-        val end = Offset((size.width - stroke / 2f).coerceAtLeast(start.x), start.y)
-        drawLine(ink.copy(alpha = 0.17f), start, end, stroke, StrokeCap.Round)
-        if (fraction > 0f) drawLine(ink.copy(alpha = 0.65f), start, Offset(start.x + (end.x - start.x) * fraction, start.y), stroke, StrokeCap.Round)
+        val start = Offset(0f, size.height / 2f)
+        val end = Offset(size.width, size.height / 2f)
+        drawLine(
+            Color(0xFF303230).copy(alpha = 0.15f),
+            start, end, 3.dp.toPx(), StrokeCap.Round
+        )
+        if (fraction > 0f) {
+            drawLine(
+                Color(0xFF333633),
+                start, Offset(size.width * fraction, start.y),
+                3.dp.toPx(), StrokeCap.Round
+            )
+        }
     }
-    // Compact timestamps at the left and right ends, just below the seek bar.
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 38.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 30.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(
-            text = time(positionMs),
-            fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.Medium,
-            fontSize = 12.sp,
-            color = ink.copy(alpha = 0.70f)
-        )
-        Text(
-            text = time(durationMs),
-            fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.Medium,
-            fontSize = 12.sp,
-            color = ink.copy(alpha = 0.70f)
-        )
+        Text(time(positionMs), fontSize = 12.sp, color = Color(0xFF818481))
+        Text(time(durationMs), fontSize = 12.sp, color = Color(0xFF818481))
     }
 }

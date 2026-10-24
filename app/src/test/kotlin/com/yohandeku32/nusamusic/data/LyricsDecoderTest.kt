@@ -6,6 +6,39 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class LyricsDecoderTest {
+    @Test fun appleMusicM4aTtmlAcceptsBareDecimalSecondsFromEmbeddedLyrics() {
+        // Same timing dialect and metadata namespaces as the supplied M4A:
+        // some units have bare decimal seconds, later ones use m:ss.mmm.
+        val content = """
+            <tt xmlns="http://www.w3.org/ns/ttml"
+                xmlns:itunes="http://music.apple.com/lyric-ttml-internal"
+                xmlns:ttm="http://www.w3.org/ns/ttml#metadata"
+                itunes:timing="Word" xml:lang="id">
+                <head><metadata>
+                    <ttm:agent type="person" xml:id="v1"/>
+                </metadata></head>
+                <body dur="4:14.401">
+                    <div begin="7.208" end="11.283" itunes:songPart="Chorus">
+                        <p begin="7.208" end="7.816" ttm:agent="v1">
+                            <span begin="7.208" end="7.446">Ko</span><span begin="7.446" end="7.816">to</span>
+                        </p>
+                    </div>
+                    <div begin="1:07.208" end="1:10.500">
+                        <p begin="1:07.208" end="1:10.500" ttm:agent="v1">
+                            <span begin="1:07.208" end="1:10.500">Lanjut</span>
+                        </p>
+                    </div>
+                </body>
+            </tt>
+        """.trimIndent()
+        val lines = LyricsDecoder.decodeWithTiming(content, 254_401).lyrics.lines
+        assertEquals(2, lines.size)
+        val first = lines.first() as KaraokeLine
+        assertEquals(listOf(7_208, 7_446), first.syllables.map { it.start })
+        assertEquals(listOf(7_446, 7_816), first.syllables.map { it.end })
+        assertEquals(67_208, lines[1].start)
+    }
+
     @Test fun inferredEnhancedTailIsFlaggedWithoutChangingHighlightTimestamps() {
         val decoded = LyricsDecoder.decodeWithTiming("[00:01]<00:01>Hello <00:02>world\n[00:30]Next", 35000)
         val line = decoded.lyrics.lines.first() as KaraokeLine

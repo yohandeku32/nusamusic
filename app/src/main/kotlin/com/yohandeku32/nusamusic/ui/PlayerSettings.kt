@@ -56,6 +56,8 @@ internal fun PlayerSettingsContent(
     hasLyricsSong: Boolean,
     lyricsLoading: Boolean,
     onRetryLyrics: () -> Unit,
+    onlineLyricsEnabled: Boolean,
+    onOnlineLyricsChange: (Boolean) -> Unit,
     titleFontSize: Float,
     onTitleFontSizeChange: (Float) -> Unit,
     onTitleFontSizeChangeFinished: () -> Unit,
@@ -68,10 +70,16 @@ internal fun PlayerSettingsContent(
     onResetCustomTitleFont: () -> Unit,
     playerPresentationMode: PlayerPresentationMode,
     onPresentationSelected: (PlayerPresentationMode) -> Unit,
+    libraryLightMode: Boolean,
+    onLibraryLightModeChange: (Boolean) -> Unit,
+    liquidGlassEnabled: Boolean,
+    onLiquidGlassChange: (Boolean) -> Unit,
     animatedArtworkEnabled: Boolean,
     roundedCarouselCorners: Boolean,
     onRoundedCarouselCornersChange: (Boolean) -> Unit,
     onAnimatedArtworkChange: (Boolean) -> Unit,
+    artworkSourceOrder: String,
+    onArtworkSourceOrderChange: (String) -> Unit,
     realisticControls: Boolean,
     onRealisticControlsChange: (Boolean) -> Unit,
     crossfadeEnabled: Boolean,
@@ -220,14 +228,6 @@ internal fun PlayerSettingsContent(
                             modifier = Modifier.weight(1f)
                         )
                         SettingModeTile(
-                            label = "Vinyl",
-                            icon = Icons.Default.GraphicEq,
-                            selected = playerPresentationMode == PlayerPresentationMode.VINYL,
-                            enabled = PlayerPresentationMode.VINYL.isAvailable,
-                            onClick = { onPresentationSelected(PlayerPresentationMode.VINYL) },
-                            modifier = Modifier.weight(1f)
-                        )
-                        SettingModeTile(
                             label = settingsText("Imersif", "Immersive"),
                             icon = Icons.Default.CropOriginal,
                             selected = playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK,
@@ -237,6 +237,30 @@ internal fun PlayerSettingsContent(
                         )
                     }
                     SettingsDivider()
+                    if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
+                        SettingToggle(
+                            title = settingsText("Liquid Glass", "Liquid Glass"),
+                            subtitle = settingsText(
+                                "Kaca dinamis pada navigasi. Nonaktifkan untuk tampilan lebih ringan.",
+                                "Dynamic glass navigation. Turn off for smoother, lighter rendering."
+                            ),
+                            checked = liquidGlassEnabled,
+                            onCheckedChange = onLiquidGlassChange,
+                            icon = Icons.Default.WaterDrop
+                        )
+                        SettingsDivider()
+                        SettingToggle(
+                            settingsText("Daftar lagu terang", "Light song list"),
+                            settingsText(
+                                "Hanya daftar lagu dan pencarian. Tampilan pemutar tetap gelap.",
+                                "Song list and search only. Now Playing stays dark."
+                            ),
+                            libraryLightMode,
+                            onLibraryLightModeChange,
+                            icon = Icons.Default.LightMode
+                        )
+                        SettingsDivider()
+                    }
                     if (playerPresentationMode == PlayerPresentationMode.CD) {
                         SettingToggle(
                             settingsText("Sudut carousel", "Carousel corners"),
@@ -249,16 +273,66 @@ internal fun PlayerSettingsContent(
                     SettingToggle(
                         settingsText("Animasi sampul", "Animated artwork"),
                         settingsText(
-                            "Apple Music → Spotify Canvas. Judul dan artis dikirim saat pencarian.",
-                            "Apple Music → Spotify Canvas. Searches share title and artist."
+                            "Mengikuti prioritas sumber animasi di bawah.",
+                            "Uses your chosen animation source priority below."
                         ),
                         animatedArtworkEnabled, onAnimatedArtworkChange,
                         icon = Icons.Default.AutoAwesome
                     )
+                    if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK &&
+                        animatedArtworkEnabled
+                    ) {
+                        SettingsDivider()
+                        var sourceMenuOpen by remember { mutableStateOf(false) }
+                        val sourceOptions = listOf(
+                            "APPLE_FIRST" to settingsText("Apple Music dahulu", "Apple Music first"),
+                            "SPOTIFY_FIRST" to settingsText("Spotify Canvas dahulu", "Spotify Canvas first"),
+                            "APPLE_ONLY" to settingsText("Apple Music saja", "Apple Music only"),
+                            "SPOTIFY_ONLY" to settingsText("Spotify Canvas saja", "Spotify Canvas only")
+                        )
+                        Box {
+                            SettingAction(
+                                title = settingsText("Sumber animasi", "Animation source"),
+                                subtitle = sourceOptions.firstOrNull { it.first == artworkSourceOrder }?.second
+                                    ?: sourceOptions.first().second,
+                                icon = Icons.Default.AutoAwesome,
+                                onClick = { sourceMenuOpen = true }
+                            )
+                            DropdownMenu(
+                                expanded = sourceMenuOpen,
+                                onDismissRequest = { sourceMenuOpen = false }
+                            ) {
+                                sourceOptions.forEach { (value, title) ->
+                                    DropdownMenuItem(
+                                        text = { Text(title) },
+                                        onClick = {
+                                            sourceMenuOpen = false
+                                            onArtworkSourceOrderChange(value)
+                                        },
+                                        trailingIcon = {
+                                            if (artworkSourceOrder == value)
+                                                Icon(Icons.Default.Check, null)
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
             if (LYRICS_ENABLED && playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) item(key = "lyrics") {
                 SettingsSection(settingsText("Lirik", "Lyrics")) {
+                    SettingToggle(
+                        title = settingsText("Lirik online", "Online lyrics"),
+                        subtitle = settingsText(
+                            "Cari lirik TTML dan backing vocal dari internet. Jika mati, hanya gunakan lirik yang tersimpan di perangkat.",
+                            "Find TTML and backing vocals online. When off, use only lyrics stored on your device."
+                        ),
+                        checked = onlineLyricsEnabled,
+                        onCheckedChange = onOnlineLyricsChange,
+                        icon = Icons.Default.CloudDownload
+                    )
+                    SettingsDivider()
                     Surface(
                         shape = RoundedCornerShape(18.dp),
                         color = colors.primary.copy(alpha = 0.08f)
