@@ -196,12 +196,9 @@ internal class SyllableLyricsPainter(
         )
     }
     private val heldWords = LyricsHeldWordWave(heldWordUnits)
-    private val coherentWordCenters = lyricCoherentWordCenters(heldWordUnits)
-    // Every authored unit participates, even 150-300ms words.
-    private val travelingPass = LyricsTravelingWaveMask(glyphs.map { glyph ->
-        LyricsVocalSpan(glyph.layout.syllable.start, glyph.layout.syllable.end,
-            glyph.pathStartDp, glyph.pathEndDp)
-    })
+    // Ordinary words breathe on their OWN authored timestamps.
+    // Do not let a single sentence-wide playhead raise neighbouring words.
+    private val wordPulse = LyricsTimedWordPulse(heldWordUnits)
     private val glowPalette = LyricsGlowPaletteCache.forDensity(density)
 
     /**
@@ -215,20 +212,18 @@ internal class SyllableLyricsPainter(
              playbackRevision: Int) = with(scope) {
         val frameTime = frameClock.sample(waveTime, playbackRevision)
         val strength = focus.coerceIn(0f, 1f)
-        val movingFront = travelingPass.front(frameTime)
-
-        // One smooth wave travels across ordinary words; held-note expression
-        // stays separate. All motion samples the same Media3 playback clock.
+ 
+        // Independent word-local envelopes replace the former sentence-wide
+        // travelling front. The long held-vocal mountain remains separate.
         for ((index, glyph) in glyphs.withIndex()) {
             glyph.wavePose = heldWords.pose(
                 index, frameTime, (glyph.pathStartDp + glyph.pathEndDp) * 0.5f
             )
             glyph.controller.update(frameTime)
-            // The same media clock moves a smooth shallow crest across
-            // ordinary words without slicing, clipping or displacing letters.
-            glyph.passingInfluence = travelingPass.coherentInfluence(
-                movingFront, coherentWordCenters[index], frameTime
-            ) * strength * (1f - 0.75f * glyph.wavePose.depth)
+            // One small, coherent lift per word (shared across its syllables).
+            // Suppress this micro-wave under the existing long-held mountain.
+            glyph.passingInfluence = wordPulse.influence(index, frameTime) *
+                strength * (1f - 0.85f * glyph.wavePose.depth)
             glyph.passingLiftDp = lyricPassingLiftDp(glyph.passingInfluence)
             // Keep the old bubble as a LIGHT-only accent. Its independent
             // sinusoidal position/scale must never re-enlarge a letter while
