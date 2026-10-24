@@ -21,7 +21,10 @@ data class DecodedLyrics(
     val duetRightLines: Set<Int> = emptySet()
 )
 
-private data class TtmlVoiceEntry(val start: Int, val content: String, val agentId: String)
+private data class TtmlVoiceEntry(
+    val start: Int, val content: String, val agentId: String,
+    val explicitRight: Boolean? = null
+)
 private data class NormalizedTtml(
     val xml: String,
     val lineOnly: Set<Pair<Int, String>>,
@@ -91,7 +94,7 @@ object LyricsDecoder {
         // singer 2 swap the left/right assignment on each song.
         val heardAgents = taggedVoices.map { it.agentId }.distinct()
         val agentIds = (
-            declaredAgents.filter { it in heardAgents } +
+            declaredAgents +
                 // Some TTML files omit <ttm:agent> declarations. Use stable
                 // identifiers instead of swapping sides based on who starts
                 // singing first. This also keeps v1 to the left of v2.
@@ -102,8 +105,8 @@ object LyricsDecoder {
                     }.thenBy { it }
                 )
         ).distinct()
-        val duetRight = if (agentIds.size >= 2) {
-            val secondSinger = agentIds[1]
+        val duetRight = if (taggedVoices.isNotEmpty()) {
+            val secondSinger = agentIds.getOrNull(1)
             val used = BooleanArray(taggedVoices.size)
             buildSet {
                 lines.forEachIndexed { index, line ->
@@ -119,7 +122,17 @@ object LyricsDecoder {
                     }
                     if (match != null) {
                         used[match] = true
-                        if (taggedVoices[match].agentId == secondSinger) add(index)
+                        val voice = taggedVoices[match]
+                        // Explicit TTML positioning takes priority over a
+                        // guessed first/second singer order. A lone v2 is also
+                        // a valid second voice when v1 is temporarily silent.
+                        val right = voice.explicitRight ?: (
+                            (secondSinger != null && voice.agentId == secondSinger) ||
+                                (secondSinger == null && declaredAgents.isEmpty() &&
+                                    Regex("(?i)^(?:v|voice|agent|singer|speaker|person)[-_]?0*2$")
+                                        .matches(voice.agentId))
+                        )
+                        if (right) add(index)
                     }
                 }
             }
@@ -242,6 +255,44 @@ object LyricsDecoder {
         require(Regex("\\bbegin\\s*=").containsMatchIn(content)) { "TTML has no timed lyrics" }
         val lineOnly = mutableSetOf<Pair<Int, String>>()
         val taggedVoices = ArrayList<TtmlVoiceEntry>()
+        // Namespaced tts:textAlign may be placed directly on p/span or
+        // declared by a referenced <style xml:id="..."> element.
+        val styleElements = HashMap<String, Element>()
+        val allElements = root.getElementsByTagName("*")
+        for (i in 0 until allElements.length) {
+            val el = allElements.item(i) as? Element ?: continue
+            if (el.localName != "style") continue
+            val id = el.getAttribute("xml:id").ifBlank { el.getAttribute("id") }
+            if (id.isNotBlank()) styleElements[id.trim()] = el
+        }
+        fun explicitRight(element: Element): Boolean? {
+            val seen = HashSet<String>()
+            fun value(el: Element): Boolean? {
+                val attrs = el.attributes
+                for (i in 0 until attrs.length) {
+                    val attr = attrs.item(i)
+                    if ((attr.localName ?: attr.nodeName.substringAfter(':'))
+                            .equals("textAlign", ignoreCase = true)) {
+                        when (attr.nodeValue.trim().lowercase()) {
+                            "right", "end" -> return true
+                            "left", "start" -> return false
+                        }
+                    }
+                }
+                val refs = el.getAttribute("style").trim().split(Regex("\\s+"))
+                for (ref in refs.asReversed()) {
+                    val target = styleElements[ref] ?: continue
+                    if (seen.add(ref)) value(target)?.let { return it }
+                }
+                return null
+            }
+            var node: Node? = element
+            while (node is Element) {
+                value(node)?.let { return it }
+                node = node.parentNode
+            }
+            return null
+        }
         // Metadata declares the singer identities independently of who
         // happens to sing first. Keep its order stable through sorted lines.
         val declaredAgents = buildList {
@@ -365,10 +416,11 @@ object LyricsDecoder {
             if (name == "span" && isBacking(node)) {
                 val voiceId = speaker(node)
                 val text = node.textContent.trim()
-                if (voiceId.isNotBlank() && text.isNotBlank()) {
+                val right = explicitRight(node)
+                if (text.isNotBlank() && (voiceId.isNotBlank() || right != null)) {
                     taggedVoices += TtmlVoiceEntry(
                         firstSungStart(node, start, mainOnly = false),
-                        text, voiceId
+                        text, voiceId, right
                     )
                 }
             }
@@ -376,12 +428,13 @@ object LyricsDecoder {
                 val spans = node.getElementsByTagName("*")
                 val voiceId = speaker(node)
                 val leadText = mainText(node).trim()
-                if (voiceId.isNotBlank() && leadText.isNotBlank()) {
+                val right = explicitRight(node)
+                if (leadText.isNotBlank() && (voiceId.isNotBlank() || right != null)) {
                     // The lead and nested backing singer can differ. Match
                     // only the lead's own vocal text and onset here.
                     taggedVoices += TtmlVoiceEntry(
                         firstSungStart(node, start, mainOnly = true),
-                        leadText, voiceId
+                        leadText, voiceId, right
                     )
                 }
                 val hasTimedUnit = (0 until spans.length).any { index ->
