@@ -33,6 +33,7 @@ class SongLyricsState {
     var confirmedEmbeddedQuality = 0
     var loading by mutableStateOf(false)
     var attempted = false
+    var lastOnlineEnabled: Boolean? = null
     var job: Job? = null
     var generation = 0
     val list = LazyListState()
@@ -53,8 +54,23 @@ class ImmersiveLyricsState(private val repository: LyricsRepository) {
         }
     }
 
-    fun load(song: Song, scope: CoroutineScope, retry: Boolean = false) {
+    fun load(
+        song: Song,
+        scope: CoroutineScope,
+        retry: Boolean = false,
+        onlineEnabled: Boolean = true
+    ) {
         val state = forSong(song)
+        val settingChanged = state.lastOnlineEnabled != null &&
+            state.lastOnlineEnabled != onlineEnabled
+        val reload = retry || settingChanged
+        state.lastOnlineEnabled = onlineEnabled
+        // Offline means that a previously displayed online-only result must
+        // not linger until the next song or until a local metadata read finishes.
+        if (settingChanged && !onlineEnabled &&
+            state.data?.stored?.source !in listOf("embedded", "saved-in-app")) {
+            state.data = null
+        }
         activeLoad?.takeIf { it !== state }?.let { previous ->
             previous.generation++
             previous.job?.cancel()
@@ -65,18 +81,18 @@ class ImmersiveLyricsState(private val repository: LyricsRepository) {
         // Metadata updates from another tag editor supersede an older read.
         // In particular, do not drop forced refreshes just because the
         // previous request is still reading the original audio file.
-        if (state.loading && retry) {
+        if (state.loading && reload) {
             state.generation++
             state.job?.cancel()
             state.loading = false
         }
-        if (state.loading || (state.attempted && !retry)) return
+        if (state.loading || (state.attempted && !reload)) return
         val generation = ++state.generation
         state.loading = true
         state.attempted = true
         state.job = scope.launch {
             try {
-                val result = repository.load(song, retry) { local ->
+                val result = repository.load(song, reload, onlineEnabled) { local ->
                     // Keep the embedded version's actual timing quality
                     // separate from the online version chosen for display.
                     // A line-synced file (2) can upgrade to syllable TTML (3).
