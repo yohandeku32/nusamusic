@@ -13,7 +13,9 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
+import java.io.FileInputStream
 import java.nio.ByteBuffer
+import java.nio.channels.FileChannel
 import kotlin.coroutines.coroutineContext
 
 data class SongLyrics(
@@ -132,28 +134,42 @@ class LyricsRepository(context: Context) {
             return EmbeddedLyricsSelector.select(listOf(entry.content), song.durationMs, entry.credits)
         }
         val loadContext = coroutineContext
-        val metadata = try {
+        fun readAt(channel: FileChannel, base: Long, length: Long): EmbeddedLyricsMetadata =
+            EmbeddedLyricsReader(length) { offset, count ->
+                loadContext.ensureActive()
+                val buffer = ByteBuffer.allocate(count)
+                while (buffer.hasRemaining()) {
+                    if (channel.read(buffer, base + offset + buffer.position()) <= 0) break
+                }
+                buffer.array().copyOf(buffer.position())
+            }.readMetadata()
+
+        // Different Android providers expose different AssetFileDescriptor
+        // length/offset semantics. Always try a full seekable descriptor if
+        // the bounded asset view yielded no lyrics. No full file copy/scanning.
+        val primary = try {
             resolver.openAssetFileDescriptor(uri, "r")?.use { asset ->
                 asset.createInputStream().use { input ->
-                    val channel = input.channel
-                    val size = if (asset.declaredLength >= 0) asset.declaredLength
-                        else channel.size() - asset.startOffset
-                    EmbeddedLyricsReader(size) { offset, count ->
-                        loadContext.ensureActive()
-                        val buffer = ByteBuffer.allocate(count)
-                        while (buffer.hasRemaining()) {
-                            if (channel.read(buffer, asset.startOffset + offset + buffer.position()) <= 0) break
-                        }
-                        buffer.array().copyOf(buffer.position())
-                    }.readMetadata()
+                    val length = if (asset.declaredLength >= 0) asset.declaredLength
+                        else input.channel.size() - asset.startOffset
+                    readAt(input.channel, asset.startOffset, length)
                 }
-            } ?: EmbeddedLyricsMetadata(emptyList())
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) { null }
+
+        val metadata = if (primary != null && primary.lyrics.isNotEmpty()) primary else try {
+            resolver.openFileDescriptor(uri, "r")?.use { descriptor ->
+                FileInputStream(descriptor.fileDescriptor).use { input ->
+                    val length = descriptor.statSize.takeIf { it >= 0L } ?: input.channel.size()
+                    readAt(input.channel, 0L, length)
+                }
+            } ?: primary ?: EmbeddedLyricsMetadata(emptyList())
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
-            // A provider may deny metadata reads while the music file still
-            // plays; use the online lookup rather than failing the Lyrics UI.
-            EmbeddedLyricsMetadata(emptyList())
+            primary ?: EmbeddedLyricsMetadata(emptyList())
         }
         val result = selectLatestEmbeddedLyrics(metadata, song.durationMs)
         coroutineContext.ensureActive()
