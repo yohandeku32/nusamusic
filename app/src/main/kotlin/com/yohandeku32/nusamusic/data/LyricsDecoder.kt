@@ -91,7 +91,16 @@ object LyricsDecoder {
         // singer 2 swap the left/right assignment on each song.
         val heardAgents = taggedVoices.map { it.agentId }.distinct()
         val agentIds = (
-            declaredAgents.filter { it in heardAgents } + heardAgents
+            declaredAgents.filter { it in heardAgents } +
+                // Some TTML files omit <ttm:agent> declarations. Use stable
+                // identifiers instead of swapping sides based on who starts
+                // singing first. This also keeps v1 to the left of v2.
+                heardAgents.filter { it !in declaredAgents }.sortedWith(
+                    compareBy<String> {
+                        Regex("(\\d+)$").find(it)?.value?.toIntOrNull()
+                            ?: Int.MAX_VALUE
+                    }.thenBy { it }
+                )
         ).distinct()
         val duetRight = if (agentIds.size >= 2) {
             val secondSinger = agentIds[1]
