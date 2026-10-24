@@ -252,7 +252,9 @@ fun ImmersiveLyricsPanel(
                 // A transient provider error should not require leaving the
                 // lyrics page and finding Reload inside Settings.
                 if (song != null) TextButton(
-                    onClick = { state.load(song, scope, retry = true) },
+                    onClick = {
+                        state.load(song, scope, retry = true, onlineEnabled = onlineLyricsEnabled)
+                    },
                     enabled = entry?.loading != true
                 ) {
                     Text("Try again", color = Color.White)
