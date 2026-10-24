@@ -578,4 +578,19 @@ class LyricsDecoderTest {
         assertEquals(setOf(0), decoded.duetRightLines)
     }
 
+    @Test fun ttmlRightAlignOnWordSpansAppliesToTheirEnclosingLine() {
+        val xml = """
+            <tt xmlns="http://www.w3.org/ns/ttml"
+                xmlns:tts="http://www.w3.org/ns/ttml#styling">
+                <body><p begin="1s" end="3s">
+                    <span begin="1s" end="2s" tts:textAlign="end">A </span>
+                    <span begin="2s" end="3s" tts:textAlign="end">second</span>
+                </p></body>
+            </tt>
+        """.trimIndent()
+        val decoded = LyricsDecoder.decodeWithTiming(xml, 4000)
+        assertEquals(1, decoded.lyrics.lines.size)
+        assertEquals(setOf(0), decoded.duetRightLines)
+    }
+
 }
