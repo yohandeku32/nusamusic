@@ -251,4 +251,16 @@ class EmbeddedLyricsReaderTest {
         assertEquals("Other lyrics", selectLatestEmbeddedLyrics(fresh(), 10_000).stored.content)
     }
 
+    @Test fun quickTimeUserDataCopyrightLyricsWithoutNestedDataAreReadable() {
+        val lyric = text("Lyrics from external editor")
+        val payload = byteArrayOf((lyric.size ushr 8).toByte(),
+            lyric.size.toByte(), 0, 0) + lyric
+        val file = atom("ftyp", text("M4A ") + be(0)) +
+            atom("moov", atom("udta", atom("©lyr", payload)))
+        val result = metadata(file)
+        assertEquals("Lyrics from external editor", result.preferredPlainLyrics)
+        assertEquals("Lyrics from external editor",
+            selectLatestEmbeddedLyrics(result, 12_000).stored.content)
+    }
+
 }
