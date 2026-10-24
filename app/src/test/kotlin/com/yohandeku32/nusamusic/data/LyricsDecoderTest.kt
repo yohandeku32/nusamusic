@@ -466,4 +466,77 @@ class LyricsDecoderTest {
         assertTrue(mainIndices.all { it in decoded.duetRightLines })
     }
 
+    @Test fun duetSecondSingerOnRightEvenIfFirstSingerIsSilentInThisTtml() {
+        val xml = """
+            <tt xmlns:ttm="http://www.w3.org/ns/ttml#metadata">
+                <head><metadata>
+                    <ttm:agent xml:id="v1" type="person"/>
+                    <ttm:agent xml:id="v2" type="person"/>
+                </metadata></head>
+                <body><p begin="1s" end="3s" ttm:agent="v2">
+                    <span begin="1s" end="3s">Only second singer</span>
+                </p></body>
+            </tt>
+        """.trimIndent()
+        val result = LyricsDecoder.decodeWithTiming(xml, 4000)
+        assertEquals(1, result.lyrics.lines.size)
+        assertEquals(setOf(0), result.duetRightLines)
+    }
+
+    @Test fun v2IsRightEvenWhenTheProviderOmitsV1AndItsDeclarations() {
+        val xml = """
+            <tt xmlns:ttm="http://www.w3.org/ns/ttml#metadata">
+                <body><p begin="1s" end="2s" ttm:agent="v2">
+                    <span begin="1s" end="2s">Right alone</span>
+                </p></body>
+            </tt>
+        """.trimIndent()
+        val result = LyricsDecoder.decodeWithTiming(xml, 3000)
+        assertEquals(setOf(0), result.duetRightLines)
+    }
+
+    @Test fun providerStylesCanExplicitlyPutRightAlignedLineOnRightWithoutAgents() {
+        val xml = """
+            <tt xmlns="http://www.w3.org/ns/ttml"
+                xmlns:tts="http://www.w3.org/ns/ttml#styling">
+                <head><styling>
+                    <style xml:id="rightStyle" tts:textAlign="right"/>
+                    <style xml:id="leftStyle" tts:textAlign="left"/>
+                </styling></head>
+                <body><div>
+                    <p begin="1s" end="2s" style="rightStyle">
+                        <span begin="1s" end="2s">Right explicitly</span>
+                    </p>
+                    <p begin="2s" end="3s" style="leftStyle">
+                        <span begin="2s" end="3s">Left explicitly</span>
+                    </p>
+                </div></body>
+            </tt>
+        """.trimIndent()
+        val result = LyricsDecoder.decodeWithTiming(xml, 4000)
+        assertEquals(setOf(0), result.duetRightLines)
+    }
+
+    @Test fun explicitTextAlignmentOverridesAgentNumber() {
+        val xml = """
+            <tt xmlns:ttm="http://www.w3.org/ns/ttml#metadata"
+                xmlns:tts="http://www.w3.org/ns/ttml#styling">
+                <head><metadata>
+                    <ttm:agent xml:id="v1" type="person"/>
+                    <ttm:agent xml:id="v2" type="person"/>
+                </metadata></head>
+                <body>
+                    <p begin="1s" end="2s" ttm:agent="v1" tts:textAlign="right">
+                        <span begin="1s" end="2s">Right by provider</span>
+                    </p>
+                    <p begin="2s" end="3s" ttm:agent="v2" tts:textAlign="left">
+                        <span begin="2s" end="3s">Left by provider</span>
+                    </p>
+                </body>
+            </tt>
+        """.trimIndent()
+        val result = LyricsDecoder.decodeWithTiming(xml, 4000)
+        assertEquals(setOf(0), result.duetRightLines)
+    }
+
 }
