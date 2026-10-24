@@ -384,4 +384,25 @@ class LyricsDecoderTest {
         assertEquals(setOf(1), decoded.duetRightLines)
     }
 
+    @Test fun ttmlWithoutAgentDeclarationsKeepsStableV1V2SideAssignment() {
+        val content = """
+            <tt xmlns:ttm="http://www.w3.org/ns/ttml#metadata">
+                <body><div>
+                    <p begin="1s" end="2s" ttm:agent="v2">
+                        <span begin="1s" end="2s">Right starts</span>
+                    </p>
+                    <p begin="2s" end="3s" ttm:agent="v1">
+                        <span begin="2s" end="3s">Left replies</span>
+                    </p>
+                    <p begin="3s" end="4s" ttm:agent="v2">
+                        <span begin="3s" end="4s">Right again</span>
+                    </p>
+                </div></body>
+            </tt>
+        """.trimIndent()
+        val decoded = LyricsDecoder.decodeWithTiming(content, 5_000)
+        assertEquals(3, decoded.lyrics.lines.size)
+        assertEquals(setOf(0, 2), decoded.duetRightLines)
+    }
+
 }
