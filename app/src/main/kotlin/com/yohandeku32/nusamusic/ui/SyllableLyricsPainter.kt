@@ -334,7 +334,7 @@ internal class SyllableLyricsPainter(
         val pose = glyph.wavePose
         val position = glyph.position + Offset(
             pose.parallaxXDp * density,
-            pose.liftDp * density
+            pose.liftDp * density * 0.70f
         )
         // A single intact measured text run tilts and rises with the local
         // mountain, never distorting glyphs with separately clipped slices.
@@ -347,8 +347,8 @@ internal class SyllableLyricsPainter(
         // Local vertical scale and camera depth make the leading syllables
         // approach the viewer before the trailing ones, without clipped glyphs.
         val forwardBulge = heldWordForwardBulge(pose.depth, pose.intensity)
-        val scaleX = 1f + 0.105f * pose.depth
-        val scaleY = forwardBulge.scaleY
+        val scaleX = 1f + 0.075f * pose.depth
+        val scaleY = 1f + (forwardBulge.scaleY - 1f) * 0.70f
         val width = glyph.width
         val pivot = Offset(
             x = if (pose.depth > 0f) heldWordPivotX(
