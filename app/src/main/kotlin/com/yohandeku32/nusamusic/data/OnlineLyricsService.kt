@@ -191,7 +191,8 @@ internal class OnlineLyricsService(
             // For an entire backing row, wrap the shaped syllables into a
             // single role-tagged span (same TTML dialect as Apple-style x-bg).
             val backingRow = row.isBackingVocal()
-            if (backingRow) xml.append("<span ttm:role=\"x-bg\">")
+            if (backingRow) xml.append("<span ttm:role=\"x-bg\" begin=\"")
+                .append(begin).append("s\" end=\"").append(end).append("s\">")
             if (pieces.isEmpty()) xml.append(escapeXml(lineText))
             else for (piece in pieces) {
                 xml.append("<span begin=\"").append(piece.begin).append("s\" end=\"")
