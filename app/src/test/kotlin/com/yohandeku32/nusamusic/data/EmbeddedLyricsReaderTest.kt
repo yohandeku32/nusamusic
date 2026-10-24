@@ -263,6 +263,42 @@ class EmbeddedLyricsReaderTest {
             selectLatestEmbeddedLyrics(result, 12_000).stored.content)
     }
 
+    @Test fun m4aQuickTimeMdtaLyricsAreReadWithoutCopyrightAtom() {
+        // External metadata editors may use keys/mdta and a numeric ilst
+        // field instead of the classic iTunes ©lyr. Keys can follow ilst.
+        val lyric = "New external lyrics"
+        val numericField = String(charArrayOf(0.toChar(), 0.toChar(), 0.toChar(), 1.toChar()))
+        val data = atom("data", be(1) + be(0) + text(lyric))
+        val ilst = atom("ilst", atom(numericField, data))
+        val key = "com.apple.quicktime.lyrics"
+        val keyEntry = be(text(key).size + 8) + text("mdta") + text(key)
+        val keys = atom("keys", be(0) + be(1) + keyEntry)
+        val file = atom("ftyp", text("M4A ") + be(0)) +
+            atom("moov", atom("meta", be(0) + ilst + keys)) +
+            atom("mdat", ByteArray(15))
+        val parsed = metadata(file)
+        assertEquals(lyric, parsed.preferredPlainLyrics)
+        assertEquals(lyric, selectLatestEmbeddedLyrics(parsed, 15_000).stored.content)
+    }
+
+    @Test fun m4aExternalMdtaLyricsReplaceOldFreeformKaraoke() {
+        val timed = "[00:01]<00:01>Old <00:02>version<00:04>"
+        val plain = "New version"
+        val numericField = String(charArrayOf(0.toChar(), 0.toChar(), 0.toChar(), 1.toChar()))
+        val synced = atom("----", atom("name", be(0) + text("LYRICS")) +
+            atom("data", be(1) + be(0) + text(timed)))
+        val ilst = atom("ilst", atom(numericField,
+            atom("data", be(1) + be(0) + text(plain))) + synced)
+        val key = "com.apple.quicktime.lyrics"
+        val keys = atom("keys", be(0) + be(1) +
+            be(text(key).size + 8) + text("mdta") + text(key))
+        val file = atom("ftyp", text("M4A ") + be(0)) +
+            atom("moov", atom("udta", atom("meta", be(0) + keys + ilst)))
+        val result = selectLatestEmbeddedLyrics(metadata(file), 8_000)
+        assertEquals(plain, result.stored.content)
+        assertTrue(result.stored.plain)
+    }
+
     @Test fun m4aEditedPunctuationAndCapitalizationMustNotRemainStale() {
         val timed = "[00:01]<00:01>Hello <00:02>world<00:04>"
         val metadata = EmbeddedLyricsMetadata(
