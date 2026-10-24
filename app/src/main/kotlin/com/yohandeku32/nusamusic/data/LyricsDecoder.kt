@@ -29,7 +29,8 @@ private data class NormalizedTtml(
     val xml: String,
     val lineOnly: Set<Pair<Int, String>>,
     val voices: List<TtmlVoiceEntry>,
-    val declaredAgents: List<String>
+    val declaredAgents: List<String>,
+    val nonSingerAgents: Set<String>
 )
 
 /** Adapts common local-file dialects to Accompanist's timed model. */
@@ -48,10 +49,12 @@ object LyricsDecoder {
         val inferredEnds = mutableSetOf<LyricsUnitKey>()
         var taggedVoices: List<TtmlVoiceEntry> = emptyList()
         var declaredAgents: List<String> = emptyList()
+        var nonSingerAgents: Set<String> = emptySet()
         val parsed = if (content.startsWith('<')) {
             val normalized = normalizeTtml(content, duration, inferredEnds)
             taggedVoices = normalized.voices
             declaredAgents = normalized.declaredAgents
+            nonSingerAgents = normalized.nonSingerAgents
             val ttml = TTMLParser.parse(normalized.xml)
             ttml.copy(lines = ttml.lines.map { line ->
                 if (line is KaraokeLine && (line.start to line.syllables.joinToString("") { it.content }.trim()) in normalized.lineOnly)
@@ -86,27 +89,38 @@ object LyricsDecoder {
         }.sortedBy { it.start }
         require(lines.isNotEmpty() && lines.size <= 8_000) { "No supported timed lyrics" }
 
-        // TTML agent tags identify vocalists; don't guess duet sides from
-        // alternating lines or accompaniment timing. Match by actual sung
-        // onset and content after the parser normalizes timing and sorts rows.
-        // Use stable TTML metadata declaration order, not the order in which
-        // each singer first starts singing. Otherwise verses that begin with
-        // singer 2 swap the left/right assignment on each song.
-        val heardAgents = taggedVoices.map { it.agentId }.distinct()
-        val agentIds = (
-            declaredAgents +
-                // Some TTML files omit <ttm:agent> declarations. Use stable
-                // identifiers instead of swapping sides based on who starts
-                // singing first. This also keeps v1 to the left of v2.
-                heardAgents.filter { it !in declaredAgents }.sortedWith(
-                    compareBy<String> {
-                        Regex("(\\d+)$").find(it)?.value?.toIntOrNull()
-                            ?: Int.MAX_VALUE
-                    }.thenBy { it }
-                )
+        // Apple lyric TTML is allowed to declare MANY voices. Its metadata
+        // may interleave "other" pseudo-voices (e.g. v2000) with people:
+        // v1, v2000 [type=other], v2, v3, v4, v5, v6.
+        // Counting the second <ttm:agent> as the right singer incorrectly
+        // maps v2000 -> right and every actual person v2..v6 -> left.
+        //
+        // For Apple's numbered *person* voices, odd IDs occupy the left lane
+        // and even IDs the right lane. Generic named people alternate in their
+        // declared order. A supplied tts:textAlign always takes precedence.
+        // Both main and backing vocals use this same side metadata.
+        val singerIds = (
+            declaredAgents.filterNot { it in nonSingerAgents } +
+                taggedVoices.map { it.agentId }
+                    .filter { it.isNotBlank() && it !in nonSingerAgents }
+                    .distinct().sortedWith(
+                        compareBy<String> {
+                            Regex("(\\d+)$").find(it)?.value?.toIntOrNull()
+                                ?: Int.MAX_VALUE
+                        }.thenBy { it }
+                    )
         ).distinct()
+        val numberedVoice = Regex("^v([1-9][0-9]*)$", RegexOption.IGNORE_CASE)
+        fun isRightVoice(voice: TtmlVoiceEntry): Boolean {
+            voice.explicitRight?.let { return it }
+            if (voice.agentId.isBlank() || voice.agentId in nonSingerAgents) return false
+            val number = numberedVoice.matchEntire(voice.agentId)
+                ?.groupValues?.get(1)?.toIntOrNull()
+            if (number != null && number in 1..99) return number % 2 == 0
+            val declaredIndex = singerIds.indexOf(voice.agentId)
+            return declaredIndex >= 0 && declaredIndex % 2 == 1
+        }
         val duetRight = if (taggedVoices.isNotEmpty()) {
-            val secondSinger = agentIds.getOrNull(1)
             val used = BooleanArray(taggedVoices.size)
             buildSet {
                 lines.forEachIndexed { index, line ->
@@ -122,17 +136,7 @@ object LyricsDecoder {
                     }
                     if (match != null) {
                         used[match] = true
-                        val voice = taggedVoices[match]
-                        // Explicit TTML positioning takes priority over a
-                        // guessed first/second singer order. A lone v2 is also
-                        // a valid second voice when v1 is temporarily silent.
-                        val right = voice.explicitRight ?: (
-                            (secondSinger != null && voice.agentId == secondSinger) ||
-                                (secondSinger == null &&
-                                    Regex("(?i)^(?:v|voice|agent|singer|speaker|person)[-_]?0*2$")
-                                        .matches(voice.agentId))
-                        )
-                        if (right) add(index)
+                        if (isRightVoice(taggedVoices[match])) add(index)
                     }
                 }
             }
@@ -309,6 +313,7 @@ object LyricsDecoder {
         }
         // Metadata declares the singer identities independently of who
         // happens to sing first. Keep its order stable through sorted lines.
+        val nonSingerAgents = HashSet<String>()
         val declaredAgents = buildList {
             val children = root.getElementsByTagName("*")
             for (index in 0 until children.length) {
@@ -319,7 +324,12 @@ object LyricsDecoder {
                 val id = child.getAttribute("xml:id").ifBlank {
                     child.getAttribute("id")
                 }.trim().removePrefix("#")
-                if (id.isNotBlank() && id !in this) add(id)
+                if (id.isBlank()) continue
+                // Apple emits e.g. <ttm:agent type="other" xml:id="v2000"/>
+                // which is not a primary singer and cannot occupy a duet lane.
+                if (child.getAttribute("type").trim().equals("other", ignoreCase = true)) {
+                    nonSingerAgents += id
+                } else if (id !in this) add(id)
             }
         }
         fun isBacking(element: Element): Boolean {
@@ -473,6 +483,6 @@ object LyricsDecoder {
             return "<$name$attributes>$children</$name>"
         }
         val rendered = render(root, 0, duration, 0)
-        return NormalizedTtml(rendered, lineOnly, taggedVoices, declaredAgents)
+        return NormalizedTtml(rendered, lineOnly, taggedVoices, declaredAgents, nonSingerAgents)
     }
 }
