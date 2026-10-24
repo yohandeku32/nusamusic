@@ -255,7 +255,7 @@ class OnlineLyricsServiceTest {
         }
         val lyric = service.lookup(song).result!!.content
         assertTrue(lyric.contains("xmlns:ttm="))
-        assertTrue(lyric.contains("ttm:role=\\"x-bg\\""))
+        assertTrue(lyric.contains("ttm:role=\"x-bg\""))
         val decoded = LyricsDecoder.decode(lyric, song.durationMs)
         assertTrue("Backing vocal should be a separate accompaniment line",
             decoded.lines.filterIsInstance<com.mocharealm.accompanist.lyrics.core.model.karaoke.KaraokeLine>()
@@ -278,7 +278,7 @@ class OnlineLyricsServiceTest {
             }
         }
         val content = service.lookup(song).result!!.content
-        assertTrue(content.contains("ttm:role=\\"x-bg\\""))
+        assertTrue(content.contains("ttm:role=\"x-bg\""))
         assertTrue(content.contains("oh"))
     }
 
