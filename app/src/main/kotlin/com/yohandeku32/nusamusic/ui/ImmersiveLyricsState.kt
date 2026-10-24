@@ -41,6 +41,8 @@ class SongLyricsState {
     // media index continues to report the earlier version of this audio file.
     var confirmedEmbeddedQuality = 0
     var loading by mutableStateOf(false)
+    // Separate fast local metadata from a potentially slow online upgrade.
+    var localReadComplete by mutableStateOf(false)
     var attempted = false
     var lastOnlineEnabled: Boolean? = null
     var job: Job? = null
@@ -101,6 +103,7 @@ class ImmersiveLyricsState(private val repository: LyricsRepository) {
         val generation = ++state.generation
         state.loading = true
         state.attempted = true
+        state.localReadComplete = false
         state.job = scope.launch {
             try {
                 val result = repository.load(
@@ -126,6 +129,7 @@ class ImmersiveLyricsState(private val repository: LyricsRepository) {
                             state.embeddedHasBackingVocals = hasBackingVocals(local)
                         }
                         state.data = local
+                        state.localReadComplete = true
                     }
                 }
                 if (state.generation == generation) state.data = result
@@ -133,9 +137,15 @@ class ImmersiveLyricsState(private val repository: LyricsRepository) {
                 if (state.generation == generation) state.attempted = state.data != null
                 throw e
             } catch (_: Exception) {
-                if (state.generation == generation) state.data = null
+                if (state.generation == generation) {
+                    state.data = null
+                    state.localReadComplete = true
+                }
             } finally {
-                if (state.generation == generation) state.loading = false
+                if (state.generation == generation) {
+                    state.loading = false
+                    state.localReadComplete = true
+                }
             }
         }
     }
