@@ -56,7 +56,8 @@ internal class LyricsPendingSaveQueue(context: Context) {
             }
     }
 
-    fun isQueued(songId: Long): Boolean = pending[songId] == true
+    fun isQueued(songId: Long): Boolean =
+        pending[songId] == true && File(folder, "$songId.json").isFile
 
     /**
      * A Save becomes readable in NusaMusic immediately. It is NOT yet embedded
