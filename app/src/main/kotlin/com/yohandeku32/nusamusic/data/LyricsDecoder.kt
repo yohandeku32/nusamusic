@@ -257,6 +257,52 @@ object LyricsDecoder {
                 if (id.isNotBlank() && id !in this) add(id)
             }
         }
+        fun isBacking(element: Element): Boolean {
+            val attrs = element.attributes
+            for (i in 0 until attrs.length) {
+                val attribute = attrs.item(i)
+                val name = (attribute.localName ?: attribute.nodeName.substringAfter(':')).lowercase()
+                if (name == "role" &&
+                    attribute.nodeValue.trim().lowercase() in
+                        setOf("x-bg", "bg", "background", "backing")
+                ) return true
+            }
+            return false
+        }
+
+        fun withinBacking(node: Node, parent: Element): Boolean {
+            var cursor: Node? = node
+            while (cursor is Element && cursor !== parent) {
+                if (isBacking(cursor)) return true
+                cursor = cursor.parentNode
+            }
+            return false
+        }
+
+        // A nested x-bg span is a separate parsed backing-vocal row. It
+        // must not become part of the lead singer's text matching key.
+        fun mainText(node: Node): String = when {
+            node is Element && isBacking(node) -> ""
+            node.nodeType == Node.TEXT_NODE || node.nodeType == Node.CDATA_SECTION_NODE ->
+                node.nodeValue.orEmpty()
+            else -> buildString {
+                for (i in 0 until node.childNodes.length) {
+                    append(mainText(node.childNodes.item(i)))
+                }
+            }
+        }
+
+        fun firstSungStart(container: Element, fallback: Int, mainOnly: Boolean): Int {
+            val descendants = container.getElementsByTagName("*")
+            return (0 until descendants.length).mapNotNull { i ->
+                val span = descendants.item(i) as? Element ?: return@mapNotNull null
+                if (span.localName != "span" || span.textContent.isBlank() ||
+                    (mainOnly && withinBacking(span, container))
+                ) return@mapNotNull null
+                span.getAttribute("begin").takeIf { it.isNotBlank() }?.let(::ttmlTime)
+            }.minOrNull() ?: fallback
+        }
+
         // Resolve the nearest TTML metadata ttm:agent, plus commonly exported
         // speaker/voice attributes. A one-singer TTML remains left aligned.
         fun speaker(element: Element): String {
@@ -279,7 +325,7 @@ object LyricsDecoder {
             val spans = element.getElementsByTagName("*")
             for (i in 0 until spans.length) {
                 val span = spans.item(i) as? Element ?: continue
-                if (span.localName != "span") continue
+                if (span.localName != "span" || withinBacking(span, element)) continue
                 val attrs = span.attributes
                 for (j in 0 until attrs.length) {
                     val attr = attrs.item(j)
@@ -316,28 +362,33 @@ object LyricsDecoder {
             var children = buildString {
                 for (i in 0 until node.childNodes.length) append(render(node.childNodes.item(i), start, end, depth + 1))
             }
+            if (name == "span" && isBacking(node)) {
+                val voiceId = speaker(node)
+                val text = node.textContent.trim()
+                if (voiceId.isNotBlank() && text.isNotBlank()) {
+                    taggedVoices += TtmlVoiceEntry(
+                        firstSungStart(node, start, mainOnly = false),
+                        text, voiceId
+                    )
+                }
+            }
             if (name == "p") {
                 val spans = node.getElementsByTagName("*")
                 val voiceId = speaker(node)
-                if (voiceId.isNotEmpty() && node.textContent.isNotBlank()) {
-                    // Normalized karaoke starts at the first audible span
-                    // rather than at a padded TTML container begin.
-                    val vocalStart = (0 until spans.length).mapNotNull { i ->
-                        val span = spans.item(i) as Element
-                        if ((span.localName ?: span.nodeName) == "span" &&
-                            span.textContent.isNotBlank()
-                        ) span.getAttribute("begin").takeIf { it.isNotBlank() }?.let(::ttmlTime)
-                        else null
-                    }.minOrNull() ?: start
+                val leadText = mainText(node).trim()
+                if (voiceId.isNotBlank() && leadText.isNotBlank()) {
+                    // The lead and nested backing singer can differ. Match
+                    // only the lead's own vocal text and onset here.
                     taggedVoices += TtmlVoiceEntry(
-                        vocalStart, node.textContent.trim(), voiceId
+                        firstSungStart(node, start, mainOnly = true),
+                        leadText, voiceId
                     )
                 }
                 val hasTimedUnit = (0 until spans.length).any { index ->
                     val element = spans.item(index) as Element
                     (element.localName ?: element.nodeName) == "span" && element.hasAttribute("begin")
                 }
-                if (!hasTimedUnit) lineOnly += start to node.textContent.trim()
+                if (!hasTimedUnit) lineOnly += start to leadText
             }
             if (name == "p" && (0 until node.childNodes.length).none { node.childNodes.item(it) is Element }) {
                 children = "<span begin=\"${clock(start)}\" end=\"${clock(end)}\">$children</span>"
