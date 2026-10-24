@@ -180,18 +180,26 @@ object LyricsDecoder {
     private fun clock(ms: Int): String = "%02d:%02d.%03d".format(java.util.Locale.ROOT, ms / 60_000, ms / 1_000 % 60, ms % 1_000)
 
     private fun ttmlTime(value: String): Int {
-        val unit = Regex("^(\\d+(?:\\.\\d+)?)(ms|s|m|h)$").matchEntire(value)
-        val millis = if (unit != null) {
-            unit.groupValues[1].toDouble() * when (unit.groupValues[2]) {
+        val time = value.trim()
+        val unit = Regex("^(\\d+(?:\\.\\d+)?)(ms|s|m|h)$").matchEntire(time)
+        val millis = when {
+            unit != null -> unit.groupValues[1].toDouble() * when (unit.groupValues[2]) {
                 "ms" -> 1; "s" -> 1_000; "m" -> 60_000; else -> 3_600_000
             }
-        } else {
-            val parts = value.split(':')
-            require(parts.size in 2..3)
-            parts.fold(0.0) { total, part -> total * 60 + part.toDouble() } * 1_000
+            // Apple Music exports iTunes lyric TTML using bare decimal seconds:
+            // begin="7.208", end="7.446". These are valid for the music
+            // source we import, but require an explicit interpretation here.
+            Regex("^\\d+(?:\\.\\d+)?$").matches(time) -> time.toDouble() * 1_000
+            else -> {
+                val parts = time.split(':')
+                require(parts.size in 2..3)
+                parts.fold(0.0) { total, part -> total * 60 + part.toDouble() } * 1_000
+            }
         }
         require(millis.isFinite() && millis >= 0 && millis < Int.MAX_VALUE)
-        return millis.toInt()
+        // Avoid losing a millisecond to floating-point representation when
+        // converting sample offsets such as 7.208 -> 7208 ms.
+        return kotlin.math.round(millis).toInt()
     }
 
     /** Handle seconds/duration notation and line-timed TTML, which older Core omits. */
