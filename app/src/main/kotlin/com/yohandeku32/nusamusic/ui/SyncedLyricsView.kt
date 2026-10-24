@@ -301,8 +301,13 @@ internal fun SyncedLyricsView(
                                 val voice = backing.value
                                 val voices = remember(voice) { LyricsVocalWindows(voice) }
                                 TimedVocalContent(voices, clock.read, motionState) {
+                                    // Speaker identity applies to ALL lyric rows,
+                                    // including TTML accompaniment/backing rows.
+                                    // Previously duetRightLines was checked only
+                                    // for main vocals, sending backing singer 2 left.
                                     CenteredKaraokeLine(voice, clock.read, motionState, backgroundStyle, seekLine,
-                                        expressions = expressions[voice])
+                                        expressions = expressions[voice],
+                                        alignEnd = backing.index in duetRightLines)
                                 }
                             }
                         }
