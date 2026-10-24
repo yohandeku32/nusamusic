@@ -102,11 +102,11 @@ object LyricsDecoder {
                         is KaraokeLine -> line.syllables.joinToString("") { it.content }
                         is SyncedLine -> line.content
                         else -> ""
-                    }.trim().replace(Regex("\\s+"), " ")
+                    }.let(::voiceTextKey)
                     val match = taggedVoices.indices.firstOrNull { candidate ->
                         val entry = taggedVoices[candidate]
                         !used[candidate] && entry.start == line.start &&
-                            entry.content.trim().replace(Regex("\\s+"), " ") == contentText
+                            voiceTextKey(entry.content) == contentText
                     }
                     if (match != null) {
                         used[match] = true
@@ -117,6 +117,12 @@ object LyricsDecoder {
         } else emptySet()
         return DecodedLyrics(parsed.copy(lines = lines), inferredEnds.toSet(), duetRight)
     }
+
+    // TTML parsers may drop insignificant XML indentation between adjacent
+    // word spans. Ignore only whitespace for matching source paragraphs back
+    // to parsed timed rows, without guessing identities from alternating lines.
+    private fun voiceTextKey(text: String): String =
+        text.filterNot(Char::isWhitespace)
 
     private fun time(match: MatchResult): Int = (
         match.groupValues[1].toLong() * 60_000 + match.groupValues[2].toLong() * 1_000 +
