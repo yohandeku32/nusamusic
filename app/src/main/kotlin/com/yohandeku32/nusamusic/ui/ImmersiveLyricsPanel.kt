@@ -61,6 +61,7 @@ fun ImmersiveLyricsPanel(
     state: ImmersiveLyricsState,
     onSeek: (Long) -> Unit,
     fontSize: Float,
+    onlineLyricsEnabled: Boolean,
     modifier: Modifier = Modifier,
     onQueueLyrics: suspend (Song, SongLyrics) -> Unit,
     isLyricsQueued: (Song) -> Boolean
@@ -83,7 +84,7 @@ fun ImmersiveLyricsPanel(
         onQueueLyrics(snapshot.song, snapshot.lyrics)
         // The original file is untouched while Media3 reads it, but the
         // authored lyrics are immediately durable and visible offline.
-        state.load(snapshot.song, scope, retry = true)
+        state.load(snapshot.song, scope, retry = true, onlineEnabled = onlineLyricsEnabled)
         Toast.makeText(context,
             "Lyrics saved in NusaMusic. File embedding completes when playback releases this song.",
             Toast.LENGTH_LONG).show()
@@ -148,13 +149,18 @@ fun ImmersiveLyricsPanel(
     }
     val entry = song?.let { state.forSong(it) }
     val queuedForSong = song?.let { isLyricsQueued(it) } ?: false
-    LaunchedEffect(song?.uri, queuedForSong) {
+    LaunchedEffect(song?.uri, queuedForSong, onlineLyricsEnabled) {
         if (song != null) {
-            // A queued local preview becomes real embedded metadata only
-            // after the source is released. Refresh on both transitions:
-            // offline Save -> queued, and queued -> verified embedded.
+            // Toggle changes re-read embedded metadata and cancel any running
+            // online lookup. OFF cannot reuse a previously fetched online lyric.
             val stalePreview = entry?.data?.stored?.source == "saved-in-app"
-            state.load(song, scope, retry = queuedForSong || stalePreview)
+            state.load(
+                song, scope,
+                retry = queuedForSong || stalePreview ||
+                    (entry?.lastOnlineEnabled != null &&
+                        entry.lastOnlineEnabled != onlineLyricsEnabled),
+                onlineEnabled = onlineLyricsEnabled
+            )
         }
     }
 
