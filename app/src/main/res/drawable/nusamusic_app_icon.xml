@@ -1,33 +1,55 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Aruna: crisp monochrome note/A monogram, softly curved vinyl-wave lines. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
 
+    <!-- Rounded black app tile. All glyphs remain in the safe icon region. -->
     <path
-        android:fillColor="#111111"
-        android:pathData="M54,4A50,50 0,1 0,54 104A50,50 0,1 0,54 4" />
+        android:fillColor="#0B0C0E"
+        android:pathData="M25,5 L83,5 Q103,5 103,25 L103,83 Q103,103 83,103 L25,103 Q5,103 5,83 L5,25 Q5,5 25,5 Z" />
 
+    <!-- Three fine musical wave paths behind the central mark. -->
     <path
-        android:fillColor="#2A2A2A"
-        android:pathData="M54,15A39,39 0,1 0,54 93A39,39 0,1 0,54 15" />
-
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeAlpha="0.24"
+        android:strokeWidth="1.6"
+        android:strokeLineCap="round"
+        android:pathData="M14,50 C28,41 37,42 48,48 C62,57 75,40 94,48" />
     <path
-        android:fillColor="#3B3B3B"
-        android:pathData="M54,22A32,32 0,1 0,54 86A32,32 0,1 0,54 22" />
-
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeAlpha="0.33"
+        android:strokeWidth="1.6"
+        android:strokeLineCap="round"
+        android:pathData="M14,58 C29,48 39,50 50,57 C64,65 77,48 94,56" />
     <path
-        android:fillColor="#050505"
-        android:pathData="M54,38A16,16 0,1 0,54 70A16,16 0,1 0,54 38" />
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeAlpha="0.24"
+        android:strokeWidth="1.6"
+        android:strokeLineCap="round"
+        android:pathData="M14,66 C27,57 38,60 50,65 C66,73 78,58 94,63" />
 
+    <!-- The A is also a note: stem meets a round notehead. -->
     <path
-        android:fillColor="#D8D3C9"
-        android:pathData="M54,49A5,5 0,1 0,54 59A5,5 0,1 0,54 49" />
-
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="7.2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M38,73 L57,24 L79,79" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="5.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M48,60 C57,55 66,56 71,60" />
     <path
         android:fillColor="#FFFFFF"
-        android:fillAlpha="0.18"
-        android:pathData="M24,28A40,40 0,0 1,62 14L58,20A34,34 0,0 0,30 32Z" />
-
+        android:pathData="M38,69 C30,67 23,72 22,79 C21,86 28,90 35,87 C42,84 44,75 38,69 Z" />
 </vector>
