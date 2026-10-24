@@ -1982,14 +1982,19 @@ private fun NusaMusicApp(
     LaunchedEffect(songs) {
         AudioCodecLoader.warmVerifiedBadges(context, songs)
     }
+    var onlineLyricsEnabled by remember {
+        mutableStateOf(context.getSharedPreferences(
+            "ui_preferences", android.content.Context.MODE_PRIVATE
+        ).getBoolean("online_lyrics_enabled", true))
+    }
     val lyricsState = remember(context) { ImmersiveLyricsState(LyricsRepository(context)) }
-    LaunchedEffect(currentSong?.uri, lyricsMetadataGeneration) {
+    LaunchedEffect(currentSong?.uri, lyricsMetadataGeneration, onlineLyricsEnabled) {
         val activeSong = currentSong ?: return@LaunchedEffect
         if (!LYRICS_ENABLED || lyricsMetadataGeneration == 0) return@LaunchedEffect
         // ContentObserver changes arrive in bursts when another tag editor
         // saves. Coalesce writes, then bypass both parsed + on-disk caches.
         delay(420L)
-        lyricsState.load(activeSong, this, retry = true)
+        lyricsState.load(activeSong, this, retry = true, onlineEnabled = onlineLyricsEnabled)
     }
     val artistPageStates = remember { androidx.collection.LruCache<String, ImmersiveArtistPageState>(8) }
     val artistPageState = remember(artistKey) {
@@ -2406,7 +2411,21 @@ private fun NusaMusicApp(
                 },
                 hasLyricsSong = currentSong != null,
                 lyricsLoading = LYRICS_ENABLED && currentSong?.let { lyricsState.forSong(it).loading } == true,
-                onRetryLyrics = { currentSong?.let { lyricsState.load(it, scope, retry = true) } },
+                onRetryLyrics = {
+                    currentSong?.let {
+                        lyricsState.load(it, scope, retry = true, onlineEnabled = onlineLyricsEnabled)
+                    }
+                },
+                onlineLyricsEnabled = onlineLyricsEnabled,
+                onOnlineLyricsChange = { enabled ->
+                    if (onlineLyricsEnabled != enabled) {
+                        onlineLyricsEnabled = enabled
+                        uiPrefs.edit().putBoolean("online_lyrics_enabled", enabled).apply()
+                        currentSong?.let {
+                            lyricsState.load(it, scope, retry = true, onlineEnabled = enabled)
+                        }
+                    }
+                },
                 titleFontSize = titleFontSize,
                 onTitleFontSizeChange = { titleFontSize = it },
                 onTitleFontSizeChangeFinished = {
@@ -2773,6 +2792,7 @@ private fun NusaMusicApp(
                                         state = lyricsState,
                                         onSeek = onSeek,
                                         fontSize = lyricsFontSize,
+                                        onlineLyricsEnabled = onlineLyricsEnabled,
                                         modifier = lyricsModifier,
                                         onQueueLyrics = onQueueLyrics,
                                         isLyricsQueued = isLyricsQueued
