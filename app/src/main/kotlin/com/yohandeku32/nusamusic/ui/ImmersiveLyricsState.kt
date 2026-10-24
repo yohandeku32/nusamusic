@@ -9,6 +9,7 @@ import androidx.compose.runtime.setValue
 import com.yohandeku32.nusamusic.data.LyricsRepository
 import com.yohandeku32.nusamusic.data.SongLyrics
 import com.yohandeku32.nusamusic.data.lyricQuality
+import com.yohandeku32.nusamusic.data.hasBackingVocals
 import com.yohandeku32.nusamusic.model.Song
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -17,17 +18,25 @@ import kotlinx.coroutines.launch
 
 /**
  * Save should also upgrade an existing embedded lyric when a higher-quality
- * online syllable version is available. Equal or worse timing is not an upgrade.
+ * online syllable version is available. Extra authored backing vocals are
+ * also an upgrade even when the main karaoke quality is already equal.
  */
-internal fun lyricsNeedEmbedding(displayed: SongLyrics?, embeddedQuality: Int): Boolean =
+internal fun lyricsNeedEmbedding(
+    displayed: SongLyrics?,
+    embeddedQuality: Int,
+    embeddedHasBackingVocals: Boolean = false
+): Boolean =
     displayed != null &&
         displayed.stored.source != "embedded" &&
         displayed.stored.content.isNotBlank() &&
-        lyricQuality(displayed) > embeddedQuality
+        (lyricQuality(displayed) > embeddedQuality ||
+            (lyricQuality(displayed) >= embeddedQuality &&
+                hasBackingVocals(displayed) && !embeddedHasBackingVocals))
 
 class SongLyricsState {
     var data by mutableStateOf<SongLyrics?>(null)
     var embeddedLyricsQuality by mutableIntStateOf(0)
+    var embeddedHasBackingVocals by mutableStateOf(false)
     // A completed, verified write must not briefly re-show Save while Android's
     // media index continues to report the earlier version of this audio file.
     var confirmedEmbeddedQuality = 0
@@ -51,6 +60,7 @@ class ImmersiveLyricsState(private val repository: LyricsRepository) {
         forSong(song).apply {
             confirmedEmbeddedQuality = maxOf(confirmedEmbeddedQuality, lyricQuality(saved))
             embeddedLyricsQuality = maxOf(embeddedLyricsQuality, confirmedEmbeddedQuality)
+            embeddedHasBackingVocals = embeddedHasBackingVocals || hasBackingVocals(saved)
         }
     }
 
@@ -104,6 +114,8 @@ class ImmersiveLyricsState(private val repository: LyricsRepository) {
                             state.embeddedLyricsQuality = maxOf(
                                 lyricQuality(local), state.confirmedEmbeddedQuality
                             )
+                            state.embeddedHasBackingVocals =
+                                state.embeddedHasBackingVocals || hasBackingVocals(local)
                         }
                         state.data = local
                     }
