@@ -120,7 +120,11 @@ class LyricsRepository(context: Context) {
         if (uri.scheme !in setOf("content", "file"))
             return EmbeddedLyricsSelector.select(emptyList(), song.durationMs)
         val key = cacheKey(song) + "\u0000" + fingerprint(uri)
-        if (!retry) embedded.read(key)?.let { entry ->
+        // MediaStore's size/DATE_MODIFIED can remain stale after an in-place
+        // M4A tag edit. M4A metadata lives in small indexed atoms: re-read it
+        // on entry instead of trusting an old successful/negative disk cache.
+        if (!retry && !song.uri.substringBefore('?').endsWith(".m4a", ignoreCase = true))
+            embedded.read(key)?.let { entry ->
             return EmbeddedLyricsSelector.select(listOf(entry.content), song.durationMs, entry.credits)
         }
         val loadContext = coroutineContext
@@ -147,7 +151,7 @@ class LyricsRepository(context: Context) {
             // plays; use the online lookup rather than failing the Lyrics UI.
             EmbeddedLyricsMetadata(emptyList())
         }
-        val result = EmbeddedLyricsSelector.select(metadata.lyrics, song.durationMs, metadata.credits)
+        val result = selectLatestEmbeddedLyrics(metadata, song.durationMs)
         coroutineContext.ensureActive()
         runCatching { embedded.write(key, result.stored) }
         return result
@@ -165,6 +169,38 @@ class LyricsRepository(context: Context) {
             }
         }.getOrNull() ?: "unknown"
     }
+}
+
+/**
+ * A third-party editor commonly updates the standard iTunes ©lyr atom but
+ * leaves NusaMusic's extra karaoke/TTML freeform atom untouched. Its old
+ * timestamps may score higher than a newly edited plain lyric, so comparing
+ * timing scores alone hides the user's edit indefinitely.
+ *
+ * The official ©lyr text is authoritative *only when its words differ*
+ * from the timed candidate. Matching text keeps richer karaoke/backing vocals.
+ */
+internal fun selectLatestEmbeddedLyrics(
+    metadata: EmbeddedLyricsMetadata,
+    durationMs: Long
+): SongLyrics {
+    val selected = EmbeddedLyricsSelector.select(metadata.lyrics, durationMs, metadata.credits)
+    val userFacing = metadata.preferredPlainLyrics?.trim()?.takeIf { it.isNotEmpty() }
+        ?: return selected
+    val plain = EmbeddedLyricsSelector.select(listOf(userFacing), durationMs, metadata.credits)
+    if (selected.stored.content.isBlank() || selected.stored.content == userFacing) return selected
+
+    val allTimedText = selected.synced?.lines?.joinToString(" ") { line ->
+        when (line) {
+            is KaraokeLine -> line.syllables.joinToString("") { it.content }
+            is com.mocharealm.accompanist.lyrics.core.model.synced.SyncedLine -> line.content
+            else -> ""
+        }
+    }?.takeIf { it.isNotBlank() } ?: selected.stored.content
+
+    // Compare actual words, ignoring timestamp markup, line breaks and case.
+    // Do NOT choose stale timed lyrics if the third-party editor changed words.
+    return if (normalizeLyricsTag(userFacing) != normalizeLyricsTag(allTimedText)) plain else selected
 }
 
 /** Accompaniment must be *decoded*, not merely mentioned in untrusted XML text. */
