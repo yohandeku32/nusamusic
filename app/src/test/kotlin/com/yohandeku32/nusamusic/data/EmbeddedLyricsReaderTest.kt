@@ -263,4 +263,14 @@ class EmbeddedLyricsReaderTest {
             selectLatestEmbeddedLyrics(result, 12_000).stored.content)
     }
 
+    @Test fun m4aEditedPunctuationAndCapitalizationMustNotRemainStale() {
+        val timed = "[00:01]<00:01>Hello <00:02>world<00:04>"
+        val metadata = EmbeddedLyricsMetadata(
+            listOf(timed, "Hello, World!"),
+            preferredPlainLyrics = "Hello, World!"
+        )
+        assertEquals("Hello, World!",
+            selectLatestEmbeddedLyrics(metadata, 8_000).stored.content)
+    }
+
 }
