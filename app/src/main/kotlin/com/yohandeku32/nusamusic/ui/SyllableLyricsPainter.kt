@@ -132,6 +132,9 @@ internal class SyllableLyricsPainter(
         val horizontalDp = (position.x + width / 2f) / density
         // Word-local shape is sampled once per frame, reused by halo and fill.
         var wavePose = LyricsHeldWordPose()
+        // Gentle movement of one intact rendered syllable at a time.
+        var passingLiftDp = 0f
+        var passingInfluence = 0f
         val controller = LyricsExpressionController(layout.syllable.start, layout.syllable.end, expression)
         // Separate sustained-vocal accent. Reuses the intact syllable's
         // measured text run so no individual character can break apart.
@@ -192,6 +195,11 @@ internal class SyllableLyricsPainter(
             reliableHold = glyph.expression.breathing > 0f
         )
     })
+    // Every authored unit participates, even 150-300ms words.
+    private val travelingPass = LyricsTravelingWaveMask(glyphs.map { glyph ->
+        LyricsVocalSpan(glyph.layout.syllable.start, glyph.layout.syllable.end,
+            glyph.pathStartDp, glyph.pathEndDp)
+    })
     private val glowPalette = LyricsGlowPaletteCache.forDensity(density)
 
     /**
@@ -205,6 +213,7 @@ internal class SyllableLyricsPainter(
              playbackRevision: Int) = with(scope) {
         val frameTime = frameClock.sample(waveTime, playbackRevision)
         val strength = focus.coerceIn(0f, 1f)
+        val movingFront = travelingPass.front(frameTime)
 
         // Sample ONCE from the Media3 clock. A fast "aku cinta" stays still;
         // only a long, explicitly authored "kamu" receives the moving arch.
@@ -214,6 +223,12 @@ internal class SyllableLyricsPainter(
                 index, frameTime, (glyph.pathStartDp + glyph.pathEndDp) * 0.5f
             )
             glyph.controller.update(frameTime)
+            // The same media clock moves a smooth shallow crest across
+            // ordinary words without slicing, clipping or displacing letters.
+            glyph.passingInfluence = travelingPass.glyphInfluence(
+                movingFront, glyph.pathStartDp, glyph.pathEndDp
+            ) * strength
+            glyph.passingLiftDp = lyricPassingLiftDp(glyph.passingInfluence)
             // Keep the old bubble as a LIGHT-only accent. Its independent
             // sinusoidal position/scale must never re-enlarge a letter while
             // the main 3D wave is smoothly shrinking back to baseline.
@@ -242,7 +257,7 @@ internal class SyllableLyricsPainter(
         val pose = glyph.wavePose
         val position = glyph.position + Offset(
             pose.parallaxXDp * density,
-            pose.liftDp * density
+            (pose.liftDp + glyph.passingLiftDp) * density
         )
         // A single intact measured text run tilts and rises with the local
         // mountain, never distorting glyphs with separately clipped slices.
@@ -256,7 +271,7 @@ internal class SyllableLyricsPainter(
         // approach the viewer before the trailing ones, without clipped glyphs.
         val forwardBulge = heldWordForwardBulge(pose.depth, pose.intensity)
         val scaleX = 1f + 0.105f * pose.depth
-        val scaleY = forwardBulge.scaleY
+        val scaleY = forwardBulge.scaleY * (1f + 0.012f * glyph.passingInfluence)
         val width = glyph.width
         val pivot = Offset(
             x = if (pose.depth > 0f) heldWordPivotX(

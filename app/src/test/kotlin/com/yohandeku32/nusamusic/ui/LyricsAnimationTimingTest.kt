@@ -44,10 +44,37 @@ class LyricsAnimationTimingTest {
         val voices = LyricsVocalWindows(line)
         assertEquals(0f, voices.presence(900, 0), 0f)
         assertEquals(1f, voices.presence(1500, 0), 0f)
-        assertTrue(voices.presence(2080, 0) in 0.4f..0.6f)
+        assertTrue(voices.presence(2080, 0) > 0.8f)
+        assertTrue(voices.presence(2190, 0) in 0.4f..0.6f)
+        assertEquals(0f, voices.presence(2380, 0), 0f)
         assertEquals(0f, voices.presence(3000, 0), 0f)
         assertTrue(voices.presence(4100, 0) > 0f)
         assertEquals(0f, voices.presence(6000, 0), 0f)
+    }
+    @Test fun backingVocalEntersAndLeavesWithoutFastPops() {
+        val voice = KaraokeLine(
+            listOf(KaraokeSyllable("Ooh", 1000, 3000)),
+            null, true, KaraokeAlignment.Start, 1000, 3000
+        )
+        val windows = LyricsVocalWindows(voice)
+        assertEquals(0f, windows.presence(1000, 0), 0f)
+        assertTrue(windows.presence(1050, 0) < 0.08f)
+        assertTrue(windows.presence(1250, 0) in 0.45f..0.65f)
+        assertEquals(1f, windows.presence(1420, 0), 0f)
+        assertTrue(windows.presence(3190, 0) in 0.45f..0.55f)
+        assertEquals(0f, windows.presence(3380, 0), 0f)
+    }
+    @Test fun ordinaryWordWaveIsBoundedAndSmooth() {
+        assertEquals(0f, lyricPassingLiftDp(0f), 0f)
+        assertEquals(-1.35f, lyricPassingLiftDp(0.5f), 0.001f)
+        assertEquals(-2.7f, lyricPassingLiftDp(1f), 0.001f)
+        var previous = 0f
+        for (i in 0..100) {
+            val value = lyricPassingLiftDp(i / 100f)
+            assertTrue(value in -2.7f..0f)
+            assertTrue(kotlin.math.abs(value - previous) < 0.05f)
+            previous = value
+        }
     }
     @Test fun voiceWindowsRepairOrderingAndMergeOverlapsWithoutInventingUnits() {
         val line = KaraokeLine(listOf(KaraokeSyllable("later", 3000, 5000), KaraokeSyllable("early", 1000, 4000)),

@@ -41,7 +41,8 @@ internal fun CenteredKaraokeLine(
     val voices = remember(line) { LyricsVocalWindows(line) }
     val live by remember(line, time, motion) { derivedStateOf {
         val now = time()
-        now >= line.start && now.toLong() < line.end.toLong() + 160 && motion.resetAt < line.end
+        now >= line.start && now.toLong() < line.end.toLong() +
+            (if (line.isAccompaniment) 380L else 160L) && motion.resetAt < line.end
     } }
     val visualTime = remember(live, time) { { if (live) time() else Int.MIN_VALUE } }
     MotionRow(line, visualTime, motion, voices, line.isAccompaniment, { onSeek(line) }, onMainHeight) {

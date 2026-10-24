@@ -74,10 +74,29 @@ internal class LyricsVocalWindows(line: ISyncedLine) {
             val middle = (low + high) / 2
             if (windows[middle].first <= now) low = middle + 1 else high = middle
         }
-        val interval = windows.getOrNull(low - 1) ?: return 0f
-        return lyricPresence(interval.first, interval.second, now, resetAt)
+        // Soft 220-420ms attack and 380ms release for backing-vocal rows.
+        // Adjacent authored syllables overlap naturally instead of popping.
+        fun smooth(interval: Pair<Int, Int>): Float {
+            val (start, end) = interval
+            if (now < start || now.toLong() >= end.toLong() + 380L ||
+                (resetAt >= end && now >= end)) return 0f
+            val duration = (end.toLong() - start).toFloat()
+            val attackMs = (duration * 0.40f).coerceIn(220f, 420f)
+            val attack = if (resetAt >= start) 1f
+                else lyricEase((now.toLong() - start) / attackMs)
+            val release = if (now < end) 1f
+                else 1f - lyricEase((now.toLong() - end) / 380f)
+            return (attack * release).coerceIn(0f, 1f)
+        }
+        val current = windows.getOrNull(low - 1)?.let(::smooth) ?: 0f
+        val prior = windows.getOrNull(low - 2)?.let(::smooth) ?: 0f
+        return maxOf(current, prior)
     }
 }
+
+/** A subtle but visible continuous wave, including ordinary fast words. */
+internal fun lyricPassingLiftDp(influence: Float): Float =
+    -2.7f * lyricEase(influence.coerceIn(0f, 1f))
 
 /** Critically damped spring response evaluated from audio time: no wall-clock animator or repeated bounce. */
 internal fun syllableExpression(start: Int, end: Int, now: Int, resetAt: Int): Float {

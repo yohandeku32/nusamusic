@@ -12,6 +12,19 @@ class LyricsTravelingWaveMaskTest {
     )
     private val mask = LyricsTravelingWaveMask(spans)
 
+    @Test fun ordinaryShortSyllablesReceiveASmoothPassingWave() {
+        val fast = LyricsTravelingWaveMask(listOf(
+            LyricsVocalSpan(1000, 1270, 0f, 45f),
+            LyricsVocalSpan(1270, 1510, 45f, 90f)
+        ))
+        val values = (1000..1770 step 10).map { time ->
+            fast.glyphInfluence(fast.front(time), 0f, 45f)
+        }
+        assertEquals(0f, values.first(), 0f)
+        assertTrue(values.maxOrNull()!! > 0.7f)
+        assertEquals(0f, values.last(), 0f)
+        assertTrue(values.all { it in 0f..1f })
+    }
     @Test fun nothingMovesBeforeFirstSyllableOrFarAheadOfVoice() {
         assertNull(mask.front(999))
         val active = requireNotNull(mask.front(1500))
