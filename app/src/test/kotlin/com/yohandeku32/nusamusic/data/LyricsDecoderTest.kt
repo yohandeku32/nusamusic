@@ -405,4 +405,65 @@ class LyricsDecoderTest {
         assertEquals(setOf(0, 2), decoded.duetRightLines)
     }
 
+    @Test fun nestedXBgSpanCanBelongToTheOtherDuetSinger() {
+        val content = """
+            <tt xmlns="http://www.w3.org/ns/ttml"
+                xmlns:ttm="http://www.w3.org/ns/ttml#metadata">
+                <head><metadata>
+                    <ttm:agent xml:id="left" type="person"/>
+                    <ttm:agent xml:id="right" type="person"/>
+                </metadata></head>
+                <body><div>
+                    <p begin="1s" end="4s" ttm:agent="left">
+                        <span begin="1s" end="2s">Hello </span>
+                        <span begin="2s" end="4s">world</span>
+                        <span ttm:role="x-bg" ttm:agent="right"
+                              begin="2s" end="3s">
+                            <span begin="2s" end="3s">Oh</span>
+                        </span>
+                    </p>
+                </div></body>
+            </tt>
+        """.trimIndent()
+        val decoded = LyricsDecoder.decodeWithTiming(content, 5_000)
+        val backingIndices = decoded.lyrics.lines.indices.filter {
+            (decoded.lyrics.lines[it] as? KaraokeLine)?.isAccompaniment == true
+        }
+        assertTrue("Nested x-bg should remain a separate backing row",
+            backingIndices.isNotEmpty())
+        assertTrue("Right singer backing should align on the right",
+            backingIndices.any { it in decoded.duetRightLines })
+        assertTrue("Left lead should stay on the left",
+            decoded.lyrics.lines.indices.filterNot { it in backingIndices }
+                .none { it in decoded.duetRightLines })
+    }
+
+    @Test fun nestedXBgSingerDoesNotStealRightLeadsIdentity() {
+        val content = """
+            <tt xmlns="http://www.w3.org/ns/ttml"
+                xmlns:ttm="http://www.w3.org/ns/ttml#metadata">
+                <head><metadata>
+                    <ttm:agent xml:id="left" type="person"/>
+                    <ttm:agent xml:id="right" type="person"/>
+                </metadata></head>
+                <body><div>
+                    <p begin="1s" end="4s" ttm:agent="right">
+                        <span begin="1s" end="2s">Good </span>
+                        <span begin="2s" end="4s">morning</span>
+                        <span ttm:role="x-bg" ttm:agent="left"
+                              begin="2s" end="3s">
+                            <span begin="2s" end="3s">Yeah</span>
+                        </span>
+                    </p>
+                </div></body>
+            </tt>
+        """.trimIndent()
+        val decoded = LyricsDecoder.decodeWithTiming(content, 5_000)
+        val mainIndices = decoded.lyrics.lines.indices.filter {
+            (decoded.lyrics.lines[it] as? KaraokeLine)?.isAccompaniment != true
+        }
+        assertTrue(mainIndices.isNotEmpty())
+        assertTrue(mainIndices.all { it in decoded.duetRightLines })
+    }
+
 }
