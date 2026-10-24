@@ -191,4 +191,64 @@ class EmbeddedLyricsReaderTest {
         val data = text("ID3") + byteArrayOf(2, 0, 0) + safe(body.size) + body
         assertEquals(SongCredits(listOf("Music"), listOf("Words")), metadata(data).credits)
     }
+    @Test fun m4aExternalCopyrightLyricsEditOverridesOldCustomKaraoke() {
+        fun data(value: String) = atom("data", be(1) + be(0) + text(value))
+        val originalSynced = "[00:01]<00:01>Old <00:02>version<00:04>"
+        val ownTimed = atom("----",
+            atom("mean", be(0) + text("com.nusamusic")) +
+                atom("name", be(0) + text("LYRICS")) + data(originalSynced))
+        // External editors change the user-visible ©lyr, but leave our freeform
+        // timed copy in place. Other players see "New version" immediately.
+        val meta = atom("meta", be(0) + atom("ilst",
+            atom("©lyr", data("New version")) + ownTimed))
+        val file = atom("ftyp", text("M4A ") + be(0)) +
+            atom("mdat", ByteArray(20)) + atom("moov", atom("udta", meta))
+        val parsed = metadata(file)
+        assertEquals("New version", parsed.preferredPlainLyrics)
+        assertEquals(2, parsed.lyrics.size)
+        assertEquals("New version", selectLatestEmbeddedLyrics(parsed, 8_000).stored.content)
+        assertTrue(selectLatestEmbeddedLyrics(parsed, 8_000).stored.plain)
+    }
+
+    @Test fun m4aMatchingCopyrightLyricsRetainSyncedTiming() {
+        fun data(value: String) = atom("data", be(1) + be(0) + text(value))
+        val timed = "[00:01]<00:01>Hello <00:02>world<00:04>"
+        val own = atom("----", atom("name", be(0) + text("LYRICS")) + data(timed))
+        val file = atom("ftyp", text("M4A ") + be(0)) +
+            atom("moov", atom("udta", atom("meta", be(0) + atom("ilst",
+                atom("©lyr", data("Hello world")) + own))))
+        val selected = selectLatestEmbeddedLyrics(metadata(file), 8_000)
+        assertEquals(timed, selected.stored.content)
+        assertTrue(selected.synced!!.lines.single() is KaraokeLine)
+    }
+
+    @Test fun quickTimeStyleM4aMetaWithoutFullBoxHeaderReadsEditedLyrics() {
+        val data = atom("data", be(1) + be(0) + text("Externally updated lyrics"))
+        val meta = atom("meta", atom("ilst", atom("©lyr", data)))
+        val file = atom("ftyp", text("M4A ") + be(0)) +
+            atom("mdat", ByteArray(50)) + atom("moov", atom("udta", meta))
+        assertEquals("Externally updated lyrics",
+            selectLatestEmbeddedLyrics(metadata(file), 15_000).stored.content)
+    }
+
+    @Test fun m4aInPlaceMetadataRefreshReadsCurrentBytesInsteadOfFirstResult() {
+        fun sample(lyric: String): ByteArray {
+            val data = atom("data", be(1) + be(0) + text(lyric))
+            return atom("ftyp", text("M4A ") + be(0)) +
+                atom("moov", atom("udta", atom("meta", be(0) + atom("ilst",
+                    atom("©lyr", data)))))
+        }
+        // Equivalent byte length: a tag editor can overwrite without changing
+        // the MediaStore SIZE field or advancing its generation immediately.
+        var bytes = sample("First lyrics")
+        val originalSize = bytes.size
+        fun fresh() = EmbeddedLyricsReader(bytes.size.toLong()) { offset, count ->
+            bytes.copyOfRange(offset.toInt(), minOf(bytes.size, offset.toInt() + count))
+        }.readMetadata()
+        assertEquals("First lyrics", selectLatestEmbeddedLyrics(fresh(), 10_000).stored.content)
+        bytes = sample("Other lyrics")
+        assertEquals(originalSize, bytes.size)
+        assertEquals("Other lyrics", selectLatestEmbeddedLyrics(fresh(), 10_000).stored.content)
+    }
+
 }
