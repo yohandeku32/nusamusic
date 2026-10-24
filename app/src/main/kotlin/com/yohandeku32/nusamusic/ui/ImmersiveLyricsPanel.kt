@@ -197,7 +197,7 @@ fun ImmersiveLyricsPanel(
     Box(modifier) {
         val data = entry?.data
         when {
-            entry != null && (entry.loading || !entry.attempted) &&
+            entry != null && !entry.localReadComplete && (entry.loading || !entry.attempted) &&
                 data?.stored?.content.isNullOrBlank() ->
                 CircularProgressIndicator(
                     modifier = Modifier.align(Alignment.Center).size(24.dp),
@@ -249,7 +249,7 @@ fun ImmersiveLyricsPanel(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    data?.onlineNotice ?: "No synchronized lyrics found",
+                    data?.onlineNotice ?: if (entry?.loading == true && entry.localReadComplete) "Checking online lyrics…" else "No synchronized lyrics found",
                     color = Color.White.copy(alpha = 0.76f),
                     fontSize = 16.sp
                 )
@@ -280,7 +280,6 @@ fun ImmersiveLyricsPanel(
                         refreshEmbeddedOnly = true
                     )
                 },
-                enabled = entry?.loading != true,
                 modifier = Modifier.align(Alignment.TopEnd)
                     .padding(top = 2.dp, end = if (saveVisible) 64.dp else 16.dp)
                     .size(44.dp)
