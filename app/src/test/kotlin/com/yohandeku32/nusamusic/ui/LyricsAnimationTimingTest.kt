@@ -66,12 +66,12 @@ class LyricsAnimationTimingTest {
     }
     @Test fun ordinaryWordWaveIsBoundedAndSmooth() {
         assertEquals(0f, lyricPassingLiftDp(0f), 0f)
-        assertEquals(-1.35f, lyricPassingLiftDp(0.5f), 0.001f)
-        assertEquals(-2.7f, lyricPassingLiftDp(1f), 0.001f)
+        assertEquals(-0.9f, lyricPassingLiftDp(0.5f), 0.001f)
+        assertEquals(-1.8f, lyricPassingLiftDp(1f), 0.001f)
         var previous = 0f
         for (i in 0..100) {
             val value = lyricPassingLiftDp(i / 100f)
-            assertTrue(value in -2.7f..0f)
+            assertTrue(value in -1.8f..0f)
             assertTrue(kotlin.math.abs(value - previous) < 0.05f)
             previous = value
         }
@@ -147,4 +147,53 @@ class LyricsAnimationTimingTest {
         repeat(120) { assertEquals(syllableExpression(1000, 9000, 1060, 0),
             syllableExpression(1000, 9000, 1060, 0), 0f) }
     }
+    @Test fun eachWordMovesOnlyWithinItsOwnTimestampWindow() {
+        val motion = LyricsTimedWordPulse(listOf(
+            LyricsHeldWordUnit("Aku ", 1000, 1400, 0f, 46f),
+            LyricsHeldWordUnit("suka ", 1400, 1950, 48f, 105f),
+            LyricsHeldWordUnit("musik", 1950, 2500, 107f, 170f)
+        ))
+        assertEquals(0f, motion.influence(0, 999), 0f)
+        assertTrue(motion.influence(0, 1250) > 0.95f)
+        assertEquals(0f, motion.influence(1, 1250), 0f)
+        assertEquals(0f, motion.influence(2, 1250), 0f)
+        assertTrue(motion.influence(1, 1700) > 0.95f)
+        assertEquals(0f, motion.influence(0, 1700), 0f)
+        assertTrue(motion.influence(2, 2150) > 0.95f)
+        assertEquals(0f, motion.influence(1, 2150), 0f)
+        assertEquals(0f, motion.influence(2, 2700), 0f)
+    }
+
+    @Test fun syllablesWithinOneWordShareTheirGentleEnvelope() {
+        val pulse = LyricsTimedWordPulse(listOf(
+            LyricsHeldWordUnit("ber", 1000, 1300, 0f, 25f),
+            LyricsHeldWordUnit("sa", 1300, 1600, 25f, 49f),
+            LyricsHeldWordUnit("ma ", 1600, 1850, 49f, 80f),
+            LyricsHeldWordUnit("kita", 1850, 2200, 90f, 130f)
+        ))
+        for (time in 1000..2050 step 25) {
+            assertEquals(pulse.influence(0, time), pulse.influence(1, time), 0f)
+            assertEquals(pulse.influence(1, time), pulse.influence(2, time), 0f)
+            assertTrue(pulse.influence(0, time) in 0f..1f)
+        }
+        assertEquals(0f, pulse.influence(3, 1200), 0f)
+    }
+
+    @Test fun shortWordHasContinuousArrivalAndReleaseWithoutBounce() {
+        val pulse = LyricsTimedWordPulse(
+            listOf(LyricsHeldWordUnit("Ya", 1000, 1130, 0f, 35f))
+        )
+        assertEquals(0f, pulse.influence(0, 1000), 0f)
+        assertTrue(pulse.influence(0, 1070) > 0f)
+        val atEnd = pulse.influence(0, 1130)
+        val easingOut = pulse.influence(0, 1230)
+        assertTrue(atEnd > easingOut)
+        assertTrue(easingOut > 0f)
+        assertEquals(0f, pulse.influence(0, 1330), 0f)
+        for (t in 1000..1330 step 4) {
+            assertTrue(kotlin.math.abs(pulse.influence(0, t + 4) -
+                pulse.influence(0, t)) < 0.09f)
+        }
+    }
+
 }
