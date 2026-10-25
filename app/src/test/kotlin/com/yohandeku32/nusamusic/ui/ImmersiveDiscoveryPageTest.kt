@@ -1,22 +1,25 @@
 package com.yohandeku32.nusamusic.ui
 
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.view.View
+import androidx.activity.ComponentActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import com.yohandeku32.nusamusic.data.DiscoveryLibrary
 import com.yohandeku32.nusamusic.model.Song
 import java.io.File
 import java.util.Locale
+import kotlin.math.roundToInt
 import org.junit.*
 import org.junit.Assert.*
 import org.junit.runner.RunWith
@@ -28,7 +31,7 @@ import org.robolectric.annotation.GraphicsMode
 @Config(sdk = [34], qualifiers = "w411dp-h891dp")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class ImmersiveDiscoveryPageTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
     private val previousLocale = Locale.getDefault()
     private val one = Song(1, "Song one", "Artist A", "Collection one", "content://music/1", 180000, 1, 100)
     private val two = Song(2, "Song two", "Artist B", "Collection two", "content://music/2", 180000, 2, 200)
@@ -64,9 +67,19 @@ class ImmersiveDiscoveryPageTest {
     }
 
     private fun screenshot(name: String) {
-        val dir = File("build/reports/discovery-preview").apply { mkdirs() }
-        File(dir, "$name.png").outputStream().use {
-            assertTrue(compose.onRoot().captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it))
+        val bounds = compose.onNodeWithTag("discovery-feed").getUnclippedBoundsInRoot()
+        compose.runOnIdle {
+            val view = compose.activity.findViewById<View>(android.R.id.content)
+            val bitmap = Bitmap.createBitmap(bounds.width.value.roundToInt(),
+                bounds.height.value.roundToInt(), Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bitmap)
+            canvas.translate(-bounds.left.value, -bounds.top.value)
+            view.draw(canvas)
+            val dir = File("build/reports/discovery-preview").apply { mkdirs() }
+            File(dir, "$name.png").outputStream().use {
+                assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
+            }
+            bitmap.recycle()
         }
     }
 
