@@ -24,6 +24,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -42,6 +43,8 @@ import com.yohandeku32.nusamusic.BuildConfig
 import com.yohandeku32.nusamusic.LYRICS_ENABLED
 import com.yohandeku32.nusamusic.TITLE_FONT_OPTIONS
 import com.yohandeku32.nusamusic.model.PlayerPresentationMode
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Github
 import java.util.Locale
 
 private fun settingsText(id: String, en: String): String =
@@ -96,6 +99,7 @@ internal fun PlayerSettingsContent(
     modifier: Modifier = Modifier
 ) {
     val colors = MaterialTheme.colorScheme
+    val uriHandler = LocalUriHandler.current
     val listState = rememberLazyListState()
     val swipeThresholdPx = with(LocalDensity.current) { 76.dp.toPx() }
     val latestDismiss by rememberUpdatedState(onDismiss)
@@ -377,7 +381,7 @@ internal fun PlayerSettingsContent(
                         ) {
                             SettingCaption(settingsText("PRATINJAU", "PREVIEW"))
                             Text(
-                                "Nusa Music",
+                                "Aruna",
                                 fontFamily = titleFontFamily,
                                 fontSize = titleFontSize.sp,
                                 lineHeight = (titleFontSize * 1.2f).sp,
@@ -541,11 +545,11 @@ internal fun PlayerSettingsContent(
                 }
             }
             item(key = "about") {
-                SettingsSection(settingsText("Tentang Nusa", "About Nusa")) {
+                SettingsSection(settingsText("Tentang Aruna", "About Aruna")) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         SettingIcon(Icons.Default.MusicNote)
                         Column(Modifier.weight(1f)) {
-                            Text("Nusa Music", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text("Aruna", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                             Text(settingsText("Versi ${BuildConfig.VERSION_NAME}", "Version ${BuildConfig.VERSION_NAME}"), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
                         }
                     }
@@ -554,6 +558,14 @@ internal fun PlayerSettingsContent(
                         settingsText("Dibuat oleh yohandeku32", "By yohandeku32"),
                         style = MaterialTheme.typography.bodyMedium,
                         color = colors.onSurfaceVariant
+                    )
+                    SettingsDivider()
+                    SettingAction(
+                        title = "GitHub",
+                        subtitle = "github.com/yohandeku32",
+                        icon = Lucide.Github,
+                        onClick = { uriHandler.openUri("https://github.com/yohandeku32") },
+                        trailingIcon = Icons.Default.OpenInNew
                     )
                 }
             }
