@@ -1,185 +1,94 @@
-# Lyrics: Embedded and Online (Immersive only)
+# Lyrics in Aruna
 
-Tap Lyrics in the Immersive Now Playing controls. CD and Vinyl do not expose this feature.
-The modal has one open anchor at half the window height, full width, 28dp top corners,
-and a dark artwork-derived gradient. Dismiss with Back, the close button, an outside tap,
-or a downward swipe. The existing player remains visible behind it.
+Lyrics are available in the Immersive player. Tap **Lyrics** in the player controls to switch from artwork to lyrics, then tap it again to return. The lyric view occupies the player foreground, with playback controls still available.
 
-## Sources and timing
+In **Settings > Lyrics**, change the font size, toggle online lookup, or reload the current song's lyrics. A timed row seeks to its authored start when tapped. Manual browsing suspends automatic following until scrolling stops and the browsing grace period has passed.
 
-LyricsRepository first reads the current local audio URI on Dispatchers.IO.
-If the file has valid authored word/syllable-timed karaoke, that embedded version
-wins and no online request is made. Otherwise NusaMusic searches lrc.red via
-https://lrc.red/match.json or https://lrc.red/search.json, then downloads
-https://lrc.red/s/{ISRC}.ttml first, tries .song.json for explicitly timed
-word/line segments if needed, and finally .lrc for line-synced lyrics.
-If lrc.red cannot supply a result, a bounded LRCLIB API search is the final
-fallback. Title, artist, and duration checks avoid incorrect-song matches.
+## Sources and synchronization
 
-The original embedded version can render immediately while online lookup runs.
-Only a more precisely synchronized online version replaces it. Plain or
-malformed online responses never displace valid embedded lyrics; offline failure
-keeps local lyrics. No API token, user sign-in, WebView, Apple private endpoint,
-sidecar file, audio upload, or invented word timing is used.
+`LyricsRepository` reads the local audio URI first. Fully timed embedded karaoke takes priority. When online lyrics are enabled and the local version is missing or less precisely synchronized, Aruna tries:
 
-A separate bounded online cache at cacheDir/lyrics/online-lrcred-v2 stores up to 120
-successful matches, including provider attribution in cache metadata.
-Confirmed misses expire after 6 hours; network errors do not become misses.
-Settings > Lyrics > Reload lyrics forces a fresh embedded/online lookup.
-Queries share local file title, artist, album and duration with public providers.
+1. lrc.red matching by title/artist and available album/duration metadata, followed by the ISRC-based `.ttml` download.
+2. lrc.red structured `.song.json` or `.lrc` data when needed.
+3. A bounded LRCLIB search for line-synced lyrics if lrc.red cannot provide a suitable result.
 
-| Container | Embedded metadata |
+Local lyrics can appear while online lookup runs. Only a better synchronized version replaces them. Network failures keep the available local lyrics. Reload bypasses lookup caches. Public providers receive matching metadata; these requests do not upload audio or require an Apple Music/Spotify login.
+
+The online and embedded caches are separate. Parsed lyrics are retained for up to eight songs in memory, and the bounded disk stores retain up to 120 entries each. Confirmed misses expire after six hours; network errors are not recorded as confirmed misses. Files saved in Aruna's private pending queue are separate from the provider caches.
+
+### Embedded metadata
+
+| Container | Readable lyric metadata |
 | --- | --- |
-| MP3 and ID3-prefixed audio | ID3v2.2/2.3/2.4 USLT/ULT, millisecond SYLT/SLT, lyric TXXX/TXX |
-| FLAC | Vorbis comment LYRICS, UNSYNCEDLYRICS, SYNCEDLYRICS and compatible lyric keys |
-| OGG Vorbis / Opus | Vorbis comment / OpusTags packets, including continued packets |
-| M4A / MP4 | ilst ©lyr, freeform lyric fields, ID32; moov may follow mdat |
-| WAV / AIFF | Embedded ID3 chunks |
+| MP3 and ID3-prefixed audio | ID3v2.2/2.3/2.4 USLT/ULT, millisecond SYLT/SLT, lyric TXXX/TXX frames. |
+| FLAC | Vorbis lyric comments, including plain and synchronized lyric fields. |
+| OGG Vorbis / Opus | Vorbis comments or OpusTags, including continued packets. |
+| M4A / MP4 | `ilst` lyrics, freeform lyric fields and ID32; `moov` may follow `mdat`. |
+| WAV / AIFF | Embedded ID3 chunks. |
 
-Fields may contain plain text, LRC, Enhanced LRC or timed TTML. The selector prefers
-unit-timed data, then line-timed data, then plain text. Authored adjacent units such as
-ber / sa / ma remain separate. No text is split to invent word or syllable timestamps.
-Line-only TTML and LRC use line focus. Plain text scrolls manually with no timed animation.
+Fields can contain plain text, LRC, Enhanced LRC or TTML. The decoder prefers authored word/syllable timing, then line timing, then plain text. It does not split a line to invent word timestamps. Start-only LRC and inherited TTML container ends remain distinguishable from reliable authored vocal ends.
 
-For start-only formats, a unit ends at the next authored start; the final unit uses the
-next line boundary or track duration. This is a boundary convention, not a vocal-duration
-estimate. Explicit Enhanced LRC terminal stamps and TTML end times take precedence.
-Unsupported MPEG-frame-count SYLT, compressed/encrypted ID3 frames, non-seekable content
-providers and metadata beyond the bounded limits are ignored. The fallback is exactly:
-No embedded lyrics available.
+Readers use bounded metadata reads and skip audio payloads where seeking is available. Unsupported compression/encryption, malformed fields, unsupported SYLT time formats and files outside the reader limits may be ignored. Supported metadata does not by itself guarantee that the audio container can be played on a given device.
 
-## Playback and performance
+## Character motion and following
 
-The visible sheet samples MediaController.currentPosition on the Compose display clock.
-The controller accounts for playback speed; the UI adds no delayed tween or invented
-wall-clock timing. Pausing holds position, seek discontinuities update immediately, and
-changing songs replaces the keyed lyric view and cancels the previous metadata read.
-The frame loop runs only while playing and the lifecycle is STARTED.
+All lyric motion samples the playback clock. Pausing holds the current pose; a real seek evaluates the destination pose. Changing songs replaces the song's lyric state. The active frame publisher follows the activity lifecycle and stops publishing playback frames when it is not started.
 
-Active/fading text layers and active gap indicators observe frame positions. A derived
-focus state changes list composition only at lyric boundaries. Text measurements are
-retained; the list is lazy. Manual drag/fling suspends following until 2.5 seconds after
-scrolling stops. Tapping a timed row seeks to its actual start.
+- Rapid words up to 650 ms avoid the extra character wave.
+- Reliable short pulls longer than 650 ms use a crest that travels across measured character centers. Rise and release use the word's duration instead of a fixed short cycle.
+- Nearby short pulls can connect when their gap is at most 120 ms. The outgoing motion releases by at most 180 ms after the next word starts. The next word's authored highlighting and motion onset stay unchanged. Real rests, rapid words, unreliable timing and sustained notes break this connection.
+- An authored held unit of at least 1,300 ms enables the separate sustained-vocal effect. Characters rise, project in 3D and release in sequence over the hold. The short-word handoff does not change that animation.
 
-Long-note glow breathes and sweeps slowly within the embedded unit interval.
-Onset movement has one damped pulse; it settles independently of the held-note glow.
-Row fades, mini-voice visibility, countdown phases and following all use audio time.
-The high-damping follow spring integrates audio deltas, so pause holds its position.
-Explicit player discontinuities reset following and suppress historical onset/fade replay.
+The painter caches complete grapheme layouts, gradients, projection resources and glow palettes. Combining accents stay with their base letter. Joining scripts, RTL runs and unsupported sequences retain their shaped text runs. Fill and halo share the same position; the painter does not cut moving strips through letter strokes.
 
-Countdowns are temporary overlays rather than list spacer rows. During the final 440 ms
-of an authored break, the already measured next row begins moving into place while the
-dots fade. Mini backing vocals use authored accompaniment flags and unioned unit windows;
-translations with unit timing follow those same windows, including explicit internal
-silence. Line-only translations stay hidden because their separate vocal activity cannot
-be established. Measured mini text slots remain stable while their layers fade/slide.
-Start-only unit intervals remain visual boundary conventions, never vocal detection.
+Duet alignment follows the TTML voice information, including right-aligned wrapped rows for the secondary voice. Backing vocals follow their own authored windows. Available translations and composer/lyricist credits display with the lyrics. Instrumental countdowns use authored gaps and relinquish their layout space when they finish.
 
-Parsed lyrics are retained for up to 8 songs. A separate embedded-only disk cache retains
-up to 120 records, keyed by audio identity, duration, size and modification time where
-provided. Empty results expire after 6 hours. Settings > Lyrics > Reload embedded lyrics
-bypasses caches, useful after retagging a file through a provider without modification time.
-Reader limits: 16 MiB per metadata block, 32 MiB aggregate reads, 512 KiB per lyric field,
-32 candidate fields, bounded container nesting/packet/frame counts. Audio payloads and
-large mdat atoms are skipped with seeking rather than copied.
+Automatic following yields to manual scrolling and resumes after the browsing grace period. The view retains measurements and updates drawing/layers from playback time. Tests of timing mathematics do not establish physical-device smoothness or visual equivalence to another player.
+
+## Save lyrics to a song
+
+A **Save** button appears when downloaded lyrics improve on the file's existing embedded lyrics, including an upgrade from plain or line-synced text to authored word/syllable timing. Original-file embedding supports **MP3, FLAC and M4A**. Other containers remain read-only for embedding.
+
+1. On first use without a suitable stored grant, select the music folder using Android's folder picker. Grant access to a parent folder containing the songs, including any Artist/Album subfolders.
+2. Aruna stores the requested lyrics in its private pending queue and refreshes the displayed lyrics from that copy. Playback continues.
+3. A **clock icon** indicates that the lyrics are saved in Aruna but embedding into the original audio file is still pending.
+4. Once the song is no longer the active playback source, Aruna resolves the original inside the authorized folder, verifies its identity, prepares the tagged copy and commits the metadata update.
+
+The folder grant persists for later songs in that tree. A different folder may need another grant. Android can restrict which storage roots may be selected. The app does not require a separate file picker for every song.
+
+### Metadata writers
+
+| Format | Written fields and preservation |
+| --- | --- |
+| MP3 | Plain `USLT:NusaMusic` and timed `TXXX:LYRICS`; supported ID3v2.3/2.4 layouts preserve unrelated tags, artwork and MPEG frames. |
+| FLAC | Timed `NUSAMUSIC_LYRICS`, plus ordinary `LYRICS` when absent; unrelated metadata blocks, artwork and audio frames are retained. |
+| M4A | Ordinary `©lyr` when absent and the owned `com.nusamusic:LYRICS` freeform atom; existing audio offsets and unrelated atoms are retained. |
+
+The writer identifiers above retain their legacy names for compatibility. They are not the app's display name. Saving does not convert or re-encode the audio.
+
+Before writing, Aruna compares the authorized file with the playing URI using a whole-file SHA-256 digest. It creates a backup and staged output, then verifies that `EmbeddedLyricsReader` can read the staged timing. After committing, it verifies the original against the staged output. A failed write attempts rollback; if rollback also fails, the backup remains available for recovery. Unsafe or unsupported metadata layouts are rejected rather than reported as successful writes.
+
+Queued lyrics and completed file embedding are separate states. Verify completion before expecting another music player or tag editor to read the newly embedded metadata.
 
 ## Verification
 
-Run with Java 21+ and the project's configured Android SDK:
+From the repository root, use JDK 21 and the configured Android SDK:
 
-    ./gradlew :app:testDebugUnitTest :app:assembleDebug
+~~~sh
+./gradlew :app:testDebugUnitTest
+~~~
 
-Binary fixtures cover plain USLT, line/word/syllable Enhanced LRC, SYLT, UTF-16,
-ID3v2.4 TXXX, FLAC, OGG/Opus packet continuation, M4A freeform/©lyr metadata,
-moov-after-large-mdat seeking, missing/corrupt tags and non-monotonic timestamps.
-Clock/timeline tests cover pause-position stability, speed-adjusted audio samples,
-backward seeks, source replacement and boundary conditions.
+On Windows PowerShell, use `.\gradlew.bat :app:testDebugUnitTest`. This command runs checks without packaging an APK.
 
-Device acceptance checks (require an Android device): play tagged fixtures in Immersive;
-verify the half-height panel, close/swipe/outside dismissal, line taps, manual fling,
-pause/resume, seek, track changes and playback speed. Profile 60/90/120Hz hardware with
-animated artwork enabled. JVM tests and an APK build do not measure device frame pacing.
+Fixtures cover supported metadata containers, malformed input, lyric selection, saved timing, cache behavior and file-writer round trips. Motion tests cover pause/seek behavior, short-word handoffs, sustained characters, backing windows and simulated 60/90/120 Hz samples. Robolectric/Compose tests cover selected UI behavior.
 
-Format references: https://id3.org/id3v2.3.0 and
-https://www.xiph.org/vorbis/doc/v-comment.html
+On an Android device, verify:
 
-## Embed online lyrics into the ORIGINAL MP3, FLAC or M4A
+- Online lookup enabled/disabled, offline fallback and reload after retagging.
+- Short pulls, long holds, adjacent words, duet sides and backing vocals with a known TTML track.
+- Tap-to-seek, pause/resume, manual scrolling, track changes and large lyric fonts.
+- Save from a nested authorized folder for each supported write format, including app restart while queued and completion after changing tracks.
+- Independent tag-editor readback, unchanged audio/artwork and storage-provider error handling.
+- Frame pacing and touch behavior with animated artwork enabled on the actual device.
 
-A Lucide Save button appears at the top right of Immersive Lyrics when a
-downloaded lyric is better synced than the source file's embedded lyrics
-(including an authored word/syllable upgrade). The playing **file type is
-preserved**. There is no conversion to MP3, no audio re-encoding, and no
-per-song file picker.
-
-First use: choose the single parent Music folder once with Android's SAF
-OpenDocumentTree dialog. The persisted read/write tree grant covers MP3, FLAC
-and M4A originals inside any nested Artist/Album directory. NusaMusic tries
-the exact MediaStore path and safely scans descendants as a fallback; a
-whole-file SHA-256 comparison against the playing URI must match before an
-original is modified. Android may refuse permission to the root storage
-volume itself; grant access to the highest permitted music parent instead.
-
-Per-format metadata writers:
-
-- **MP3**: retain MPEG frames, artwork and unrelated ID3 fields; store plain
-  text in USLT:NusaMusic and authored TTML/Enhanced LRC in TXXX:LYRICS.
-  Only standard, safely supported ID3v2.3/2.4 layouts can be changed.
-- **FLAC**: preserve STREAMINFO, audio frames, artwork and all unrelated
-  metadata blocks/comments; store timed content as NUSAMUSIC_LYRICS Vorbis
-  comment. Add standard LYRICS plain text when no ordinary lyric field exists.
-  Reject malformed or unsafe metadata instead of modifying it.
-- **M4A**: preserve original audio byte positions, all existing atoms,
-  artwork and third-party lyrics; use Apple-readable ©lyr (if absent) and a
-  NusaMusic-owned com.nusamusic:LYRICS freeform atom for authored timing.
-  For fast-start files, replace the original moov location with same-size
-  free padding and append the updated moov at EOF, leaving all existing
-  audio sample offsets unchanged. Fragmented/protected/unusual layouts may be
-  rejected for safety.
-
-**Save without playback interruption:** tapping Save instantly commits
-the authored lyrics to durable NusaMusic private storage. The on-screen
-lyrics are refreshed from that stored copy immediately; reopening Lyrics or
-restarting the app does not require internet or pressing Next to view the
-saved lyrics. A clock icon accurately indicates that the lyrics are already
-saved **in NusaMusic**, but are still **queued for embedding into the original
-song file**. This is distinct from completed file metadata editing.
-
-When Media3 advances naturally or manually to a different song (or after
-relaunch if the queued track is no longer the active source), NusaMusic
-locates the original in the authorized Music tree, checks the full content
-hash, constructs a staged tagged copy and commits it. Save never pauses or
-toggles playback; searches and checksums of the playing file are also deferred
-to avoid I/O contention with the decoder. Rewriting a still-open SAF audio
-file during playback is intentionally prohibited because it may freeze the
-song or corrupt its currently open audio frames.
-
-Every writer confirms EmbeddedLyricsReader can read the staged authored
-timing, normalizing only the same harmless surrounding whitespace, BOM, and
-CR/LF differences the reader discards. Missing or altered timestamps never
-pass verification. After overwriting, the original is compared byte-for-byte
-by SHA-256 with the staged output. An untouched temporary backup is kept for
-rollback; on failed rollback the backup is retained for manual recovery.
-
-After **verified success**, the queued indicator clears. Failure never reports
-success or marks the song embedded. The app does not request broad storage
-permission. Other formats (OGG, Opus, WAV, etc.) remain read-only for embedding
-until safe writers exist for them.
-
-### Immersive syllable wave tuning
-
-Ordinary, fast and moderately paced words keep their progressive karaoke
-highlight without per-word looping shimmer or miniature rise/fall effects.
-Only authored held syllables lasting at least 2 seconds qualify for the
-expressive ribbon. Longer holds produce a moving hill with a synchronized
-foreground depth scale (up to roughly 11%), restrained X-axis parallax, a
-soft depth halo, and smooth easing to the original baseline. The intact
-measured glyph runs are transformed as wholes, without slicing letter strokes
-or introducing additional timing clocks. Seek/pause remain deterministic.
-
-### Device verification
-
-Test a real song of each format from a nested Music folder on Android.
-Check saved lyrics after closing/relaunching NusaMusic and reading the file
-in an independent tag editor. Confirm that audio playback, length, artwork,
-and existing tags remain unchanged. JVM fixtures verify metadata roundtrips
-but are not a replacement for physical-device SAF testing.
+For the implementation, start with [LyricsRepository](../app/src/main/kotlin/com/yohandeku32/nusamusic/data/LyricsRepository.kt), [SyllableLyricsPainter](../app/src/main/kotlin/com/yohandeku32/nusamusic/ui/SyllableLyricsPainter.kt) and [AudioLyricsEmbedder](../app/src/main/kotlin/com/yohandeku32/nusamusic/data/AudioLyricsEmbedder.kt). Return to the [main README](../README.md) for setup and build commands.
