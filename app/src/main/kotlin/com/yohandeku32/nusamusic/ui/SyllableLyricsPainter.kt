@@ -118,6 +118,7 @@ internal class SyllableLyricsPainter(
         val centerPathDp: Float
     ) {
         var pose = LyricsHeldWordPose()
+        var shortLiftPx = 0f
     }
 
     private class Glyph(
@@ -209,8 +210,9 @@ internal class SyllableLyricsPainter(
 
     init {
         for (glyph in glyphs) {
-            // Only sustained vocals need the extra character draw calls.
-            if (!heldWords.hasHold(glyph.index) || glyph.rtl) continue
+            // Both short pulls and sustained vocals use complete graphemes.
+            // Rapid/inferred words keep the cheaper intact-run drawing path.
+            if ((!heldWords.hasHold(glyph.index) && !wordWave.hasMotion(glyph.index)) || glyph.rtl) continue
             val original = glyph.layout.textLayoutResult
             val text = glyph.layout.syllable.content
             if (original.layoutInput.text.text != text) continue
@@ -249,8 +251,11 @@ internal class SyllableLyricsPainter(
             glyph.controller.update(frameTime)
             val amplitude = strength * (1f - 0.88f * glyph.wavePose.depth)
             glyph.wordLiftPx = wordWave.wordLiftDp(index, frameTime) * density * amplitude
+            val heldVocal = heldWords.hasHold(index)
             for (letter in glyph.letters) {
                 letter.pose = heldWords.letterPose(index, frameTime, letter.centerPathDp)
+                letter.shortLiftPx = if (heldVocal) 0f else
+                    wordWave.liftDp(index, letter.centerPathDp, frameTime) * density * strength
             }
             glyph.bubble.update(frameTime, glyph.wavePose.intensity * 0.30f)
         }
@@ -283,7 +288,7 @@ internal class SyllableLyricsPainter(
         val runOffset = letter?.offset ?: Offset.Zero
         val position = glyph.position + runOffset + Offset(
             pose.parallaxXDp * density,
-            pose.liftDp * density * 0.70f + if (letter == null) glyph.wordLiftPx else 0f
+            pose.liftDp * density * 0.70f + (letter?.shortLiftPx ?: glyph.wordLiftPx)
         )
         val forwardBulge = heldWordForwardBulge(pose.depth, pose.intensity)
         // Shared X expansion preserves advances; each character has its own

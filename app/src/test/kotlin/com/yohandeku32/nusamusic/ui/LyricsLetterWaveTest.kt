@@ -5,6 +5,70 @@ import org.junit.Test
 import kotlin.math.abs
 
 class LyricsLetterWaveTest {
+    @Test fun shortPullsAreEligibleForCharacterDrawingBeforeTheLongHoldThreshold() {
+        val units = listOf(
+            LyricsHeldWordUnit("cepat ", 0, 200, 0f, 60f),
+            LyricsHeldWordUnit("melodi ", 200, 1200, 65f, 155f),
+            LyricsHeldWordUnit("unknown", 1200, 2300, 160f, 250f, reliableHold = false)
+        )
+        val wave = LyricsLetterWave(units)
+        val held = LyricsHeldWordWave(units)
+        assertFalse(held.hasHold(1))
+        assertTrue("Short pulls need separate character layouts", wave.hasMotion(1))
+        assertFalse(wave.hasMotion(0))
+        assertFalse(wave.hasMotion(2))
+        for (now in listOf(0, 400, 900, 1600, 400)) {
+            wave.liftDp(1, 80f, now)
+            assertTrue("Never swap glyph layouts when a short pull starts/ends", wave.hasMotion(1))
+        }
+    }
+
+    @Test fun shortPullCharactersPeakInOrderAndReturnSmoothlyAt60_90_120Hz() {
+        for (duration in listOf(700, 900, 1200)) {
+            val wave = LyricsLetterWave(listOf(
+                LyricsHeldWordUnit("aruna", 1000, 1000 + duration, 0f, 100f)
+            ))
+            for (hz in listOf(60, 90, 120)) {
+                var previousPeakTime = 0
+                for (center in listOf(10f, 30f, 50f, 70f, 90f)) {
+                    var previous = 0f
+                    var peak = 0f
+                    var peakTime = 0
+                    var falling = false
+                    for (frame in 0..hz * 3) {
+                        val time = (frame * 1000.0 / hz).toInt()
+                        val lift = wave.liftDp(0, center, time)
+                        assertTrue("Letter jumped at $duration ms / $hz Hz / $time",
+                            abs(lift - previous) < 0.18f)
+                        if (lift < peak) { peak = lift; peakTime = time }
+                        if (lift > previous + 0.000001f) falling = true
+                        if (falling) assertTrue("Short pull bounced twice", lift >= previous - 0.000001f)
+                        previous = lift
+                    }
+                    assertTrue("Each character must move", peak < 0f)
+                    assertTrue("The crest must travel across the word", peakTime > previousPeakTime)
+                    assertEquals(0f, previous, 0f)
+                    previousPeakTime = peakTime
+                }
+            }
+        }
+    }
+
+    @Test fun shortCharacterWaveDoesNotRestartAtTtmlSyllableBoundaries() {
+        val whole = LyricsLetterWave(listOf(
+            LyricsHeldWordUnit("melodi", 1000, 2000, 0f, 120f)
+        ))
+        val split = LyricsLetterWave(listOf(
+            LyricsHeldWordUnit("me", 1000, 1250, 0f, 40f),
+            LyricsHeldWordUnit("lo", 1250, 1600, 40f, 80f),
+            LyricsHeldWordUnit("di", 1600, 2000, 80f, 120f)
+        ))
+        for (time in 900..2200 step 8) for ((index, center) in listOf(20f, 60f, 100f).withIndex()) {
+            assertTrue(split.hasMotion(index))
+            assertEquals(whole.liftDp(0, center, time), split.liftDp(index, center, time), 0f)
+        }
+    }
+
     @Test fun independentLettersKeepAccentsWhileJoiningScriptsAndEmojiStayShaped() {
         val text = "a\u0301ku"
         assertEquals(listOf("a\u0301", "k", "u"), lyricIndependentLetterRanges(text).map {

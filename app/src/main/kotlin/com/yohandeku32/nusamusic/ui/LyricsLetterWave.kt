@@ -25,6 +25,9 @@ internal class LyricsLetterWave(units: List<LyricsHeldWordUnit>) {
 
     private val byUnit = arrayOfNulls<Word>(units.size)
 
+    /** Layout eligibility stays fixed while the playback clock advances. */
+    fun hasMotion(unitIndex: Int): Boolean = byUnit.getOrNull(unitIndex) != null
+
     init {
         var index = 0
         while (index < units.size) {
