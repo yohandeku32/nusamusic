@@ -45,9 +45,7 @@ internal class LyricsLetterWave(units: List<LyricsHeldWordUnit>) {
             val start = group.minOf { it.startMs }
             val end = group.maxOf { it.endMs }
             val duration = end.toLong() - start
-            val sustained = group.any { it.reliableHold && it.endMs.toLong() - it.startMs >= 1300L }
             if (duration > LYRICS_DETAIL_MIN_MS &&
-                !sustained &&
                 group.all { it.reliableHold } &&
                 group.none { it.content.trim().any(Char::isWhitespace) }) {
                 val travel = (duration * 0.45f).coerceIn(240f, 640f)

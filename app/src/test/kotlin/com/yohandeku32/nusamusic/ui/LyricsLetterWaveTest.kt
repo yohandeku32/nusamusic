@@ -27,7 +27,7 @@ class LyricsLetterWaveTest {
         }
     }
 
-    @Test fun longHeldWordsDoNotAlsoReplayTheShortLetterCrest() {
+    @Test fun longHeldWordsRetainTheirSecondaryCrestAndSustainedPull() {
         val units = listOf(
             LyricsHeldWordUnit("ka", 1000, 1300, 0f, 30f),
             LyricsHeldWordUnit("mu", 1300, 7000, 30f, 90f)
@@ -35,14 +35,17 @@ class LyricsLetterWaveTest {
         val shortWave = LyricsLetterWave(units)
         val heldWave = LyricsHeldWordWave(units)
         var heldPeak = 0f
+        var secondaryPeak = 0f
         for (now in 900..7500 step 8) {
-            for (part in units.indices) {
-                assertFalse(shortWave.isAnimating(part, now))
-                assertEquals(0f, shortWave.wordLiftDp(part, now), 0f)
-            }
+            val first = shortWave.wordLiftDp(0, now)
+            assertEquals(first, shortWave.wordLiftDp(1, now), 0f)
+            secondaryPeak = maxOf(secondaryPeak, -first)
             heldPeak = maxOf(heldPeak, heldWave.pose(1, now, 60f).depth)
         }
+        assertTrue("Preserve the existing secondary crest on long words", secondaryPeak > 0.8f)
         assertTrue("The authored held-vocal wave must remain", heldPeak > 0.9f)
+        assertEquals(0f, shortWave.wordLiftDp(0, 7000), 0f)
+        assertEquals(LyricsHeldWordPose(), heldWave.pose(1, 7000, 60f))
     }
 
     @Test fun inferredEndNeverInventsWordMotion() {
@@ -127,8 +130,7 @@ class LyricsLetterWaveTest {
 
     @Test fun durationGateIsSoftAndLastLetterFinishesBeforeTheNextWord() {
         var previous = 0f
-        // Authored holds from 1300ms use the separate sustained-vocal wave.
-        for (duration in 650 until 1300 step 10) {
+        for (duration in 650..1300 step 10) {
             val wave = LyricsLetterWave(listOf(
                 LyricsHeldWordUnit("pelan ", 1000, 1000 + duration, 0f, 80f)
             ))

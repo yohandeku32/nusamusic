@@ -194,7 +194,7 @@ internal class SyllableLyricsPainter(
         )
     }
     private val heldWords = LyricsHeldWordWave(heldWordUnits)
-    // Medium words move intact; sustained words use only their held-vocal wave.
+    // Keep the existing secondary motion on held words without slicing glyphs.
     private val wordWave = LyricsLetterWave(heldWordUnits)
     private val glowPalette = LyricsGlowPaletteCache.forDensity(density)
 
@@ -217,7 +217,8 @@ internal class SyllableLyricsPainter(
                 index, frameTime, (glyph.pathStartDp + glyph.pathEndDp) * 0.5f
             )
             glyph.controller.update(frameTime)
-            glyph.wordLiftPx = wordWave.wordLiftDp(index, frameTime) * density * strength
+            val amplitude = strength * (1f - 0.88f * glyph.wavePose.depth)
+            glyph.wordLiftPx = wordWave.wordLiftDp(index, frameTime) * density * amplitude
             glyph.bubble.update(frameTime, glyph.wavePose.intensity * 0.30f)
         }
 
