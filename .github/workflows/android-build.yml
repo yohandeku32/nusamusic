@@ -38,6 +38,15 @@ jobs:
           chmod +x gradlew
           ./gradlew :app:testDebugUnitTest --no-daemon --stacktrace
 
+      - name: Upload Discovery layout previews
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Discovery-layout-previews
+          path: app/build/reports/discovery-preview/*.png
+          if-no-files-found: ignore
+          retention-days: 7
+
       # Keep failing unit tests visible, but don't block the requested debug
       # APK. This build is separate from release gating and is not test-passed.
       - name: Assemble debug APK for main, manual, or NusaMusic PR 176/178

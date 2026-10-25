@@ -184,6 +184,7 @@ import com.yohandeku32.nusamusic.ui.immersiveGlassPill
 import com.yohandeku32.nusamusic.ui.ImmersiveArtworkScene
 import com.yohandeku32.nusamusic.ui.ImmersiveArtistPage
 import com.yohandeku32.nusamusic.ui.ImmersiveArtistPageState
+import com.yohandeku32.nusamusic.ui.ImmersiveDiscoveryPage
 import com.yohandeku32.nusamusic.ui.ImmersiveLyricsPanel
 import com.yohandeku32.nusamusic.ui.ImmersiveLyricsState
 import com.yohandeku32.nusamusic.ui.MiuixHorizontalPager
@@ -1961,6 +1962,8 @@ private fun NusaMusicApp(
     var isFavorite by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var artistOverlayOpen by remember { mutableStateOf(false) }
+    var discoveryArtistName by remember { mutableStateOf<String?>(null) }
+    val discoveryListState = androidx.compose.foundation.lazy.rememberLazyListState()
     var libraryOverlayOpen by remember { mutableStateOf(false) }
     // Decode animated artwork only after either immersive overlay has fully
     // closed; restarting Media3 while the pill is moving causes a brief hitch.
@@ -2003,10 +2006,11 @@ private fun NusaMusicApp(
         )
     }
     val artistPageStates = remember { androidx.collection.LruCache<String, ImmersiveArtistPageState>(8) }
-    val artistPageState = remember(artistKey) {
-        artistPageStates.get(artistKey) ?: ImmersiveArtistPageState(
-            ArtistNameUtils.firstArtist(currentSong?.artist)
-        ).also { artistPageStates.put(artistKey, it) }
+    val discoveryArtistKey = ArtistNameUtils.cacheKey(discoveryArtistName)
+    val artistPageState = remember(discoveryArtistKey) {
+        artistPageStates.get(discoveryArtistKey) ?: ImmersiveArtistPageState(
+            ArtistNameUtils.firstArtist(discoveryArtistName)
+        ).also { artistPageStates.put(discoveryArtistKey, it) }
     }
     // Artist opens on a true-black surface. Reuse only the existing cover,
     // avoiding backdrop bitmap decoding and blur work during this animation.
@@ -2267,6 +2271,15 @@ private fun NusaMusicApp(
         derivedStateOf { !libraryListState.isScrollInProgress }
     }
     val scope = rememberCoroutineScope()
+    fun openDiscoveryArtist(name: String, albumKey: String? = null) {
+        val key = ArtistNameUtils.cacheKey(name)
+        val state = artistPageStates.get(key) ?: ImmersiveArtistPageState(name).also {
+            artistPageStates.put(key, it)
+        }
+        state.selectedAlbumKey = albumKey
+        discoveryArtistName = name
+        scope.launch { state.listState.scrollToItem(0) }
+    }
     var alphabetVisible by remember { mutableStateOf(false) }
     var alphabetDragging by remember { mutableStateOf(false) }
     var alphabetHideJob by remember { mutableStateOf<Job?>(null) }
@@ -2635,40 +2648,52 @@ private fun NusaMusicApp(
                                     libraryOverlayOpen = false
                                     lyricsRequested = !lyricsRequested
                                 },
-                                onArtist = {
-                                    if (!artistOverlayOpen && currentSong != null) {
+                                onDiscovery = {
+                                    if (!artistOverlayOpen || libraryOverlayOpen) {
                                         lyricsRequested = false
-                                        artistPageState.selectedAlbumKey = null
-                                        scope.launch { artistPageState.listState.scrollToItem(0) }
-                                        // Begin a cache-miss request at tap-time,
-                                        // not several hundred milliseconds after
-                                        // the Artist page becomes visible.
-                                        val selectedArtist = ArtistNameUtils.firstArtist(currentSong?.artist)
-                                        if (selectedArtist.isNotBlank() &&
-                                            AppleArtistPortraitLoader.cached(selectedArtist) == null
-                                        ) {
-                                            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                                                AppleArtistPortraitLoader.load(context, selectedArtist)
-                                            }
-                                        }
+                                        discoveryArtistName = null
                                         libraryOverlayOpen = false
                                         artistOverlayOpen = true
                                     }
                                 },
-                                artistOpen = artistOverlayOpen,
-                                canCloseArtistBySwipe = {
-                                    artistPageState.listState.firstVisibleItemIndex == 0 &&
-                                        artistPageState.listState.firstVisibleItemScrollOffset < 12
+                                discoveryOpen = artistOverlayOpen,
+                                canCloseDiscoveryBySwipe = {
+                                    val state = if (discoveryArtistName == null) discoveryListState
+                                        else artistPageState.listState
+                                    state.firstVisibleItemIndex == 0 && state.firstVisibleItemScrollOffset < 12
                                 },
-                                onArtistClose = { artistOverlayOpen = false },
-                                artistProfile = {
+                                onDiscoveryClose = { artistOverlayOpen = false },
+                                discoveryContent = {
+                                    val selectedArtist = discoveryArtistName
+                                    if (selectedArtist == null) {
+                                        ImmersiveDiscoveryPage(
+                                            songs = songs, currentSong = currentSong, isPlaying = isPlaying,
+                                            listState = discoveryListState, isVisible = artistOverlayOpen,
+                                            onBack = { artistOverlayOpen = false },
+                                            onArtist = { openDiscoveryArtist(it) },
+                                            onAlbum = { openDiscoveryArtist(it.artist, it.albumKey) },
+                                            onPlay = { selected, queue ->
+                                                artistOverlayOpen = false
+                                                onPlay(selected, queue)
+                                            },
+                                            onTogglePlay = onTogglePlay,
+                                            onLibrary = {
+                                                artistOverlayOpen = false
+                                                libraryOverlayOpen = true
+                                            },
+                                            artwork = { track, tile ->
+                                                ArtworkView(track, maxSizePx = 320, modifier = tile,
+                                                    grainOverlay = false)
+                                            }
+                                        )
+                                    } else {
                                     ImmersiveArtistPage(
-                                        artistName = currentSong?.artist,
+                                        artistName = selectedArtist,
                                         songs = songs,
                                         currentSong = currentSong,
                                         isVisible = artistOverlayOpen,
                                         state = artistPageState,
-                                        onBack = { artistOverlayOpen = false },
+                                        onBack = { discoveryArtistName = null },
                                         onPlay = { selected, queue ->
                                             artistOverlayOpen = false
                                             onPlay(selected, queue)
@@ -2691,6 +2716,7 @@ private fun NusaMusicApp(
                                         },
                                         overlayMode = true
                                     )
+                                    }
                                 },
                                 libraryOpen = libraryOverlayOpen,
                                 libraryLightMode = libraryLightMode,

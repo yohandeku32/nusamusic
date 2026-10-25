@@ -89,11 +89,11 @@ internal fun ImmersiveArtworkPlayer(
     onRepeat: () -> Unit,
     onFavorite: () -> Unit,
     onLyrics: () -> Unit,
-    onArtist: () -> Unit,
-    artistOpen: Boolean = false,
-    canCloseArtistBySwipe: () -> Boolean = { true },
-    onArtistClose: () -> Unit = {},
-    artistProfile: @Composable () -> Unit = {},
+    onDiscovery: () -> Unit,
+    discoveryOpen: Boolean = false,
+    canCloseDiscoveryBySwipe: () -> Boolean = { true },
+    onDiscoveryClose: () -> Unit = {},
+    discoveryContent: @Composable () -> Unit = {},
     libraryOpen: Boolean = false,
     libraryLightMode: Boolean = false,
     liquidGlassEnabled: Boolean = true,
@@ -136,7 +136,7 @@ internal fun ImmersiveArtworkPlayer(
     }
     var portalMounted by remember { mutableStateOf(false) }
     var lastOverlayIsLibrary by remember { mutableStateOf(false) }
-    val overlayOpen = artistOpen || libraryOpen
+    val overlayOpen = discoveryOpen || libraryOpen
     // Make the first overlay frame part of the tap recomposition, instead
     // of waiting for LaunchedEffect to mount the portal a frame later.
     val portalVisible = overlayOpen || portalMounted
@@ -154,7 +154,7 @@ internal fun ImmersiveArtworkPlayer(
         animationSpec = tween(125, easing = FastOutSlowInEasing),
         label = "continuousLiquidGlassBackdrop"
     )
-    LaunchedEffect(artistOpen, libraryOpen) {
+    LaunchedEffect(discoveryOpen, libraryOpen) {
         if (overlayOpen) {
             dragActive = false
             lastOverlayIsLibrary = libraryOpen
@@ -286,10 +286,10 @@ internal fun ImmersiveArtworkPlayer(
             ),
             heroHeight, if (wide) (1f - controlsFraction + 0.06f) else 1f
         )
-        // Rightward drags on the artwork open Artist; leave vertical scroll,
+        // Rightward drags on the artwork open Discovery; leave vertical scroll,
         // seeking, and transport-button gestures to their own controls.
         if (hasSong && !overlayOpen && !lyricsOpen) {
-            Box(Modifier.matchParentSize().pointerInput(onArtist) {
+            Box(Modifier.matchParentSize().pointerInput(onDiscovery) {
                 var distance = 0f
                 val thresholdPx = 72.dp.toPx()
                 detectHorizontalDragGestures(
@@ -299,7 +299,7 @@ internal fun ImmersiveArtworkPlayer(
                         change.consume()
                     },
                     onDragEnd = {
-                        if (distance >= thresholdPx) onArtist()
+                        if (distance >= thresholdPx) onDiscovery()
                     },
                     onDragCancel = { distance = 0f }
                 )
@@ -543,11 +543,11 @@ internal fun ImmersiveArtworkPlayer(
                                 modifier = Modifier.matchParentSize()
                             )
                             ImmersiveAction(
-                                lightMode, Lucide.UserRound,
-                                immersiveText("Buka halaman artis", "Open artist page"),
-                                onArtist, hasSong && !artistOpen && !libraryOpen,
-                                iconSize = 23.dp,
-                                iconTint = if (liquidGlassEnabled) Color.White else null,
+                                lightMode, NusaNavigationIcons.Discover,
+                                "Discover",
+                                onDiscovery, !discoveryOpen && !libraryOpen,
+                                iconSize = 25.dp,
+                                iconTint = Color(0xFFF2D535),
                                 liquidMotion = liquidGlassEnabled,
                                 inactiveAlpha = 1f
                             )
@@ -585,7 +585,7 @@ internal fun ImmersiveArtworkPlayer(
             source = artistButtonBounds ?: navigationPillBounds,
             host = playerBounds,
             topInsetPx = with(density) { topInset.toPx() },
-            onClose = if (presentingLibrary) onLibraryClose else onArtistClose,
+            onClose = if (presentingLibrary) onLibraryClose else onDiscoveryClose,
             onDragFraction = { fraction ->
                 // No suspend call or coroutine per touch movement.
                 dragFraction = fraction
@@ -605,13 +605,13 @@ internal fun ImmersiveArtworkPlayer(
                 // Do not interrupt the still-opening Animatable with a
                 // drag snapTo; allow gestures once the sheet has settled.
                 portalSettled &&
-                    (presentingLibrary || canCloseArtistBySwipe())
+                    (presentingLibrary || canCloseDiscoveryBySwipe())
             },
             swipeFromHeaderOnly = presentingLibrary,
             hazeState = liveBackdrop,
             profile = {
                 if (presentingLibrary) libraryContent(portalSettled)
-                else artistProfile()
+                else discoveryContent()
             },
             modifier = Modifier.fillMaxSize()
         )
@@ -652,10 +652,10 @@ internal fun ImmersiveArtworkPlayer(
                     modifier = Modifier.matchParentSize()
                 )
                 ImmersiveAction(
-                    lightMode, Lucide.UserRound,
-                    immersiveText("Buka profil artis", "Open artist profile"),
-                    onArtist, hasSong && libraryOpen,
-                    iconSize = 23.dp, iconTint = Color.White,
+                    lightMode, NusaNavigationIcons.Discover,
+                    "Discover",
+                    onDiscovery, libraryOpen,
+                    iconSize = 25.dp, iconTint = Color(0xFFF2D535),
                     liquidMotion = liquidGlassEnabled,
                     inactiveAlpha = 1f
                 )
@@ -813,7 +813,7 @@ private fun ImmersiveOverlayActionPill(
                     lightMode,
                     if (showingLibraryHome)
                         Lucide.House
-                    else Lucide.ListMusic,
+                    else NusaNavigationIcons.Library,
                     if (showingLibraryHome)
                         immersiveText("Kembali ke pemutar", "Back to Now Playing")
                     else immersiveText("Perpustakaan", "Library"),
