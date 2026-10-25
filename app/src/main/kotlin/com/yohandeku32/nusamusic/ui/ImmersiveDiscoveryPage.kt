@@ -49,7 +49,7 @@ private fun discoveryText(id: String, en: String) =
 @Composable
 internal fun ImmersiveDiscoveryPage(
     songs: List<Song>, currentSong: Song?, isPlaying: Boolean,
-    listState: LazyListState, isVisible: Boolean, onBack: () -> Unit,
+    listState: LazyListState, isVisible: Boolean, isSettled: Boolean, onBack: () -> Unit,
     onArtist: (String) -> Unit, onAlbum: (DiscoveryAlbum) -> Unit,
     onPlay: (Song, List<Song>) -> Unit, onTogglePlay: () -> Unit,
     onLibrary: () -> Unit, artwork: @Composable (Song, Modifier) -> Unit
@@ -80,7 +80,10 @@ internal fun ImmersiveDiscoveryPage(
             CircularProgressIndicator(Modifier.align(Alignment.Center).size(24.dp), color = discoveryYellow)
         } else {
             DiscoveryFeed(data, songs, currentSong, isPlaying, listState,
-                onArtist, onAlbum, onPlay, onTogglePlay, onLibrary, artwork)
+                onArtist, onAlbum, onPlay, onTogglePlay, onLibrary, artwork,
+                artistArtwork = { artist, modifier ->
+                    DiscoveryArtistArtwork(artist, modifier, artwork, isVisible && isSettled)
+                })
         }
     }
 }
@@ -204,12 +207,13 @@ private fun DiscoverySectionTitle(text: String) {
 
 @Composable
 private fun DiscoveryArtistArtwork(
-    artist: DiscoveryArtist, modifier: Modifier, artwork: @Composable (Song, Modifier) -> Unit
+    artist: DiscoveryArtist, modifier: Modifier, artwork: @Composable (Song, Modifier) -> Unit,
+    loadAllowed: Boolean = true
 ) {
     val context = LocalContext.current
     var portrait by remember(artist.key) { mutableStateOf(AppleArtistPortraitLoader.cached(artist.name)) }
-    LaunchedEffect(artist.key) {
-        if (portrait == null) portrait = AppleArtistPortraitLoader.warm(context, artist.name)
+    LaunchedEffect(artist.key, loadAllowed) {
+        if (loadAllowed && portrait == null) portrait = AppleArtistPortraitLoader.warm(context, artist.name)
     }
     val image = portrait
     if (image != null) Image(image.asImageBitmap(), null, modifier, contentScale = ContentScale.Crop)

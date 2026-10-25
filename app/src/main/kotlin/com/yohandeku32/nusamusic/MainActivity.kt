@@ -2663,12 +2663,13 @@ private fun NusaMusicApp(
                                     state.firstVisibleItemIndex == 0 && state.firstVisibleItemScrollOffset < 12
                                 },
                                 onDiscoveryClose = { artistOverlayOpen = false },
-                                discoveryContent = {
+                                discoveryContent = { settled ->
                                     val selectedArtist = discoveryArtistName
                                     if (selectedArtist == null) {
                                         ImmersiveDiscoveryPage(
                                             songs = songs, currentSong = currentSong, isPlaying = isPlaying,
                                             listState = discoveryListState, isVisible = artistOverlayOpen,
+                                            isSettled = settled,
                                             onBack = { artistOverlayOpen = false },
                                             onArtist = { openDiscoveryArtist(it) },
                                             onAlbum = { openDiscoveryArtist(it.artist, it.albumKey) },
@@ -2683,7 +2684,7 @@ private fun NusaMusicApp(
                                             },
                                             artwork = { track, tile ->
                                                 ArtworkView(track, maxSizePx = 320, modifier = tile,
-                                                    grainOverlay = false)
+                                                    loadAllowed = settled, grainOverlay = false)
                                             }
                                         )
                                     } else {

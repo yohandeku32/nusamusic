@@ -93,7 +93,7 @@ internal fun ImmersiveArtworkPlayer(
     discoveryOpen: Boolean = false,
     canCloseDiscoveryBySwipe: () -> Boolean = { true },
     onDiscoveryClose: () -> Unit = {},
-    discoveryContent: @Composable () -> Unit = {},
+    discoveryContent: @Composable (Boolean) -> Unit = {},
     libraryOpen: Boolean = false,
     libraryLightMode: Boolean = false,
     liquidGlassEnabled: Boolean = true,
@@ -611,7 +611,7 @@ internal fun ImmersiveArtworkPlayer(
             hazeState = liveBackdrop,
             profile = {
                 if (presentingLibrary) libraryContent(portalSettled)
-                else discoveryContent()
+                else discoveryContent(portalSettled)
             },
             modifier = Modifier.fillMaxSize()
         )
@@ -795,7 +795,7 @@ private fun ImmersiveOverlayActionPill(
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
             if (lyricsEnabled) ImmersiveAction(
-                lightMode, Lucide.MessageSquareText,
+                lightMode, NusaNavigationIcons.Search,
                 if (lyricsOpen) immersiveText("Tutup lirik", "Close lyrics")
                 else immersiveText("Buka lirik", "Open lyrics"),
                 onLyrics, hasSong, active = lyricsOpen, iconSize = 23.dp,
@@ -824,7 +824,7 @@ private fun ImmersiveOverlayActionPill(
                 )
             }
             ImmersiveAction(
-                lightMode, Lucide.Settings2,
+                lightMode, NusaNavigationIcons.Account,
                 immersiveText("Pengaturan", "Settings"),
                 onSettings, iconSize = 23.dp, iconTint = iconColor,
                 liquidMotion = liquidGlassEnabled
