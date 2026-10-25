@@ -16,8 +16,8 @@ import java.util.Locale
 /**
  * One result per track, shared by speculative preloads and foreground playback.
  *
- * Source order follows the user's Apple/Spotify setting. Both standard and
- * portrait Apple streams can be resolved. Limit lookups to two tracks at once
+ * Source order follows the user's Apple/Spotify setting. Immersive Apple
+ * artwork uses portrait streams. Limit lookups to two tracks at once
  * and warm video bytes one stream at a time.
  */
 internal enum class ArtworkSourceOrder {
@@ -29,7 +29,6 @@ internal enum class ArtworkSourceOrder {
 }
 
 internal object AnimatedArtworkQueuePreloader {
-    // APPLE_TALL is the existing provider identifier; it accepts either Apple variant.
     enum class Provider { APPLE_TALL, SPOTIFY_CANVAS }
     data class Result(val provider: Provider, val url: String)
 

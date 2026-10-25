@@ -36,7 +36,7 @@ All lyric motion samples the playback clock. Pausing holds the current pose; a r
 
 - Rapid words up to 650 ms avoid the extra character wave.
 - Reliable short pulls longer than 650 ms use a crest that travels across measured character centers. Rise and release use the word's duration instead of a fixed short cycle.
-- Nearby short pulls can connect when their gap is at most 120 ms. The outgoing motion releases by at most 180 ms after the next word starts. The next word's authored highlighting and motion onset stay unchanged. Real rests, rapid words, unreliable timing and sustained notes break this connection.
+- Nearby short pulls with gaps up to 120 ms share one continuous crest along the measured text path, with matching speed and acceleration at word joins. The small visual wave may anticipate or trail a word by up to 180 ms; karaoke highlighting keeps its authored timing. Real rests, rapid words, unreliable timing and sustained notes break this connection. Short runs that cannot separate graphemes keep their baseline anchored.
 - An authored held unit of at least 1,300 ms enables the separate sustained-vocal effect. Characters rise, project in 3D and release in sequence over the hold. The short-word handoff does not change that animation.
 
 The painter caches complete grapheme layouts, gradients, projection resources and glow palettes. Combining accents stay with their base letter. Joining scripts, RTL runs and unsupported sequences retain their shaped text runs. Fill and halo share the same position; the painter does not cut moving strips through letter strokes.

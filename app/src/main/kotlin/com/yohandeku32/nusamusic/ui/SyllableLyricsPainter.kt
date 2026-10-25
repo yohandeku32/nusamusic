@@ -250,8 +250,10 @@ internal class SyllableLyricsPainter(
             )
             glyph.controller.update(frameTime)
             val amplitude = strength * (1f - 0.88f * glyph.wavePose.depth)
-            glyph.wordLiftPx = wordWave.wordLiftDp(index, frameTime) * density * amplitude
             val heldVocal = heldWords.hasHold(index)
+            // A short run that cannot separate graphemes stays anchored.
+            glyph.wordLiftPx = if (heldVocal)
+                wordWave.wordLiftDp(index, frameTime) * density * amplitude else 0f
             for (letter in glyph.letters) {
                 letter.pose = heldWords.letterPose(index, frameTime, letter.centerPathDp)
                 letter.shortLiftPx = if (heldVocal) 0f else

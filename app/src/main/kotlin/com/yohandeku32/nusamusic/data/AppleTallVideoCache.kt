@@ -21,7 +21,7 @@ import java.io.File
 import java.net.URI
 
 /**
- * Bounded HLS warm cache for standard or portrait Apple artwork video bytes.
+ * Bounded HLS warm cache for Apple portrait artwork video bytes.
  *
  * Cache the selected playlist and first segment(s), then give the SAME cache
  * data source to Media3 when the song starts. Merely prefetching an m3u8 URL
@@ -137,8 +137,7 @@ internal object AppleTallVideoCache {
             ?: return
         if (!first.trimStart().startsWith("#EXTM3U")) return
 
-        // Warm the first child playlist; Media3 selects playback tracks using
-        // the stream's declared dimensions, without a portrait-only filter.
+        // Warm the first child playlist from the selected portrait stream.
         val firstUri = mediaUris(first, initial).firstOrNull() ?: return
         val playlistUri: URI
         val playlist: String

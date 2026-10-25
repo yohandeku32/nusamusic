@@ -18,7 +18,7 @@ class LyricsLetterWaveTest {
         }
     }
 
-    @Test fun nearbyShortWordsHandOffWithoutADeadIntervalOrStartingTheNextWordEarly() {
+    @Test fun nearbyShortWordsShareAContinuousCrestWithBoundedVisualAnticipation() {
         for (gap in listOf(0, 60, 120)) {
             val nextStart = 1900 + gap
             val wave = LyricsLetterWave(listOf(
@@ -33,9 +33,71 @@ class LyricsLetterWaveTest {
                 assertTrue("Both words became still during the handoff at $time",
                     outgoing < -0.00001f || incoming < -0.00001f)
             }
-            assertEquals(0f, wave.liftDp(1, 115f, nextStart - 1), 0f)
-            assertEquals(0f, wave.liftDp(1, 115f, nextStart), 0f)
+            assertEquals(0f, wave.liftDp(1, 115f, nextStart - 180), 0f)
+            assertTrue(wave.liftDp(1, 115f, nextStart) < -0.01f)
             assertEquals(0f, wave.liftDp(0, 100f, nextStart + 180), 0f)
+        }
+    }
+
+    @Test fun bothWordsUseTheSameMovingSurfaceAtTheirSharedBoundary() {
+        val wave = LyricsLetterWave(listOf(
+            LyricsHeldWordUnit("aku ", 1000, 1900, 0f, 100f),
+            LyricsHeldWordUnit("suka", 1900, 2800, 105f, 205f)
+        ))
+        val sharedCenter = 102.5f
+        val outgoing = wave.liftDp(0, sharedCenter, 1900)
+        val incoming = wave.liftDp(1, sharedCenter, 1900)
+        assertTrue("The flow must not reset at the next word", incoming < -0.1f)
+        assertEquals(outgoing, incoming, 0.00001f)
+        assertEquals(wave.liftDp(0, sharedCenter, 1899),
+            wave.liftDp(1, sharedCenter, 1901), 0.001f)
+    }
+
+    @Test fun flowCursorKeepsVelocityAndAccelerationAcrossMixedWordDurations() {
+        val flow = LyricsWordFlow(listOf(1000 to -40f, 1900 to 102.5f,
+            2020 to 110f, 3000 to 215f, 4200 to 380f))
+        for (join in listOf(1900, 2020, 3000)) {
+            val leftVelocity = flow.sample(join) - flow.sample(join - 1)
+            val rightVelocity = flow.sample(join + 1) - flow.sample(join)
+            assertTrue("Do not stop and restart at $join", minOf(leftVelocity, rightVelocity) > 0.02f)
+            assertEquals(leftVelocity, rightVelocity, 0.001f)
+            val leftAcceleration = flow.sample(join) - 2f * flow.sample(join - 1) + flow.sample(join - 2)
+            val rightAcceleration = flow.sample(join + 2) - 2f * flow.sample(join + 1) + flow.sample(join)
+            assertEquals(leftAcceleration, rightAcceleration, 0.001f)
+        }
+        var previous = flow.sample(900)
+        for (time in 900..4300 step 4) {
+            val current = flow.sample(time)
+            assertTrue("The crest reversed at $time", current >= previous - 0.0001f)
+            previous = current
+        }
+        val paused = flow.sample(1950)
+        repeat(30) { assertEquals(paused, flow.sample(1950), 0f) }
+        flow.sample(4000)
+        assertEquals(paused, flow.sample(1950), 0f)
+    }
+
+    @Test fun aConnectedCharacterRisesOnlyOnceAsTheCrestPasses() {
+        val wave = LyricsLetterWave(listOf(
+            LyricsHeldWordUnit("aku ", 1000, 1900, 0f, 100f),
+            LyricsHeldWordUnit("suka ", 1900, 2800, 105f, 205f),
+            LyricsHeldWordUnit("musik", 2800, 3700, 210f, 310f)
+        ))
+        for (hz in listOf(60, 90, 120)) for ((index, center) in listOf(90f, 115f, 220f).withIndex()) {
+            var previous = 0f
+            var peak = 0f
+            var releasing = false
+            for (frame in 0..hz * 4) {
+                val time = (frame * 1000.0 / hz).toInt()
+                val current = wave.liftDp(index, center, time)
+                if (current > previous + 0.00001f) releasing = true
+                if (releasing) assertTrue("A second kick appeared at $time", current >= previous - 0.00001f)
+                assertTrue(abs(current - previous) < 0.1f)
+                peak = minOf(peak, current)
+                previous = current
+            }
+            assertTrue(peak < -0.1f)
+            assertEquals(0f, previous, 0f)
         }
     }
 

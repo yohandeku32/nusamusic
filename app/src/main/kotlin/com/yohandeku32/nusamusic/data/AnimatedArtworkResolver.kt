@@ -67,9 +67,7 @@ internal suspend fun resolveAnimatedArtwork(
     return ArtworkReply(failed = failed)
 }
 
-/** Try the standard animation first and retain portrait as a playback alternative. */
-internal fun preferredAnimatedArtworkUrls(standard: String?, tall: String? = null): List<String> =
-    listOfNotNull(standard, tall)
-        .map(String::trim)
+/** Immersive playback accepts only Apple's authored portrait animation. */
+internal fun preferredAnimatedArtworkUrls(tall: String?): List<String> =
+    listOfNotNull(tall?.trim())
         .filter { it.isNotEmpty() && !it.equals("null", true) && !it.equals("none", true) }
-        .distinct()

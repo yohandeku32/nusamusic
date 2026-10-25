@@ -33,7 +33,7 @@ Open **Lyrics** from the Immersive player's controls. Lyrics replace the artwork
 - Embedded lyrics load first. The reader accepts plain text, LRC, Enhanced LRC and TTML from supported audio metadata.
 - Fully timed embedded karaoke takes priority. When online lyrics are enabled, lrc.red can provide a more precisely synchronized version; LRCLIB provides a line-synced fallback.
 - Authored TTML timings drive word and syllable highlighting, duet alignment and backing vocals. Translations and composer/lyricist credits appear when supplied.
-- Short vocal pulls use a wave across individual characters. Nearby short words have a gentle motion handoff; long held notes retain their separate character-by-character 3D rise and release. Rapid words and uncertain timing avoid the extra character animation.
+- Short vocal pulls use a wave across individual characters. Nearby short words share one continuously moving crest across word boundaries; long held notes retain their separate character-by-character 3D rise and release. Rapid words and uncertain timing avoid the extra character animation.
 - Animations use playback time, hold their pose on pause and resample after a seek. Tap a timed lyric row to seek; manual scrolling temporarily suspends automatic following.
 
 When online lyrics improve the file's existing lyrics, **Save** stores them in Aruna and queues embedding into supported MP3, FLAC or M4A files. Grant access to the music folder when prompted. A clock icon means file embedding is still pending; Aruna waits until the song is no longer playing before editing the original. Saving keeps the original audio format.
@@ -42,7 +42,7 @@ See [Lyrics: sources, timing and saving](docs/EMBEDDED_LYRICS.md) for supported 
 
 ## Animated artwork
 
-Enable animated artwork in the Immersive player settings. Choose **Apple first**, **Spotify first**, **Apple only** or **Spotify only**. Apple is the default priority. It tries the standard animation first and keeps portrait artwork as an alternative if playback fails. Albums with only a square animation are supported. Spotify Canvas is an optional alternative; static local artwork remains the fallback.
+Enable animated artwork in the Immersive player settings. Choose **Apple first**, **Spotify first**, **Apple only** or **Spotify only**. Apple is the default priority and accepts portrait Tall artwork only. Spotify Canvas is an optional alternative; static local artwork remains the fallback.
 
 Artwork lookup uses song metadata and external resolvers. The current Spotify resolver uses the independent Spotycovs service without a Spotify login. Provider availability and matching can vary. Aruna caches video data and can prefetch artwork for up to five upcoming tracks in the actual playback queue, including shuffle order. Prefetching uses network data.
 
@@ -53,7 +53,7 @@ Local playback does not require an account. Optional features make network reque
 | Feature | Information used |
 | --- | --- |
 | Online lyrics | Song title, artist, album and duration for matching. |
-| Animated artwork | Song/album metadata for Apple artwork or Spotify Canvas lookup and video downloads. |
+| Animated artwork | Song/album metadata for Apple Tall artwork or Spotify Canvas lookup and video downloads. |
 | Artist information | Artist names for portraits and biographies. |
 
 These lookup features do not upload the audio file. Disable online lyrics and animated artwork in Settings to stop those lookups. Listening history stays on the device. Cached provider content may be unavailable after Android clears app caches.

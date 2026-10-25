@@ -190,9 +190,9 @@ object AppleMusicAnimatedArtworkLoader {
         return response
     }
 
-    // Keep every supported variant so a failed standard stream can try portrait.
+    // Square album covers remain separate from the Immersive portrait artwork.
     internal fun animatedUrls(json: JSONObject?): List<String> =
-        preferredAnimatedArtworkUrls(json?.optString("url"), json?.optString("url_tall"))
+        preferredAnimatedArtworkUrls(json?.optString("url_tall"))
             .filter(::isAppleArtworkUrl)
     private fun isAppleArtworkUrl(value: String): Boolean = runCatching {
         val parsed = URL(value)
