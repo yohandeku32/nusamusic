@@ -5,6 +5,86 @@ import org.junit.Test
 import kotlin.math.abs
 
 class LyricsLetterWaveTest {
+    @Test fun shortWordConnectionsLeaveNeighboringLongVocalMotionUnchanged() {
+        val long = LyricsHeldWordUnit("panjang ", 1900, 6900, 105f, 205f)
+        val solo = LyricsLetterWave(listOf(long))
+        val phrase = LyricsLetterWave(listOf(
+            LyricsHeldWordUnit("aku ", 1000, 1900, 0f, 100f), long,
+            LyricsHeldWordUnit("lagi", 6900, 7800, 210f, 310f)
+        ))
+        for (time in 900..8000 step 8) for (center in listOf(115f, 155f, 195f)) {
+            assertEquals(solo.liftDp(0, center, time), phrase.liftDp(1, center, time), 0f)
+            assertEquals(solo.isAnimating(0, time), phrase.isAnimating(1, time))
+        }
+    }
+
+    @Test fun nearbyShortWordsHandOffWithoutADeadIntervalOrStartingTheNextWordEarly() {
+        for (gap in listOf(0, 60, 120)) {
+            val nextStart = 1900 + gap
+            val wave = LyricsLetterWave(listOf(
+                LyricsHeldWordUnit("aku ", 1000, 1900, 0f, 100f),
+                LyricsHeldWordUnit("suka", nextStart, nextStart + 900, 105f, 205f)
+            ))
+            assertTrue("The outgoing crest must keep releasing at the boundary",
+                wave.liftDp(0, 90f, nextStart) < -0.01f)
+            for (time in nextStart..nextStart + 90 step 5) {
+                val outgoing = wave.liftDp(0, 90f, time)
+                val incoming = wave.liftDp(1, 115f, time)
+                assertTrue("Both words became still during the handoff at $time",
+                    outgoing < -0.00001f || incoming < -0.00001f)
+            }
+            assertEquals(0f, wave.liftDp(1, 115f, nextStart - 1), 0f)
+            assertEquals(0f, wave.liftDp(1, 115f, nextStart), 0f)
+            assertEquals(0f, wave.liftDp(0, 100f, nextStart + 180), 0f)
+        }
+    }
+
+    @Test fun shortWordReleaseUsesTheAuthoredWindowInsteadOfStoppingMidWord() {
+        val wave = LyricsLetterWave(listOf(
+            LyricsHeldWordUnit("melodi", 1000, 2200, 0f, 100f)
+        ))
+        assertTrue("Keep the trailing character moving near the authored end",
+            wave.liftDp(0, 95f, 2050) < -0.01f)
+        assertEquals(0f, wave.liftDp(0, 95f, 2200), 0f)
+    }
+
+    @Test fun restsRapidAndUnreliableWordsBreakTheShortWordConnection() {
+        for (next in listOf(
+            LyricsHeldWordUnit("rest", 2021, 2921, 105f, 205f),
+            LyricsHeldWordUnit("rapid", 1900, 2150, 105f, 205f),
+            LyricsHeldWordUnit("unknown", 1900, 2800, 105f, 205f, reliableHold = false),
+            LyricsHeldWordUnit("long", 1900, 6900, 105f, 205f)
+        )) {
+            val wave = LyricsLetterWave(listOf(
+                LyricsHeldWordUnit("aku ", 1000, 1900, 0f, 100f), next
+            ))
+            for (time in 1900..2300 step 8) {
+                assertEquals("Do not drag motion across ${next.content}",
+                    0f, wave.liftDp(0, 95f, time), 0f)
+            }
+        }
+    }
+
+    @Test fun connectedShortWordsRemainSmoothAt60_90_120HzAndDeterministicOnSeek() {
+        val wave = LyricsLetterWave(listOf(
+            LyricsHeldWordUnit("aku ", 1000, 1900, 0f, 100f),
+            LyricsHeldWordUnit("suka", 1900, 2800, 105f, 205f)
+        ))
+        for (hz in listOf(60, 90, 120)) for ((index, center) in listOf(90f, 115f).withIndex()) {
+            var previous = 0f
+            for (frame in 0..hz * 3) {
+                val time = (frame * 1000.0 / hz).toInt()
+                val current = wave.liftDp(index, center, time)
+                assertTrue("Handoff jumped at $hz Hz / $time", abs(current - previous) < 0.12f)
+                previous = current
+            }
+            val boundary = wave.liftDp(index, center, 1950)
+            repeat(30) { assertEquals(boundary, wave.liftDp(index, center, 1950), 0f) }
+            wave.liftDp(index, center, 2700)
+            assertEquals(boundary, wave.liftDp(index, center, 1950), 0f)
+        }
+    }
+
     @Test fun shortPullsAreEligibleForCharacterDrawingBeforeTheLongHoldThreshold() {
         val units = listOf(
             LyricsHeldWordUnit("cepat ", 0, 200, 0f, 60f),

@@ -20,7 +20,9 @@ internal class LyricsLetterWave(units: List<LyricsHeldWordUnit>) {
         val rightDp: Float,
         val amplitudeDp: Float,
         val travelMs: Float,
-        val cycleMs: Float
+        var cycleMs: Float,
+        val sustained: Boolean,
+        var motionEndMs: Long = end.toLong()
     )
 
     private val byUnit = arrayOfNulls<Word>(units.size)
@@ -29,6 +31,7 @@ internal class LyricsLetterWave(units: List<LyricsHeldWordUnit>) {
     fun hasMotion(unitIndex: Int): Boolean = byUnit.getOrNull(unitIndex) != null
 
     init {
+        val groups = ArrayList<Word?>()
         var index = 0
         while (index < units.size) {
             val first = index
@@ -47,10 +50,12 @@ internal class LyricsLetterWave(units: List<LyricsHeldWordUnit>) {
             val start = group.minOf { it.startMs }
             val end = group.maxOf { it.endMs }
             val duration = end.toLong() - start
+            var prepared: Word? = null
             if (duration > LYRICS_DETAIL_MIN_MS &&
                 group.all { it.reliableHold } &&
                 group.none { it.content.trim().any(Char::isWhitespace) }) {
                 val travel = (duration * 0.45f).coerceIn(240f, 640f)
+                val sustained = group.any { it.endMs.toLong() - it.startMs >= 1_300L }
                 val word = Word(
                     start = start,
                     end = end,
@@ -59,11 +64,26 @@ internal class LyricsLetterWave(units: List<LyricsHeldWordUnit>) {
                     amplitudeDp = 0.85f * heldWordEase((duration - LYRICS_DETAIL_MIN_MS) / 550f)
                         .coerceIn(0f, 1f),
                     travelMs = travel,
-                    cycleMs = minOf(410f, duration - travel)
+                    cycleMs = if (sustained) minOf(410f, duration - travel) else duration - travel,
+                    sustained = sustained
                 )
                 for (part in first..index) byUnit[part] = word
+                prepared = word
             }
+            groups += prepared
             index++
+        }
+        for (index in 0 until groups.lastIndex) {
+            val outgoing = groups[index] ?: continue
+            val incoming = groups[index + 1] ?: continue
+            if (outgoing.sustained || incoming.sustained) continue
+            val gap = incoming.start.toLong() - outgoing.end
+            if (gap !in 0L..120L) continue
+            // Only motion overlaps. The next word's authored fill/onset is
+            // unchanged, and rapid/inferred words break this connection.
+            val handoffMs = gap + 180L
+            outgoing.cycleMs += handoffMs.toFloat()
+            outgoing.motionEndMs += handoffMs
         }
     }
 
@@ -75,14 +95,14 @@ internal class LyricsLetterWave(units: List<LyricsHeldWordUnit>) {
 
     fun isAnimating(unitIndex: Int, nowMs: Int): Boolean {
         val word = byUnit.getOrNull(unitIndex) ?: return false
-        return nowMs > word.start && nowMs < word.end &&
+        return nowMs > word.start && nowMs.toLong() < word.motionEndMs &&
             nowMs.toDouble() < word.start.toDouble() + word.travelMs + word.cycleMs
     }
 
     /** A completed letter never springs up again during the same word. */
     fun liftDp(unitIndex: Int, letterCenterDp: Float, nowMs: Int): Float {
         val word = byUnit.getOrNull(unitIndex) ?: return 0f
-        if (nowMs <= word.start || nowMs >= word.end) return 0f
+        if (nowMs <= word.start || nowMs.toLong() >= word.motionEndMs) return 0f
         val fraction = ((letterCenterDp - word.leftDp) /
             (word.rightDp - word.leftDp).coerceAtLeast(1f)).coerceIn(0f, 1f)
 
@@ -90,7 +110,7 @@ internal class LyricsLetterWave(units: List<LyricsHeldWordUnit>) {
         val elapsed = (nowMs - onset).toFloat()
         if (elapsed <= 0f || elapsed >= word.cycleMs) return 0f
 
-        // Finish even the last letter's release before the next word starts.
+        // A single smooth release may overlap the next nearby short pull.
         val attack = word.cycleMs * 0.39f
         val rise = heldWordEase(elapsed / attack)
         val fall = 1f - heldWordEase((elapsed - attack) / (word.cycleMs - attack))
