@@ -547,7 +547,7 @@ internal fun ImmersiveArtworkPlayer(
                                 "Discover",
                                 onDiscovery, !discoveryOpen && !libraryOpen,
                                 iconSize = 25.dp,
-                                iconTint = Color(0xFFF2D535),
+                                iconTint = if (liquidGlassEnabled) Color.White else null,
                                 liquidMotion = liquidGlassEnabled,
                                 inactiveAlpha = 1f
                             )
@@ -655,7 +655,7 @@ internal fun ImmersiveArtworkPlayer(
                     lightMode, NusaNavigationIcons.Discover,
                     "Discover",
                     onDiscovery, libraryOpen,
-                    iconSize = 25.dp, iconTint = Color(0xFFF2D535),
+                    iconSize = 25.dp, iconTint = Color.White,
                     liquidMotion = liquidGlassEnabled,
                     inactiveAlpha = 1f
                 )
@@ -795,7 +795,7 @@ private fun ImmersiveOverlayActionPill(
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
             if (lyricsEnabled) ImmersiveAction(
-                lightMode, NusaNavigationIcons.Search,
+                lightMode, Lucide.MessageSquareText,
                 if (lyricsOpen) immersiveText("Tutup lirik", "Close lyrics")
                 else immersiveText("Buka lirik", "Open lyrics"),
                 onLyrics, hasSong, active = lyricsOpen, iconSize = 23.dp,
@@ -824,7 +824,7 @@ private fun ImmersiveOverlayActionPill(
                 )
             }
             ImmersiveAction(
-                lightMode, NusaNavigationIcons.Account,
+                lightMode, Lucide.Settings,
                 immersiveText("Pengaturan", "Settings"),
                 onSettings, iconSize = 23.dp, iconTint = iconColor,
                 liquidMotion = liquidGlassEnabled
