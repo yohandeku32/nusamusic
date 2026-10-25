@@ -6,9 +6,8 @@ import java.util.Locale
 internal const val LYRICS_DETAIL_MIN_MS = 650L
 
 /**
- * A single C2-smoothed rise and fall from authored word timing. The painter
- * samples wordLiftDp so shaped runs and their halo share one offset, without
- * cutting through ligatures, accents or glyph overhangs.
+ * A C2-smoothed crest travelling through character centers in authored word time.
+ * Connected scripts use wordLiftDp to retain their contextual shaping.
  *
  * All values derive from Media3 playback milliseconds. Pause holds the pose;
  * seeking samples the correct pose immediately instead of replaying a tween.
@@ -113,4 +112,28 @@ internal fun lyricGraphemeRanges(text: String): List<IntRange> {
         end = breaker.next()
     }
     return ranges
+}
+
+/** Joining scripts and emoji sequences must retain their original shaped run. */
+internal fun lyricIndependentLetterRanges(text: String): List<IntRange> {
+    val supported = text.codePoints().allMatch { code ->
+        val type = Character.getType(code)
+        when {
+            type == Character.NON_SPACING_MARK.toInt() ||
+                type == Character.COMBINING_SPACING_MARK.toInt() -> true
+            Character.isLetter(code) -> Character.UnicodeScript.of(code) in setOf(
+                Character.UnicodeScript.LATIN, Character.UnicodeScript.GREEK,
+                Character.UnicodeScript.CYRILLIC, Character.UnicodeScript.HAN,
+                Character.UnicodeScript.HIRAGANA, Character.UnicodeScript.KATAKANA,
+                Character.UnicodeScript.HANGUL
+            )
+            else -> Character.isDigit(code) || Character.isWhitespace(code) || type in setOf(
+                Character.CONNECTOR_PUNCTUATION.toInt(), Character.DASH_PUNCTUATION.toInt(),
+                Character.START_PUNCTUATION.toInt(), Character.END_PUNCTUATION.toInt(),
+                Character.INITIAL_QUOTE_PUNCTUATION.toInt(), Character.FINAL_QUOTE_PUNCTUATION.toInt(),
+                Character.OTHER_PUNCTUATION.toInt()
+            )
+        }
+    }
+    return if (supported) lyricGraphemeRanges(text) else emptyList()
 }

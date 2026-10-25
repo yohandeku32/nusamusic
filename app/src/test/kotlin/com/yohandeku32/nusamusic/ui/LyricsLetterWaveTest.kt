@@ -5,6 +5,34 @@ import org.junit.Test
 import kotlin.math.abs
 
 class LyricsLetterWaveTest {
+    @Test fun independentLettersKeepAccentsWhileJoiningScriptsAndEmojiStayShaped() {
+        val text = "a\u0301ku"
+        assertEquals(listOf("a\u0301", "k", "u"), lyricIndependentLetterRanges(text).map {
+            text.substring(it.first, it.last + 1)
+        })
+        for (content in listOf("سلام", "नमस्ते", "A👩‍🎤B", "កម្ពុជា", "สวัสดี")) {
+            assertTrue("Keep contextual shaping for $content", lyricIndependentLetterRanges(content).isEmpty())
+        }
+        for (content in listOf("Victory", "café", "Δέλτα", "Привет", "日本語", "한글")) {
+            assertTrue(lyricIndependentLetterRanges(content).isNotEmpty())
+        }
+    }
+
+    @Test fun cachedCharacterEligibilityDoesNotToggleDuringPlayback() {
+        val wave = LyricsHeldWordWave(listOf(
+            LyricsHeldWordUnit("hold ", 1000, 7000, 0f, 80f),
+            LyricsHeldWordUnit("rap ", 7000, 7200, 85f, 120f),
+            LyricsHeldWordUnit("inferred", 7200, 12000, 125f, 220f, reliableHold = false)
+        ))
+        assertTrue(wave.hasHold(0))
+        assertFalse(wave.hasHold(1))
+        assertFalse(wave.hasHold(2))
+        for (now in listOf(0, 1300, 4000, 8000, 2000)) {
+            wave.letterPose(0, now, 10f)
+            assertTrue(wave.hasHold(0))
+        }
+    }
+
     @Test fun shapedRunsInOneWordShareSmoothMotionAt60_90_120Hz() {
         val wave = LyricsLetterWave(listOf(
             LyricsHeldWordUnit("mélo", 1000, 1400, 0f, 60f),

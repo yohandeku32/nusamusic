@@ -6,6 +6,58 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LyricsHeldWordWaveTest {
+    @Test fun heldWordCharactersHaveSeparateDepthAndTiltThroughoutThePull() {
+        val wave = LyricsHeldWordWave(listOf(
+            LyricsHeldWordUnit("kamu", 2000, 7000, 0f, 80f)
+        ))
+        val left = wave.letterPose(0, 3500, 10f)
+        val right = wave.letterPose(0, 3500, 70f)
+        assertTrue("Characters must not share a flat camera plane", left.depth - right.depth > 0.3f)
+        assertTrue(left.perspectiveSlope < 0f)
+        assertTrue(right.perspectiveSlope > 0f)
+        val leftPeak = (2000..7000 step 10).maxBy { wave.letterPose(0, it, 10f).depth }
+        val rightPeak = (2000..7000 step 10).maxBy { wave.letterPose(0, it, 70f).depth }
+        assertTrue("The crest must reach later characters later", rightPeak - leftPeak > 400)
+        assertTrue("Keep the sustained release", wave.letterPose(0, 5800, 70f).depth > 0.1f)
+    }
+
+    @Test fun characterProjectionIsSmoothAt60_90_120HzAndRestsAtAuthoredEnd() {
+        val wave = LyricsHeldWordWave(listOf(
+            LyricsHeldWordUnit("kamu", 2000, 7000, 0f, 80f)
+        ))
+        for (hz in listOf(60, 90, 120)) for (center in listOf(10f, 30f, 50f, 70f)) {
+            var previous = LyricsHeldWordPose()
+            for (frame in 0..hz * 8) {
+                val now = (frame * 1000.0 / hz).toInt()
+                val next = wave.letterPose(0, now, center)
+                assertTrue(abs(next.liftDp - previous.liftDp) < 0.2f)
+                assertTrue(abs(next.depth - previous.depth) < 0.025f)
+                assertTrue(abs(next.perspectiveSlope - previous.perspectiveSlope) < 0.035f)
+                previous = next
+            }
+            assertEquals(LyricsHeldWordPose(), previous)
+        }
+        for (time in listOf(2000, 7000, 8000)) {
+            assertEquals(LyricsHeldWordPose(), wave.letterPose(0, time, 50f))
+        }
+        val paused = wave.letterPose(0, 4300, 50f)
+        repeat(50) { assertEquals(paused, wave.letterPose(0, 4300, 50f)) }
+        wave.letterPose(0, 6500, 50f)
+        assertEquals(paused, wave.letterPose(0, 4300, 50f))
+    }
+
+    @Test fun fastInferredAndMultiwordUnitsDoNotGainCharacterDepth() {
+        val units = listOf(
+            LyricsHeldWordUnit("rap ", 0, 180, 0f, 34f),
+            LyricsHeldWordUnit("inferred ", 180, 5000, 40f, 100f, reliableHold = false),
+            LyricsHeldWordUnit("two words", 5000, 9000, 105f, 200f)
+        )
+        val wave = LyricsHeldWordWave(units)
+        for (index in units.indices) for (time in 0..9000 step 16) {
+            assertEquals(LyricsHeldWordPose(), wave.letterPose(index, time, 60f))
+        }
+    }
+
     private fun phrase(): LyricsHeldWordWave = LyricsHeldWordWave(listOf(
         LyricsHeldWordUnit("aku ", 1000, 1400, 0f, 52f),
         LyricsHeldWordUnit("cinta ", 1400, 2000, 58f, 134f),

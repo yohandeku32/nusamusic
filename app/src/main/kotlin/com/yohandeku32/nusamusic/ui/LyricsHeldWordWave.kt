@@ -101,6 +101,20 @@ internal class LyricsHeldWordWave(units: List<LyricsHeldWordUnit>) {
     private val words: Array<Word?> = arrayOfNulls(units.size)
     private val restingPose = LyricsHeldWordPose()
 
+    fun hasHold(index: Int): Boolean = words.getOrNull(index) != null
+
+    /** Sample the travelling surface at a character, rather than the word midpoint. */
+    fun letterPose(index: Int, playbackMs: Int, centerDp: Float): LyricsHeldWordPose {
+        val local = pose(index, playbackMs, centerDp)
+        if (local.depth == 0f) return local
+        return local.copy(
+            depth = local.intensity,
+            scaleY = 1f + 0.055f * local.intensity,
+            perspectiveSlope = ((centerDp - local.crestDp) / 24f).coerceIn(-1f, 1f)
+                * local.intensity
+        )
+    }
+
     init {
         var index = 0
         while (index < units.size) {

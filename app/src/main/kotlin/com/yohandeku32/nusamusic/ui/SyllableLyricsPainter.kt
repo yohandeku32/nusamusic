@@ -14,6 +14,8 @@ import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.style.ResolvedTextDirection
 import com.mocharealm.accompanist.lyrics.ui.composable.lyrics.SyllableLayout
 import com.yohandeku32.nusamusic.data.LyricsUnitKey
@@ -107,8 +109,18 @@ internal class SyllableLyricsPainter(
     expressions: List<LyricsAdaptiveExpression>? = null,
     alignEnd: Boolean = false,
     viewportWidthPx: Float = 0f,
-    inferredEnds: Set<LyricsUnitKey> = emptySet()
+    inferredEnds: Set<LyricsUnitKey> = emptySet(),
+    textMeasurer: TextMeasurer
 ) {
+    private class Letter(
+        val result: TextLayoutResult,
+        val offset: Offset,
+        val centerPathDp: Float
+    ) {
+        var pose = LyricsHeldWordPose()
+        var liftPx = 0f
+    }
+
     private class Glyph(
         val index: Int,
         val layout: SyllableLayout,
@@ -131,9 +143,8 @@ internal class SyllableLyricsPainter(
         val horizontalDp = (position.x + width / 2f) / density
         var wavePose = LyricsHeldWordPose()
         var wordLiftPx = 0f
+        var letters: List<Letter> = emptyList()
         val controller = LyricsExpressionController(layout.syllable.start, layout.syllable.end, expression)
-        // Separate sustained-vocal accent. Reuses the intact syllable's
-        // measured text run so no individual character can break apart.
         val bubble = LyricsLongVocalMotion(
             layout.syllable.start, layout.syllable.end, horizontalDp, expression
         )
@@ -194,15 +205,37 @@ internal class SyllableLyricsPainter(
         )
     }
     private val heldWords = LyricsHeldWordWave(heldWordUnits)
-    // Keep the existing secondary motion on held words without slicing glyphs.
     private val wordWave = LyricsLetterWave(heldWordUnits)
     private val glowPalette = LyricsGlowPaletteCache.forDensity(density)
 
-    /**
-     * Long holds move only their OWN word. Each syllable is shaped and drawn
-     * intact to avoid clipped letters or seams. Both glow and text share the
-     * same mountain-wave transform sampled from the existing playback clock.
-     */
+    init {
+        for (glyph in glyphs) {
+            // Only sustained vocals need the extra character draw calls.
+            if (!heldWords.hasHold(glyph.index) || glyph.rtl) continue
+            val original = glyph.layout.textLayoutResult
+            val text = glyph.layout.syllable.content
+            if (original.layoutInput.text.text != text) continue
+            val ranges = lyricIndependentLetterRanges(text)
+            if (ranges.size !in 1..64) continue
+            // Cache complete graphemes, not clipped strips of the word. Keep
+            // these layouts at rest too, so entering a hold cannot swap fonts.
+            val letters = ranges.mapNotNull { range ->
+                val content = text.substring(range.first, range.last + 1)
+                if (content.isBlank()) return@mapNotNull null
+                val left = original.getHorizontalPosition(range.first, true)
+                val right = original.getHorizontalPosition(range.last + 1, true)
+                if (!left.isFinite() || !right.isFinite() || right <= left) return@mapNotNull null
+                val measured = textMeasurer.measure(content, original.layoutInput.style,
+                    softWrap = false)
+                Letter(measured, Offset(left, original.firstBaseline - measured.firstBaseline),
+                    glyph.pathStartDp + (left + right) / (2f * density))
+            }
+            if (letters.size == ranges.count { !text.substring(it.first, it.last + 1).isBlank() }) {
+                glyph.letters = letters
+            }
+        }
+    }
+
     private val frameClock = LyricsFrameTimeSmoother()
 
     fun draw(scope: DrawScope, now: Int, focus: Float, waveTime: Int,
@@ -210,8 +243,6 @@ internal class SyllableLyricsPainter(
         val frameTime = frameClock.sample(waveTime, playbackRevision)
         val strength = focus.coerceIn(0f, 1f)
  
-        // Every pass shares one position. Clipping and shifting individual
-        // letters broke ligatures/overhangs and left the halo behind the fill.
         for ((index, glyph) in glyphs.withIndex()) {
             glyph.wavePose = heldWords.pose(
                 index, frameTime, (glyph.pathStartDp + glyph.pathEndDp) * 0.5f
@@ -219,6 +250,10 @@ internal class SyllableLyricsPainter(
             glyph.controller.update(frameTime)
             val amplitude = strength * (1f - 0.88f * glyph.wavePose.depth)
             glyph.wordLiftPx = wordWave.wordLiftDp(index, frameTime) * density * amplitude
+            for (letter in glyph.letters) {
+                letter.pose = heldWords.letterPose(index, frameTime, letter.centerPathDp)
+                letter.liftPx = wordWave.liftDp(index, letter.centerPathDp, frameTime) * density * amplitude
+            }
             glyph.bubble.update(frameTime, glyph.wavePose.intensity * 0.30f)
         }
 
@@ -228,7 +263,11 @@ internal class SyllableLyricsPainter(
             if (halo && (strength <= 0f || glyph.controller.glow <= 0f)) continue
             val progress = syllableProgress(unit, frameTime)
             val glow = glyph.controller.glow * strength
-            drawGlyph(glyph, halo, progress, glow, strength, frameTime)
+            if (glyph.letters.isEmpty()) {
+                drawGlyph(glyph, halo, progress, glow, strength, frameTime)
+            } else for (letter in glyph.letters) {
+                drawGlyph(glyph, halo, progress, glow, strength, frameTime, letter)
+            }
         }
     }
 
@@ -238,33 +277,27 @@ internal class SyllableLyricsPainter(
         progress: Float,
         glow: Float,
         strength: Float,
-        now: Int
+        now: Int,
+        letter: Letter? = null
     ) {
-        val result = glyph.layout.textLayoutResult
-        val pose = glyph.wavePose
-        val position = glyph.position + Offset(
+        val result = letter?.result ?: glyph.layout.textLayoutResult
+        val pose = letter?.pose ?: glyph.wavePose
+        val runOffset = letter?.offset ?: Offset.Zero
+        val position = glyph.position + runOffset + Offset(
             pose.parallaxXDp * density,
-            pose.liftDp * density * 0.70f + glyph.wordLiftPx
+            pose.liftDp * density * 0.70f + (letter?.liftPx ?: glyph.wordLiftPx)
         )
-        // A single intact measured text run tilts and rises with the local
-        // mountain, never distorting glyphs with separately clipped slices.
-        // Expand every syllable as part of ONE word-shaped surface:
-        // measured text and kerning remain intact, with a shared scale and
-        // shared pivot so no neighbouring syllable grows/shrinks alone.
-        // The mountain travels through local lift and a restrained Y bulge.
-        // A travelling, restrained forward swell follows the arched crest.
-        // Horizontal magnification remains shared to protect word spacing.
-        // Local vertical scale and camera depth make the leading syllables
-        // approach the viewer before the trailing ones, without clipped glyphs.
         val forwardBulge = heldWordForwardBulge(pose.depth, pose.intensity)
-        val scaleX = 1f + 0.075f * pose.depth
+        // Shared X expansion preserves advances; each character has its own
+        // lift, Y stretch and camera plane along the travelling crest.
+        val scaleX = 1f + 0.075f * glyph.wavePose.depth
         val scaleY = 1f + (forwardBulge.scaleY - 1f) * 0.70f
         val width = glyph.width
         val pivot = Offset(
-            x = if (pose.depth > 0f) heldWordPivotX(
-                glyph.position.x, glyph.pathStartDp, pose.wordCenterDp, density
+            x = if (glyph.wavePose.depth > 0f) heldWordPivotX(
+                glyph.position.x, glyph.pathStartDp, glyph.wavePose.wordCenterDp, density
             ) else glyph.position.x + width / 2f,
-            y = glyph.position.y + result.size.height * 0.8f
+            y = glyph.position.y + glyph.layout.textLayoutResult.size.height * 0.8f
         )
         val native = drawContext.canvas.nativeCanvas
         val saved = if (pose.depth > 0.0001f) native.save() else -1
@@ -272,7 +305,7 @@ internal class SyllableLyricsPainter(
             if (saved >= 0) {
                 glyph.perspective.apply(
                     native,
-                    pivotX = pivot.x,
+                    pivotX = if (letter == null) pivot.x else position.x + result.size.width * 0.5f,
                     pivotY = pivot.y,
                     depth = forwardBulge.cameraDepth,
                     slope = pose.perspectiveSlope
@@ -289,7 +322,8 @@ internal class SyllableLyricsPainter(
             val distance = (width + 2f * glyph.feather) * progress - glyph.feather
             val edge = if (glyph.rtl) width - distance else distance
             val direction = if (glyph.rtl) -1f else 1f
-            glyph.fill.move(edge - direction * glyph.feather, edge + direction * glyph.feather)
+            glyph.fill.move(edge - direction * glyph.feather - runOffset.x,
+                edge + direction * glyph.feather - runOffset.x)
             if (halo) {
                 if (glow <= 0f) return@withLyricsScale
                 // The approved bright tight/mid halos still use the
@@ -333,7 +367,7 @@ internal class SyllableLyricsPainter(
                         shadow = glowPalette.heldAura(heldLight),
                         drawStyle = Fill)
                     glyph.mountainGlow.move(
-                        centerX = (pose.crestDp - glyph.pathStartDp) * density,
+                        centerX = (pose.crestDp - glyph.pathStartDp) * density - runOffset.x,
                         centerY = result.size.height * 0.46f +
                             pose.liftDp * density * 0.11f,
                         radiusX = maxOf(width * 0.56f, 16f * density),
@@ -372,7 +406,7 @@ internal class SyllableLyricsPainter(
                     val band = minOf(width * 0.3f + 4f * density, sungWidth / 2f)
                     val swept = band + (sungWidth - 2f * band) * shimmer
                     val center = if (glyph.rtl) width - swept else swept
-                    glyph.sheen.move(center - band, center + band)
+                    glyph.sheen.move(center - band - runOffset.x, center + band - runOffset.x)
                     drawText(result, brush = glyph.sheen.brush, topLeft = position,
                         alpha = 0.45f * glow, shadow = Shadow.None, drawStyle = Fill)
                 }
