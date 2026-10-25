@@ -67,14 +67,9 @@ internal suspend fun resolveAnimatedArtwork(
     return ArtworkReply(failed = failed)
 }
 
-/**
- * Immersive artwork uses the actual portrait/3:4 animation, not a square
- * stream stretched or cropped to fill the tall player.
- *
- * The API exposes `url_tall` separately from `url` (square). A square-only
- * album intentionally returns no Apple animation: Spotify Canvas may then
- * provide the alternate animation, otherwise the static cover remains.
- */
-internal fun preferredAnimatedArtworkUrls(tall: String?): List<String> =
-    listOfNotNull(tall?.trim())
+/** Try the standard animation first and retain portrait as a playback alternative. */
+internal fun preferredAnimatedArtworkUrls(standard: String?, tall: String? = null): List<String> =
+    listOfNotNull(standard, tall)
+        .map(String::trim)
         .filter { it.isNotEmpty() && !it.equals("null", true) && !it.equals("none", true) }
+        .distinct()

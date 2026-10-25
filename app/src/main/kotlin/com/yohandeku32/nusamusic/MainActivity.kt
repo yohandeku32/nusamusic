@@ -4913,12 +4913,11 @@ private fun ImmersiveArtwork(
             return@LaunchedEffect
         }
         // Use the same provider decision prepared for the next five songs.
-        // Apple's genuine Tall animation must win when available; only a
-        // confirmed Apple miss allows Spotify. No provider races or late
-        // switching can tear down the TextureView mid-song.
+        // Respect the selected provider order without late lookup results
+        // replacing a stream that is already playing.
         if (spotifyPlaybackFailed && sourceOrder == ArtworkSourceOrder.SPOTIFY_FIRST) {
             // The preferred Spotify stream failed after bounded Media3
-            // recovery: only now try Apple Tall, with no provider race.
+            // recovery: only now try Apple artwork, with no provider race.
             artworkProvider = AnimatedArtworkProvider.APPLE_MUSIC
             animatedArtworkUrl =
                 AppleMusicAnimatedArtworkLoader.loadAnimatedArtworkUrl(context, song)
@@ -4937,8 +4936,8 @@ private fun ImmersiveArtwork(
                 animatedArtworkUrl = null
             }
         } else {
-            // A genuine Apple Tall stream failed to play. Spotify remains
-            // an alternate only when selected in settings.
+            // All Apple playback variants failed. Spotify remains an alternate
+            // only when selected in settings.
             if (sourceOrder == ArtworkSourceOrder.APPLE_ONLY) {
                 animatedArtworkUrl = null
             } else {
@@ -5055,7 +5054,7 @@ private fun ImmersiveArtwork(
                                         // lookup across Next -> Previous, so the
                                         // song can play again with a fresh player.
                                         // Only hide this exhausted player instance.
-                                        // In Spotify-first mode, try Apple Tall
+                                        // In Spotify-first mode, try Apple artwork
                                         // once. For Spotify-only stay on the static
                                         // cover until the user revisits this song.
                                         animatedArtworkUrl = null

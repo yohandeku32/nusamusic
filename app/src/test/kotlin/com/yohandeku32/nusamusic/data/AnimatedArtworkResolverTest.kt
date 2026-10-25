@@ -4,45 +4,79 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.json.JSONObject
 
 class AnimatedArtworkResolverTest {
     @Test
-    fun tallArtworkIsTheOnlyAppleAnimationVariant() {
-        assertEquals(listOf("tall"), preferredAnimatedArtworkUrls("tall"))
-        assertEquals(emptyList<String>(), preferredAnimatedArtworkUrls(null))
-        assertEquals(emptyList<String>(), preferredAnimatedArtworkUrls("null"))
-        assertEquals(emptyList<String>(), preferredAnimatedArtworkUrls("NONE"))
-        assertEquals(emptyList<String>(), preferredAnimatedArtworkUrls(" "))
-        assertEquals(listOf("https://apple.com/tall.m3u8"),
-            preferredAnimatedArtworkUrls("  https://apple.com/tall.m3u8  "))
+    fun standardAndPortraitAreRetainedInPlaybackOrder() {
+        assertEquals(listOf("square", "portrait"), preferredAnimatedArtworkUrls("square", "portrait"))
+        assertEquals(listOf("square"), preferredAnimatedArtworkUrls("square", null))
+        assertEquals(listOf("portrait"), preferredAnimatedArtworkUrls(null, "portrait"))
+        assertEquals(emptyList<String>(), preferredAnimatedArtworkUrls("null", "NONE"))
+        assertEquals(emptyList<String>(), preferredAnimatedArtworkUrls(" ", null))
+        assertEquals(listOf("https://apple.com/square.m3u8"),
+            preferredAnimatedArtworkUrls("  https://apple.com/square.m3u8  ", "https://apple.com/square.m3u8"))
     }
     private val metadata = ArtworkLookupMetadata("Song", "Singer", "Album (Deluxe Edition)")
     private val stream = "https://example.mzstatic.com/artwork.m3u8"
 
     @Test
-    fun failedTallArtworkNeverFallsBackToSquareVideo() {
+    fun playbackFailureTriesTheOtherAppleVariantBeforeExhaustingCandidates() {
+        val square = "https://example.mzstatic.com/square.m3u8"
         val tall = "https://example.mzstatic.com/tall.m3u8"
-        // No square fallback is added to the result when only Tall is allowed.
-        val original = ArtworkReply(tall)
-        val exhausted = original.afterPlaybackFailure(tall)
+        val urls = AppleMusicAnimatedArtworkLoader.animatedUrls(JSONObject()
+            .put("url", square).put("url_tall", tall))
+        val original = ArtworkReply(urls.first(), alternatives = urls.drop(1))
+        val remaining = original.afterPlaybackFailure(square)
+        assertEquals(tall, remaining.url)
+        val exhausted = remaining.afterPlaybackFailure(tall)
         assertEquals(null, exhausted.url)
         assertTrue(exhausted.alternatives.isEmpty())
         assertTrue(exhausted.failed)
     }
 
     @Test
-    fun resolverContinuesLookingForTallWhenFirstAlbumHasOnlySquare() = runBlocking {
-        val tall = "https://example.mzstatic.com/tall.m3u8"
-        val secondAlbum = AppleCatalogSong(
-            "Song", "Singer", "Alternate Album", "https://music.apple.com/us/album/7654321"
-        )
+    fun squareOnlyAlbumResolvesWithoutSearchingForAnotherPortraitAlbum() = runBlocking {
+        val square = "https://example.mzstatic.com/square.m3u8"
         val result = resolveAnimatedArtwork(
             metadata, metadata, "US",
-            searchAlbum = { ArtworkReply() }, // Square-only response maps to no Tall URL.
-            searchCatalog = { _, _ -> CatalogReply(listOf(secondAlbum)) },
-            loadAlbumUrl = { ArtworkReply(tall) }
+            searchAlbum = {
+                val urls = AppleMusicAnimatedArtworkLoader.animatedUrls(JSONObject().put("url", square))
+                ArtworkReply(urls.firstOrNull(), alternatives = urls.drop(1))
+            },
+            searchCatalog = { _, _ -> error("A square animation is already available") },
+            loadAlbumUrl = { error("Another album lookup is unnecessary") }
         )
-        assertEquals(tall, result.url)
+        assertEquals(square, result.url)
+    }
+
+    @Test
+    fun responseRetainsSquareAndPortraitWhileRemovingDuplicates() {
+        val square = "https://example.mzstatic.com/square.m3u8"
+        val tall = "https://example.mzstatic.com/tall.m3u8"
+        assertEquals(listOf(square, tall), AppleMusicAnimatedArtworkLoader.animatedUrls(
+            JSONObject().put("url", square).put("url_tall", tall)))
+        assertEquals(listOf(square), AppleMusicAnimatedArtworkLoader.animatedUrls(
+            JSONObject().put("url", " $square ").put("url_tall", square)))
+    }
+
+    @Test
+    fun invalidStandardUrlStillAllowsValidPortraitAndRejectsUntrustedHosts() {
+        val tall = "https://example.mzstatic.com/tall.m3u8"
+        for (invalid in listOf("null", "NONE", "", "http://a.mzstatic.com/a.m3u8",
+            "https://mzstatic.com.evil.example/a.m3u8", "file:///a.mp4")) {
+            assertEquals(listOf(tall), AppleMusicAnimatedArtworkLoader.animatedUrls(
+                JSONObject().put("url", invalid).put("url_tall", tall)))
+        }
+        assertTrue(AppleMusicAnimatedArtworkLoader.animatedUrls(null).isEmpty())
+        assertTrue(AppleMusicAnimatedArtworkLoader.animatedUrls(JSONObject()).isEmpty())
+    }
+
+    @Test
+    fun responseSupportsStandardMp4AsWellAsHls() {
+        val mp4 = "https://example.cdn-apple.com/square.mp4"
+        assertEquals(listOf(mp4), AppleMusicAnimatedArtworkLoader.animatedUrls(
+            JSONObject().put("url", mp4).put("url_tall", "none")))
     }
 
     @Test

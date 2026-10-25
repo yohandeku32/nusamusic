@@ -16,10 +16,9 @@ import java.util.Locale
 /**
  * One result per track, shared by speculative preloads and foreground playback.
  *
- * Apple Music's genuine Tall stream is always checked first; a negative Apple
- * result is the only reason to consult Spotify Canvas. Do not start five
- * simultaneous album lookups: limit network resolution to two tracks at once,
- * and warm actual video bytes one stream at a time.
+ * Source order follows the user's Apple/Spotify setting. Both standard and
+ * portrait Apple streams can be resolved. Limit lookups to two tracks at once
+ * and warm video bytes one stream at a time.
  */
 internal enum class ArtworkSourceOrder {
     APPLE_FIRST, SPOTIFY_FIRST, APPLE_ONLY, SPOTIFY_ONLY;
@@ -30,6 +29,7 @@ internal enum class ArtworkSourceOrder {
 }
 
 internal object AnimatedArtworkQueuePreloader {
+    // APPLE_TALL is the existing provider identifier; it accepts either Apple variant.
     enum class Provider { APPLE_TALL, SPOTIFY_CANVAS }
     data class Result(val provider: Provider, val url: String)
 

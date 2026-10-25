@@ -42,7 +42,7 @@ See [Lyrics: sources, timing and saving](docs/EMBEDDED_LYRICS.md) for supported 
 
 ## Animated artwork
 
-Enable animated artwork in the Immersive player settings. Choose **Apple first**, **Spotify first**, **Apple only** or **Spotify only**. Apple is the default priority and accepts portrait Tall artwork only. Spotify Canvas is an optional alternative; static local artwork remains the fallback.
+Enable animated artwork in the Immersive player settings. Choose **Apple first**, **Spotify first**, **Apple only** or **Spotify only**. Apple is the default priority. It tries the standard animation first and keeps portrait artwork as an alternative if playback fails. Albums with only a square animation are supported. Spotify Canvas is an optional alternative; static local artwork remains the fallback.
 
 Artwork lookup uses song metadata and external resolvers. The current Spotify resolver uses the independent Spotycovs service without a Spotify login. Provider availability and matching can vary. Aruna caches video data and can prefetch artwork for up to five upcoming tracks in the actual playback queue, including shuffle order. Prefetching uses network data.
 
@@ -53,7 +53,7 @@ Local playback does not require an account. Optional features make network reque
 | Feature | Information used |
 | --- | --- |
 | Online lyrics | Song title, artist, album and duration for matching. |
-| Animated artwork | Song/album metadata for Apple Tall or Spotify Canvas lookup and video downloads. |
+| Animated artwork | Song/album metadata for Apple artwork or Spotify Canvas lookup and video downloads. |
 | Artist information | Artist names for portraits and biographies. |
 
 These lookup features do not upload the audio file. Disable online lyrics and animated artwork in Settings to stop those lookups. Listening history stays on the device. Cached provider content may be unavailable after Android clears app caches.

@@ -73,8 +73,7 @@ object AppleMusicAnimatedArtworkLoader {
         finish(result.url, result.failed, result.alternatives)
     }
 
-    // Album-detail hero uses Apple's SQUARE animated cover, unlike the tall
-    // player artwork. Reuse m8tec's existing open community endpoint without
+    // Album-detail hero keeps its square cover selection. Reuse the endpoint without
     // opening a local audio file or searching per track.
     private val albumSquareCache = LinkedHashMap<String, CacheEntry>(32, 0.75f, true)
 
@@ -191,11 +190,9 @@ object AppleMusicAnimatedArtworkLoader {
         return response
     }
 
-    // The service returns url_tall (portrait) and url (square) independently.
-    // Never fall back to its square URL: the full-height Immersive player must
-    // display genuine Tall artwork, not a zoomed/cropped square video.
-    private fun animatedUrls(json: JSONObject?): List<String> =
-        preferredAnimatedArtworkUrls(json?.optString("url_tall"))
+    // Keep every supported variant so a failed standard stream can try portrait.
+    internal fun animatedUrls(json: JSONObject?): List<String> =
+        preferredAnimatedArtworkUrls(json?.optString("url"), json?.optString("url_tall"))
             .filter(::isAppleArtworkUrl)
     private fun isAppleArtworkUrl(value: String): Boolean = runCatching {
         val parsed = URL(value)
