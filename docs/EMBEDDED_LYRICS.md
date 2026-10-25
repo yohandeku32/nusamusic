@@ -1,4 +1,6 @@
-# Embedded Lyrics (Immersive only)
+# Embedded lyrics in Aruna
+
+This guide describes the current `main` implementation. Online lyrics, queued file embedding and updated character waves are documented in the [PR #178 lyric guide](https://github.com/yohandeku32/nusamusic/blob/feat/immersive-library-on-soft-ambient-20261019/docs/EMBEDDED_LYRICS.md).
 
 Tap Lyrics in the Immersive Now Playing controls. CD and Vinyl do not expose this feature.
 The modal has one open anchor at half the window height, full width, 28dp top corners,
@@ -69,7 +71,9 @@ large mdat atoms are skipped with seeking rather than copied.
 
 Run with Java 21+ and the project's configured Android SDK:
 
-    ./gradlew :app:testDebugUnitTest :app:assembleDebug
+    ./gradlew :app:testDebugUnitTest
+
+On Windows PowerShell, use `.\gradlew.bat :app:testDebugUnitTest`. The check above does not package an APK.
 
 Binary fixtures cover plain USLT, line/word/syllable Enhanced LRC, SYLT, UTF-16,
 ID3v2.4 TXXX, FLAC, OGG/Opus packet continuation, M4A freeform/©lyr metadata,
@@ -84,3 +88,5 @@ animated artwork enabled. JVM tests and an APK build do not measure device frame
 
 Format references: https://id3.org/id3v2.3.0 and
 https://www.xiph.org/vorbis/doc/v-comment.html
+
+Return to the [Aruna README](../README.md) for setup and development status.
