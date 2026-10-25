@@ -118,7 +118,6 @@ internal class SyllableLyricsPainter(
         val centerPathDp: Float
     ) {
         var pose = LyricsHeldWordPose()
-        var liftPx = 0f
     }
 
     private class Glyph(
@@ -252,7 +251,6 @@ internal class SyllableLyricsPainter(
             glyph.wordLiftPx = wordWave.wordLiftDp(index, frameTime) * density * amplitude
             for (letter in glyph.letters) {
                 letter.pose = heldWords.letterPose(index, frameTime, letter.centerPathDp)
-                letter.liftPx = wordWave.liftDp(index, letter.centerPathDp, frameTime) * density * amplitude
             }
             glyph.bubble.update(frameTime, glyph.wavePose.intensity * 0.30f)
         }
@@ -285,7 +283,7 @@ internal class SyllableLyricsPainter(
         val runOffset = letter?.offset ?: Offset.Zero
         val position = glyph.position + runOffset + Offset(
             pose.parallaxXDp * density,
-            pose.liftDp * density * 0.70f + (letter?.liftPx ?: glyph.wordLiftPx)
+            pose.liftDp * density * 0.70f + if (letter == null) glyph.wordLiftPx else 0f
         )
         val forwardBulge = heldWordForwardBulge(pose.depth, pose.intensity)
         // Shared X expansion preserves advances; each character has its own

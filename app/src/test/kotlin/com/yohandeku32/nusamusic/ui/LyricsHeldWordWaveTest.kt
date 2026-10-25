@@ -13,12 +13,48 @@ class LyricsHeldWordWaveTest {
         val left = wave.letterPose(0, 3500, 10f)
         val right = wave.letterPose(0, 3500, 70f)
         assertTrue("Characters must not share a flat camera plane", left.depth - right.depth > 0.3f)
-        assertTrue(left.perspectiveSlope < 0f)
-        assertTrue(right.perspectiveSlope > 0f)
+        assertTrue("Characters must also have independent camera tilt",
+            abs(left.perspectiveSlope - right.perspectiveSlope) > 0.01f)
         val leftPeak = (2000..7000 step 10).maxBy { wave.letterPose(0, it, 10f).depth }
         val rightPeak = (2000..7000 step 10).maxBy { wave.letterPose(0, it, 70f).depth }
         assertTrue("The crest must reach later characters later", rightPeak - leftPeak > 400)
         assertTrue("Keep the sustained release", wave.letterPose(0, 5800, 70f).depth > 0.1f)
+    }
+
+    @Test fun everyCharacterReachesTheSameCrestInOrderWithoutASecondBounce() {
+        val wave = LyricsHeldWordWave(listOf(
+            LyricsHeldWordUnit("melody", 2000, 7000, 0f, 120f)
+        ))
+        var previousPeakTime = 0
+        for (center in listOf(10f, 30f, 50f, 70f, 90f, 110f)) {
+            val samples = (2000..7000 step 5).map { it to wave.letterPose(0, it, center).depth }
+            val peak = samples.maxBy { it.second }
+            assertTrue("Trailing characters must peak later", peak.first > previousPeakTime)
+            assertTrue("The trailing characters must not lose their pull", peak.second > 0.999f)
+            var falling = false
+            var previous = 0f
+            for ((time, depth) in samples) {
+                if (depth < previous - 0.000001f) falling = true
+                if (falling) assertTrue("A second crest appeared at $time", depth <= previous + 0.000001f)
+                previous = depth
+            }
+            previousPeakTime = peak.first
+        }
+    }
+
+    @Test fun characterWaveContinuesAcrossAuthoredSyllableBoundaries() {
+        val single = LyricsHeldWordWave(listOf(
+            LyricsHeldWordUnit("melody", 2000, 7000, 0f, 120f)
+        ))
+        val split = LyricsHeldWordWave(listOf(
+            LyricsHeldWordUnit("me", 1600, 2000, 0f, 40f),
+            LyricsHeldWordUnit("lo", 2000, 7000, 40f, 80f),
+            LyricsHeldWordUnit("dy", 7000, 7100, 80f, 120f)
+        ))
+        for (time in 1600..7200 step 16) for ((index, center) in listOf(20f, 60f, 100f).withIndex()) {
+            assertEquals("Syllable boundaries must not restart the wave",
+                single.letterPose(0, time, center), split.letterPose(index, time, center))
+        }
     }
 
     @Test fun characterProjectionIsSmoothAt60_90_120HzAndRestsAtAuthoredEnd() {

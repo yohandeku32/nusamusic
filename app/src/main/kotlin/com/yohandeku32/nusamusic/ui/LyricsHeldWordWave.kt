@@ -103,15 +103,34 @@ internal class LyricsHeldWordWave(units: List<LyricsHeldWordUnit>) {
 
     fun hasHold(index: Int): Boolean = words.getOrNull(index) != null
 
-    /** Sample the travelling surface at a character, rather than the word midpoint. */
+    /** One smooth rise/release per character, staggered along the measured word. */
     fun letterPose(index: Int, playbackMs: Int, centerDp: Float): LyricsHeldWordPose {
-        val local = pose(index, playbackMs, centerDp)
-        if (local.depth == 0f) return local
-        return local.copy(
-            depth = local.intensity,
-            scaleY = 1f + 0.055f * local.intensity,
-            perspectiveSlope = ((centerDp - local.crestDp) / 24f).coerceIn(-1f, 1f)
-                * local.intensity
+        val word = words.getOrNull(index) ?: return restingPose
+        val duration = (word.holdEndMs.toLong() - word.holdStartMs).toFloat()
+        if (duration <= 0f || playbackMs <= word.holdStartMs || playbackMs >= word.holdEndMs) {
+            return restingPose
+        }
+        val fraction = ((centerDp - word.left) / (word.right - word.left).coerceAtLeast(1f))
+            .coerceIn(0f, 1f)
+        val travel = minOf(duration * 0.24f, 900f)
+        val cycle = duration - travel
+        val elapsed = (playbackMs.toLong() - word.holdStartMs).toFloat()
+        val phase = (elapsed - fraction * travel) / cycle
+        if (phase <= 0f || phase >= 1f) return restingPose
+        val peakAt = 0.42f
+        val envelope = if (phase <= peakAt) heldWordEase(phase / peakAt)
+            else 1f - heldWordEase((phase - peakAt) / (1f - peakAt))
+        val weight = heldWordEase((duration - 1_000f) / 1_500f)
+        val depth = (envelope * weight).coerceIn(0f, 1f)
+        val crestFraction = ((elapsed - cycle * peakAt) / travel).coerceIn(0f, 1f)
+        return LyricsHeldWordPose(
+            liftDp = -8.1f * depth,
+            depth = depth,
+            scaleY = 1f + 0.055f * depth,
+            intensity = depth,
+            wordCenterDp = (word.left + word.right) * 0.5f,
+            crestDp = word.left + (word.right - word.left) * crestFraction,
+            perspectiveSlope = ((phase - peakAt) / (1f - peakAt)).coerceIn(-1f, 1f) * depth
         )
     }
 
