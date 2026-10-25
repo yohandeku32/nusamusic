@@ -6,6 +6,58 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class LyricsDecoderTest {
+    @Test fun loneSpanTaggedGuestDoesNotBecomeTheDefaultBodyLead() {
+        val xml = """
+            <tt xmlns:ttm="http://www.w3.org/ns/ttml#metadata"><body>
+                <p begin="1s" end="2s">
+                    <span begin="1s" end="2s" ttm:agent="v2">Guest</span>
+                </p>
+            </body></tt>
+        """.trimIndent()
+        assertEquals(setOf(0), LyricsDecoder.decodeWithTiming(xml, 3000).duetRightLines)
+    }
+
+    @Test fun victoryLapFourGuestAtThreeMinutes27IsRightWhileBodyLeadStaysLeft() {
+        val xml = """
+            <tt xmlns:ttm="http://www.w3.org/ns/ttml#metadata">
+                <head><metadata>
+                    <ttm:agent type="person" xml:id="v1"/>
+                    <ttm:agent type="person" xml:id="v3"/>
+                    <ttm:agent type="person" xml:id="v5"/>
+                </metadata></head>
+                <body ttm:agent="v5"><div>
+                    <p begin="3:26.122" end="3:27.365">
+                        <span begin="3:26.122" end="3:27.365">Lead</span>
+                    </p>
+                    <p begin="3:27.696" end="3:28.750" ttm:agent="v3">
+                        <span begin="3:27.696" end="3:28.750">Guest</span>
+                    </p>
+                </div></body>
+            </tt>
+        """.trimIndent()
+        val result = LyricsDecoder.decodeWithTiming(xml, 344571)
+        assertEquals(207696, result.lyrics.lines[1].start)
+        assertEquals(setOf(1), result.duetRightLines)
+    }
+
+    @Test fun thirdNamedSingerIsAGuestInsteadOfAlternatingBackToTheLeft() {
+        val xml = """
+            <tt xmlns:ttm="http://www.w3.org/ns/ttml#metadata">
+                <head><metadata>
+                    <ttm:agent type="person" xml:id="lead"/>
+                    <ttm:agent type="person" xml:id="guestA"/>
+                    <ttm:agent type="person" xml:id="guestB"/>
+                </metadata></head>
+                <body>
+                    <p begin="1s" end="2s" ttm:agent="lead">Lead</p>
+                    <p begin="2s" end="3s" ttm:agent="guestA">First guest</p>
+                    <p begin="3s" end="4s" ttm:agent="guestB">Second guest</p>
+                </body>
+            </tt>
+        """.trimIndent()
+        assertEquals(setOf(1, 2), LyricsDecoder.decodeWithTiming(xml, 5000).duetRightLines)
+    }
+
     @Test fun rightSingerSurvivesInlineTranslationAndEarlierContainerOnset() {
         val xml = """
             <tt xmlns:ttm="http://www.w3.org/ns/ttml#metadata"><body>
@@ -644,7 +696,7 @@ class LyricsDecoderTest {
         assertEquals(setOf(0), decoded.duetRightLines)
     }
 
-    @Test fun appleMultiVocalTtmlExcludesV2000OtherAndPlacesV2V4V6OnRight() {
+    @Test fun appleMultiVocalTtmlPreservesBodyLeadAndGuestDuetSides() {
         // Reproduces the user's supplied Apple-style header and real line
         // positions, including an 'other' agent between v1 and v2.
         val xml = """
@@ -712,16 +764,16 @@ class LyricsDecoderTest {
         fun index(timeMs: Int): Int = parsed.lyrics.lines.indexOfFirst {
             it.start == timeMs
         }.also { assertTrue("Missing user example lyric at $timeMs", it >= 0) }
-        // Three alternating right singers, not only second declaration v2000.
+        // Guest IDs do not alternate left/right by their numeric parity.
         assertTrue(index(771) in parsed.duetRightLines) // v2 / L3
         assertTrue(index(151165) in parsed.duetRightLines) // v2 / L98
         assertTrue(index(97659) in parsed.duetRightLines) // v4 / L69
         assertTrue(index(272488) in parsed.duetRightLines) // v6 / L170
         assertFalse(index(0) in parsed.duetRightLines) // v5
         assertFalse(index(341) in parsed.duetRightLines) // v1
-        assertFalse(index(1217) in parsed.duetRightLines) // v3
+        assertTrue(index(1217) in parsed.duetRightLines) // v3
         assertFalse(index(110926) in parsed.duetRightLines) // v2000, 'other'
-        assertFalse(index(207696) in parsed.duetRightLines) // v3
+        assertTrue(index(207696) in parsed.duetRightLines) // v3, user's 03:27 report
     }
 
     @Test fun untypedAndNamedSingersPreserveTraditionalTwoSingerAlternation() {

@@ -30,7 +30,8 @@ private data class NormalizedTtml(
     val lineOnly: Set<Pair<Int, String>>,
     val voices: List<TtmlVoiceEntry>,
     val declaredAgents: List<String>,
-    val nonSingerAgents: Set<String>
+    val nonSingerAgents: Set<String>,
+    val primaryAgent: String
 )
 
 /** Adapts common local-file dialects to Accompanist's timed model. */
@@ -50,11 +51,13 @@ object LyricsDecoder {
         var taggedVoices: List<TtmlVoiceEntry> = emptyList()
         var declaredAgents: List<String> = emptyList()
         var nonSingerAgents: Set<String> = emptySet()
+        var primaryAgent = ""
         val parsed = if (content.startsWith('<')) {
             val normalized = normalizeTtml(content, duration, inferredEnds)
             taggedVoices = normalized.voices
             declaredAgents = normalized.declaredAgents
             nonSingerAgents = normalized.nonSingerAgents
+            primaryAgent = normalized.primaryAgent
             val ttml = TTMLParser.parse(normalized.xml)
             ttml.copy(lines = ttml.lines.map { line ->
                 if (line is KaraokeLine && (line.start to line.syllables.joinToString("") { it.content }.trim()) in normalized.lineOnly)
@@ -109,10 +112,10 @@ object LyricsDecoder {
         // Counting the second <ttm:agent> as the right singer incorrectly
         // maps v2000 -> right and every actual person v2..v6 -> left.
         //
-        // For Apple's numbered *person* voices, odd IDs occupy the left lane
-        // and even IDs the right lane. Generic named people alternate in their
-        // declared order. A supplied tts:textAlign always takes precedence.
-        // Both main and backing vocals use this same side metadata.
+        // Voice IDs identify people, not alternating positions. Preserve the
+        // body's default singer and conventional v1 lead on the main side;
+        // additional guests (including v3) use the duet side. Explicit source
+        // alignment takes precedence for both main and backing vocals.
         val singerIds = (
             declaredAgents.filterNot { it in nonSingerAgents } +
                 taggedVoices.map { it.agentId }
@@ -128,11 +131,12 @@ object LyricsDecoder {
         fun isRightVoice(voice: TtmlVoiceEntry): Boolean {
             voice.explicitRight?.let { return it }
             if (voice.agentId.isBlank() || voice.agentId in nonSingerAgents) return false
+            if (voice.agentId == primaryAgent) return false
             val number = numberedVoice.matchEntire(voice.agentId)
                 ?.groupValues?.get(1)?.toIntOrNull()
-            if (number != null && number in 1..99) return number % 2 == 0
+            if (number != null && number in 1..99) return number != 1
             val declaredIndex = singerIds.indexOf(voice.agentId)
-            return declaredIndex >= 0 && declaredIndex % 2 == 1
+            return declaredIndex > 0
         }
         val duetRight = buildSet {
             sortedIndices.forEachIndexed { index, sourceIndex ->
@@ -373,7 +377,7 @@ object LyricsDecoder {
 
         // Resolve the nearest TTML metadata ttm:agent, plus commonly exported
         // speaker/voice attributes. A one-singer TTML remains left aligned.
-        fun speaker(element: Element): String {
+        fun speaker(element: Element, inheritedOnly: Boolean = false): String {
             // Explicit paragraph voice has priority over an inherited voice.
             var cursor: Node? = element
             while (cursor is Element) {
@@ -387,6 +391,7 @@ object LyricsDecoder {
                 }
                 cursor = cursor.parentNode
             }
+            if (inheritedOnly) return ""
             // Some word-timed TTML tags only label their spans. Treat the
             // paragraph as one singer only if all its tagged spans agree.
             val speakers = mutableSetOf<String>()
@@ -468,7 +473,11 @@ object LyricsDecoder {
             }
             return "<$name$attributes>$children</$name>"
         }
+        val bodies = root.getElementsByTagNameNS("*", "body")
+        val primaryAgent = (bodies.item(0) as? Element)?.let {
+            speaker(it, inheritedOnly = true)
+        }.orEmpty()
         val rendered = render(root, 0, duration, 0)
-        return NormalizedTtml(rendered, lineOnly, taggedVoices, declaredAgents, nonSingerAgents)
+        return NormalizedTtml(rendered, lineOnly, taggedVoices, declaredAgents, nonSingerAgents, primaryAgent)
     }
 }
