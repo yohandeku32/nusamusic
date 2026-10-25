@@ -70,8 +70,8 @@ class ImmersiveDiscoveryPageTest {
         val bounds = compose.onNodeWithTag("discovery-feed").getUnclippedBoundsInRoot()
         compose.runOnIdle {
             val view = compose.activity.findViewById<View>(android.R.id.content)
-            val bitmap = Bitmap.createBitmap(bounds.width.value.roundToInt(),
-                bounds.height.value.roundToInt(), Bitmap.Config.ARGB_8888)
+            val bitmap = Bitmap.createBitmap((bounds.right - bounds.left).value.roundToInt(),
+                (bounds.bottom - bounds.top).value.roundToInt(), Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
             canvas.translate(-bounds.left.value, -bounds.top.value)
             view.draw(canvas)
