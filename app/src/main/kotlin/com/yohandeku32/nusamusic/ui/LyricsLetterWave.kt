@@ -6,9 +6,9 @@ import java.util.Locale
 internal const val LYRICS_DETAIL_MIN_MS = 650L
 
 /**
- * Every visible letter follows its own gentle crest, delayed by its measured
- * position within the word. Unlike a per-letter bounce, this is one single
- * pass: C2-smoothed rise, C2-smoothed fall, and no oscillator or loop.
+ * A single C2-smoothed rise and fall from authored word timing. The painter
+ * samples wordLiftDp so shaped runs and their halo share one offset, without
+ * cutting through ligatures, accents or glyph overhangs.
  *
  * All values derive from Media3 playback milliseconds. Pause holds the pose;
  * seeking samples the correct pose immediately instead of replaying a tween.
@@ -45,7 +45,10 @@ internal class LyricsLetterWave(units: List<LyricsHeldWordUnit>) {
             val start = group.minOf { it.startMs }
             val end = group.maxOf { it.endMs }
             val duration = end.toLong() - start
+            val sustained = group.any { it.reliableHold && it.endMs.toLong() - it.startMs >= 1300L }
             if (duration > LYRICS_DETAIL_MIN_MS &&
+                !sustained &&
+                group.all { it.reliableHold } &&
                 group.none { it.content.trim().any(Char::isWhitespace) }) {
                 val travel = (duration * 0.45f).coerceIn(240f, 640f)
                 val word = Word(
@@ -62,6 +65,12 @@ internal class LyricsLetterWave(units: List<LyricsHeldWordUnit>) {
             }
             index++
         }
+    }
+
+    /** One offset for every shaped run in a word, including halo and fill. */
+    fun wordLiftDp(unitIndex: Int, nowMs: Int): Float {
+        val word = byUnit.getOrNull(unitIndex) ?: return 0f
+        return liftDp(unitIndex, (word.leftDp + word.rightDp) * 0.5f, nowMs)
     }
 
     fun isAnimating(unitIndex: Int, nowMs: Int): Boolean {

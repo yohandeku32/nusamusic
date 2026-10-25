@@ -5,6 +5,67 @@ import org.junit.Test
 import kotlin.math.abs
 
 class LyricsLetterWaveTest {
+    @Test fun shapedRunsInOneWordShareSmoothMotionAt60_90_120Hz() {
+        val wave = LyricsLetterWave(listOf(
+            LyricsHeldWordUnit("mélo", 1000, 1400, 0f, 60f),
+            LyricsHeldWordUnit("die", 1400, 2000, 60f, 120f)
+        ))
+        for (hz in listOf(60, 90, 120)) {
+            var previous = 0f
+            var peak = 0f
+            for (frame in 0..hz * 3) {
+                val now = (frame * 1000.0 / hz).toInt()
+                val first = wave.wordLiftDp(0, now)
+                val second = wave.wordLiftDp(1, now)
+                assertEquals("Joined runs separated at $now", first, second, 0f)
+                assertTrue("Motion snapped at $hz Hz / $now", abs(first - previous) < 0.14f)
+                peak = maxOf(peak, -first)
+                previous = first
+            }
+            assertTrue("Motion must not be disabled for medium words", peak > 0.4f)
+            assertEquals(0f, previous, 0f)
+        }
+    }
+
+    @Test fun longHeldWordsDoNotAlsoReplayTheShortLetterCrest() {
+        val units = listOf(
+            LyricsHeldWordUnit("ka", 1000, 1300, 0f, 30f),
+            LyricsHeldWordUnit("mu", 1300, 7000, 30f, 90f)
+        )
+        val shortWave = LyricsLetterWave(units)
+        val heldWave = LyricsHeldWordWave(units)
+        var heldPeak = 0f
+        for (now in 900..7500 step 8) {
+            for (part in units.indices) {
+                assertFalse(shortWave.isAnimating(part, now))
+                assertEquals(0f, shortWave.wordLiftDp(part, now), 0f)
+            }
+            heldPeak = maxOf(heldPeak, heldWave.pose(1, now, 60f).depth)
+        }
+        assertTrue("The authored held-vocal wave must remain", heldPeak > 0.9f)
+    }
+
+    @Test fun inferredEndNeverInventsWordMotion() {
+        val wave = LyricsLetterWave(listOf(
+            LyricsHeldWordUnit("held", 1000, 5000, 0f, 90f, reliableHold = false)
+        ))
+        for (now in 900..5500 step 8) {
+            assertFalse(wave.isAnimating(0, now))
+            assertEquals(0f, wave.wordLiftDp(0, now), 0f)
+        }
+    }
+
+    @Test fun wordMotionFreezesOnPauseAndResamplesAfterSeek() {
+        val wave = LyricsLetterWave(listOf(
+            LyricsHeldWordUnit("réflexion", 1000, 2100, 0f, 150f)
+        ))
+        val pose = wave.wordLiftDp(0, 1350)
+        assertTrue(pose < 0f)
+        repeat(120) { assertEquals(pose, wave.wordLiftDp(0, 1350), 0f) }
+        assertEquals(0f, wave.wordLiftDp(0, 9000), 0f)
+        assertEquals(pose, wave.wordLiftDp(0, 1350), 0f)
+    }
+
     @Test fun crestTravelsFromOneLetterToTheNextRatherThanLiftingTheWholeWord() {
         val wave = LyricsLetterWave(listOf(
             LyricsHeldWordUnit("melodi", 1000, 2000, 0f, 120f)
@@ -66,7 +127,8 @@ class LyricsLetterWaveTest {
 
     @Test fun durationGateIsSoftAndLastLetterFinishesBeforeTheNextWord() {
         var previous = 0f
-        for (duration in 650..1300 step 10) {
+        // Authored holds from 1300ms use the separate sustained-vocal wave.
+        for (duration in 650 until 1300 step 10) {
             val wave = LyricsLetterWave(listOf(
                 LyricsHeldWordUnit("pelan ", 1000, 1000 + duration, 0f, 80f)
             ))

@@ -284,7 +284,8 @@ internal fun SyncedLyricsView(
                     }) {
                         if (main is KaraokeLine) CenteredKaraokeLine(main, clock.read, motionState,
                             normalStyle, seekLine, onMainHeight = { mainHeights[index] = it },
-                            expressions = expressions[main], alignEnd = duetRight)
+                            expressions = expressions[main], alignEnd = duetRight,
+                            inferredEnds = inferredEnds)
                         else if (main is SyncedLine) LineSyncedLyricsRow(main, clock.read, motionState,
                             normalStyle, onMainHeight = { mainHeights[index] = it },
                             alignEnd = duetRight) { seekLine(main) }
@@ -309,7 +310,8 @@ internal fun SyncedLyricsView(
                                     // for main vocals, sending backing singer 2 left.
                                     CenteredKaraokeLine(voice, clock.read, motionState, backgroundStyle, seekLine,
                                         expressions = expressions[voice],
-                                        alignEnd = backing.index in duetRightLines)
+                                        alignEnd = backing.index in duetRightLines,
+                                        inferredEnds = inferredEnds)
                                 }
                             }
                         }

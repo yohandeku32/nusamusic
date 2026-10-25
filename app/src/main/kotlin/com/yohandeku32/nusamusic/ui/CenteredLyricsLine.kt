@@ -26,6 +26,7 @@ import com.mocharealm.accompanist.lyrics.core.model.karaoke.KaraokeLine
 import com.mocharealm.accompanist.lyrics.core.model.synced.SyncedLine
 import com.mocharealm.accompanist.lyrics.ui.composable.lyrics.*
 import com.mocharealm.accompanist.lyrics.ui.utils.isRtl
+import com.yohandeku32.nusamusic.data.LyricsUnitKey
 
 /** Measurements are retained; playback-time effects invalidate drawing/layers only. */
 @Composable
@@ -33,7 +34,8 @@ internal fun CenteredKaraokeLine(
     line: KaraokeLine, time: () -> Int, motion: LyricsMotionState,
     style: TextStyle, onSeek: (ISyncedLine) -> Unit, onMainHeight: (Int) -> Unit = {},
     expressions: List<LyricsAdaptiveExpression>? = null,
-    alignEnd: Boolean = false
+    alignEnd: Boolean = false,
+    inferredEnds: Set<LyricsUnitKey> = emptySet()
 ) {
     val textMeasurer = rememberTextMeasurer()
     val density = LocalDensity.current
@@ -59,9 +61,9 @@ internal fun CenteredKaraokeLine(
             val layouts = remember(wrapped, width, lineHeight, rtl) {
                 calculateStaticLineLayout(wrapped, false, width, lineHeight, rtl)
             }
-            val painter = remember(layouts, density.density, line.start, line.end, expressions, alignEnd, width) {
+            val painter = remember(layouts, density.density, line.start, line.end, expressions, alignEnd, width, inferredEnds) {
                 SyllableLyricsPainter(layouts, density.density, expressions,
-                    alignEnd = alignEnd, viewportWidthPx = width)
+                    alignEnd = alignEnd, viewportWidthPx = width, inferredEnds = inferredEnds)
             }
             val height = with(density) { (lineHeight * wrapped.size).toDp() } + 8.dp
             val readable by remember(line, voices, visualTime, motion) { derivedStateOf {
