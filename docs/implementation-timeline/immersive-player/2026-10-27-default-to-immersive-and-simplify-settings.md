@@ -15,6 +15,6 @@ The first-launch import choices now remain available in the empty Immersive libr
 
 - The combined presentation/intro/library/search run passed 32 checks. New cases cover a missing preference choosing Immersive, invalid/legacy fallback, saved-mode preservation, actual empty-library import callbacks and rescan access at narrow width with large text.
 - Android compilation passed. Source inspection confirms no Liquid Glass setting, GitHub label/address, URI handler or obsolete Settings callback remains.
-- The final full local run completed 619 tests: 616 passed, with only the three pre-existing artist-layout failures. `:app:lintDebug` passed. PR CI results are recorded after completion.
+- The final full local run completed 619 tests: 616 passed, with only the three pre-existing artist-layout failures. `:app:lintDebug` passed. [PR CI run 40499592898](https://github.com/yohandeku32/nusamusic/actions/runs/40499592898) verified application source `68d303992212042f663cafe3578d5857f1107551`: compilation passed and 619 tests ran, with 616 passing and only the same three pre-existing `ImmersiveArtistHeroTest` failures. All changed default/import, folder-refresh and original-file lyric tests passed. The workflow is red because of those existing failures; no APK was assembled.
 
 Physical first-run handoff and OEM viewport behavior remain device acceptance checks. See [onboarding](../onboarding/README.md) for the welcome contract.
