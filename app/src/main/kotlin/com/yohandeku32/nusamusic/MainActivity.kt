@@ -1,6 +1,7 @@
 package com.yohandeku32.nusamusic
 
 import android.Manifest
+import androidx.compose.material3.TextButton
 import androidx.lifecycle.compose.currentStateAsState
 import android.database.ContentObserver
 import android.content.ComponentName
@@ -540,6 +541,10 @@ class MainActivity : ComponentActivity() {
             ?.takeIf { customTitleFontPath != null }
 
         permissionGranted = checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
+        val showWelcome = com.yohandeku32.nusamusic.ui.ArunaIntroPreferences.prepare(
+            uiPrefsForFonts(), existingUse = selectedMusicFolders.isNotEmpty() ||
+                libraryPrefs.all.isNotEmpty() || playbackPrefs.all.isNotEmpty()
+        )
 
         contentResolver.registerContentObserver(
             MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
@@ -569,9 +574,6 @@ class MainActivity : ComponentActivity() {
             }
         }
         loadCachedSongs()
-        if (!permissionGranted) {
-            permissionLauncher.launch(permission)
-        }
 
         val token = SessionToken(this, ComponentName(this, PlaybackService::class.java))
         val future = MediaController.Builder(this, token).buildAsync()
@@ -663,7 +665,15 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             NusaMusicTheme {
+                com.yohandeku32.nusamusic.ui.ArunaIntroHost(
+                    preferences = uiPrefsForFonts(), showInitially = showWelcome,
+                    onChooseFolder = ::openMusicFolderPicker,
+                    onDeviceMusic = {
+                        if (permissionGranted) scanMusic() else permissionLauncher.launch(permission)
+                    }
+                ) { openLibrary ->
                 NusaMusicApp(
+                    startInLibrary = openLibrary,
                     songs = songs,
                     currentSong = currentSong,
                     isPlaying = isPlaying,
@@ -743,6 +753,7 @@ class MainActivity : ComponentActivity() {
                     onRemoveMusicFolder = ::removeMusicFolder,
                     onRequestPermission = { permissionLauncher.launch(permission) }
                 )
+                }
             }
         }
 
@@ -1958,14 +1969,15 @@ private fun NusaMusicApp(
     onQuickRefreshMusic: () -> Unit,
     onSelectMusicFolder: () -> Unit,
     onRemoveMusicFolder: (String) -> Unit,
-    onRequestPermission: () -> Unit
+    onRequestPermission: () -> Unit,
+    startInLibrary: Boolean = false
 ) {
     var isFavorite by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var artistOverlayOpen by remember { mutableStateOf(false) }
     var discoveryArtistName by remember { mutableStateOf<String?>(null) }
     val discoveryListState = androidx.compose.foundation.lazy.rememberLazyListState()
-    var libraryOverlayOpen by remember { mutableStateOf(false) }
+    var libraryOverlayOpen by remember { mutableStateOf(startInLibrary) }
     // Decode animated artwork only after either immersive overlay has fully
     // closed; restarting Media3 while the pill is moving causes a brief hitch.
     var immersiveVideoSuspended by remember { mutableStateOf(false) }
@@ -2251,7 +2263,7 @@ private fun NusaMusicApp(
     val artistPageEnabled = playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
     val playerPage = 0
     val libraryPage = 1
-    var libraryWasVisible by remember { mutableStateOf(false) }
+    var libraryWasVisible by remember { mutableStateOf(startInLibrary) }
     val pagerState = androidx.compose.runtime.key(artistPageEnabled) {
         androidx.compose.foundation.pager.rememberPagerState(
             initialPage = if (!artistPageEnabled && libraryWasVisible)
@@ -3261,37 +3273,36 @@ private fun NusaMusicApp(
                                         ) {
                                             Text(
                                                 nusaText(
-                                                    "Izinkan Nusa mengakses file audio Anda.",
-                                                    "Give Nusa access to your audio files."
+                                                    "Tambahkan musik untuk mulai mendengarkan.",
+                                                    "Add music to start listening."
                                                 ),
                                                 color = Color(0xFF9D9D9D),
                                                 fontSize = 14.sp
                                             )
                                             Spacer(Modifier.height(12.dp))
-                                            FilledIconButton(onClick = onRequestPermission) {
-                                                Icon(
-                                                    Icons.Default.FolderOpen,
-                                                    contentDescription = nusaText(
-                                                        "Izinkan akses musik",
-                                                        "Allow music access"
-                                                    )
-                                                )
-                                            }
+                                            com.yohandeku32.nusamusic.ui.MusicImportActions(
+                                                onChooseFolder = onSelectMusicFolder,
+                                                onDeviceMusic = onRequestPermission,
+                                                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)
+                                            )
                                         }
                                     }
                                 } else {
                                     item {
-                                        Box(
+                                        Column(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .padding(top = 80.dp),
-                                            contentAlignment = Alignment.Center
+                                            horizontalAlignment = Alignment.CenterHorizontally
                                         ) {
                                             Text(
                                                 emptyLibraryMessage,
                                                 color = Color(0xFF9D9D9D),
                                                 fontSize = 14.sp
                                             )
+                                            if (!isScanningMusic && songs.isEmpty()) TextButton(onClick = onSelectMusicFolder) {
+                                                Text(nusaText("Pilih folder musik", "Choose a music folder"))
+                                            }
                                         }
                                     }
                                 }

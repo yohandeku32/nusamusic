@@ -6,6 +6,10 @@ Requires **Android 10 (API 29) or newer**. The app is under active development.
 
 Developed by [@yohandeku32](https://github.com/yohandeku32). The repository and Android application ID still use `nusamusic`; the app's display name is **Aruna**. Version information lives in [app/build.gradle.kts](app/build.gradle.kts).
 
+## First launch
+
+New listeners see a short Aruna welcome with three choices: choose a music folder, find audio on the device, or set up later. Access is requested after the listener chooses an import action. Cancelling a folder selection or declining audio access leaves import choices available in the empty song list. The welcome is shown once; existing settings and library history preserve returning-listener continuity.
+
 ## Player and library
 
 | Player | Presentation |
