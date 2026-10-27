@@ -155,20 +155,21 @@ class ImmersiveMusicLibraryTest {
         compose.onNodeWithText("Perpustakaan").assertIsDisplayed()
         compose.onNodeWithText("40 lagu").assertIsDisplayed()
         compose.onNodeWithText("Putar semua").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Urutkan lagu").performClick()
-        compose.onNodeWithText("Judul Z–A").performClick()
-        compose.waitUntil(5_000) {
-            compose.onAllNodesWithContentDescription("Opsi lainnya untuk Track 40").fetchSemanticsNodes().isNotEmpty()
-        }
-        compose.onNodeWithContentDescription("Opsi lainnya untuk Track 40").performScrollTo().performClick()
+        compose.onNodeWithContentDescription("Opsi lainnya untuk Track 01").performClick()
         compose.onNodeWithText("Hapus permanen").performClick()
         compose.onNodeWithText("Hapus lagu secara permanen?").assertIsDisplayed()
         compose.onNodeWithText("Batal").performClick()
+        compose.onNodeWithContentDescription("Urutkan lagu").performClick()
+        compose.onNodeWithText("Judul Z–A").performClick()
+        compose.onNodeWithText("Judul Z–A").assertIsDisplayed()
         compose.onNodeWithText("Cari lagu, artis, album").performClick()
         compose.onNode(hasSetTextAction()).performTextInput("does not exist")
         compose.waitUntil(5_000) { compose.onAllNodesWithText("Tidak ada lagu yang cocok").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("0 lagu").assertIsDisplayed()
         compose.onNodeWithContentDescription("Tutup pencarian").performClick()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithText("Tidak ada lagu yang cocok").fetchSemanticsNodes().isNotEmpty()
+        }
         compose.onNodeWithText("Tidak ada lagu yang cocok").assertIsDisplayed()
         compose.onNodeWithContentDescription("Hapus pencarian").performClick()
         compose.waitUntil(5_000) { compose.onAllNodesWithText("40 lagu").fetchSemanticsNodes().isNotEmpty() }
