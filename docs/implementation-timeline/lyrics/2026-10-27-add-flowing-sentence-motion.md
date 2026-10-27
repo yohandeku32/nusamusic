@@ -23,10 +23,12 @@ Offsets are nonnegative and ordered, capped at 35% of the shortest visible row h
 Local Android compilation succeeded. Initial focused verification completed **392 tests with zero failures** (`:app:testDebugUnitTest --tests '*Lyrics*'`). This includes:
 
 - 12 follower-model regressions covering phase differences, continuity on cue changes, ordered/bounded positions, pause, reset, equal-onset voices, recycling, reduced motion, comparable 60/90/120 Hz positions, and snapshot observation after first draw/reset.
-- Four native Robolectric/Compose tests exercising distinct rendered sentence travel, pause during transition, zero-duration-scale while paused, tap-to-seek, manual browsing, and 320dp/1.5x wrapped text.
+- Four initial native Robolectric/Compose tests exercising distinct rendered sentence travel, pause during transition, zero-duration-scale while paused, tap-to-seek, manual browsing, and 320dp/1.5x wrapped text.
 - Existing lyric timing, focus, playback-clock, duet/grouping and character-motion regressions.
 
 An additional native regression covers refreshed duet metadata with unchanged lyric content. The follow effect is keyed to the display grouping so a replacement follower stays connected to the scroll loop.
+
+Final [CI run 40448559607](https://github.com/yohandeku32/nusamusic/actions/runs/40448559607), on source revision `480f3889d152c69ddb2515ff8b6f6de4ba4106f5`, compiled successfully and passed all **17 new regressions** (12 model tests and five native UI tests). The full suite completed **575 tests: 572 passed and three failed**. The failures are the same existing `ImmersiveArtistHeroTest` methods as [the pre-change head](https://github.com/yohandeku32/nusamusic/actions/runs/40431223461): `shortArtistKeepsOverlayHeight`, `enlargedArtistTitleReflowsBeyondThreeLinesAtBothPhoneWidths`, and `enlargedAlbumTitleAndArtistMetadataFitAndPlaybackActionsStillWork`. Local `:app:lintDebug` also completed successfully.
 
 The native test produces 43 playback-driven PNG frames in `app/build/reports/lyrics-motion-preview/`; CI uploads them as `Lyrics-motion-previews`. All words in the preview are test fixtures. The frames are actual component renders rather than a separately recreated animation.
 
