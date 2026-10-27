@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.widget.Toast
 import com.yohandeku32.nusamusic.data.LyricsFolderAccess
+import com.yohandeku32.nusamusic.data.LyricsPendingSaveQueue
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Save
 import com.composables.icons.lucide.Clock3
@@ -36,6 +37,12 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.yohandeku32.nusamusic.model.Song
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.util.Locale
+
+private fun lyricsText(id: String, en: String) =
+    if (Locale.getDefault().language.equals("id", true)) id else en
 
 /**
  * In-place Immersive lyric viewport. This is the existing Lyrics engine
@@ -86,7 +93,10 @@ fun ImmersiveLyricsPanel(
         // authored lyrics are immediately durable and visible offline.
         state.load(snapshot.song, scope, retry = true, onlineEnabled = onlineLyricsEnabled)
         Toast.makeText(context,
-            "Lyrics saved in NusaMusic. File embedding completes when playback releases this song.",
+            lyricsText(
+                "Menunggu penulisan metadata. Putar lagu lain agar berkas ini dapat ditulis dengan aman.",
+                "Waiting to write metadata. Switch to another song so this file can be written safely."
+            ),
             Toast.LENGTH_LONG).show()
     }
 
@@ -127,7 +137,12 @@ fun ImmersiveLyricsPanel(
                 check(activeSong?.uri == snapshot.song.uri) {
                     "The playing song changed. Save its lyrics again."
                 }
-                if (folderAccess.authorizedTrees().isEmpty()) {
+                folderAccess.requireSupportedSong(snapshot.song)
+                if (withContext(Dispatchers.IO) {
+                        LyricsPendingSaveQueue.needsFolderReview(context, snapshot.song.id)
+                    }) {
+                    folderNeedsReview = snapshot
+                } else if (folderAccess.authorizedTrees().isEmpty()) {
                     // One-time parent folder permission. Reading the original
                     // audio and writing metadata happen after track transition.
                     pendingFolder = snapshot
@@ -294,8 +309,9 @@ fun ImmersiveLyricsPanel(
                     Icon(
                         imageVector = if (queued) Lucide.Clock3 else Lucide.Save,
                         contentDescription = if (queued)
-                            "Lyrics saved in NusaMusic; waiting to embed into original file"
-                        else "Save lyrics to this song",
+                            lyricsText("Menunggu penulisan metadata; putar lagu lain untuk menyelesaikan",
+                                "Waiting to write metadata; switch songs to finish")
+                        else lyricsText("Simpan lirik ke metadata lagu", "Save lyrics to song metadata"),
                         tint = Color.White,
                         modifier = Modifier.size(21.dp)
                     )
@@ -308,13 +324,13 @@ fun ImmersiveLyricsPanel(
     if (folderNeedsReview != null) {
         AlertDialog(
             onDismissRequest = { folderNeedsReview = null },
-            title = { Text("Music folder access") },
+            title = { Text(lyricsText("Tinjau akses folder musik", "Review music folder access")) },
             text = {
                 Text(
-                    "This song could not be found inside the authorized folder. " +
-                        "If it is stored elsewhere, choose the highest Music folder " +
-                        "that contains all your artists and albums. " +
-                        "NusaMusic will remember that folder for future saves."
+                    lyricsText(
+                        "Metadata belum berhasil ditulis. Pilih folder yang berisi lagu ini dengan akses tulis, lalu coba lagi. Aruna akan mengingat izin foldernya.",
+                        "The metadata write did not finish. Choose the folder containing this song with write access and try again. Aruna will remember the folder permission."
+                    )
                 )
             },
             confirmButton = {
@@ -331,10 +347,10 @@ fun ImmersiveLyricsPanel(
                         Toast.makeText(context, error.message ?: "Cannot open folder picker",
                             Toast.LENGTH_LONG).show()
                     }
-                }) { Text("Choose music folder") }
+                }) { Text(lyricsText("Pilih folder musik", "Choose music folder")) }
             },
             dismissButton = {
-                TextButton(onClick = { folderNeedsReview = null }) { Text("Cancel") }
+                TextButton(onClick = { folderNeedsReview = null }) { Text(lyricsText("Batal", "Cancel")) }
             }
         )
     }

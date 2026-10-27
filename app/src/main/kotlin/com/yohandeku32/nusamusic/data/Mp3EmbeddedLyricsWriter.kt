@@ -9,7 +9,7 @@ import java.nio.charset.Charset
 /**
  * Preserve every existing ID3 frame byte-for-byte and the complete MPEG audio.
  * Add a standards-compliant USLT for general players and a TXXX:LYRICS frame
- * containing original TTML/Enhanced LRC timing for NusaMusic.
+ * containing original TTML/Enhanced LRC timing for Aruna.
  *
  * Deliberately reject unsupported tag flags/versions rather than corrupting
  * an MP3 with unusual extended headers, global unsynchronization or a footer.
@@ -70,8 +70,8 @@ internal object Mp3EmbeddedLyricsWriter {
                     require(size in 0..MAX_FRAME_BYTES && size <= tag.size - p - 10) {
                         "Unsupported ID3 frame size."
                     }
-                    // Never interpret/replace other providers' USLT frames.
-                    // Update only our own TXXX:LYRICS and USLT:NusaMusic.
+                    // Replace canonical/owned lyrics; retain described alternate
+                    // translations and unrelated metadata.
                     val body = tag.copyOfRange(p + 10, p + 10 + size)
                     if (!isOwnedLyrics(name, body)) oldFrames.write(tag, p, 10 + size)
                     p += size + 10
@@ -86,7 +86,6 @@ internal object Mp3EmbeddedLyricsWriter {
             }
 
             val tagPayload = ByteArrayOutputStream()
-            tagPayload.write(oldFrames.toByteArray())
             val timed = fullLyrics.toByteArray(Charsets.UTF_8)
             val plain = plainLyrics.takeIf { it.isNotBlank() } ?: fullLyrics
             addFrame(tagPayload, "TXXX", if (version == 4) {
@@ -96,14 +95,14 @@ internal object Mp3EmbeddedLyricsWriter {
                     byteArrayOf(0, 0) + fullLyrics.toByteArray(Charsets.UTF_16)
             }, version)
             addFrame(tagPayload, "USLT", if (version == 4) {
-                byteArrayOf(3) + "eng".toByteArray(Charsets.US_ASCII) +
-                    "NusaMusic".toByteArray(Charsets.UTF_8) + byteArrayOf(0) +
+                byteArrayOf(3) + "und".toByteArray(Charsets.US_ASCII) + byteArrayOf(0) +
                     plain.toByteArray(Charsets.UTF_8)
             } else {
-                byteArrayOf(1) + "eng".toByteArray(Charsets.US_ASCII) +
-                    "NusaMusic".toByteArray(Charsets.UTF_16) + byteArrayOf(0, 0) +
+                byteArrayOf(1) + "und".toByteArray(Charsets.US_ASCII) +
+                    byteArrayOf(0xFE.toByte(), 0xFF.toByte(), 0, 0) +
                     plain.toByteArray(Charsets.UTF_16)
             }, version)
+            tagPayload.write(oldFrames.toByteArray())
             val payload = tagPayload.toByteArray()
             require(payload.size < MAX_TAG_BYTES) { "The combined song metadata is too large." }
             FileOutputStream(output).use { destination ->
@@ -123,10 +122,10 @@ internal object Mp3EmbeddedLyricsWriter {
     private fun isOwnedLyrics(name: String, payload: ByteArray): Boolean {
         if (payload.size < 6) return false
         val encoding = payload[0].toInt() and 255
-        // Only exact owned descriptors are replaced; unrelated lyrics survive.
+        // Empty descriptions are the standard default lyric field.
         return when (name) {
             "TXXX" -> descriptor(payload, 1, encoding) == "LYRICS"
-            "USLT" -> payload.size > 5 && descriptor(payload, 4, encoding) == "NusaMusic"
+            "USLT" -> payload.size > 5 && descriptor(payload, 4, encoding) in setOf("", "Aruna", "NusaMusic")
             else -> false
         }
     }

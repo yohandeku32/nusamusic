@@ -193,7 +193,7 @@ internal object AppleArtistPortraitLoader {
                 readTimeout = 3700
                 instanceFollowRedirects = false
                 setRequestProperty("Accept", "image/webp,image/jpeg,image/png")
-                setRequestProperty("User-Agent", "NusaMusic/ArtistPortrait")
+                setRequestProperty("User-Agent", "Aruna/ArtistPortrait")
             }
             try {
                 val code = connection.responseCode

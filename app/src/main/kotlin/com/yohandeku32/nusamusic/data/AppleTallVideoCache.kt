@@ -60,7 +60,7 @@ internal object AppleTallVideoCache {
             .setCache(cache)
             .setUpstreamDataSourceFactory(
                 DefaultHttpDataSource.Factory()
-                    .setUserAgent("NusaMusic/AppleTall")
+                    .setUserAgent("Aruna/AppleTall")
                     .setConnectTimeoutMs(4_000)
                     .setReadTimeoutMs(8_000)
                     .setAllowCrossProtocolRedirects(false)

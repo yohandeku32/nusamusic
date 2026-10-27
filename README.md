@@ -1,6 +1,6 @@
 # Aruna
 
-Aruna is an Android music player for the music stored on your device, built with Kotlin, Jetpack Compose and AndroidX Media3. Choose a Vinyl, CD or Immersive player, browse your collection, and follow synchronized lyrics while you listen.
+Aruna is an Android music player for the music stored on your device, built with Kotlin, Jetpack Compose and AndroidX Media3. Start with the Immersive player or choose CD in Settings, browse your collection, and follow synchronized lyrics while you listen.
 
 Requires **Android 10 (API 29) or newer**. The app is under active development.
 
@@ -14,13 +14,14 @@ New listeners see a short Aruna welcome with three choices: choose a music folde
 
 | Player | Presentation |
 | --- | --- |
-| Vinyl | Rotating record artwork, reflections and a moving tonearm. |
+| Immersive (default) | Large album artwork, a blurred backdrop, light/dark appearance and optional animated covers. |
 | CD | Rotating disc inside a jewel case, with a row of discs for choosing tracks. |
-| Immersive | Large album artwork, a blurred backdrop, light/dark appearance and optional animated covers. |
 
-Choose a presentation in Settings. Playback includes background audio, notification controls, shuffle, repeat, saved playback position and optional crossfade from 1 to 12 seconds.
+Choose a presentation in Settings. A missing or unavailable saved mode uses Immersive; an explicitly saved CD choice is preserved. Playback includes background audio, notification controls, shuffle, repeat, saved playback position and optional crossfade from 1 to 12 seconds.
 
 Aruna reads your device library through MediaStore and folders you select, including subfolders. It skips tracks shorter than 10 seconds. The library supports search, album and artist browsing, and sorting by title, artist, album, date added or duration.
+
+Pull to refresh checks both the Android media index and manually selected folders, just like the explicit scan in Settings. Unchanged folder tags are reused; newly copied songs do not need to be indexed by Android before a selected-folder refresh can discover them.
 
 The folder scanner recognizes AAC, ALAC, FLAC, M4A, MP3, OGG, OPUS, WAV and WMA extensions. Actual playback depends on the device's decoders and Media3's container support. Lossless and Hi-Res badges come from inspected audio metadata. A reported depth of at least 24 bits qualifies for the Hi-Res flag; the badge does not certify bit-perfect output to a DAC.
 
@@ -28,7 +29,7 @@ The folder scanner recognizes AAC, ALAC, FLAC, M4A, MP3, OGG, OPUS, WAV and WMA 
 
 In Immersive mode, **Discover** opens a feed of albums, artists and recently played songs from your local collection. Artist rankings use listening history recorded on the device. Before there is listening history, the feed shows artists from your library.
 
-Open an artist or album from Discovery to browse that artist's local tracks and albums. Artist pages can show a Deezer portrait and a Last.fm biography. Playback and local browsing work without either service. About Aruna in Settings links to the developer's GitHub profile.
+Open an artist or album from Discovery to browse that artist's local tracks and albums. Artist pages can show a Deezer portrait and a Last.fm biography. Playback and local browsing work without either service. About Aruna in Settings shows the app version and developer credit.
 
 ## Lyrics
 
@@ -40,7 +41,7 @@ Open **Lyrics** from the Immersive player's controls. Lyrics replace the artwork
 - Short vocal pulls use a wave across individual characters. Nearby short words share one continuously moving crest across word boundaries; long held notes retain their separate character-by-character 3D rise and release. Rapid words and uncertain timing avoid the extra character animation.
 - Animations use playback time, hold their pose on pause and resample after a seek. Tap a timed lyric row to seek; manual scrolling temporarily suspends automatic following.
 
-When online lyrics improve the file's existing lyrics, **Save** stores them in Aruna and queues embedding into supported MP3, FLAC or M4A files. Grant access to the music folder when prompted. A clock icon means file embedding is still pending; Aruna waits until the song is no longer playing before editing the original. Saving keeps the original audio format.
+When online lyrics improve the file's existing lyrics, **Save** queues a metadata update to the original MP3, FLAC or M4A file. Grant access to the music folder when prompted. A clock means the original is still waiting to be written; switch songs so the player can release the file. Success is reported only after the original matches the verified output. Saving updates the standard readable lyric and authored timing without converting the audio.
 
 See [Lyrics: sources, timing and saving](docs/EMBEDDED_LYRICS.md) for supported metadata, folder access and verification details.
 

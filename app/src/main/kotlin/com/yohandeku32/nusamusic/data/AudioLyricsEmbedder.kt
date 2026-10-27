@@ -8,6 +8,7 @@ import com.mocharealm.accompanist.lyrics.core.model.synced.SyncedLine
 import com.yohandeku32.nusamusic.model.Song
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -63,8 +64,9 @@ internal class AudioLyricsEmbedder(private val context: Context) {
         require(context.cacheDir.usableSpace > requiredSpace) {
             "Not enough free space to back up the song before embedding."
         }
-        val backup = File.createTempFile("nusa-lyrics-original-", format.extension, context.cacheDir)
-        val updated = File.createTempFile("nusa-lyrics-updated-", format.extension, context.cacheDir)
+        val backups = File(context.filesDir, "lyrics-backups").apply { mkdirs() }
+        val backup = File.createTempFile("aruna-lyrics-original-", format.extension, backups)
+        val updated = File.createTempFile("aruna-lyrics-updated-", format.extension, context.cacheDir)
         var preserveBackup = false
         try {
             val chosenHash = resolver.openInputStream(selectedUri)?.use { source ->
@@ -106,18 +108,25 @@ internal class AudioLyricsEmbedder(private val context: Context) {
                 }
             } catch (error: Exception) {
                 if (attemptedWrite) {
-                    val restored = runCatching { overwriteOriginal(selectedUri, backup) }
+                    val restored = withContext(NonCancellable) { runCatching {
+                        overwriteOriginal(selectedUri, backup)
+                        val restoredHash = resolver.openInputStream(selectedUri)?.use {
+                            copyAndHash(it, null, MAX_AUDIO_BYTES)
+                        } ?: throw IOException("Unable to verify the restored song.")
+                        check(restoredHash.contentEquals(chosenHash)) { "The restored song did not match its backup." }
+                    } }
                     if (restored.isFailure) {
                         // Never discard the last intact copy if both writing
                         // and rollback fail (e.g. an unplugged USB provider).
                         preserveBackup = true
                         throw IOException(
                             "Writing and automatic restoration failed. An untouched " +
-                                "backup is retained inside NusaMusic's cache for recovery.",
+                                "backup is retained in Aruna's data folder for recovery.",
                             error
                         )
                     }
                 }
+                if (error is CancellationException) throw error
                 throw IOException("Embedding failed; the original file was restored.", error)
             }
         } finally {

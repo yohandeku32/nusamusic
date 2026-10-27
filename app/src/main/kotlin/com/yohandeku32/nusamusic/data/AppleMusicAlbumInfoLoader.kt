@@ -164,7 +164,7 @@ internal object AppleMusicAlbumInfoLoader {
             connection.readTimeout = 5_000
             connection.instanceFollowRedirects = false
             connection.setRequestProperty("Accept", "application/json,text/html")
-            connection.setRequestProperty("User-Agent", "NusaMusic/AlbumInfo")
+            connection.setRequestProperty("User-Agent", "Aruna/AlbumInfo")
             if (connection.responseCode != HttpURLConnection.HTTP_OK ||
                 connection.contentLengthLong > maximum) return null
             connection.inputStream.use { input ->

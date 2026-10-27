@@ -76,7 +76,7 @@ internal object SpotifyCanvasVideoCache {
     private fun dataSourceFactory(): CacheDataSource.Factory? {
         val cache = store ?: return null
         val upstream = DefaultHttpDataSource.Factory()
-            .setUserAgent("NusaMusic/SpotifyCanvas")
+            .setUserAgent("Aruna/SpotifyCanvas")
             .setConnectTimeoutMs(4_000)
             .setReadTimeoutMs(8_000)
             .setAllowCrossProtocolRedirects(false)

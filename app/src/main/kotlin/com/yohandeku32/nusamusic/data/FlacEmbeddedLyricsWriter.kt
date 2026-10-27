@@ -9,8 +9,7 @@ import java.io.RandomAccessFile
 /**
  * Lossless FLAC metadata rewrite. The STREAMINFO/audio frames and unrelated
  * Vorbis comments, pictures and application blocks remain byte-for-byte intact.
- * A dedicated NUSAMUSIC_LYRICS Vorbis field holds authored TTML/Enhanced LRC;
- * conventional LYRICS text is added only if it does not already exist.
+ * ARUNA_LYRICS holds authored timing; LYRICS holds the chosen readable text.
  */
 internal object FlacEmbeddedLyricsWriter {
     private const val MAX_METADATA_BLOCK = 0xFFFFFF
@@ -88,9 +87,8 @@ internal object FlacEmbeddedLyricsWriter {
     private fun updatedComments(
         original: ByteArray?, timed: String, plain: String
     ): ByteArray {
-        var vendor = "NusaMusic".toByteArray(Charsets.UTF_8)
+        var vendor = "Aruna".toByteArray(Charsets.UTF_8)
         val entries = ArrayList<ByteArray>()
-        var hasRegularLyrics = false
         if (original != null) {
             var p = 0
             fun next(): ByteArray {
@@ -106,6 +104,7 @@ internal object FlacEmbeddedLyricsWriter {
                 return original.copyOfRange(p, p + length).also { p += length }
             }
             vendor = next()
+            if (vendor.toString(Charsets.UTF_8).equals("NusaMusic", true)) vendor = "Aruna".toByteArray()
             require(p + 4 <= original.size)
             val count = (original[p].toInt() and 255) or
                 ((original[p + 1].toInt() and 255) shl 8) or
@@ -116,15 +115,15 @@ internal object FlacEmbeddedLyricsWriter {
             repeat(count) {
                 val field = next()
                 val key = field.toString(Charsets.UTF_8).substringBefore('=')
-                if (key.equals("NUSAMUSIC_LYRICS", ignoreCase = true)) return@repeat
-                if (key.equals("LYRICS", ignoreCase = true) ||
-                    key.equals("UNSYNCEDLYRICS", ignoreCase = true)) hasRegularLyrics = true
+                if (key.uppercase(java.util.Locale.ROOT) in setOf(
+                        "ARUNA_LYRICS", "NUSAMUSIC_LYRICS", "LYRICS", "UNSYNCEDLYRICS", "UNSYNCED LYRICS"
+                    )) return@repeat
                 entries += field
             }
             require(p == original.size) { "Unexpected trailing FLAC comment bytes." }
         }
-        if (!hasRegularLyrics) entries += ("LYRICS=" + plain).toByteArray(Charsets.UTF_8)
-        entries += ("NUSAMUSIC_LYRICS=" + timed).toByteArray(Charsets.UTF_8)
+        entries += ("LYRICS=" + plain).toByteArray(Charsets.UTF_8)
+        entries += ("ARUNA_LYRICS=" + timed).toByteArray(Charsets.UTF_8)
         val out = ByteArrayOutputStream()
         DataOutputStream(out).use { data ->
             fun writeLE(value: Int) {

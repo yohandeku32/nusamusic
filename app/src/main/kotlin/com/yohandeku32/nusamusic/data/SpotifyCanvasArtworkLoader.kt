@@ -192,7 +192,7 @@ internal object SpotifyCanvasArtworkLoader {
             connection.requestMethod = "GET"
             connection.instanceFollowRedirects = false
             connection.setRequestProperty("Accept", "application/json")
-            connection.setRequestProperty("User-Agent", "NusaMusic/SpotifyCanvasFallback")
+            connection.setRequestProperty("User-Agent", "Aruna/SpotifyCanvasFallback")
             val status = connection.responseCode
             if (status == HttpURLConnection.HTTP_NOT_FOUND) return LookupResult(null, false)
             if (status != HttpURLConnection.HTTP_OK) return LookupResult(null, true)

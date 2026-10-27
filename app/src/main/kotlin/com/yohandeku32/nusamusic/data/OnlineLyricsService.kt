@@ -314,7 +314,7 @@ private suspend fun requestLyricsText(url: String): String? = withContext(Dispat
         connection.connectTimeout = 3_500
         connection.readTimeout = 3_500
         connection.setRequestProperty(
-            "User-Agent", "NusaMusic/1.0 (https://github.com/yohandeku32/nusamusic)"
+            "User-Agent", "Aruna/1.0 (https://github.com/yohandeku32/nusamusic)"
         )
         connection.setRequestProperty("Accept", "application/json")
         // lrc.red uses canonical redirects on some routes. Java handles these

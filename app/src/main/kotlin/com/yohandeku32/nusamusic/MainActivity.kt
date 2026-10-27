@@ -688,7 +688,10 @@ class MainActivity : ComponentActivity() {
                     onPlayNext = ::queueSongNext,
                     onDeleteSong = ::requestPermanentSongDeletion,
                     onTogglePlay = ::togglePlay,
-                    onQueueLyrics = { song, lyrics -> pendingLyricSaves.enqueue(song, lyrics) },
+                    onQueueLyrics = { song, lyrics ->
+                        pendingLyricSaves.enqueue(song, lyrics)
+                        schedulePendingLyricCommit()
+                    },
                     isLyricsQueued = { song -> pendingLyricSaves.isQueued(song.id) },
                     customTitleFontPath = customTitleFontPath,
                     customTitleFontName = customTitleFontName,
@@ -748,7 +751,6 @@ class MainActivity : ComponentActivity() {
                     selectedMusicFolders = selectedMusicFolders,
                     onPlaybackPageVisibilityChanged = ::setPlaybackPageVisible,
                     onScanMusic = ::scanMusic,
-                    onQuickRefreshMusic = ::quickRefreshMusic,
                     onSelectMusicFolder = ::openMusicFolderPicker,
                     onRemoveMusicFolder = ::removeMusicFolder,
                     onRequestPermission = { permissionLauncher.launch(permission) }
@@ -1220,16 +1222,6 @@ class MainActivity : ComponentActivity() {
         // Explicit settings/manual scan: reconcile selected SAF folders too.
         automaticMusicScanJob?.cancel()
         startMusicScan(scanSelectedFolders = true, showToast = true)
-    }
-
-    private fun quickRefreshMusic() {
-        // Pull-to-refresh should NOT re-enumerate entire SAF directory trees
-        // or parse thousands of unchanged tags. MusicRepository reuses the
-        // MediaStore generation checkpoint, plus cached SAF tracks, and only
-        // queries changed Android-indexed audio. Full folder reconciliation
-        // is still available from the settings/manual Scan Music control.
-        automaticMusicScanJob?.cancel()
-        startMusicScan(scanSelectedFolders = false, showToast = false)
     }
 
     private fun startMusicScan(scanSelectedFolders: Boolean, showToast: Boolean) {
@@ -1966,7 +1958,6 @@ private fun NusaMusicApp(
     selectedMusicFolders: List<String>,
     onPlaybackPageVisibilityChanged: (Boolean, Boolean) -> Unit,
     onScanMusic: () -> Unit,
-    onQuickRefreshMusic: () -> Unit,
     onSelectMusicFolder: () -> Unit,
     onRemoveMusicFolder: (String) -> Unit,
     onRequestPermission: () -> Unit,
@@ -2105,10 +2096,9 @@ private fun NusaMusicApp(
                 uiPrefs.getBoolean("immersive_light_mode", false))
         )
     }
-    // Existing frosted-glass users keep the appearance by default; the
-    // preference can disable costly live backdrop capture immediately.
-    var liquidGlassEnabled by remember {
-        mutableStateOf(uiPrefs.getBoolean("immersive_liquid_glass_enabled", true))
+    // Retain the saved rendering choice after removing its settings row.
+    val liquidGlassEnabled = remember {
+        uiPrefs.getBoolean("immersive_liquid_glass_enabled", true)
     }
     var animatedArtworkEnabled by remember {
         mutableStateOf(uiPrefs.getBoolean("animated_artwork_enabled", true))
@@ -2483,11 +2473,6 @@ private fun NusaMusicApp(
                 onResetCustomTitleFont = onResetCustomTitleFont,
                 playerPresentationMode = playerPresentationMode,
                 libraryLightMode = libraryLightMode,
-                liquidGlassEnabled = liquidGlassEnabled,
-                onLiquidGlassChange = { enabled ->
-                    liquidGlassEnabled = enabled
-                    uiPrefs.edit().putBoolean("immersive_liquid_glass_enabled", enabled).apply()
-                },
                 onLibraryLightModeChange = { light ->
                     libraryLightMode = light
                     uiPrefs.edit()
@@ -2769,8 +2754,9 @@ private fun NusaMusicApp(
                                         onDeleteSong = onDeleteSong,
                                         onShare = { onShare(it) },
                                         onTogglePlay = onTogglePlay,
-                                        onScanMusic = onQuickRefreshMusic,
+                                        onScanMusic = onScanMusic,
                                         onRequestPermission = onRequestPermission,
+                                        onChooseMusicFolder = onSelectMusicFolder,
                                         artwork = { track, tileModifier, settled, index ->
                                             ArtworkView(
                                                 song = track,
@@ -3071,6 +3057,7 @@ private fun NusaMusicApp(
                                 onTogglePlay = onTogglePlay,
                                 onScanMusic = onScanMusic,
                                 onRequestPermission = onRequestPermission,
+                                onChooseMusicFolder = onSelectMusicFolder,
                                 artwork = { track, tileModifier, settled, index ->
                                     ArtworkView(
                                         song = track,

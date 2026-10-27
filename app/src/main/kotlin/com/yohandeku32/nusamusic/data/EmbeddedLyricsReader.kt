@@ -20,7 +20,7 @@ internal class EmbeddedLyricsReader(
     private var indexedMetadataKeys: Map<Long, String> = emptyMap()
     private val lyricKeys = setOf("LYRICS", "UNSYNCEDLYRICS", "UNSYNCED LYRICS", "SYNCEDLYRICS",
         "SYNCED LYRICS", "SYNCHRONIZEDLYRICS", "SYLT", "USLT", "LRC", "ENHANCED LRC", "TTML",
-        "NUSAMUSIC_LYRICS")
+        "ARUNA_LYRICS", "NUSAMUSIC_LYRICS")
 
     fun read(): List<String> = readMetadata().lyrics
 

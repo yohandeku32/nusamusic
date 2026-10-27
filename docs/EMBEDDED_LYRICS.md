@@ -55,7 +55,7 @@ A **Save** button appears when downloaded lyrics improve on the file's existing 
 
 1. On first use without a suitable stored grant, select the music folder using Android's folder picker. Grant access to a parent folder containing the songs, including any Artist/Album subfolders.
 2. Aruna stores the requested lyrics in its private pending queue and refreshes the displayed lyrics from that copy. Playback continues.
-3. A **clock icon** indicates that the lyrics are saved in Aruna but embedding into the original audio file is still pending.
+3. A **clock icon** means the metadata write is pending, not completed. Switch songs so the player can release the original file. The durable queue is a draft, not evidence that another player can already read the lyric.
 4. Once the song is no longer the active playback source, Aruna resolves the original inside the authorized folder, verifies its identity, prepares the tagged copy and commits the metadata update.
 
 The folder grant persists for later songs in that tree. A different folder may need another grant. Android can restrict which storage roots may be selected. The app does not require a separate file picker for every song.
@@ -64,13 +64,13 @@ The folder grant persists for later songs in that tree. A different folder may n
 
 | Format | Written fields and preservation |
 | --- | --- |
-| MP3 | Plain `USLT:NusaMusic` and timed `TXXX:LYRICS`; supported ID3v2.3/2.4 layouts preserve unrelated tags, artwork and MPEG frames. |
-| FLAC | Timed `NUSAMUSIC_LYRICS`, plus ordinary `LYRICS` when absent; unrelated metadata blocks, artwork and audio frames are retained. |
-| M4A | Ordinary `©lyr` when absent and the owned `com.nusamusic:LYRICS` freeform atom; existing audio offsets and unrelated atoms are retained. |
+| MP3 | Updates canonical readable `USLT` and timed `TXXX:LYRICS`; legacy owned lyric descriptions are replaced. Described alternate translations, unrelated tags, artwork and MPEG frames are retained. |
+| FLAC | Updates ordinary `LYRICS` and timed `ARUNA_LYRICS`; legacy owned lyric fields are migrated. Unrelated metadata blocks, artwork and audio frames are retained. |
+| M4A | Updates ordinary `©lyr` and the owned `com.aruna:LYRICS` freeform atom. Legacy owned freeforms are migrated; audio offsets and unrelated atoms are retained. |
 
-The writer identifiers above retain their legacy names for compatibility. They are not the app's display name. Saving does not convert or re-encode the audio.
+The reader still accepts legacy owned fields in existing files. Only an explicit Save updates the selected song; existing files are not bulk-retagged. Saving does not convert or re-encode the audio.
 
-Before writing, Aruna compares the authorized file with the playing URI using a whole-file SHA-256 digest. It creates a backup and staged output, then verifies that `EmbeddedLyricsReader` can read the staged timing. After committing, it verifies the original against the staged output. A failed write attempts rollback; if rollback also fails, the backup remains available for recovery. Unsafe or unsupported metadata layouts are rejected rather than reported as successful writes.
+Before writing, Aruna compares the authorized file with the playing URI using a whole-file SHA-256 digest. It creates a backup and staged output, then verifies that `EmbeddedLyricsReader` can read the staged timing. After committing, it verifies the original against the staged output. A failed write attempts and verifies rollback; if rollback fails, the backup remains in Aruna's data folder, separate from disposable caches. Unsupported formats are rejected before queuing; unsafe metadata layouts are rejected rather than reported as successful writes. A failed Save offers a folder-access review on retry.
 
 Queued lyrics and completed file embedding are separate states. Verify completion before expecting another music player or tag editor to read the newly embedded metadata.
 

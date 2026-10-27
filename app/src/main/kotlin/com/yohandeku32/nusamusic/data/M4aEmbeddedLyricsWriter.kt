@@ -160,19 +160,17 @@ internal object M4aEmbeddedLyricsWriter {
 
     private fun rewrittenIlst(payload: ByteArray, timed: String, plain: String): ByteArray {
         val entries = boxes(payload, 0, payload.size)
-        val hasReadable = entries.any { it.type == "©lyr" }
         val out = ByteArrayOutputStream()
         for (entry in entries) {
             val raw = payload.copyOfRange(entry.start, entry.end)
-            if (entry.type == "----" && isOwnedFreeform(raw)) continue
+            if (entry.type == "©lyr" || (entry.type == "----" && isOwnedFreeform(raw))) continue
             out.write(raw)
         }
-        // Add common Apple-readable ©lyr only if not already present.
-        if (!hasReadable) out.write(atom("©lyr", atom("data", textData(plain))))
-        // Authored sync is stored in a NusaMusic-owned freeform entry; another
-        // user's pre-existing ©lyr/---- metadata is never removed.
+        // Explicit Save updates the standard lyric as well as authored timing.
+        // Other freeform metadata and artwork remain untouched.
+        out.write(atom("©lyr", atom("data", textData(plain))))
         out.write(atom("----", atom("mean", ByteArray(4) +
-            "com.nusamusic".toByteArray(Charsets.UTF_8)) +
+            "com.aruna".toByteArray(Charsets.UTF_8)) +
             atom("name", ByteArray(4) + "LYRICS".toByteArray(Charsets.UTF_8)) +
             atom("data", textData(timed))))
         return out.toByteArray()
@@ -190,7 +188,7 @@ internal object M4aEmbeddedLyricsWriter {
                 return bytes.copyOfRange(item.start + 12, item.end)
                     .toString(Charsets.UTF_8)
             }
-            tag("mean") == "com.nusamusic" && tag("name") == "LYRICS"
+            tag("mean") in setOf("com.aruna", "com.nusamusic") && tag("name") == "LYRICS"
         }.getOrDefault(false)
     }
 

@@ -7,6 +7,7 @@ import android.util.AtomicFile
 import androidx.compose.runtime.mutableStateMapOf
 import com.yohandeku32.nusamusic.model.Song
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -19,8 +20,13 @@ import java.io.File
  * are therefore durable and completed only after switching to another song.
  */
 internal class LyricsPendingSaveQueue(context: Context) {
+    companion object {
+        private const val DIRECTORY = "pending_embedded_lyrics"
+        fun needsFolderReview(context: Context, songId: Long): Boolean =
+            File(File(context.applicationContext.filesDir, DIRECTORY), "$songId.failed").isFile
+    }
     private val app = context.applicationContext
-    private val folder = File(app.filesDir, "pending_embedded_lyrics").apply { mkdirs() }
+    private val folder = File(app.filesDir, DIRECTORY).apply { mkdirs() }
     private val mutex = Mutex()
     private val pending = mutableStateMapOf<Long, Boolean>()
 
@@ -60,7 +66,7 @@ internal class LyricsPendingSaveQueue(context: Context) {
         pending[songId] == true && File(folder, "$songId.json").isFile
 
     /**
-     * A Save becomes readable in NusaMusic immediately. It is NOT yet embedded
+     * A queued draft is readable in Aruna immediately. It is NOT yet embedded
      * in the original file: that part still waits for Media3 to release it.
      * Read the durable authored lyric directly, without rereading active audio.
      */
@@ -105,6 +111,7 @@ internal class LyricsPendingSaveQueue(context: Context) {
                     output.write(payload.toString().toByteArray(Charsets.UTF_8))
                     output.fd.sync()
                     atomic.finishWrite(output)
+                    File(folder, "${song.id}.failed").delete()
                 } catch (error: Exception) {
                     atomic.failWrite(output)
                     throw error
@@ -178,7 +185,11 @@ internal class LyricsPendingSaveQueue(context: Context) {
                 )
                 withContext(Dispatchers.IO) { file.delete() }
                 pending.remove(id)
-                onResult(id, true, "Lyrics saved to this song")
+                onResult(id, true, if (java.util.Locale.getDefault().language.equals("id", true))
+                    "Lirik sudah ditulis dan diverifikasi di metadata lagu."
+                    else "Lyrics written and verified in the song metadata.")
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (error: Exception) {
                 // A return to this song is transient, not a failed save.
                 if (currentSongId() == id) continue

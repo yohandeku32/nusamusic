@@ -51,32 +51,37 @@ class ImmersiveMusicLibraryTest {
     private var deleted: Song? = null
     private var refreshes = 0
     private var returns = 0
+    private var folderImports = 0
+    private var permissionRequests = 0
 
     @Before fun english() { Locale.setDefault(Locale.ENGLISH) }
     @After fun restoreLocale() { Locale.setDefault(previousLocale) }
 
     @Composable
-    private fun library(light: Boolean, bottom: Dp = 24.dp, visible: Boolean = true) {
+    private fun library(light: Boolean, bottom: Dp = 24.dp, visible: Boolean = true,
+        empty: Boolean = false, access: Boolean = true, importEnabled: Boolean = false) {
         ImmersiveMusicLibrary(
-            songs = songs, currentSong = songs.first(), isPlaying = true,
-            isVisible = visible, lightMode = light, hasMusicAccess = true,
+            songs = if (empty) emptyList() else songs, currentSong = songs.first(), isPlaying = true,
+            isVisible = visible, lightMode = light, hasMusicAccess = access,
             isScanning = false, emptyMessage = "No music yet",
             onReturnToPlayer = { returns++ },
             onPlay = { song, queue -> assertTrue(queue.contains(song)); played = song },
             onPlayNext = { next = it }, onShare = { shared = it },
             onDeleteSong = { deleted = it }, onTogglePlay = {},
-            onScanMusic = { refreshes++ }, onRequestPermission = {},
+            onScanMusic = { refreshes++ }, onRequestPermission = { permissionRequests++ },
+            onChooseMusicFolder = if (importEnabled) ({ folderImports++ }) else null,
             artwork = { _, modifier, _, _ -> Box(modifier.background(Color(0xFF84644B))) },
             bottomContentPadding = bottom, modifier = Modifier.testTag("library-test")
         )
     }
 
-    private fun show(light: Boolean = true, width: Int = 411, scale: Float = 1f, overlay: Boolean = false) {
+    private fun show(light: Boolean = true, width: Int = 411, scale: Float = 1f, overlay: Boolean = false,
+        empty: Boolean = false, access: Boolean = true, importEnabled: Boolean = false) {
         compose.setContent {
             CompositionLocalProvider(LocalDensity provides Density(1f, scale)) {
                 MaterialTheme(colorScheme = if (light) darkColorScheme() else lightColorScheme()) {
                     Box(Modifier.requiredWidth(width.dp).fillMaxHeight()) {
-                        if (!overlay) library(light) else {
+                        if (!overlay) library(light, empty = empty, access = access, importEnabled = importEnabled) else {
                             ImmersiveArtworkPlayer(
                                 title = "Track 01", artist = "Artist 1", composerNames = "",
                                 titleFontFamily = FontFamily.Default, titleFontSize = 32f,
@@ -86,7 +91,9 @@ class ImmersiveMusicLibraryTest {
                                 onPlayPause = {}, onPrevious = {}, onNext = {}, onShuffle = {},
                                 onRepeat = {}, onFavorite = {}, onLyrics = {}, onDiscovery = {},
                                 libraryOpen = true, libraryLightMode = light, liquidGlassEnabled = false,
-                                libraryContent = { settled, padding -> library(light, padding, settled) },
+                                libraryContent = { settled, padding ->
+                                    library(light, padding, settled, empty, access, importEnabled)
+                                },
                                 onLibrary = {}, onShare = {}, onSettings = {},
                                 artwork = { modifier, _, _ -> Box(modifier.background(Color.DarkGray)) },
                                 progress = {}, quality = {}, contentInsets = WindowInsets(0, 0, 0, 0)
@@ -231,6 +238,40 @@ class ImmersiveMusicLibraryTest {
     @Test fun narrowDarkLibraryWithLargeTextKeepsFinalSongActionReachable() {
         show(light = false, width = 320, scale = 1.5f, overlay = true)
         assertLastTrackAboveNavigation("library-dark-narrow-large-text")
+    }
+
+    @Test fun pullingTheImmersiveLibraryRequestsAScan() {
+        show(light = false, overlay = true)
+        compose.onNode(hasScrollToIndexAction()).performScrollToIndex(0)
+        compose.onNode(hasScrollToIndexAction()).performTouchInput {
+            swipeDown(startY = 20f, endY = 350f, durationMillis = 600)
+        }
+        compose.waitForIdle()
+        assertEquals(1, refreshes)
+    }
+
+    @Test fun immersiveFirstRunRetainsFolderAndDeviceRecoveryWithoutAccess() {
+        show(light = false, overlay = true, empty = true, access = false, importEnabled = true)
+        assertEquals(0, folderImports + permissionRequests)
+        compose.onNodeWithText("Choose a music folder").performScrollTo().performClick()
+        assertEquals(1, folderImports)
+        assertEquals(0, permissionRequests)
+        compose.onNodeWithText("Find music on this device").performScrollTo().performClick()
+        assertEquals(1, permissionRequests)
+        screenshot("library-first-run-import")
+    }
+
+    @Test fun emptyImmersiveLibraryCanChooseAnotherFolderOrRescanWithLargeText() {
+        show(light = true, width = 320, scale = 1.5f, overlay = true,
+            empty = true, access = true, importEnabled = true)
+        compose.onNodeWithText("Choose a music folder").performScrollTo().performClick()
+        assertEquals(1, folderImports)
+        compose.onNodeWithText("Scan again").performScrollTo().performClick()
+        assertEquals(1, refreshes)
+        val action = compose.onNodeWithText("Scan again").getUnclippedBoundsInRoot()
+        val navigation = compose.onNodeWithContentDescription("Back to Now Playing").getUnclippedBoundsInRoot()
+        assertTrue(action.bottom <= navigation.top)
+        screenshot("library-first-run-large-text")
     }
 
     @Test fun destructiveTextHasNormalTextContrastInBothLibraryThemes() {

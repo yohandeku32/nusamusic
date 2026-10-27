@@ -12,7 +12,7 @@ enum class PlayerPresentationMode(val preferenceValue: String) {
 
     companion object {
         fun fromPreference(value: String?): PlayerPresentationMode {
-            return entries.firstOrNull { it.preferenceValue == value && it.isAvailable } ?: CD
+            return entries.firstOrNull { it.preferenceValue == value && it.isAvailable } ?: IMMERSIVE_ARTWORK
         }
     }
 }

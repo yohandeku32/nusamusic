@@ -19,9 +19,14 @@ class PlayerPresentationModeTest {
     }
 
     @Test
-    fun disabledVinylOrUnknownPreferencesFallBackToCd() {
-        for (value in listOf(null, "unknown", "vinyl", PlayerPresentationMode.VINYL.preferenceValue)) {
-            assertEquals(PlayerPresentationMode.CD, PlayerPresentationMode.fromPreference(value))
+    fun newInstallDefaultsToImmersive() {
+        assertEquals(PlayerPresentationMode.IMMERSIVE_ARTWORK, PlayerPresentationMode.fromPreference(null))
+    }
+
+    @Test
+    fun disabledVinylOrUnknownPreferencesFallBackToImmersive() {
+        for (value in listOf("", "unknown", "vinyl", PlayerPresentationMode.VINYL.preferenceValue)) {
+            assertEquals(PlayerPresentationMode.IMMERSIVE_ARTWORK, PlayerPresentationMode.fromPreference(value))
         }
     }
 }

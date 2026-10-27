@@ -171,7 +171,7 @@ object AppleMusicAnimatedArtworkLoader {
             connection.readTimeout = 7_000
             connection.requestMethod = "GET"
             connection.setRequestProperty("Accept", "application/json")
-            connection.setRequestProperty("User-Agent", "NusaMusic/AppleAnimatedArtwork")
+            connection.setRequestProperty("User-Agent", "Aruna/AppleAnimatedArtwork")
             when (connection.responseCode) {
                 HttpURLConnection.HTTP_OK -> JsonResponse(
                     connection.inputStream.bufferedReader(Charsets.UTF_8).use { JSONObject(it.readText()) }

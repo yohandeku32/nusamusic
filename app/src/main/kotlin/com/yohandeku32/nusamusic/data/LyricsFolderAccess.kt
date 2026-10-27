@@ -41,6 +41,13 @@ internal class LyricsFolderAccess(private val context: Context) {
             .toList()
     }
 
+    /** Reject unsupported formats before queuing a metadata write. */
+    suspend fun requireSupportedSong(song: Song) = withContext(Dispatchers.IO) {
+        require(EmbeddedAudioFormat.fromFilename(indexedLocation(song).filename.orEmpty()) != null) {
+            "Metadata lyrics can currently be saved only to MP3, FLAC and M4A files."
+        }
+    }
+
     /** Resolve the original song inside a persistently authorized parent folder. */
     suspend fun find(song: Song): Uri? = withContext(Dispatchers.IO) {
         val trees = authorizedTrees()

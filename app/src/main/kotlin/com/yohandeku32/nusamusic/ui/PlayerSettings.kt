@@ -24,7 +24,6 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -43,8 +42,6 @@ import com.yohandeku32.nusamusic.BuildConfig
 import com.yohandeku32.nusamusic.LYRICS_ENABLED
 import com.yohandeku32.nusamusic.TITLE_FONT_OPTIONS
 import com.yohandeku32.nusamusic.model.PlayerPresentationMode
-import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.Github
 import java.util.Locale
 
 private fun settingsText(id: String, en: String): String =
@@ -75,8 +72,6 @@ internal fun PlayerSettingsContent(
     onPresentationSelected: (PlayerPresentationMode) -> Unit,
     libraryLightMode: Boolean,
     onLibraryLightModeChange: (Boolean) -> Unit,
-    liquidGlassEnabled: Boolean,
-    onLiquidGlassChange: (Boolean) -> Unit,
     animatedArtworkEnabled: Boolean,
     roundedCarouselCorners: Boolean,
     onRoundedCarouselCornersChange: (Boolean) -> Unit,
@@ -101,7 +96,6 @@ internal fun PlayerSettingsContent(
     onDynamicGlowChange: (Boolean) -> Unit = {}
 ) {
     val colors = MaterialTheme.colorScheme
-    val uriHandler = LocalUriHandler.current
     val listState = rememberLazyListState()
     val swipeThresholdPx = with(LocalDensity.current) { 76.dp.toPx() }
     val latestDismiss by rememberUpdatedState(onDismiss)
@@ -244,17 +238,6 @@ internal fun PlayerSettingsContent(
                     }
                     SettingsDivider()
                     if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
-                        SettingToggle(
-                            title = settingsText("Liquid Glass", "Liquid Glass"),
-                            subtitle = settingsText(
-                                "Kaca dinamis pada navigasi. Nonaktifkan untuk tampilan lebih ringan.",
-                                "Dynamic glass navigation. Turn off for smoother, lighter rendering."
-                            ),
-                            checked = liquidGlassEnabled,
-                            onCheckedChange = onLiquidGlassChange,
-                            icon = Icons.Default.WaterDrop
-                        )
-                        SettingsDivider()
                         SettingToggle(
                             settingsText("Daftar lagu terang", "Light song list"),
                             settingsText(
@@ -564,14 +547,6 @@ internal fun PlayerSettingsContent(
                         settingsText("Dibuat oleh yohandeku32", "By yohandeku32"),
                         style = MaterialTheme.typography.bodyMedium,
                         color = colors.onSurfaceVariant
-                    )
-                    SettingsDivider()
-                    SettingAction(
-                        title = "GitHub",
-                        subtitle = "github.com/yohandeku32",
-                        icon = Lucide.Github,
-                        onClick = { uriHandler.openUri("https://github.com/yohandeku32") },
-                        trailingIcon = Icons.Default.OpenInNew
                     )
                 }
             }

@@ -5,6 +5,8 @@ import java.util.Locale
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -157,7 +159,8 @@ internal fun ImmersiveMusicLibrary(
     // the fourth spreads first-screen loads across frames instead of a burst.
     artwork: @Composable (Song, Modifier, Boolean, Int) -> Unit,
     bottomContentPadding: Dp = 24.dp,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onChooseMusicFolder: (() -> Unit)? = null
 ) {
     val palette = immersiveColors(lightMode)
     val context = LocalContext.current
@@ -445,7 +448,9 @@ internal fun ImmersiveMusicLibrary(
             ) {
                 if (!hasMusicAccess || (songs.isEmpty() && !isScanning)) {
                     Column(
-                        Modifier.fillMaxSize().padding(horizontal = 32.dp),
+                        Modifier.fillMaxSize().padding(bottom = bottomContentPadding.coerceAtLeast(24.dp))
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = 32.dp, vertical = 24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
@@ -455,9 +460,16 @@ internal fun ImmersiveMusicLibrary(
                             fontSize = 17.sp, textAlign = TextAlign.Center
                         )
                         Spacer(Modifier.height(14.dp))
-                        OutlinedButton(onClick = if (!hasMusicAccess) onRequestPermission else onScanMusic) {
-                            Text(if (!hasMusicAccess) libraryText("Izinkan akses", "Allow access")
-                                else libraryText("Pindai lagi", "Scan again"), color = palette.primaryText)
+                        if (onChooseMusicFolder != null) {
+                            MusicImportActions(onChooseMusicFolder, onRequestPermission)
+                            if (hasMusicAccess) androidx.compose.material3.TextButton(onClick = onScanMusic) {
+                                Text(libraryText("Pindai lagi", "Scan again"))
+                            }
+                        } else {
+                            OutlinedButton(onClick = if (!hasMusicAccess) onRequestPermission else onScanMusic) {
+                                Text(if (!hasMusicAccess) libraryText("Izinkan akses", "Allow access")
+                                    else libraryText("Pindai lagi", "Scan again"), color = palette.primaryText)
+                            }
                         }
                     }
                 } else {

@@ -42,6 +42,31 @@ class Mp3EmbeddedLyricsWriterTest {
         }
     }
 
+    @Test fun saveReplacesDefaultAndLegacyLyricsButKeepsAlternateDescriptions() {
+        val directory = Files.createTempDirectory("aruna-lyrics-migration").toFile()
+        val original = File(directory, "original.mp3")
+        val output = File(directory, "updated.mp3")
+        fun size(n: Int) = byteArrayOf(((n ushr 21) and 127).toByte(),
+            ((n ushr 14) and 127).toByte(), ((n ushr 7) and 127).toByte(), (n and 127).toByte())
+        fun uslt(description: String, text: String): ByteArray {
+            val body = byteArrayOf(3) + "eng".toByteArray() + description.toByteArray() + byteArrayOf(0) + text.toByteArray()
+            return "USLT".toByteArray() + size(body.size) + byteArrayOf(0, 0) + body
+        }
+        val fields = uslt("", "Old default") + uslt("NusaMusic", "Old app lyric") +
+            uslt("French translation", "Keep alternate")
+        original.writeBytes("ID3".toByteArray() + byteArrayOf(4, 0, 0) + size(fields.size) + fields + mp3Audio)
+        Mp3EmbeddedLyricsWriter.write(original, output, ttml, "Aku cinta kamu")
+        val found = lyricsFound(output)
+        assertTrue(found.contains(ttml))
+        assertTrue(found.contains("Aku cinta kamu"))
+        assertTrue(found.contains("Keep alternate"))
+        assertFalse(found.contains("Old default"))
+        assertFalse(found.contains("Old app lyric"))
+        assertFalse(output.readBytes().toString(Charsets.UTF_8).contains("NusaMusic"))
+        assertArrayEquals(mp3Audio, output.readBytes().takeLast(mp3Audio.size).toByteArray())
+        original.delete(); output.delete(); directory.delete()
+    }
+
     @Test fun existingTitleFrameSurvivesNewLyricsAndSubsequentEmbeddingReplacesOwnedTags() {
         val directory = Files.createTempDirectory("embed-preserved").toFile()
         try {
