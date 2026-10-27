@@ -13,19 +13,22 @@ The accepted direction is one subtle artwork-derived ambient layer. Controls, li
 
 ## Implementation
 
-- [MainActivity](../../../../app/src/main/kotlin/com/yohandeku32/nusamusic/MainActivity.kt) connects the preference, the current video instance, and the scene. Sampling requires the option, animated artwork, a visible player outside Lyrics, a resumed lifecycle, and a nonzero animation duration scale. Song and URL changes reset the dynamic image, and cancellation prevents old work from publishing into the next session.
-- [DynamicArtworkGlow](../../../../app/src/main/kotlin/com/yohandeku32/nusamusic/ui/DynamicArtworkGlow.kt) stores the preference, diffuses spatial video colours, and renders the light. Dark samples contribute transparency rather than a black overlay. Opacity is bounded at 140/255 and decreases toward the transport controls.
-- [ArtworkBlur](../../../../app/src/main/kotlin/com/yohandeku32/nusamusic/data/ArtworkBlur.kt) reuses the visible TextureView viewport. Dynamic captures have a longest edge of 96 pixels; existing callers retain their 320-pixel default. No additional decoder, media request, or dependency is introduced.
+- [MainActivity](../../../app/src/main/kotlin/com/yohandeku32/nusamusic/MainActivity.kt) connects the preference, the current video instance, and the scene. Sampling requires the option, animated artwork, a visible player outside Lyrics, a resumed lifecycle, and a nonzero animation duration scale. Song and URL changes reset the dynamic image, and cancellation prevents old work from publishing into the next session.
+- [DynamicArtworkGlow](../../../app/src/main/kotlin/com/yohandeku32/nusamusic/ui/DynamicArtworkGlow.kt) stores the preference, diffuses spatial video colours, and renders the light. Dark samples contribute transparency rather than a black overlay. Opacity is bounded at 140/255 and decreases toward the transport controls.
+- [ArtworkBlur](../../../app/src/main/kotlin/com/yohandeku32/nusamusic/data/ArtworkBlur.kt) reuses the visible TextureView viewport. Dynamic captures have a longest edge of 96 pixels; existing callers retain their 320-pixel default. No additional decoder, media request, or dependency is introduced.
 - Sampling is sequential, at least 200 ms apart plus processing time. Paused/buffering video or an unchanged playback position performs no readback. Pixel diffusion runs on Dispatchers.Default, while TextureView access stays on the UI thread. Slower system animation scales lengthen the interval, keeping the 160 ms image transition shorter than the interval.
-- [ImmersiveArtworkScene](../../../../app/src/main/kotlin/com/yohandeku32/nusamusic/ui/ImmersiveArtworkScene.kt) composites the new light separately from the existing 700 ms track-change blur transition, below the light-appearance tint. It follows the same swipe fade as the visible video. Toggle off or hiding the player removes the light and cancels sampling; the original static capture remains available.
-- [PlayerSettings](../../../../app/src/main/kotlin/com/yohandeku32/nusamusic/ui/PlayerSettings.kt) uses the existing localized toggle component and exposes the option only for Immersive.
+- [ImmersiveArtworkScene](../../../app/src/main/kotlin/com/yohandeku32/nusamusic/ui/ImmersiveArtworkScene.kt) composites the new light separately from the existing 700 ms track-change blur transition, below the light-appearance tint. It follows the same swipe fade as the visible video. Toggle off or hiding the player removes the light and cancels sampling; the original static capture remains available.
+- [PlayerSettings](../../../app/src/main/kotlin/com/yohandeku32/nusamusic/ui/PlayerSettings.kt) uses the existing localized toggle component and exposes the option only for Immersive.
 
 ## Verification
 
 - Android Kotlin compilation passed.
 - The focused run passed 20 tests: 12 new glow tests (7 pixel/preference/sampler tests and 5 native Compose tests) plus 8 existing ambient/blur tests. Coverage includes default off, persistence, source hue/position, dark and neutral input, unchanged playback, cancellation before publish, capture retry, zero duration scale, native toggle interaction, narrow light appearance, actual rendered light, and pixel-identical restoration after switching off.
 - Native screenshot fixtures exercise the production scene and player. The final focused run also passed after coupling moving artwork and light, capturing 41 frames and asserting changes below the sharp artwork region.
-- Android `:app:lintDebug` passed. CI verification is recorded in PR #178; it must be read separately from these local checks.
+- Android `:app:lintDebug` passed.
+- Full local verification of source `af78e1916f60105e226130f0791b9c3fe60b1a7f` ran 587 tests: 584 passed and only the three pre-existing artist-layout checks failed. All seven library checks and all twelve new glow checks passed.
+- [CI run 40478472437, attempt 2](https://github.com/yohandeku32/nusamusic/actions/runs/40478472437/attempts/2) verified the same source: 587 tests, 584 passing, with only those three artist-layout failures. All new glow checks passed, and the workflow uploaded Artwork-glow-previews.
+- The first CI attempt additionally threw IllegalArgumentException in the unchanged Indonesian library-search test after closing its dialog. That test then passed in the full local run and the CI retry without source changes. The exact runner exception cause was not established; the first failure remains visible in CI history.
 
 ## Limitations and maintenance
 
