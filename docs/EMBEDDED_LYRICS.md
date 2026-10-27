@@ -43,7 +43,11 @@ The painter caches complete grapheme layouts, gradients, projection resources an
 
 Duet alignment follows the TTML voice information, including right-aligned wrapped rows for the secondary voice. Backing vocals follow their own authored windows. Available translations and composer/lyricist credits display with the lyrics. Instrumental countdowns use authored gaps and relinquish their layout space when they finish.
 
-Automatic following yields to manual scrolling and resumes after the browsing grace period. The view retains measurements and updates drawing/layers from playback time. Tests of timing mathematics do not establish physical-device smoothness or visual equivalence to another player.
+Automatic following yields to manual scrolling and resumes after the browsing grace period. Each visible sentence also has a bounded visual follower: the active sentence leads and upcoming sentences catch up more gradually. Its main lyric, translation and attached backing move together; simultaneous duet onsets share a phase. The extra offset is capped at 35% of the shortest visible row height, within 8–32dp, to preserve spacing. Countdown layout stays separate.
+
+Sentence followers retain velocity when the active cue changes, hold their pose on pause, and reset for seeks, visibility/viewport changes, reverse rejoining or manual browsing. Zero platform animation duration scale removes the additional sentence motion, including while paused. Word and syllable timing and the existing character effects are unchanged.
+
+The view retains measurements and updates drawing/layers from playback time. Tests of timing mathematics do not establish physical-device smoothness or visual equivalence to another player. See the [sentence-motion change record](implementation-timeline/lyrics/2026-10-27-add-flowing-sentence-motion.md) for ownership and verification.
 
 ## Save lyrics to a song
 
