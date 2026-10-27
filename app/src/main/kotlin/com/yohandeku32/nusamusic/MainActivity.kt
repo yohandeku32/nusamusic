@@ -2728,12 +2728,13 @@ private fun NusaMusicApp(
                                     artistOverlayOpen = false
                                     libraryOverlayOpen = false
                                 },
-                                libraryContent = { settled ->
+                                libraryContent = { settled, bottomContentPadding ->
                                     ImmersiveMusicLibrary(
                                         songs = songs,
                                         currentSong = currentSong,
                                         isPlaying = isPlaying,
                                         isVisible = libraryOverlayOpen && settled,
+                                        bottomContentPadding = bottomContentPadding,
                                         lightMode = libraryLightMode,
                                         hasMusicAccess = hasMusicAccess,
                                         isScanning = isScanningMusic,

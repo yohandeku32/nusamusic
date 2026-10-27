@@ -60,6 +60,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import com.yohandeku32.nusamusic.R
 import com.yohandeku32.nusamusic.data.AudioCodecLoader
@@ -75,9 +76,12 @@ private val librarySurface = Color(0xFF1B1D22)
 private val librarySecondary = Color(0xFF92949E)
 private val libraryWhite = Color(0xFFF8F8FA)
 
-private enum class ImmersiveSort(val label: String) {
-    TITLE("Title A–Z"), TITLE_DESC("Title Z–A"), ARTIST("Artist"),
-    ALBUM("Album"), NEWEST("Recently added"), LONGEST("Longest first")
+private enum class ImmersiveSort(private val id: String, private val en: String) {
+    TITLE("Judul A–Z", "Title A–Z"), TITLE_DESC("Judul Z–A", "Title Z–A"),
+    ARTIST("Artis", "Artist"), ALBUM("Album", "Album"),
+    NEWEST("Baru ditambahkan", "Recently added"), LONGEST("Durasi terpanjang", "Longest first");
+
+    val label: String get() = libraryText(id, en)
 }
 private enum class FocusType { ARTIST, ALBUM }
 private data class LibraryFocus(val type: FocusType, val name: String)
@@ -152,6 +156,7 @@ internal fun ImmersiveMusicLibrary(
     // The third argument gates uncached cover IO until the portal settles;
     // the fourth spreads first-screen loads across frames instead of a burst.
     artwork: @Composable (Song, Modifier, Boolean, Int) -> Unit,
+    bottomContentPadding: Dp = 24.dp,
     modifier: Modifier = Modifier
 ) {
     val palette = immersiveColors(lightMode)
@@ -253,48 +258,58 @@ internal fun ImmersiveMusicLibrary(
         )
     }
 
-    deleteCandidate?.let { candidate ->
-        androidx.compose.material3.AlertDialog(
-            onDismissRequest = { deleteCandidate = null },
-            title = { Text("Delete song permanently?") },
-            text = {
-                Text("“${candidate.title}” will be deleted from device storage, not just removed from NusaMusic. This cannot be undone.")
-            },
-            confirmButton = {
-                androidx.compose.material3.TextButton(onClick = {
-                    deleteCandidate = null
-                    onDeleteSong(candidate)
-                }) { Text("Delete permanently", color = Color(0xFFD54A4A)) }
-            },
-            dismissButton = {
-                androidx.compose.material3.TextButton(onClick = { deleteCandidate = null }) {
-                    Text("Cancel")
-                }
-            }
-        )
-    }
-
     MaterialTheme(
         colorScheme = if (lightMode) lightColorScheme(
             background = palette.background,
             surface = palette.surface,
             surfaceVariant = palette.surfaceVariant,
+            surfaceContainer = palette.surface,
+            surfaceContainerHigh = palette.surface,
+            surfaceTint = palette.surface,
             onBackground = palette.primaryText,
             onSurface = palette.primaryText,
             onSurfaceVariant = palette.secondaryText,
             primary = palette.primaryText,
-            onPrimary = palette.background
+            onPrimary = palette.background,
+            error = palette.destructiveText
         ) else darkColorScheme(
             background = palette.background,
             surface = palette.surface,
             surfaceVariant = palette.surfaceVariant,
+            surfaceContainer = palette.surface,
+            surfaceContainerHigh = palette.surface,
+            surfaceTint = palette.surface,
             onBackground = palette.primaryText,
             onSurface = palette.primaryText,
             onSurfaceVariant = palette.secondaryText,
             primary = palette.primaryText,
-            onPrimary = palette.background
+            onPrimary = palette.background,
+            error = palette.destructiveText
         )
     ) {
+    deleteCandidate?.let { candidate ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { deleteCandidate = null },
+            title = { Text(libraryText("Hapus lagu secara permanen?", "Delete song permanently?")) },
+            text = {
+                Text(libraryText(
+                    "“${candidate.title}” akan dihapus dari penyimpanan perangkat, bukan hanya dari Aruna. Tindakan ini tidak dapat dibatalkan.",
+                    "“${candidate.title}” will be deleted from device storage, not just removed from Aruna. This cannot be undone."
+                ))
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    deleteCandidate = null
+                    onDeleteSong(candidate)
+                }) { Text(libraryText("Hapus permanen", "Delete permanently"), color = palette.destructiveText) }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { deleteCandidate = null }) {
+                    Text(libraryText("Batal", "Cancel"))
+                }
+            }
+        )
+    }
     Box(
         modifier = modifier.fillMaxSize().background(palette.background)
             .windowInsetsPadding(WindowInsets.safeDrawing)
@@ -312,19 +327,20 @@ internal fun ImmersiveMusicLibrary(
                     if (focus != null) { focus = null; search = "" }
                     else onReturnToPlayer()
                 }) {
-                    Icon(Icons.Rounded.ArrowBack, "Back", tint = palette.primaryText)
+                    Icon(Icons.Rounded.ArrowBack, libraryText("Kembali", "Back"), tint = palette.primaryText)
                 }
                 Text(
-                    "Library", color = palette.primaryText, fontSize = 16.sp,
+                    libraryText("Perpustakaan", "Library"), color = palette.primaryText, fontSize = 16.sp,
                     fontWeight = FontWeight.SemiBold,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f).padding(start = 8.dp)
                 )
                 IconButton(onClick = onScanMusic, enabled = !isScanning) {
-                    Icon(Icons.Rounded.Refresh, "Refresh library", tint = palette.primaryText)
+                    Icon(Icons.Rounded.Refresh, libraryText("Perbarui koleksi", "Refresh library"), tint = palette.primaryText)
                 }
                 Box {
                     IconButton(onClick = { sortOpen = true }) {
-                        Icon(Icons.Rounded.Sort, "Sort songs", tint = palette.primaryText)
+                        Icon(Icons.Rounded.Sort, libraryText("Urutkan lagu", "Sort songs"), tint = palette.primaryText)
                     }
                     DropdownMenu(expanded = sortOpen, onDismissRequest = { sortOpen = false }) {
                         ImmersiveSort.entries.forEach { option ->
@@ -353,7 +369,7 @@ internal fun ImmersiveMusicLibrary(
             ) {
                 Column(Modifier.weight(1f)) {
                     Text(
-                        focus?.name ?: "Songs", color = palette.primaryText,
+                        focus?.name ?: libraryText("Lagu", "Songs"), color = palette.primaryText,
                         fontSize = 29.sp, fontWeight = FontWeight.SemiBold,
                         letterSpacing = (-0.8).sp, lineHeight = 36.sp,
                         maxLines = 1, overflow = TextOverflow.Ellipsis
@@ -361,9 +377,9 @@ internal fun ImmersiveMusicLibrary(
                     Spacer(Modifier.height(5.dp))
                     Text(
                         when (focus?.type) {
-                            FocusType.ALBUM -> "ALBUM"
-                            FocusType.ARTIST -> "ARTIST"
-                            null -> "On this device"
+                            FocusType.ALBUM -> libraryText("Album", "ALBUM")
+                            FocusType.ARTIST -> libraryText("Artis", "ARTIST")
+                            null -> libraryText("Di perangkat ini", "On this device")
                         },
                         color = palette.secondaryText, fontSize = 12.sp
                     )
@@ -379,7 +395,7 @@ internal fun ImmersiveMusicLibrary(
                     ) {
                         Icon(Icons.Rounded.PlayArrow, null, modifier = Modifier.size(19.dp))
                         Spacer(Modifier.width(3.dp))
-                        Text("Play all", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text(libraryText("Putar semua", "Play all"), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -398,7 +414,7 @@ internal fun ImmersiveMusicLibrary(
                     modifier = Modifier.size(19.dp))
                 Spacer(Modifier.width(10.dp))
                 Text(
-                    search.ifBlank { "Search songs, artists, albums" },
+                    search.ifBlank { libraryText("Cari lagu, artis, album", "Search songs, artists, albums") },
                     color = if (search.isBlank()) palette.secondaryText else palette.primaryText,
                     fontSize = 13.sp, maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -406,7 +422,7 @@ internal fun ImmersiveMusicLibrary(
                 )
                 if (search.isNotBlank()) {
                     IconButton(onClick = { search = "" }, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Rounded.Close, "Clear search", tint = palette.secondaryText,
+                        Icon(Icons.Rounded.Close, libraryText("Hapus pencarian", "Clear search"), tint = palette.secondaryText,
                             modifier = Modifier.size(17.dp))
                     }
                 }
@@ -416,7 +432,7 @@ internal fun ImmersiveMusicLibrary(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    if (visibleSongs.size == 1) "1 song" else "${visibleSongs.size} songs",
+                    librarySongCount(visibleSongs.size),
                     color = palette.secondaryText, fontSize = 12.sp, fontWeight = FontWeight.Medium,
                     modifier = Modifier.weight(1f)
                 )
@@ -434,13 +450,14 @@ internal fun ImmersiveMusicLibrary(
                         verticalArrangement = Arrangement.Center
                     ) {
                         Text(
-                            if (!hasMusicAccess) "Allow access to your music" else emptyMessage,
+                            if (!hasMusicAccess) libraryText("Izinkan akses ke musik Anda", "Allow access to your music") else emptyMessage,
                             color = palette.primaryText, fontWeight = FontWeight.SemiBold,
                             fontSize = 17.sp, textAlign = TextAlign.Center
                         )
                         Spacer(Modifier.height(14.dp))
                         OutlinedButton(onClick = if (!hasMusicAccess) onRequestPermission else onScanMusic) {
-                            Text(if (!hasMusicAccess) "Allow access" else "Scan again", color = palette.primaryText)
+                            Text(if (!hasMusicAccess) libraryText("Izinkan akses", "Allow access")
+                                else libraryText("Pindai lagi", "Scan again"), color = palette.primaryText)
                         }
                     }
                 } else {
@@ -448,7 +465,7 @@ internal fun ImmersiveMusicLibrary(
                         state = listState, modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(
                             start = 12.dp, end = 12.dp, top = 2.dp,
-                            bottom = 24.dp)
+                            bottom = bottomContentPadding.coerceAtLeast(24.dp))
                     ) {
                         itemsIndexed(
                             items = visibleSongs,
@@ -485,7 +502,7 @@ internal fun ImmersiveMusicLibrary(
                         }
                         if (visibleSongs.isEmpty()) {
                             item(key = "empty-search", contentType = "empty") {
-                                Text("No matching songs", color = palette.secondaryText,
+                                Text(libraryText("Tidak ada lagu yang cocok", "No matching songs"), color = palette.secondaryText,
                                     textAlign = TextAlign.Center, fontSize = 14.sp,
                                     modifier = Modifier.fillMaxWidth().padding(top = 70.dp))
                             }
@@ -497,7 +514,7 @@ internal fun ImmersiveMusicLibrary(
 
 
     }
-    } // Immersive-only dark Material theme
+    } // Immersive-only Material theme
 }
 
 
@@ -542,11 +559,11 @@ private fun ImmersiveTrackRow(
             Spacer(Modifier.height(4.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (active) {
-                    Icon(Icons.Rounded.GraphicEq, "Now playing", tint = palette.primaryText,
+                    Icon(Icons.Rounded.GraphicEq, libraryText("Lagu saat ini", "Now playing"), tint = palette.primaryText,
                         modifier = Modifier.size(12.dp))
                     Spacer(Modifier.width(5.dp))
                 }
-                Text(song.artist.ifBlank { "Unknown artist" },
+                Text(song.artist.ifBlank { libraryText("Artis tidak diketahui", "Unknown artist") },
                     color = palette.secondaryText, fontSize = 11.5.sp,
                     maxLines = 1, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false))
@@ -565,29 +582,29 @@ private fun ImmersiveTrackRow(
         Text(librarySongDuration(song.durationMs), color = palette.secondaryText, fontSize = 10.5.sp)
         Box {
             IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(38.dp)) {
-                Icon(Icons.Rounded.MoreHoriz, "More options for ${song.title}",
+                Icon(Icons.Rounded.MoreHoriz, libraryText("Opsi lainnya untuk ${song.title}", "More options for ${song.title}"),
                     tint = palette.secondaryText, modifier = Modifier.size(21.dp))
             }
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                DropdownMenuItem(text = { Text("Play next") }, onClick = {
+                DropdownMenuItem(text = { Text(libraryText("Putar berikutnya", "Play next")) }, onClick = {
                     menuOpen = false; onPlayNext()
                 })
                 if (song.album.isNotBlank()) {
-                    DropdownMenuItem(text = { Text("View album") }, onClick = {
+                    DropdownMenuItem(text = { Text(libraryText("Lihat album", "View album")) }, onClick = {
                         menuOpen = false; onAlbum()
                     })
                 }
                 if (song.artist.isNotBlank()) {
-                    DropdownMenuItem(text = { Text("View artist") }, onClick = {
+                    DropdownMenuItem(text = { Text(libraryText("Lihat artis", "View artist")) }, onClick = {
                         menuOpen = false; onArtist()
                     })
                 }
-                DropdownMenuItem(text = { Text("Share") }, onClick = {
+                DropdownMenuItem(text = { Text(libraryText("Bagikan", "Share")) }, onClick = {
                     menuOpen = false; onShare()
                 })
                 androidx.compose.material3.HorizontalDivider()
                 DropdownMenuItem(
-                    text = { Text("Delete permanently", color = Color(0xFFD54A4A)) },
+                    text = { Text(libraryText("Hapus permanen", "Delete permanently"), color = palette.destructiveText) },
                     onClick = { menuOpen = false; onDelete() }
                 )
             }

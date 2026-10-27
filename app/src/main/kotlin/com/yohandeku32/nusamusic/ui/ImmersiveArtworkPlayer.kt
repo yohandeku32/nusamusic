@@ -100,7 +100,7 @@ internal fun ImmersiveArtworkPlayer(
     glassArtworkColor: Color = Color(0xFF29303B),
     onLibraryClose: () -> Unit = {},
     onHome: () -> Unit = {},
-    libraryContent: @Composable (Boolean) -> Unit = {},
+    libraryContent: @Composable (Boolean, Dp) -> Unit = { _, _ -> },
     onLibrary: () -> Unit,
     onShare: () -> Unit,
     onSettings: () -> Unit,
@@ -610,7 +610,20 @@ internal fun ImmersiveArtworkPlayer(
             swipeFromHeaderOnly = presentingLibrary,
             hazeState = liveBackdrop,
             profile = {
-                if (presentingLibrary) libraryContent(portalSettled)
+                if (presentingLibrary) {
+                    val navigationTop = listOfNotNull(
+                        navigationPillBounds?.top, artistButtonBounds?.top
+                    ).minOrNull()
+                    val hostBounds = playerBounds
+                    val libraryBottomPadding = if (navigationTop != null && hostBounds != null) {
+                        with(density) {
+                            // Library already consumes the system bottom inset.
+                            (hostBounds.bottom - navigationTop - contentInsets.getBottom(density))
+                                .coerceAtLeast(0f).toDp() + 12.dp
+                        }.coerceAtLeast(24.dp)
+                    } else 96.dp
+                    libraryContent(portalSettled, libraryBottomPadding)
+                }
                 else discoveryContent(portalSettled)
             },
             modifier = Modifier.fillMaxSize()

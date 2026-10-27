@@ -151,7 +151,7 @@ internal fun ImmersiveSearchDialog(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = { dismissNow() }) {
-                    Icon(Icons.Rounded.ArrowBack, "Close search", tint = white)
+                    Icon(Icons.Rounded.ArrowBack, libraryText("Tutup pencarian", "Close search"), tint = white)
                 }
                 Box(
                     Modifier.weight(1f).height(48.dp)
@@ -182,14 +182,15 @@ internal fun ImmersiveSearchDialog(
                                 Spacer(Modifier.width(9.dp))
                                 Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                                     if (query.isEmpty()) {
-                                        Text("Search songs, artists, albums",
-                                            color = secondary, fontSize = 13.sp)
+                                        Text(libraryText("Cari lagu, artis, album", "Search songs, artists, albums"),
+                                            color = secondary, fontSize = 13.sp,
+                                            maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     }
                                     inner()
                                 }
                                 if (query.isNotEmpty()) {
                                     IconButton(onClick = { query = "" }) {
-                                        Icon(Icons.Rounded.Close, "Clear", tint = secondary,
+                                        Icon(Icons.Rounded.Close, libraryText("Hapus pencarian", "Clear search"), tint = secondary,
                                             modifier = Modifier.size(18.dp))
                                     }
                                 }
@@ -200,7 +201,7 @@ internal fun ImmersiveSearchDialog(
                 }
             }
             Text(
-                if (matches.size == 1) "1 song" else "${matches.size} songs",
+                librarySongCount(matches.size),
                 color = secondary, fontSize = 12.sp,
                 modifier = Modifier.padding(start = 24.dp, top = 12.dp, bottom = 8.dp)
             )
@@ -222,14 +223,14 @@ internal fun ImmersiveSearchDialog(
                         Text(song.title, color = white, fontSize = 14.sp,
                             fontWeight = FontWeight.Medium,
                             maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(song.artist.ifBlank { "Unknown artist" },
+                        Text(song.artist.ifBlank { libraryText("Artis tidak diketahui", "Unknown artist") },
                             color = secondary, fontSize = 12.sp,
                             maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
                 if (matches.isEmpty()) {
                     item {
-                        Text("No matching songs", color = secondary,
+                        Text(libraryText("Tidak ada lagu yang cocok", "No matching songs"), color = secondary,
                             modifier = Modifier.fillMaxWidth().padding(top = 50.dp))
                     }
                 }
