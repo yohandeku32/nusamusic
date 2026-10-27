@@ -1,7 +1,7 @@
 # Keep library rows readable and overlays consistent
 
 > Date: 2026-10-27
-> Status: partial
+> Status: verified
 > Change type: fix
 > Scope: Immersive library, search, and song deletion confirmation in PR #178
 > Based on: b1ecf9ecbc4ad826efe5ff4f278b2f2f1f6f4a49
@@ -21,7 +21,11 @@ Source owners are in `app/src/main/kotlin/com/yohandeku32/nusamusic/ui/`, with t
 
 ## Verification
 
-Verification is in progress. The focused regression suite is `ImmersiveMusicLibraryTest`. Tests cover opposite parent/library themes, confirmation and cancellation, localized search and sorting, retained actions, and final-row clearance inside the actual overlay at normal and narrow/large-text sizes.
+The source revision `1a4b7ad20368d2f6a3ee4ce68c0d451ccd77d633` compiled successfully in [CI run 40430693091](https://github.com/yohandeku32/nusamusic/actions/runs/40430693091). All seven `ImmersiveMusicLibraryTest` regressions passed. They cover opposite parent/library themes, confirmation and cancellation, localized search and sorting, retained actions, and final-row clearance inside the actual overlay at 411dp and at 320dp with 1.5x text.
+
+The full run completed 558 tests: 555 passed and three `ImmersiveArtistHeroTest` tests failed. The same three failures existed before this change in [baseline run 40188017070](https://github.com/yohandeku32/nusamusic/actions/runs/40188017070): `shortArtistKeepsOverlayHeight`, `enlargedArtistTitleReflowsBeyondThreeLinesAtBothPhoneWidths`, and `enlargedAlbumTitleAndArtistMetadataFitAndPlaybackActionsStillWork`. This record verifies the library corrections; it does not claim the whole PR is green.
+
+The run's `Library-layout-previews` artifact contains simulated light overview, final-track clearance, and narrow dark/large-text screenshots. Test artwork and songs are fixtures. Local Android compilation also succeeded.
 
 Calculated contrast on the final neutral surfaces: light **6.54:1**, dark **9.93:1**, both above 4.5:1 for normal text.
 
