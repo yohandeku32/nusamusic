@@ -96,7 +96,9 @@ internal fun PlayerSettingsContent(
     onRemoveMusicFolder: (String) -> Unit,
     onScanMusic: () -> Unit,
     onDismiss: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    dynamicGlowEnabled: Boolean = false,
+    onDynamicGlowChange: (Boolean) -> Unit = {}
 ) {
     val colors = MaterialTheme.colorScheme
     val uriHandler = LocalUriHandler.current
@@ -283,6 +285,10 @@ internal fun PlayerSettingsContent(
                         animatedArtworkEnabled, onAnimatedArtworkChange,
                         icon = Icons.Default.AutoAwesome
                     )
+                    if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
+                        SettingsDivider()
+                        DynamicGlowSetting(dynamicGlowEnabled, animatedArtworkEnabled, onDynamicGlowChange)
+                    }
                     if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK &&
                         animatedArtworkEnabled
                     ) {
@@ -721,6 +727,18 @@ private fun SettingIcon(icon: ImageVector, enabled: Boolean = true) {
             tint = colors.primary.copy(alpha = if (enabled) 0.95f else 0.32f)
         )
     }
+}
+
+@Composable
+internal fun DynamicGlowSetting(checked: Boolean, artworkEnabled: Boolean, onChange: (Boolean) -> Unit) {
+    SettingToggle(
+        settingsText("Pantulan cahaya dinamis", "Dynamic artwork glow"),
+        if (artworkEnabled) settingsText("Cahaya latar mengikuti animasi sampul.",
+            "Background light follows the animated artwork.")
+        else settingsText("Aktifkan Animasi sampul untuk melihat efeknya.",
+            "Turn on Animated artwork to see this effect."),
+        checked, onChange
+    )
 }
 
 @Composable

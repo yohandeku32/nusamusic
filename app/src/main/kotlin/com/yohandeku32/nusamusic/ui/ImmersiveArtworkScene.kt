@@ -28,7 +28,9 @@ internal fun ImmersiveArtworkScene(
     heroWidthFraction: Float = 1f, scrimOpacity: Float = 0.2f,
     heroOpacity: Float = 1f,
     animateChanges: Boolean = true, description: String? = null,
-    animatedArtwork: @Composable BoxScope.() -> Unit = {}
+    animatedArtwork: @Composable BoxScope.() -> Unit = {},
+    dynamicGlow: Bitmap? = null,
+    glowReveal: () -> Float = { 0f }
 ) {
     // Only real blurred cover pixels create the ambience; black is used only
     // if the device has not loaded album artwork at all.
@@ -56,6 +58,10 @@ internal fun ImmersiveArtworkScene(
                 )
             }
         }
+        DynamicArtworkGlow(dynamicGlow, Modifier.matchParentSize().graphicsLayer {
+            val remaining = 1f - (glowReveal() / 0.14f).coerceIn(0f, 1f)
+            alpha = remaining * remaining * (3f - 2f * remaining)
+        })
         // Light appearance keeps the real blurred artwork underneath a soft
         // translucent paper tint, letting dark controls remain legible.
         // Dark mode retains the exact full-colour ambient with no extra tint.

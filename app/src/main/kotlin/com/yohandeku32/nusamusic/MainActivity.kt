@@ -1,6 +1,7 @@
 package com.yohandeku32.nusamusic
 
 import android.Manifest
+import androidx.lifecycle.compose.currentStateAsState
 import android.database.ContentObserver
 import android.content.ComponentName
 import android.content.pm.PackageManager
@@ -2100,6 +2101,9 @@ private fun NusaMusicApp(
     var animatedArtworkEnabled by remember {
         mutableStateOf(uiPrefs.getBoolean("animated_artwork_enabled", true))
     }
+    var dynamicGlowEnabled by remember {
+        mutableStateOf(com.yohandeku32.nusamusic.ui.DynamicGlowPreference.read(uiPrefs))
+    }
     var artworkSourceOrder by remember {
         mutableStateOf(ArtworkSourceOrder.fromPreference(
             uiPrefs.getString("animated_artwork_source_order", null)
@@ -2485,6 +2489,11 @@ private fun NusaMusicApp(
                     }
                 },
                 animatedArtworkEnabled = animatedArtworkEnabled,
+                dynamicGlowEnabled = dynamicGlowEnabled,
+                onDynamicGlowChange = { enabled ->
+                    dynamicGlowEnabled = enabled
+                    com.yohandeku32.nusamusic.ui.DynamicGlowPreference.write(uiPrefs, enabled)
+                },
                 roundedCarouselCorners = roundedCarouselCorners,
                 onRoundedCarouselCornersChange = { rounded ->
                     roundedCarouselCorners = rounded
@@ -2783,6 +2792,7 @@ private fun NusaMusicApp(
                                         currentSong, animatedArtworkEnabled, heroHeight, heroWidth,
                                         artworkModifier, lyricsMode = lyricsRequested,
                                         sourceOrder = artworkSourceOrder,
+                                        dynamicGlowEnabled = dynamicGlowEnabled,
                                         playerPageVisible = pagerState.settledPage == playerPage &&
                                             !artistOverlayOpen && !libraryOverlayOpen &&
                                             !immersiveVideoSuspended,
@@ -4759,7 +4769,8 @@ private fun ImmersiveArtwork(
     playerPageVisible: Boolean = true,
     pageReveal: () -> Float = { 0f },
     onCoverReady: (String, Bitmap) -> Unit = { _, _ -> },
-    onPaletteReady: (String, Color) -> Unit = { _, _ -> }
+    onPaletteReady: (String, Color) -> Unit = { _, _ -> },
+    dynamicGlowEnabled: Boolean = false
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     // Open the persistent MP4 cache off the UI thread while Apple is searched.
@@ -4813,6 +4824,13 @@ private fun ImmersiveArtwork(
     // including when an unavailable stream switches to an alternative URL.
     var frozenAnimatedBlur by remember(song?.uri) { mutableStateOf<Bitmap?>(null) }
     var frozenAnimatedBackdrop by remember(song?.uri) { mutableStateOf<Color?>(null) }
+    var dynamicGlow by remember(song?.uri, animatedArtworkUrl) { mutableStateOf<Bitmap?>(null) }
+    val durationScale = rememberCoroutineScope().coroutineContext[androidx.compose.ui.MotionDurationScale]
+    val lifecycleState by androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+    val glowActive = dynamicGlowEnabled && animatedArtworkEnabled && !lyricsMode && playerPageVisible &&
+        lifecycleState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED) &&
+        (durationScale?.scaleFactor ?: 1f) > 0f
+    LaunchedEffect(glowActive) { if (!glowActive) dynamicGlow = null }
 
     LaunchedEffect(song?.uri, song?.albumId) {
         val targetSong = song
@@ -4998,6 +5016,8 @@ private fun ImmersiveArtwork(
         scrimOpacity = scrimOpacity,
         animateChanges = hasPresentedArtwork,
         description = song?.title,
+        dynamicGlow = if (glowActive) dynamicGlow else null,
+        glowReveal = pageReveal,
         animatedArtwork = {
             val activeUrl = animatedArtworkUrl
             if (animatedArtworkEnabled && activeUrl != null) {
@@ -5019,6 +5039,10 @@ private fun ImmersiveArtwork(
                             alpha = 1f - eased
                         },
                         captureBackdrop = frozenAnimatedBlur == null,
+                        dynamicGlowEnabled = glowActive,
+                        onGlowReady = { frame ->
+                            if (glowActive && animatedArtworkUrl == activeUrl) dynamicGlow = frame
+                        },
                         onBackdropReady = { blurredFrame, frameColor ->
                             if (animatedArtworkUrl == activeUrl && frozenAnimatedBlur == null) {
                                 frozenAnimatedBlur = blurredFrame
@@ -5082,7 +5106,9 @@ private fun AnimatedArtworkVideoBackground(
     captureBackdrop: Boolean,
     onBackdropReady: (Bitmap, Color) -> Unit,
     onFirstFrame: () -> Unit,
-    onUnavailable: () -> Unit
+    onUnavailable: () -> Unit,
+    dynamicGlowEnabled: Boolean = false,
+    onGlowReady: (Bitmap) -> Unit = {}
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val isCanvasStream = remember(url) { SpotifyCanvasArtworkLoader.isSpotifyCanvasVideo(url) }
@@ -5098,6 +5124,7 @@ private fun AnimatedArtworkVideoBackground(
     val onFirstFrameCallback by rememberUpdatedState(onFirstFrame)
     val shouldCaptureBackdrop by rememberUpdatedState(captureBackdrop)
     val shouldPlayVideo by rememberUpdatedState(playbackVisible)
+    val onGlowReadyCallback by rememberUpdatedState(onGlowReady)
 
     val player = remember(url) {
         val trackSelector = androidx.media3.exoplayer.trackselection.DefaultTrackSelector(context).apply {
@@ -5219,6 +5246,16 @@ private fun AnimatedArtworkVideoBackground(
             }
             delay(220L)
         }
+    }
+
+    LaunchedEffect(player, artworkPlayerView, videoVisible, playbackVisible, dynamicGlowEnabled) {
+        val view = artworkPlayerView ?: return@LaunchedEffect
+        if (!dynamicGlowEnabled || !videoVisible || !playbackVisible) return@LaunchedEffect
+        com.yohandeku32.nusamusic.ui.sampleArtworkGlow(
+            position = { if (player.isPlaying) player.currentPosition else null },
+            capture = { ArtworkBlur.captureViewport(view, maxSize = 96) },
+            publish = { onGlowReadyCallback(it) }
+        )
     }
 
     LaunchedEffect(player, playbackRetryCount, playbackVisible) {
