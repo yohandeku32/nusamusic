@@ -177,7 +177,7 @@ class ImmersiveMusicLibraryTest {
         compose.onNodeWithText("Cari lagu, artis, album").performClick()
         compose.onNode(hasSetTextAction()).performTextInput("Track 02")
         compose.waitUntil(5_000) { compose.onAllNodesWithText("1 lagu").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithText("Track 02").performClick()
+        compose.onNode(hasText("Track 02") and hasAnyAncestor(isDialog())).performClick()
         assertEquals(songs[1], played)
         assertEquals("1 lagu", librarySongCount(1))
     }
