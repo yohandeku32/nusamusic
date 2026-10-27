@@ -1,5 +1,6 @@
 package com.yohandeku32.nusamusic.ui
 
+import android.view.ViewTreeObserver
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -30,6 +31,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -39,6 +41,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -111,6 +117,24 @@ internal fun ImmersiveSearchDialog(
             decorFitsSystemWindows = false
         )
     ) {
+        // This dialog owns a different Window from Now Playing. Apply its
+        // status-bar policy here; a fullscreen Window flag would break IME
+        // resizing on older Android versions.
+        val view = LocalView.current
+        val window = (view.parent as? DialogWindowProvider)?.window
+        if (window != null) DisposableEffect(window, view) {
+            val controller = WindowCompat.getInsetsController(window, window.decorView)
+            controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            controller.hide(WindowInsetsCompat.Type.statusBars())
+            val observer = view.viewTreeObserver
+            val listener = ViewTreeObserver.OnWindowFocusChangeListener { focused ->
+                if (focused) controller.hide(WindowInsetsCompat.Type.statusBars())
+            }
+            observer.addOnWindowFocusChangeListener(listener)
+            onDispose {
+                if (observer.isAlive) observer.removeOnWindowFocusChangeListener(listener)
+            }
+        }
         LaunchedEffect(Unit) {
             withFrameNanos { }
             requester.requestFocus()
