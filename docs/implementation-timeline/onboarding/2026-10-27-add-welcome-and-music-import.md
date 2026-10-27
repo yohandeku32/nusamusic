@@ -30,7 +30,8 @@ The marker is completed when a listener chooses an exit action, not when audio a
 
 - All 16 new checks passed: five preference-policy checks and eleven Compose/native UI checks. They cover fresh/unfinished/completed installs, existing settings and library migration, explicit folder/device/defer choices, callback-based recovery after cancellation/denial, no automatic access request, saved-state restoration, Indonesian/English, keyboard activation and visible focus, zero animation scale, a finite entrance, portrait, narrow 2x text, landscape and tablet layouts.
 - Native previews render the production welcome with the existing app icon. Tests also use a small test-only destination to observe the welcome host's route and recovery callbacks; those assertions are not a recording of the Android picker or permission dialog.
-- The combined focused local run passed 29 tests: all 16 intro checks, 7 library checks, 3 search-window checks and 3 presentation-mode checks. Android lint and full CI are recorded after completion in PR #178.
+- The combined focused local run passed 29 tests: all 16 intro checks, 7 library checks, 3 search-window checks and 3 presentation-mode checks. All 16 intro checks passed again after using Compose LocalActivity for navigation-bar ownership. Android `:app:lintDebug` passed.
+- [Full source verification](https://github.com/yohandeku32/nusamusic/actions/runs/40492327802) for `7a10f7187e71026481166ab5d7ee6c45e8830c74` compiled successfully and ran 606 tests: 603 passed, with only the three pre-existing artist-layout failures. All new intro tests and all library/search checks passed. CI uploaded First-launch-previews.
 
 ## Limits and maintenance
 
