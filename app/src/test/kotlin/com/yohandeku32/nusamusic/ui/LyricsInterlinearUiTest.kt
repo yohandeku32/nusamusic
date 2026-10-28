@@ -174,6 +174,42 @@ class LyricsInterlinearUiTest {
         return true
     }
 
+    @Test fun shortCjkWordsReceiveASoftHighlightBeforeOnsetWithoutMovingTheirGeometry() {
+        val xml = """<tt xmlns:m="http://www.w3.org/ns/ttml#metadata"><body><p begin="1s" end="2.2s"><span begin="1s" end="1.4s">你</span><span begin="1.4s" end="1.8s">好</span><span begin="1.8s" end="2.2s">吗</span><span m:role="x-roman"><span begin="1s" end="1.4s">ni</span><span begin="1.4s" end="1.8s">hao</span><span begin="1.8s" end="2.2s">ma</span></span></p></body></tt>"""
+        now.intValue = 1_240
+        show(xml = xml)
+        val layout = requireNotNull(plan)
+        val resting = bitmap()
+        val rowHeight = height
+        compose.runOnIdle { now.intValue = 1_380; motion.reset(1_380) }
+        compose.waitForIdle()
+        val approaching = bitmap()
+        val next = layout.cells[1]
+        var brighter = 0
+        for (y in 40 until 84) for (x in 32 + next.left.toInt() until 32 + (next.left + next.width).toInt()) {
+            if (android.graphics.Color.red(approaching.getPixel(x, y)) >
+                android.graphics.Color.red(resting.getPixel(x, y)) + 3) brighter++
+        }
+        assertTrue("Upcoming character must have a visible leading gradient before 1.4s", brighter > 8)
+        val distant = layout.cells[2]
+        assertTrue("The shoulder must not reach a later character",
+            sameRegion(resting, approaching, 32 + distant.left.toInt(), 40,
+                32 + (distant.left + distant.width).toInt(), 84))
+        assertEquals(rowHeight, height)
+        preview("soft-cjk-handoff-before")
+        compose.mainClock.advanceTimeBy(200)
+        assertTrue(approaching.sameAs(bitmap()))
+        for (time in listOf(1400, 1420, 1500)) {
+            compose.runOnIdle { now.intValue = time; motion.reset(time) }
+            compose.waitForIdle()
+            preview("soft-cjk-handoff-$time")
+        }
+        compose.runOnIdle { now.intValue = 1380; motion.reset(1380) }
+        compose.waitForIdle()
+        assertTrue("Backward seek must restore the same gradient", approaching.sameAs(bitmap()))
+        resting.recycle(); approaching.recycle()
+    }
+
     @Test fun onlyTheHeldMainCharacterMovesWhileBothNeighborsAndTheReadingRemainIndependent() {
         val xml = """<tt xmlns:m="http://www.w3.org/ns/ttml#metadata"><body><p begin="1s" end="5s"><span begin="1s" end="1.5s">你</span><span begin="1.5s" end="4.5s">好</span><span begin="4.5s" end="5s">吗</span><span m:role="x-roman"><span begin="1s" end="1.5s">ni</span><span begin="1.5s" end="4.5s">hao</span><span begin="4.5s" end="5s">ma</span></span></p></body></tt>"""
         now.intValue = 2_760

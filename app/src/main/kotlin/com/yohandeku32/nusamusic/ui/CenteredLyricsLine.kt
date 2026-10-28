@@ -91,11 +91,10 @@ internal fun CenteredKaraokeLine(
             val readingAnimated = durationScale?.scaleFactor != 0f
             val readingPainter = remember(interlinear, density, textMeasurer, readingAnimated) {
                 interlinear?.let { plan ->
-                    val excluded = if (readingAnimated) emptySet() else plan.readingLine.syllables
-                        .map { LyricsUnitKey(it.start, it.content.trim()) }.toSet()
                     SyllableLyricsPainter(plan.readingRows, density.density,
                         lyricsAdaptiveLineExpressions(listOf(plan.readingLine), emptySet())[plan.readingLine],
-                        inferredEnds = excluded, textMeasurer = textMeasurer, baseAlpha = 0.58f, highlightAlpha = 1f)
+                        textMeasurer = textMeasurer, baseAlpha = 0.58f, highlightAlpha = 1f,
+                        motionEnabled = readingAnimated)
                 }
             }
             val height = with(density) { interlinear?.heightPx?.toDp() ?: ((lineHeight * wrapped.size).toDp() + 8.dp) }

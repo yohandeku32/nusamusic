@@ -27,7 +27,6 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yohandeku32.nusamusic.data.LyricsPronunciation
-import com.yohandeku32.nusamusic.data.LyricsUnitKey
 import com.mocharealm.accompanist.lyrics.ui.composable.lyrics.*
 import com.mocharealm.accompanist.lyrics.ui.utils.isRtl
 
@@ -60,9 +59,6 @@ internal fun LyricsPronunciationRow(
         val expressions = remember(timedLine) { lyricsAdaptiveLineExpressions(listOf(timedLine), emptySet())[timedLine] }
         val animated = durationScale?.scaleFactor != 0f
         val rtl = remember(timedLine) { timedLine.syllables.any { it.content.isRtl() } }
-        val inferred = remember(timedLine, animated) {
-            if (animated) emptySet() else timedLine.syllables.map { LyricsUnitKey(it.start, it.content.trim()) }.toSet()
-        }
         BoxWithConstraints(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
             val width = constraints.maxWidth.toFloat() / renderScale
             val wrapped = remember(timedLine, measuredStyle, width, density, measurer) {
@@ -72,9 +68,9 @@ internal fun LyricsPronunciationRow(
             }
             val lineHeight = remember(measuredStyle, density, measurer) { measurer.measure("M", measuredStyle).size.height.toFloat() }
             val layouts = remember(wrapped, width, lineHeight, rtl) { calculateStaticLineLayout(wrapped, false, width, lineHeight, rtl) }
-            val painter = remember(layouts, density, expressions, alignEnd, width, inferred, measurer) {
-                SyllableLyricsPainter(layouts, density.density, expressions, alignEnd, width, inferred, measurer,
-                    baseAlpha = 0.58f, highlightAlpha = 1f)
+            val painter = remember(layouts, density, expressions, alignEnd, width, animated, measurer) {
+                SyllableLyricsPainter(layouts, density.density, expressions, alignEnd, width, textMeasurer = measurer,
+                    baseAlpha = 0.58f, highlightAlpha = 1f, motionEnabled = animated)
             }
             val height = with(density) { ((lineHeight * wrapped.size + 8.dp.toPx()) * renderScale).toDp() }
             Canvas(Modifier.fillMaxWidth().height(height).clearAndSetSemantics { contentDescription = pronunciation.text }) {

@@ -113,7 +113,8 @@ internal class SyllableLyricsPainter(
     textMeasurer: TextMeasurer,
     private val baseAlpha: Float = 0.4f,
     private val highlightAlpha: Float = 0.85f,
-    joinedGapDp: Float = 2.5f
+    joinedGapDp: Float = 2.5f,
+    motionEnabled: Boolean = true
 ) {
     private class Letter(
         val result: TextLayoutResult,
@@ -207,8 +208,12 @@ internal class SyllableLyricsPainter(
                 glyph.layout.syllable.content.trim()) !in inferredEnds
         )
     }
-    private val heldWords = LyricsHeldWordWave(heldWordUnits, joinedGapDp)
-    private val wordWave = LyricsLetterWave(heldWordUnits, joinedGapDp)
+    private val motionUnits = if (motionEnabled) heldWordUnits else heldWordUnits.map { it.copy(reliableHold = false) }
+    private val heldWords = LyricsHeldWordWave(motionUnits, joinedGapDp)
+    private val wordWave = LyricsLetterWave(motionUnits, joinedGapDp)
+    private val highlightHandoff = LyricsHighlightHandoff(heldWordUnits.mapIndexed { index, unit ->
+        if (glyphs[index].rtl) unit.copy(reliableHold = false) else unit
+    })
     private val glowPalette = LyricsGlowPaletteCache.forDensity(density)
 
     init {
@@ -353,12 +358,15 @@ internal class SyllableLyricsPainter(
                 drawText(result, color = Color.White.copy(alpha = baseAlpha),
                     topLeft = position, shadow = Shadow.None, drawStyle = Fill)
             }
-            if (strength <= 0f || progress <= 0f) return@withLyricsScale
-            val distance = (width + 2f * glyph.feather) * progress - glyph.feather
+            val handoffEdge = highlightHandoff.edgeDp(glyph.index, now)?.times(density)
+            val feather = if (handoffEdge != null) highlightHandoff.featherDp(glyph.index) * density
+                else glyph.feather
+            val distance = handoffEdge ?: ((width + 2f * feather) * progress - feather)
+            if (strength <= 0f || distance + feather <= 0f) return@withLyricsScale
             val edge = if (glyph.rtl) width - distance else distance
             val direction = if (glyph.rtl) -1f else 1f
-            glyph.fill.move(edge - direction * glyph.feather - runOffset.x,
-                edge + direction * glyph.feather - runOffset.x)
+            glyph.fill.move(edge - direction * feather - runOffset.x,
+                edge + direction * feather - runOffset.x)
             if (halo) {
                 if (glow <= 0f) return@withLyricsScale
                 // The approved bright tight/mid halos still use the
@@ -419,7 +427,7 @@ internal class SyllableLyricsPainter(
                 }
 
             } else {
-                if (progress >= 1f) {
+                if (distance - feather >= width) {
                     drawText(result, color = Color.White, topLeft = position,
                         alpha = strength * highlightAlpha, shadow = Shadow.None, drawStyle = Fill)
                 } else {
