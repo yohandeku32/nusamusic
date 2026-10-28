@@ -257,17 +257,24 @@ internal fun ImmersiveMusicLibrary(
         // remeasure and fights the portal animation. Publish once settled.
         snapshotFlow { currentlyVisible }.first { it }
         visibleSongs = result
-        // A press from a filtered artist, album or search restores the full
-        // list and navigates only after that updated order is published.
-        val locateIndex = pendingLocateSongId?.let { id ->
-            result.indexOfFirst { it.id == id }
-        } ?: -1
-        if (locateIndex >= 0) {
-            listState.scrollToItem(locateIndex)
-            pendingLocateSongId = null
-        } else if (listState.firstVisibleItemIndex != 0 || listState.firstVisibleItemScrollOffset != 0) {
+        // Leave the position alone when a filtered Locate action is waiting.
+        // Otherwise the usual filter reset still starts at the first result.
+        if (pendingLocateSongId == null &&
+            (listState.firstVisibleItemIndex != 0 || listState.firstVisibleItemScrollOffset != 0)) {
             listState.scrollToItem(0)
         }
+    }
+    LaunchedEffect(pendingLocateSongId, visibleSongs) {
+        val songId = pendingLocateSongId ?: return@LaunchedEffect
+        val index = visibleSongs.indexOfFirst { it.id == songId }
+        if (index < 0) return@LaunchedEffect
+        // A one-result filter may have been replaced by hundreds of rows.
+        // Wait until LazyColumn has measured the new count before jumping;
+        // otherwise scrollToItem could clamp to the stale list length.
+        snapshotFlow { listState.layoutInfo.totalItemsCount }
+            .first { it == visibleSongs.size }
+        listState.scrollToItem(index)
+        pendingLocateSongId = null
     }
     BackHandler(enabled = focus != null) {
         focus = null
