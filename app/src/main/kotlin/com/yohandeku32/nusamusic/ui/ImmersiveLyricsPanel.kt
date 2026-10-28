@@ -2,9 +2,7 @@ package com.yohandeku32.nusamusic.ui
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
@@ -15,7 +13,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -296,8 +293,9 @@ fun ImmersiveLyricsPanel(
                 modifier = Modifier.align(Alignment.TopEnd)
                     .padding(top = 2.dp, end = 16.dp)
                     .size(44.dp)
-                    .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.42f))
+                    // Match the Now Playing navigation material. The existing
+                    // artwork backdrop supplies the blur beneath this glass.
+                    .immersiveGlassPill(radius = 100.dp)
             ) {
                 if (embedBusy) {
                     CircularProgressIndicator(
