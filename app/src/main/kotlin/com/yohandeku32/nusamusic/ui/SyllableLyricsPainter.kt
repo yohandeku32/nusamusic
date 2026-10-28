@@ -112,7 +112,8 @@ internal class SyllableLyricsPainter(
     inferredEnds: Set<LyricsUnitKey> = emptySet(),
     textMeasurer: TextMeasurer,
     private val baseAlpha: Float = 0.4f,
-    private val highlightAlpha: Float = 0.85f
+    private val highlightAlpha: Float = 0.85f,
+    joinedGapDp: Float = 2.5f
 ) {
     private class Letter(
         val result: TextLayoutResult,
@@ -206,8 +207,8 @@ internal class SyllableLyricsPainter(
                 glyph.layout.syllable.content.trim()) !in inferredEnds
         )
     }
-    private val heldWords = LyricsHeldWordWave(heldWordUnits)
-    private val wordWave = LyricsLetterWave(heldWordUnits)
+    private val heldWords = LyricsHeldWordWave(heldWordUnits, joinedGapDp)
+    private val wordWave = LyricsLetterWave(heldWordUnits, joinedGapDp)
     private val glowPalette = LyricsGlowPaletteCache.forDensity(density)
 
     init {

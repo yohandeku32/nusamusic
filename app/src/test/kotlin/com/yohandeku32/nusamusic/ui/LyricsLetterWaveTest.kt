@@ -5,6 +5,15 @@ import org.junit.Test
 import kotlin.math.abs
 
 class LyricsLetterWaveTest {
+    @Test fun readingCellPaddingKeepsTheAuthoredWaveConnected() {
+        val units = listOf(LyricsHeldWordUnit("明", 1000, 1400, 0f, 34f),
+            LyricsHeldWordUnit("天", 1400, 1800, 60f, 94f))
+        assertFalse(LyricsLetterWave(units).hasMotion(0))
+        assertTrue(LyricsLetterWave(units, Float.POSITIVE_INFINITY).hasMotion(0))
+        val separated = units.toMutableList().apply { this[0] = this[0].copy(content = "明 ") }
+        assertFalse(LyricsLetterWave(separated, Float.POSITIVE_INFINITY).hasMotion(0))
+    }
+
     @Test fun shortWordConnectionsLeaveNeighboringLongVocalMotionUnchanged() {
         val long = LyricsHeldWordUnit("panjang ", 1900, 6900, 105f, 205f)
         val solo = LyricsLetterWave(listOf(long))

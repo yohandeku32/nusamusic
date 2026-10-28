@@ -11,6 +11,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
@@ -49,6 +50,7 @@ internal fun CenteredKaraokeLine(
     val textMeasurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val textStyle = remember(style) { style.copy(textDirection = TextDirection.Content) }
+    val readingStyle = remember(style, alignEnd) { lyricsReadingStyle(style, alignEnd) }
     var sourcePainter by remember(line) { mutableStateOf<SyllableLyricsPainter?>(null) }
     val durationScale = rememberCoroutineScope().coroutineContext[MotionDurationScale]
     val sourcePose = remember(line, time, motion, durationScale) { {
@@ -67,42 +69,73 @@ internal fun CenteredKaraokeLine(
     MotionRow(line, visualTime, motion, voices, line.isAccompaniment, { onSeek(line) }, onMainHeight) {
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             val width = constraints.maxWidth.toFloat()
-            val wrapped = remember(line, textStyle, textMeasurer, density, width) {
+            val measured = remember(line, textStyle, textMeasurer, density) {
                 val space = textMeasurer.measure(" ", textStyle).size.width.toFloat()
-                val syllables = measureSyllablesAndDetermineAnimation(line.syllables, textMeasurer, textStyle, true, space)
-                calculateBalancedLines(syllables, width, textMeasurer, textStyle)
+                measureSyllablesAndDetermineAnimation(line.syllables, textMeasurer, textStyle, true, space)
+            }
+            val interlinear = remember(line, pronunciation, measured, textStyle, readingStyle, textMeasurer, width, density, alignEnd) {
+                measureInterlinearLyrics(line, pronunciation, measured, textStyle, readingStyle,
+                    textMeasurer, width, density.density, alignEnd)
+            }
+            val wrapped = remember(measured, width, textMeasurer, textStyle) {
+                calculateBalancedLines(measured, width, textMeasurer, textStyle)
             }
             val lineHeight = remember(textMeasurer, textStyle, density) { textMeasurer.measure("M", textStyle).size.height.toFloat() }
-            val layouts = remember(wrapped, width, lineHeight, rtl) {
-                calculateStaticLineLayout(wrapped, false, width, lineHeight, rtl)
+            val layouts = remember(wrapped, width, lineHeight, rtl, interlinear) {
+                interlinear?.sourceRows ?: calculateStaticLineLayout(wrapped, false, width, lineHeight, rtl)
             }
-            val painter = remember(layouts, textMeasurer, density.density, line.start, line.end, expressions, alignEnd, width, inferredEnds) {
+            val painter = remember(layouts, textMeasurer, density.density, line.start, line.end, expressions, alignEnd, width, inferredEnds, interlinear != null) {
                 SyllableLyricsPainter(layouts, density.density, expressions,
-                    alignEnd = alignEnd, viewportWidthPx = width, inferredEnds = inferredEnds,
-                    textMeasurer = textMeasurer)
+                    alignEnd = alignEnd && interlinear == null, viewportWidthPx = width, inferredEnds = inferredEnds,
+                    textMeasurer = textMeasurer,
+                    // Reading-cell padding is visual spacing, not an authored word break.
+                    joinedGapDp = if (interlinear != null) Float.POSITIVE_INFINITY else 2.5f)
             }
             SideEffect { sourcePainter = painter }
-            val height = with(density) { (lineHeight * wrapped.size).toDp() } + 8.dp
+            val readingAnimated = durationScale?.scaleFactor != 0f
+            val readingPainter = remember(interlinear, density, textMeasurer, readingAnimated) {
+                interlinear?.let { plan ->
+                    val excluded = if (readingAnimated) emptySet() else plan.readingLine.syllables
+                        .map { LyricsUnitKey(it.start, it.content.trim()) }.toSet()
+                    SyllableLyricsPainter(plan.readingRows, density.density,
+                        lyricsAdaptiveLineExpressions(listOf(plan.readingLine), emptySet())[plan.readingLine],
+                        inferredEnds = excluded, textMeasurer = textMeasurer, baseAlpha = 0.58f, highlightAlpha = 1f)
+                }
+            }
+            val height = with(density) { interlinear?.heightPx?.toDp() ?: ((lineHeight * wrapped.size).toDp() + 8.dp) }
             val readable by remember(line, voices, visualTime, motion) { derivedStateOf {
                 !line.isAccompaniment || voices.previewPresence(visualTime(), motion.resetAt) > 0f
             } }
-            Canvas(Modifier.fillMaxWidth().height(height).clearAndSetSemantics {
-                if (readable) contentDescription = line.syllables.joinToString("") { it.content }
-            }) {
-                val now = visualTime()
-                // Backing vocal must use its OWN 380ms fade rather than the
-                // main lyric's 160ms release. The row alpha is already driven
-                // by voices.presence; don't fade its highlight a second time.
-                val focus = if (line.isAccompaniment) 1f
-                    else lyricPresence(line.start, line.end, now, motion.resetAt)
-                // Raw playback time drives the whole-line wave even when a
-                // syllable is inactive. visualTime retains the old syllable
-                // highlight/seek logic, so the two animations stay separate.
-                painter.draw(this, now, focus, waveTime = time(),
-                    playbackRevision = motion.revision)
+            Column {
+                Box {
+                    Canvas(Modifier.fillMaxWidth().height(height).clearAndSetSemantics {
+                        if (readable) contentDescription = line.syllables.joinToString("") { it.content }
+                    }) {
+                        val now = visualTime()
+                        // Backing vocals already receive their own fade from the row.
+                        val focus = if (line.isAccompaniment) 1f
+                            else lyricPresence(line.start, line.end, now, motion.resetAt)
+                        painter.draw(this, now, focus, waveTime = time(),
+                            playbackRevision = motion.revision)
+                    }
+                    if (interlinear != null && readingPainter != null && pronunciation != null) {
+                        Canvas(Modifier.fillMaxWidth().height(height).clearAndSetSemantics {
+                            if (readable) contentDescription = pronunciation.text
+                        }) {
+                            val now = time()
+                            val focus = if (line.isAccompaniment) 1f else
+                                lyricPresence(interlinear.readingLine.start, interlinear.readingLine.end, now, motion.resetAt)
+                            withTransform({ scale(interlinear.readingScale, interlinear.readingScale, Offset.Zero) }) {
+                                readingPainter.draw(this, now, focus, now, motion.revision)
+                            }
+                        }
+                    }
+                }
+                if (interlinear == null) pronunciation?.let {
+                    LyricsPronunciationRow(it, style, alignEnd, time, motion, sourcePose)
+                }
             }
         }
-        pronunciation?.let { LyricsPronunciationRow(it, style, alignEnd, time, motion, sourcePose) }
         line.translation?.takeIf { it.isNotBlank() }?.let {
             LyricsTranslation(it, style, alignEnd, sourcePose) { lyricPresence(line.start, line.end, time(), motion.resetAt) }
         }

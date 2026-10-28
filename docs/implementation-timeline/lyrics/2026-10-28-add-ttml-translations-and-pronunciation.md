@@ -48,8 +48,20 @@ Initial integration passed 33 focused parser/UI checks. The final Android regres
 
 ## Limits and maintenance
 
-There is no automatic translation, pronunciation generation or language picker. The first nonempty metadata variant is used. Pronunciation wraps as a companion sentence; character-by-character interlinear positioning is not added. Missing or malformed optional word timestamps leave the corresponding text readable without synthetic timing.
+There is no automatic translation, pronunciation generation or language picker. The first nonempty metadata variant is used. Chinese/Japanese pronunciation with matching timing uses the paired layout described below; other cases retain the companion-sentence fallback. Missing or malformed optional word timestamps leave the corresponding text readable without synthetic timing.
 
 Physical-device rendering, TalkBack speech, artwork-dependent contrast and frame pacing remain unverified. Existing distant-row fading and blur remain part of the lyric renderer. At full row focus, pronunciation's base measures 6.63:1 against the native test's dark background, translation's inactive base measures 8.67:1, and full-white active text measures 17.78:1. This focused run does not claim a full application audit or resolution of previously reported unrelated artist-layout failures.
 
 Keep companion association on source identity rather than matching starts alone: simultaneous duet rows can have identical times, and container padding can reorder sung starts. Keep exact text ranges when changing pronunciation parsing, because invalid or untimed repeated words must not shift a later highlight. See the [lyrics guide](../../EMBEDDED_LYRICS.md).
+
+## Chinese/Japanese paired reading follow-up
+
+The user clarified that pinyin/romaji should sit directly underneath the matching character or kanji group, following the supplied screenshot. [LyricsInterlinearLayout](../../../app/src/main/kotlin/com/yohandeku32/nusamusic/ui/LyricsInterlinearLayout.kt) joins source and reading spans at common authored interval boundaries. One-to-many and many-to-one intervals form a shared group; repeated text is matched by its intervals. Unannotated tails retain their source cells without fabricated readings.
+
+The two levels are measured as one group. Each cell uses the greater visible width and centers both text runs; source whitespace becomes a real gap between cells. A cell wraps intact, preserving its source and reading on the same visual row. Wrapped duet rows share the same right edge. Both existing syllable painters draw into the paired layout, retaining their authored timing, contrast, motion, visibility and seek target. Source wave grouping explicitly ignores added reading-cell padding while preserving authored whitespace as a word boundary.
+
+Non-CJK content, incomplete/ambiguous timing, unsupported bidirectional mixtures and indivisible groups wider than the available width use the existing separate reading-row fallback. No reading-to-character mapping is invented. Sentence translations remain below the entire paired block.
+
+Native renders cover a nine-character Chinese line, multi-kanji Japanese reading, 320dp with 1.8x text, right-aligned duet, pause and backward seek. Geometry checks use the actual placed text layouts, not stored center labels. A separate local check verified that all 32 annotated rows of the user-supplied TTML have unambiguous reading groups; its four English-only rows retain their existing layout.
+
+The final focused run passed **443 lyric/metadata tests with zero failures/skips**. New coverage adds eight interval-mapping contracts, five native paired-layout tests, and two source-animation grouping regressions. The native center check permits at most 0.6px difference between the actual placed source and reading centers. Android compilation and lintDebug passed with zero lint errors; existing project warnings remain. A prior concurrent analysis hit an internal lint exception; the final unchanged-source run completed successfully. No APK was assembled. Physical-device rendering, TalkBack, artwork-dependent contrast and frame pacing remain unverified.

@@ -41,6 +41,7 @@ Open **Lyrics** from the Immersive player's controls. Lyrics replace the artwork
 - Fully timed embedded karaoke takes priority. When online lyrics are enabled, lrc.red can provide a more precisely synchronized version; LRCLIB provides a line-synced fallback.
 - Authored TTML timings drive word and syllable highlighting, duet alignment and backing vocals. Translations and composer/lyricist credits appear when supplied.
 - TTML translations and pronunciation (such as pinyin) appear beneath their original lyric, including line-synced lyrics and duet voices. Pronunciation words brighten using supplied timestamps. These texts come from the lyric file; Aruna does not generate translations.
+- Timed Chinese/Japanese readings align directly under the corresponding character or kanji group. The shared layout centers each reading and wraps it together with its original text when matching time boundaries are available.
 - Short vocal pulls use a wave across individual characters. Nearby short words share one continuously moving crest across word boundaries; long held notes retain their separate character-by-character 3D rise and release. Rapid words and uncertain timing avoid the extra character animation.
 - Animations use playback time, hold their pose on pause and resample after a seek. Tap a timed lyric row to seek; manual scrolling temporarily suspends automatic following.
 

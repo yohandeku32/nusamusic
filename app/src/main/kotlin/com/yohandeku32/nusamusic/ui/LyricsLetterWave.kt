@@ -13,7 +13,7 @@ internal const val LYRICS_DETAIL_MIN_MS = 650L
  * All values derive from Media3 playback milliseconds. Pause holds the pose;
  * seeking samples the correct pose immediately instead of replaying a tween.
  */
-internal class LyricsLetterWave(units: List<LyricsHeldWordUnit>) {
+internal class LyricsLetterWave(units: List<LyricsHeldWordUnit>, joinedGapDp: Float = 2.5f) {
     private data class Word(
         val start: Int,
         val end: Int,
@@ -82,7 +82,7 @@ internal class LyricsLetterWave(units: List<LyricsHeldWordUnit>) {
                     next.content.firstOrNull()?.isWhitespace() != false ||
                     current.content.trim().any(Char::isWhitespace) ||
                     next.content.trim().any(Char::isWhitespace) ||
-                    next.pathStartDp - current.pathEndDp > 2.5f
+                    next.pathStartDp - current.pathEndDp > joinedGapDp
                 ) break
                 index++
             }

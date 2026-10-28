@@ -90,7 +90,7 @@ internal fun heldWordForwardBulge(
     )
 }
 
-internal class LyricsHeldWordWave(units: List<LyricsHeldWordUnit>) {
+internal class LyricsHeldWordWave(units: List<LyricsHeldWordUnit>, joinedGapDp: Float = 2.5f) {
     private data class Word(
         val left: Float,
         val right: Float,
@@ -145,7 +145,7 @@ internal class LyricsHeldWordWave(units: List<LyricsHeldWordUnit>) {
             while (last + 1 < units.size &&
                 !units[last].content.lastOrNull().let { it?.isWhitespace() ?: true } &&
                 !units[last + 1].content.firstOrNull().let { it?.isWhitespace() ?: true } &&
-                units[last + 1].pathStartDp - units[last].pathEndDp <= 2.5f &&
+                units[last + 1].pathStartDp - units[last].pathEndDp <= joinedGapDp &&
                 !units[last].content.trim().any { it.isWhitespace() } &&
                 !units[last + 1].content.trim().any { it.isWhitespace() }
             ) last++

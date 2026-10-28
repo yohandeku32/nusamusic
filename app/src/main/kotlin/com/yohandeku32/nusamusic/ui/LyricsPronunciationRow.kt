@@ -31,6 +31,15 @@ import com.yohandeku32.nusamusic.data.LyricsUnitKey
 import com.mocharealm.accompanist.lyrics.ui.composable.lyrics.*
 import com.mocharealm.accompanist.lyrics.ui.utils.isRtl
 
+internal fun lyricsReadingStyle(style: TextStyle, alignEnd: Boolean): TextStyle = style.copy(
+    fontSize = (style.fontSize.value * 0.55f).coerceAtLeast(14f).sp,
+    lineHeight = (style.lineHeight.value * 0.55f).coerceAtLeast(20f).sp,
+    fontWeight = FontWeight.Bold,
+    textDirection = TextDirection.Content,
+    textAlign = if (alignEnd) TextAlign.End else TextAlign.Start,
+    color = Color.White
+)
+
 @Composable
 internal fun LyricsPronunciationRow(
     pronunciation: LyricsPronunciation, style: TextStyle, alignEnd: Boolean,
@@ -41,14 +50,7 @@ internal fun LyricsPronunciationRow(
     val density = LocalDensity.current
     val durationScale = rememberCoroutineScope().coroutineContext[MotionDurationScale]
     val timedLine = remember(pronunciation) { pronunciationKaraokeLine(pronunciation) }
-    val textStyle = remember(style, alignEnd) { style.copy(
-        fontSize = (style.fontSize.value * 0.55f).coerceAtLeast(14f).sp,
-        lineHeight = (style.lineHeight.value * 0.55f).coerceAtLeast(20f).sp,
-        fontWeight = FontWeight.Bold,
-        textDirection = TextDirection.Content,
-        textAlign = if (alignEnd) TextAlign.End else TextAlign.Start,
-        color = Color.White
-    ) }
+    val textStyle = remember(style, alignEnd) { lyricsReadingStyle(style, alignEnd) }
     if (timedLine != null) {
         val renderScale = textStyle.fontSize.value / style.fontSize.value.coerceAtLeast(1f)
         val measuredStyle = remember(textStyle, renderScale) { textStyle.copy(
