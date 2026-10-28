@@ -95,6 +95,16 @@ class LyricsCompanionUiTest {
         image.recycle()
     }
 
+    private fun peakRed(image: Bitmap, bounds: androidx.compose.ui.unit.DpRect): Int {
+        var peak = 0
+        for (y in bounds.top.value.toInt() until bounds.bottom.value.toInt()) {
+            for (x in bounds.left.value.toInt() until bounds.right.value.toInt()) {
+                peak = maxOf(peak, android.graphics.Color.red(image.getPixel(x, y)))
+            }
+        }
+        return peak
+    }
+
     @Test fun companionsAreVisibleBeforePlaybackAndBothTapTheAuthoredStart() {
         show()
         compose.onNodeWithContentDescription(pronunciation, useUnmergedTree = true).assertIsDisplayed()
@@ -157,6 +167,39 @@ class LyricsCompanionUiTest {
         assertFalse(first.sameAs(later))
         preview("phone-during-playback")
         first.recycle(); paused.recycle(); later.recycle()
+    }
+
+    @Test fun pronunciationHighlightIsClearlyBrighterThanUpcomingWords() {
+        show()
+        val bounds = compose.onNodeWithContentDescription(pronunciation, useUnmergedTree = true)
+            .getUnclippedBoundsInRoot()
+        val before = bitmap()
+        compose.runOnIdle { now.intValue = 2_200 }
+        compose.waitForIdle()
+        val active = bitmap()
+        val difference = peakRed(active, bounds) - peakRed(before, bounds)
+        assertTrue("Pronunciation highlight must increase rendered brightness by at least 90/255; was $difference", difference >= 90)
+        preview("strong-pronunciation-highlight")
+        before.recycle(); active.recycle()
+    }
+
+    @Test fun translationBrightensWithItsLineWithoutChangingItsLayout() {
+        show(lineTimed = true)
+        val node = compose.onNodeWithText(translation, useUnmergedTree = true)
+        val bounds = node.getUnclippedBoundsInRoot()
+        val before = bitmap()
+        compose.runOnIdle { now.intValue = 2_000 }
+        compose.waitForIdle()
+        val active = bitmap()
+        assertEquals(bounds, node.getUnclippedBoundsInRoot())
+        val difference = peakRed(active, bounds) - peakRed(before, bounds)
+        assertTrue("Active translation must increase rendered brightness by at least 65/255; was $difference", difference >= 65)
+        preview("strong-translation-highlight")
+        compose.runOnIdle { now.intValue = 10_000 }
+        compose.waitForIdle()
+        val released = bitmap()
+        assertEquals(peakRed(before, bounds), peakRed(released, bounds))
+        before.recycle(); active.recycle(); released.recycle()
     }
 
     @Test fun viewportReceivesDecodedCompanionsAndKeepsFollowingAndSeeking() {

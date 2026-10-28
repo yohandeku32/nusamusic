@@ -90,7 +90,9 @@ internal fun CenteredKaraokeLine(
             }
         }
         pronunciation?.let { LyricsPronunciationRow(it, style, alignEnd, time) }
-        line.translation?.takeIf { it.isNotBlank() }?.let { LyricsTranslation(it, style, alignEnd) }
+        line.translation?.takeIf { it.isNotBlank() }?.let {
+            LyricsTranslation(it, style, alignEnd) { lyricPresence(line.start, line.end, time(), motion.resetAt) }
+        }
     }
 }
 
@@ -135,15 +137,17 @@ internal fun TimedVocalContent(
 }
 
 @Composable
-private fun LyricsTranslation(text: String, style: TextStyle, alignEnd: Boolean = false) {
+private fun LyricsTranslation(text: String, style: TextStyle, alignEnd: Boolean, presence: () -> Float) {
     Text(
         text = text,
-        modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 2.dp),
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 2.dp).graphicsLayer {
+            alpha = 0.68f + 0.32f * presence()
+        },
         style = style.copy(
             fontSize = (style.fontSize.value * 0.65f).coerceAtLeast(14f).sp,
             lineHeight = (style.lineHeight.value * 0.65f).coerceAtLeast(20f).sp
         ),
-        color = Color.White.copy(alpha = 0.82f),
+        color = Color.White,
         textAlign = if (alignEnd) TextAlign.End else TextAlign.Start
     )
 }
@@ -164,6 +168,8 @@ internal fun LineSyncedLyricsRow(
             alpha = 0.4f + 0.6f * lyricPresence(line.start, line.end, visualTime(), motion.resetAt)
         }, style = style, color = Color.White, textAlign = if (alignEnd) TextAlign.End else TextAlign.Start)
         pronunciation?.let { LyricsPronunciationRow(it, style, alignEnd, time) }
-        line.translation?.takeIf { it.isNotBlank() }?.let { LyricsTranslation(it, style, alignEnd) }
+        line.translation?.takeIf { it.isNotBlank() }?.let {
+            LyricsTranslation(it, style, alignEnd) { lyricPresence(line.start, line.end, time(), motion.resetAt) }
+        }
     }
 }

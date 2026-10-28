@@ -33,9 +33,9 @@ internal fun LyricsPronunciationRow(
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val textStyle = remember(style, alignEnd) { style.copy(
-        fontSize = (style.fontSize.value * 0.5f).coerceAtLeast(14f).sp,
-        lineHeight = (style.lineHeight.value * 0.5f).coerceAtLeast(20f).sp,
-        fontWeight = FontWeight.Medium,
+        fontSize = (style.fontSize.value * 0.55f).coerceAtLeast(14f).sp,
+        lineHeight = (style.lineHeight.value * 0.55f).coerceAtLeast(20f).sp,
+        fontWeight = FontWeight.Bold,
         textDirection = TextDirection.Content,
         textAlign = if (alignEnd) TextAlign.End else TextAlign.Start,
         color = Color.White
@@ -52,7 +52,7 @@ internal fun LyricsPronunciationRow(
         }
         Canvas(Modifier.fillMaxWidth().height(with(density) { layout.size.height.toDp() })
             .clearAndSetSemantics { contentDescription = pronunciation.text }) {
-            drawText(layout, color = Color.White, alpha = 0.82f, topLeft = Offset.Zero)
+            drawText(layout, color = Color.White, alpha = 0.58f, topLeft = Offset.Zero)
             val now = time()
             val first = pronunciation.words.minOfOrNull { it.start }
             val last = pronunciation.words.maxOfOrNull { it.end }

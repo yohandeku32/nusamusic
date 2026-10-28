@@ -10,7 +10,7 @@
 
 Show supplied translation or pronunciation beneath the original lyric, using the user's Apple Music screenshot as a hierarchy reference. The sample TTML contains timed pinyin, rather than a translated language. Preserve original word highlighting, character motion, duet alignment, backing windows, scrolling and Save behavior.
 
-The original lyric remains the largest type. Pronunciation uses half the lyric size with a 14sp minimum; translation uses 65% with the same minimum. Both inherit system font scaling. White companion text uses 82% opacity at full row focus. Spacing groups all three texts inside one measured and tappable row. Existing artwork, fonts and focus effects retain their owners. No Apple assets or implementation were copied.
+The original lyric remains the largest type. Pronunciation uses 55% of the lyric size with bold weight and a 14sp minimum; translation uses 65% with the same minimum. Both inherit system font scaling. Timed pronunciation brightens from a 58% white base to full white; translation uses the existing lyric-presence envelope to brighten from 68% to full white when its line is active. Spacing groups all three texts inside one measured and tappable row. Existing artwork, fonts and focus effects retain their owners. No Apple assets or implementation were copied.
 
 ## Implementation
 
@@ -22,7 +22,7 @@ The original lyric remains the largest type. Pronunciation uses half the lyric s
 
 ## Verification
 
-Android compilation succeeded. The final focused Gradle run passed **419 tests, zero failures, zero skips**, covering all lyric tests plus the affected metadata readers and writers. The new coverage consists of **13 TTML companion tests** and **six native Robolectric/Compose tests**. Lint completed with zero errors; the project retains existing warnings.
+Android compilation succeeded. The initial feature's focused Gradle run passed **419 tests, zero failures, zero skips**, covering all lyric tests plus the affected metadata readers and writers. Its new coverage consists of **13 TTML companion tests** and **six native Robolectric/Compose tests**. Lint completed with zero errors; the project retains existing warnings.
 
 Native checks exercise initial visibility, tapping pronunciation and translation to seek, keyboard Tab/Enter, source-row height, right-aligned duet text, 320dp at 1.8x font scale, unchanged paused pixels and the complete scrolling lyric viewport. Six actual renders are written to `app/build/reports/lyrics-companion-preview/` and uploaded by CI as `Lyrics-companion-previews`. Their sentences are synthetic test fixtures.
 
@@ -30,10 +30,16 @@ A separate local check decoded the user-supplied TTML: **36 lyric rows and 32 ti
 
 Commands: `:app:testDebugUnitTest --tests '*Lyrics*' --tests '*TtmlCompanionsTest' --tests '*EmbeddedLyricsReaderTest' --tests '*AudioContainerLyricsWriterTest' --tests '*Mp3EmbeddedLyricsWriterTest'` and `:app:lintDebug`. No APK was assembled.
 
+### Same-day follow-up: stronger companion highlighting
+
+The user found the companion animation too faint. The original pronunciation base was already 82% white, leaving only 18 percentage points of headroom. Its base is now 58%, with bold weight and a size increase from 50% to 55% of the main lyric. The timed full-white endpoint leaves 42 percentage points of headroom. Translations now brighten from 68% to full white using the original lyric's onset/release envelope. These changes add no timing estimates, movement or size changes during playback.
+
+The follow-up passed **31 focused tests with zero failures**: eight native companion UI tests, five existing viewport-motion tests and 18 animation-timing tests. Two new native pixel regressions isolate the companion bands rather than comparing the whole screen: completed pinyin highlighting must increase peak red by at least 90/255, and active translation must increase it by at least 65/255. The translation's bounds stay identical and its inactive brightness returns after release. Existing paused-pixel, keyboard, duet, tap and narrow large-text checks still pass. Android compilation and lintDebug pass; native captures include `strong-pronunciation-highlight.png` and `strong-translation-highlight.png`.
+
 ## Limits and maintenance
 
 There is no automatic translation, pronunciation generation or language picker. The first nonempty metadata variant is used. Pronunciation wraps as a companion sentence; character-by-character interlinear positioning is not added. Missing or malformed optional word timestamps leave the corresponding text readable without synthetic timing.
 
-Physical-device rendering, TalkBack speech, artwork-dependent contrast and frame pacing remain unverified. Existing distant-row fading and blur remain part of the lyric renderer; the new active companion color measures 12.16:1 against the native test's dark background. This focused run does not claim a full application audit or resolution of previously reported unrelated artist-layout failures.
+Physical-device rendering, TalkBack speech, artwork-dependent contrast and frame pacing remain unverified. Existing distant-row fading and blur remain part of the lyric renderer. At full row focus, pronunciation's base measures 6.63:1 against the native test's dark background, translation's inactive base measures 8.67:1, and full-white active text measures 17.78:1. This focused run does not claim a full application audit or resolution of previously reported unrelated artist-layout failures.
 
 Keep companion association on source identity rather than matching starts alone: simultaneous duet rows can have identical times, and container padding can reorder sung starts. Keep exact text ranges when changing pronunciation parsing, because invalid or untimed repeated words must not shift a later highlight. See the [lyrics guide](../../EMBEDDED_LYRICS.md).
