@@ -192,6 +192,8 @@ import com.yohandeku32.nusamusic.ui.ImmersiveLyricsState
 import com.yohandeku32.nusamusic.ui.MiuixHorizontalPager
 import com.yohandeku32.nusamusic.ui.animateMiuixScrollToPage
 import com.yohandeku32.nusamusic.ui.artworkBackdropColor
+import com.yohandeku32.nusamusic.ui.PlayerScaleHost
+import com.yohandeku32.nusamusic.ui.PlayerScalePreference
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -2046,6 +2048,7 @@ private fun NusaMusicApp(
     val uiPrefs = remember(context) {
         context.getSharedPreferences("ui_preferences", android.content.Context.MODE_PRIVATE)
     }
+    var playerScale by remember { mutableFloatStateOf(PlayerScalePreference.read(uiPrefs)) }
     var titleFontSize by remember {
         mutableStateOf(uiPrefs.getFloat("title_font_size", 34f))
     }
@@ -2477,6 +2480,14 @@ private fun NusaMusicApp(
                 onChooseCustomTitleFont = onChooseCustomTitleFont,
                 onResetCustomTitleFont = onResetCustomTitleFont,
                 playerPresentationMode = playerPresentationMode,
+                playerScale = playerScale,
+                onPlayerScaleChange = { value ->
+                    val normalized = PlayerScalePreference.normalize(value)
+                    if (playerScale != normalized) {
+                        playerScale = normalized
+                        PlayerScalePreference.write(uiPrefs, normalized)
+                    }
+                },
                 libraryLightMode = libraryLightMode,
                 onLibraryLightModeChange = { light ->
                     libraryLightMode = light
@@ -2637,216 +2648,218 @@ private fun NusaMusicApp(
                         BoxWithConstraints(Modifier.fillMaxSize()) {
                         val playerViewportHeight = maxHeight
                         if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
-                            ImmersiveArtworkPlayer(
-                                title = currentSong?.title ?: nusaText("Pilih lagu", "Choose a song"),
-                                composerNames = currentSong?.let { lyricsState.forSong(it).data?.stored?.credits?.composers?.joinToString(", ") } ?: "",
-                                artist = currentSong?.artist ?: nusaText("Perpustakaan musik lokal Anda", "Your local music library"),
-                                titleFontFamily = if (uiPrefs.contains("title_font_family")) titleFontFamily else FontFamily.SansSerif,
-                                titleFontSize = titleFontSize,
-                                hasSong = currentSong != null,
-                                isPlaying = isPlaying,
-                                isFavorite = isFavorite,
-                                shuffleEnabled = shuffleEnabled,
-                                repeatMode = repeatMode,
-                                lyricsOpen = lyricsRequested,
-                                lyricsEnabled = LYRICS_ENABLED,
-                                onPlayPause = if (currentSong == null) onRequestPermission else onTogglePlay,
-                                onPrevious = onPrevious, onNext = onNext,
-                                onShuffle = onToggleShuffle, onRepeat = onToggleRepeat,
-                                onFavorite = { isFavorite = !isFavorite },
-                                onLyrics = {
-                                    artistOverlayOpen = false
-                                    libraryOverlayOpen = false
-                                    lyricsRequested = !lyricsRequested
-                                },
-                                onDiscovery = {
-                                    if (!artistOverlayOpen || libraryOverlayOpen) {
-                                        lyricsRequested = false
-                                        discoveryArtistName = null
+                            PlayerScaleHost(playerScale) {
+                                ImmersiveArtworkPlayer(
+                                    title = currentSong?.title ?: nusaText("Pilih lagu", "Choose a song"),
+                                    composerNames = currentSong?.let { lyricsState.forSong(it).data?.stored?.credits?.composers?.joinToString(", ") } ?: "",
+                                    artist = currentSong?.artist ?: nusaText("Perpustakaan musik lokal Anda", "Your local music library"),
+                                    titleFontFamily = if (uiPrefs.contains("title_font_family")) titleFontFamily else FontFamily.SansSerif,
+                                    titleFontSize = titleFontSize,
+                                    hasSong = currentSong != null,
+                                    isPlaying = isPlaying,
+                                    isFavorite = isFavorite,
+                                    shuffleEnabled = shuffleEnabled,
+                                    repeatMode = repeatMode,
+                                    lyricsOpen = lyricsRequested,
+                                    lyricsEnabled = LYRICS_ENABLED,
+                                    onPlayPause = if (currentSong == null) onRequestPermission else onTogglePlay,
+                                    onPrevious = onPrevious, onNext = onNext,
+                                    onShuffle = onToggleShuffle, onRepeat = onToggleRepeat,
+                                    onFavorite = { isFavorite = !isFavorite },
+                                    onLyrics = {
+                                        artistOverlayOpen = false
                                         libraryOverlayOpen = false
-                                        artistOverlayOpen = true
-                                    }
-                                },
-                                discoveryOpen = artistOverlayOpen,
-                                canCloseDiscoveryBySwipe = {
-                                    val state = if (discoveryArtistName == null) discoveryListState
-                                        else artistPageState.listState
-                                    state.firstVisibleItemIndex == 0 && state.firstVisibleItemScrollOffset < 12
-                                },
-                                onDiscoveryClose = { artistOverlayOpen = false },
-                                discoveryContent = { settled ->
-                                    val selectedArtist = discoveryArtistName
-                                    if (selectedArtist == null) {
-                                        ImmersiveDiscoveryPage(
-                                            songs = songs, currentSong = currentSong, isPlaying = isPlaying,
-                                            listState = discoveryListState, isVisible = artistOverlayOpen,
-                                            isSettled = settled,
-                                            onBack = { artistOverlayOpen = false },
-                                            onArtist = { openDiscoveryArtist(it) },
-                                            onAlbum = { openDiscoveryArtist(it.artist, it.albumKey) },
+                                        lyricsRequested = !lyricsRequested
+                                    },
+                                    onDiscovery = {
+                                        if (!artistOverlayOpen || libraryOverlayOpen) {
+                                            lyricsRequested = false
+                                            discoveryArtistName = null
+                                            libraryOverlayOpen = false
+                                            artistOverlayOpen = true
+                                        }
+                                    },
+                                    discoveryOpen = artistOverlayOpen,
+                                    canCloseDiscoveryBySwipe = {
+                                        val state = if (discoveryArtistName == null) discoveryListState
+                                            else artistPageState.listState
+                                        state.firstVisibleItemIndex == 0 && state.firstVisibleItemScrollOffset < 12
+                                    },
+                                    onDiscoveryClose = { artistOverlayOpen = false },
+                                    discoveryContent = { settled ->
+                                        val selectedArtist = discoveryArtistName
+                                        if (selectedArtist == null) {
+                                            ImmersiveDiscoveryPage(
+                                                songs = songs, currentSong = currentSong, isPlaying = isPlaying,
+                                                listState = discoveryListState, isVisible = artistOverlayOpen,
+                                                isSettled = settled,
+                                                onBack = { artistOverlayOpen = false },
+                                                onArtist = { openDiscoveryArtist(it) },
+                                                onAlbum = { openDiscoveryArtist(it.artist, it.albumKey) },
+                                                onPlay = { selected, queue ->
+                                                    artistOverlayOpen = false
+                                                    onPlay(selected, queue)
+                                                },
+                                                onTogglePlay = onTogglePlay,
+                                                onLibrary = {
+                                                    artistOverlayOpen = false
+                                                    libraryOverlayOpen = true
+                                                },
+                                                artwork = { track, tile ->
+                                                    ArtworkView(track, maxSizePx = 320, modifier = tile,
+                                                        loadAllowed = settled, grainOverlay = false)
+                                                }
+                                            )
+                                        } else {
+                                        ImmersiveArtistPage(
+                                            artistName = selectedArtist,
+                                            songs = songs,
+                                            currentSong = currentSong,
+                                            isVisible = artistOverlayOpen,
+                                            state = artistPageState,
+                                            onBack = { discoveryArtistName = null },
                                             onPlay = { selected, queue ->
                                                 artistOverlayOpen = false
                                                 onPlay(selected, queue)
                                             },
-                                            onTogglePlay = onTogglePlay,
-                                            onLibrary = {
-                                                artistOverlayOpen = false
-                                                libraryOverlayOpen = true
+                                            artwork = { song, modifier ->
+                                                ArtworkView(song, maxSizePx = 512, modifier = modifier,
+                                                    grainOverlay = false)
                                             },
-                                            artwork = { track, tile ->
-                                                ArtworkView(track, maxSizePx = 320, modifier = tile,
-                                                    loadAllowed = settled, grainOverlay = false)
+                                            heroArtwork = { song, modifier ->
+                                                val cover = artistTransitionCover
+                                                if (song.uri == currentSong?.uri && cover != null) {
+                                                    Image(bitmap = cover.asImageBitmap(),
+                                                        contentDescription = song.title,
+                                                        contentScale = ContentScale.Crop,
+                                                        modifier = modifier)
+                                                } else {
+                                                    ArtworkView(song, maxSizePx = 512,
+                                                        modifier = modifier, grainOverlay = false)
+                                                }
+                                            },
+                                            overlayMode = true
+                                        )
+                                        }
+                                    },
+                                    libraryOpen = libraryOverlayOpen,
+                                    libraryLightMode = libraryLightMode,
+                                    liquidGlassEnabled = liquidGlassEnabled,
+                                    glassArtworkColor = playerGlassArtworkColor,
+                                    onLibraryClose = { libraryOverlayOpen = false },
+                                    onHome = {
+                                        artistOverlayOpen = false
+                                        libraryOverlayOpen = false
+                                    },
+                                    libraryContent = { settled, bottomContentPadding ->
+                                        ImmersiveMusicLibrary(
+                                            songs = songs,
+                                            currentSong = currentSong,
+                                            isPlaying = isPlaying,
+                                            isVisible = libraryOverlayOpen && settled,
+                                            bottomContentPadding = bottomContentPadding,
+                                            lightMode = libraryLightMode,
+                                            hasMusicAccess = hasMusicAccess,
+                                            isScanning = isScanningMusic,
+                                            emptyMessage = emptyLibraryMessage,
+                                            onReturnToPlayer = { libraryOverlayOpen = false },
+                                            onPlay = { selected, queue ->
+                                                libraryOverlayOpen = false
+                                                onPlay(selected, queue)
+                                            },
+                                            onPlayNext = onPlayNext,
+                                            onDeleteSong = onDeleteSong,
+                                            onShare = { onShare(it) },
+                                            onTogglePlay = onTogglePlay,
+                                            onScanMusic = onScanMusic,
+                                            onRequestPermission = onRequestPermission,
+                                            onChooseMusicFolder = onSelectMusicFolder,
+                                            artwork = { track, tileModifier, settled, index ->
+                                                ArtworkView(
+                                                    song = track,
+                                                    maxSizePx = 144,
+                                                    // Cached album thumbnails are available
+                                                    // instantly; defer misses until the
+                                                    // Library entrance finishes. Stagger
+                                                    // each visible row to avoid frame spikes.
+                                                    loadAllowed = settled,
+                                                    loadDelayMs = 40L +
+                                                        (index.coerceIn(0, 12) * 28L),
+                                                    grainOverlay = false,
+                                                    modifier = tileModifier
+                                                )
                                             }
                                         )
-                                    } else {
-                                    ImmersiveArtistPage(
-                                        artistName = selectedArtist,
-                                        songs = songs,
-                                        currentSong = currentSong,
-                                        isVisible = artistOverlayOpen,
-                                        state = artistPageState,
-                                        onBack = { discoveryArtistName = null },
-                                        onPlay = { selected, queue ->
-                                            artistOverlayOpen = false
-                                            onPlay(selected, queue)
-                                        },
-                                        artwork = { song, modifier ->
-                                            ArtworkView(song, maxSizePx = 512, modifier = modifier,
-                                                grainOverlay = false)
-                                        },
-                                        heroArtwork = { song, modifier ->
-                                            val cover = artistTransitionCover
-                                            if (song.uri == currentSong?.uri && cover != null) {
-                                                Image(bitmap = cover.asImageBitmap(),
-                                                    contentDescription = song.title,
-                                                    contentScale = ContentScale.Crop,
-                                                    modifier = modifier)
-                                            } else {
-                                                ArtworkView(song, maxSizePx = 512,
-                                                    modifier = modifier, grainOverlay = false)
+                                    },
+                                    onLibrary = {
+                                        artistOverlayOpen = false
+                                        lyricsRequested = false
+                                        libraryOverlayOpen = true
+                                    },
+                                    onShare = { onShare(currentSong) },
+                                    onSettings = {
+                                        artistOverlayOpen = false
+                                        libraryOverlayOpen = false
+                                        showSettings = true
+                                    },
+                                    artwork = { artworkModifier, heroHeight, heroWidth ->
+                                        ImmersiveArtwork(
+                                            currentSong, animatedArtworkEnabled, heroHeight, heroWidth,
+                                            artworkModifier, lyricsMode = lyricsRequested,
+                                            sourceOrder = artworkSourceOrder,
+                                            dynamicGlowEnabled = dynamicGlowEnabled,
+                                            playerPageVisible = pagerState.settledPage == playerPage &&
+                                                !artistOverlayOpen && !libraryOverlayOpen &&
+                                                !immersiveVideoSuspended,
+                                            pageReveal = {
+                                                // Renderer reads the changing pager
+                                                // offset only inside graphicsLayer.
+                                                // Fade live TextureView early on BOTH
+                                                // swipe directions; the existing cover
+                                                // stays warm beneath it.
+                                                kotlin.math.abs(
+                                                    playerPage - pagerState.currentPage -
+                                                        pagerState.currentPageOffsetFraction
+                                                ).coerceIn(0f, 1f)
+                                            },
+                                            onCoverReady = { uri, cover ->
+                                                if (uri == currentSong?.uri) artistTransitionCover = cover
+                                            },
+                                            onPaletteReady = { uri, palette ->
+                                                if (uri == currentSong?.uri) playerGlassArtworkColor = palette
                                             }
-                                        },
-                                        overlayMode = true
-                                    )
-                                    }
-                                },
-                                libraryOpen = libraryOverlayOpen,
-                                libraryLightMode = libraryLightMode,
-                                liquidGlassEnabled = liquidGlassEnabled,
-                                glassArtworkColor = playerGlassArtworkColor,
-                                onLibraryClose = { libraryOverlayOpen = false },
-                                onHome = {
-                                    artistOverlayOpen = false
-                                    libraryOverlayOpen = false
-                                },
-                                libraryContent = { settled, bottomContentPadding ->
-                                    ImmersiveMusicLibrary(
-                                        songs = songs,
-                                        currentSong = currentSong,
-                                        isPlaying = isPlaying,
-                                        isVisible = libraryOverlayOpen && settled,
-                                        bottomContentPadding = bottomContentPadding,
-                                        lightMode = libraryLightMode,
-                                        hasMusicAccess = hasMusicAccess,
-                                        isScanning = isScanningMusic,
-                                        emptyMessage = emptyLibraryMessage,
-                                        onReturnToPlayer = { libraryOverlayOpen = false },
-                                        onPlay = { selected, queue ->
-                                            libraryOverlayOpen = false
-                                            onPlay(selected, queue)
-                                        },
-                                        onPlayNext = onPlayNext,
-                                        onDeleteSong = onDeleteSong,
-                                        onShare = { onShare(it) },
-                                        onTogglePlay = onTogglePlay,
-                                        onScanMusic = onScanMusic,
-                                        onRequestPermission = onRequestPermission,
-                                        onChooseMusicFolder = onSelectMusicFolder,
-                                        artwork = { track, tileModifier, settled, index ->
-                                            ArtworkView(
-                                                song = track,
-                                                maxSizePx = 144,
-                                                // Cached album thumbnails are available
-                                                // instantly; defer misses until the
-                                                // Library entrance finishes. Stagger
-                                                // each visible row to avoid frame spikes.
-                                                loadAllowed = settled,
-                                                loadDelayMs = 40L +
-                                                    (index.coerceIn(0, 12) * 28L),
-                                                grainOverlay = false,
-                                                modifier = tileModifier
-                                            )
-                                        }
-                                    )
-                                },
-                                onLibrary = {
-                                    artistOverlayOpen = false
-                                    lyricsRequested = false
-                                    libraryOverlayOpen = true
-                                },
-                                onShare = { onShare(currentSong) },
-                                onSettings = {
-                                    artistOverlayOpen = false
-                                    libraryOverlayOpen = false
-                                    showSettings = true
-                                },
-                                artwork = { artworkModifier, heroHeight, heroWidth ->
-                                    ImmersiveArtwork(
-                                        currentSong, animatedArtworkEnabled, heroHeight, heroWidth,
-                                        artworkModifier, lyricsMode = lyricsRequested,
-                                        sourceOrder = artworkSourceOrder,
-                                        dynamicGlowEnabled = dynamicGlowEnabled,
-                                        playerPageVisible = pagerState.settledPage == playerPage &&
-                                            !artistOverlayOpen && !libraryOverlayOpen &&
-                                            !immersiveVideoSuspended,
-                                        pageReveal = {
-                                            // Renderer reads the changing pager
-                                            // offset only inside graphicsLayer.
-                                            // Fade live TextureView early on BOTH
-                                            // swipe directions; the existing cover
-                                            // stays warm beneath it.
-                                            kotlin.math.abs(
-                                                playerPage - pagerState.currentPage -
-                                                    pagerState.currentPageOffsetFraction
-                                            ).coerceIn(0f, 1f)
-                                        },
-                                        onCoverReady = { uri, cover ->
-                                            if (uri == currentSong?.uri) artistTransitionCover = cover
-                                        },
-                                        onPaletteReady = { uri, palette ->
-                                            if (uri == currentSong?.uri) playerGlassArtworkColor = palette
-                                        }
-                                    )
-                                },
-                                progress = { progressModifier ->
-                                    PlaybackProgress(
-                                        positionMsState,
-                                        durationMs.takeIf { it > 0L } ?: currentSong?.durationMs ?: 0L,
-                                        currentSong != null,
-                                        onSeek, immersive = true, modifier = progressModifier
-                                    )
-                                },
-                                quality = { AudioQualityPill(song = currentSong, immersive = true) },
-                                lyrics = { lyricsModifier ->
-                                    ImmersiveLyricsPanel(
-                                        song = currentSong,
-                                        positionMs = positionMsState,
-                                        readPlaybackPosition = readPlaybackPosition,
-                                        readPlaybackEpoch = readPlaybackEpoch,
-                                        isPlaying = isPlaying,
-                                        playbackEpoch = lyricsPlaybackEpoch,
-                                        durationMs = durationMs,
-                                        state = lyricsState,
-                                        onSeek = onSeek,
-                                        fontSize = lyricsFontSize,
-                                        onlineLyricsEnabled = onlineLyricsEnabled,
-                                        modifier = lyricsModifier,
-                                        onQueueLyrics = onQueueLyrics,
-                                        isLyricsQueued = isLyricsQueued
-                                    )
-                                },
-                                modifier = Modifier.fillMaxSize()
-                            )
+                                        )
+                                    },
+                                    progress = { progressModifier ->
+                                        PlaybackProgress(
+                                            positionMsState,
+                                            durationMs.takeIf { it > 0L } ?: currentSong?.durationMs ?: 0L,
+                                            currentSong != null,
+                                            onSeek, immersive = true, modifier = progressModifier
+                                        )
+                                    },
+                                    quality = { AudioQualityPill(song = currentSong, immersive = true) },
+                                    lyrics = { lyricsModifier ->
+                                        ImmersiveLyricsPanel(
+                                            song = currentSong,
+                                            positionMs = positionMsState,
+                                            readPlaybackPosition = readPlaybackPosition,
+                                            readPlaybackEpoch = readPlaybackEpoch,
+                                            isPlaying = isPlaying,
+                                            playbackEpoch = lyricsPlaybackEpoch,
+                                            durationMs = durationMs,
+                                            state = lyricsState,
+                                            onSeek = onSeek,
+                                            fontSize = lyricsFontSize,
+                                            onlineLyricsEnabled = onlineLyricsEnabled,
+                                            modifier = lyricsModifier,
+                                            onQueueLyrics = onQueueLyrics,
+                                            isLyricsQueued = isLyricsQueued
+                                        )
+                                    },
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
                             return@BoxWithConstraints
                         }
                         if (playerPresentationMode == PlayerPresentationMode.CD) {

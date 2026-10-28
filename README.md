@@ -19,6 +19,8 @@ New listeners see a short Aruna welcome with three choices: choose a music folde
 
 Choose a presentation in Settings. A missing or unavailable saved mode uses Immersive; an explicitly saved CD choice is preserved. Playback includes background audio, notification controls, shuffle, repeat, saved playback position and optional crossfade from 1 to 12 seconds.
 
+In Immersive Settings, **Now Playing scale** enlarges the main player's artwork, text and controls from 100% to 125% in 5% steps. The choice is saved; **Reset** returns to 100%. The layout reflows on narrow screens and retains the system font-size preference.
+
 Aruna reads your device library through MediaStore and folders you select, including subfolders. It skips tracks shorter than 10 seconds. The library supports search, album and artist browsing, and sorting by title, artist, album, date added or duration.
 
 Pull to refresh checks both the Android media index and manually selected folders, just like the explicit scan in Settings. Unchanged folder tags are reused; newly copied songs do not need to be indexed by Android before a selected-folder refresh can discover them.

@@ -32,6 +32,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -43,6 +44,7 @@ import com.yohandeku32.nusamusic.LYRICS_ENABLED
 import com.yohandeku32.nusamusic.TITLE_FONT_OPTIONS
 import com.yohandeku32.nusamusic.model.PlayerPresentationMode
 import java.util.Locale
+import kotlin.math.roundToInt
 
 private fun settingsText(id: String, en: String): String =
     if (Locale.getDefault().language.equals("id", ignoreCase = true)) id else en
@@ -93,7 +95,9 @@ internal fun PlayerSettingsContent(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     dynamicGlowEnabled: Boolean = false,
-    onDynamicGlowChange: (Boolean) -> Unit = {}
+    onDynamicGlowChange: (Boolean) -> Unit = {},
+    playerScale: Float = 1f,
+    onPlayerScaleChange: (Float) -> Unit = {}
 ) {
     val colors = MaterialTheme.colorScheme
     val listState = rememberLazyListState()
@@ -238,6 +242,8 @@ internal fun PlayerSettingsContent(
                     }
                     SettingsDivider()
                     if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
+                        PlayerScaleSetting(playerScale, onPlayerScaleChange)
+                        SettingsDivider()
                         SettingToggle(
                             settingsText("Daftar lagu terang", "Light song list"),
                             settingsText(
@@ -550,6 +556,32 @@ internal fun PlayerSettingsContent(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+internal fun PlayerScaleSetting(value: Float, onChange: (Float) -> Unit) {
+    val scale = PlayerScalePreference.normalize(value)
+    val percentage = "${(scale * 100).roundToInt()}%"
+    Column {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(settingsText("Skala player utama", "Now Playing scale"),
+                Modifier.weight(1f), fontWeight = FontWeight.Medium)
+            SettingValue(percentage)
+        }
+        Text(settingsText("Perbesar artwork, teks, dan tombol player utama.",
+            "Enlarge the artwork, text and controls in Now Playing."),
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Slider(value = scale, onValueChange = { onChange(PlayerScalePreference.normalize(it)) },
+            valueRange = PlayerScalePreference.MIN..PlayerScalePreference.MAX, steps = 4,
+            modifier = Modifier.semantics {
+                contentDescription = settingsText("Skala player utama", "Now Playing scale")
+                stateDescription = percentage
+            })
+        RangeLabels("100%", "125%")
+        TextButton(onClick = { onChange(1f) }, enabled = scale != 1f) {
+            Text(settingsText("Atur ulang", "Reset"))
         }
     }
 }

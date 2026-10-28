@@ -190,6 +190,7 @@ internal fun ImmersiveArtworkPlayer(
         )
         val mutedInk = primaryInk.copy(alpha = 0.72f)
         val density = LocalDensity.current
+        val overlayDensity = LocalPlayerBaseDensity.current ?: density
         val viewportHeight = maxHeight
         val layoutDirection = LocalLayoutDirection.current
         val wide = maxWidth >= 600.dp && maxWidth > maxHeight * 1.15f
@@ -200,7 +201,11 @@ internal fun ImmersiveArtworkPlayer(
         val controlsFraction = controlsWidth / maxWidth
         val compact = maxHeight < 720.dp || maxWidth < 370.dp
         // More breathing room at both edges without changing icon scale.
-        val horizontal = if (wide) 20.dp else if (compact) 24.dp else 28.dp
+        val controlsViewport = ((if (wide) controlsWidth else maxWidth) - insetWidth).coerceAtLeast(0.dp)
+        val tightControls = controlsViewport < 312.dp
+        val navigationWidth = if (lyricsEnabled) 242.dp else 194.dp
+        val horizontal = if (tightControls) ((controlsViewport - navigationWidth) / 2)
+            .coerceIn(0.dp, 12.dp) else if (wide) 20.dp else if (compact) 24.dp else 28.dp
         // Lift the entire Now Playing stack, INCLUDING the lower action pill.
         // Padding changes only when viewport size class changes, not per frame.
         val playerBottomPadding = if (wide) 12.dp else 22.dp
@@ -352,6 +357,22 @@ internal fun ImmersiveArtworkPlayer(
         // The three-action navigation pill stays centered across transitions.
         val actionPillWidth = if (lyricsEnabled) 176.dp else 128.dp
 
+        val shuffleControl: @Composable () -> Unit = {
+            ImmersiveAction(lightMode, Lucide.Shuffle,
+                if (shuffleEnabled) immersiveText("Acak aktif", "Shuffle on") else immersiveText("Acak nonaktif", "Shuffle off"),
+                onShuffle, hasSong, active = shuffleEnabled, iconSize = 25.dp,
+                iconTint = transportInk, touchSize = if (compact) 48.dp else 50.dp)
+        }
+        val repeatControl: @Composable () -> Unit = {
+            ImmersiveAction(lightMode, if (repeatMode == 1) Lucide.Repeat1 else Lucide.Repeat,
+                when (repeatMode) {
+                    1 -> immersiveText("Ulangi satu lagu", "Repeat one")
+                    2 -> immersiveText("Ulangi semua", "Repeat all")
+                    else -> immersiveText("Ulangi nonaktif", "Repeat off")
+                }, onRepeat, hasSong, active = repeatMode != 0, iconSize = 25.dp,
+                iconTint = transportInk, touchSize = if (compact) 48.dp else 50.dp)
+        }
+
         // On compact/large-text screens the foreground can scroll rather than
         // clipping transport buttons. The artwork remains a full-screen canvas.
         val foreground: @Composable () -> Unit = {
@@ -441,14 +462,16 @@ internal fun ImmersiveArtworkPlayer(
                 // Apple Music-inspired hierarchy: filled transport glyphs,
                 // lighter outline modes and generous, stable touch targets.
                 // Compact sizing avoids horizontal clipping on narrow devices.
+                if (tightControls) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        shuffleControl()
+                        repeatControl()
+                    }
+                    Spacer(Modifier.height(4.dp))
+                }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween) {
-                    ImmersiveAction(
-                        lightMode, Lucide.Shuffle,
-                        if (shuffleEnabled) immersiveText("Acak aktif", "Shuffle on") else immersiveText("Acak nonaktif", "Shuffle off"),
-                        onShuffle, hasSong, active = shuffleEnabled, iconSize = 25.dp,
-                        iconTint = transportInk, touchSize = if (compact) 48.dp else 50.dp
-                    )
+                    if (!tightControls) shuffleControl()
                     TransportGlyphButton(
                         icon = NusaPlayerIcons.Previous,
                         label = immersiveText("Sebelumnya", "Previous"),
@@ -471,16 +494,7 @@ internal fun ImmersiveArtworkPlayer(
                         onClick = onNext, enabled = hasSong, tint = transportInk,
                         touchSize = if (compact) 50.dp else 54.dp, iconSize = if (compact) 34.dp else 36.dp
                     )
-                    ImmersiveAction(
-                        lightMode, if (repeatMode == 1) Lucide.Repeat1 else Lucide.Repeat,
-                        when (repeatMode) {
-                            1 -> immersiveText("Ulangi satu lagu", "Repeat one")
-                            2 -> immersiveText("Ulangi semua", "Repeat all")
-                            else -> immersiveText("Ulangi nonaktif", "Repeat off")
-                        }, onRepeat, hasSong, active = repeatMode != 0,
-                        iconSize = 25.dp, iconTint = transportInk,
-                        touchSize = if (compact) 48.dp else 50.dp
-                    )
+                    if (!tightControls) repeatControl()
                 }
                 // Restore the original separate Artist profile circle beside
                 // the Lyrics/Library/Settings pill. Both are 56dp high and
@@ -545,7 +559,7 @@ internal fun ImmersiveArtworkPlayer(
                 .padding(top = 68.dp).verticalScroll(rememberScrollState())) {
                 foreground()
             }
-        } else if (maxHeight < 560.dp || density.fontScale > 1.35f) {
+        } else if (maxHeight < 560.dp || density.fontScale > 1.35f || tightControls) {
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
                 Spacer(Modifier.height(maxOf(180.dp, viewportHeight * 0.35f)))
                 foreground()
@@ -554,7 +568,8 @@ internal fun ImmersiveArtworkPlayer(
             Box(Modifier.align(Alignment.BottomCenter)) { foreground() }
         }
 
-        if (portalVisible) ImmersiveArtistPortal(
+        if (portalVisible) CompositionLocalProvider(LocalDensity provides overlayDensity) {
+        ImmersiveArtistPortal(
             open = overlayOpen,
             progress = shownProgress,
             source = artistButtonBounds ?: navigationPillBounds,
@@ -590,9 +605,9 @@ internal fun ImmersiveArtworkPlayer(
                     ).minOrNull()
                     val hostBounds = playerBounds
                     val libraryBottomPadding = if (navigationTop != null && hostBounds != null) {
-                        with(density) {
+                        with(overlayDensity) {
                             // Library already consumes the system bottom inset.
-                            (hostBounds.bottom - navigationTop - contentInsets.getBottom(density))
+                            (hostBounds.bottom - navigationTop - contentInsets.getBottom(overlayDensity))
                                 .coerceAtLeast(0f).toDp() + 12.dp
                         }.coerceAtLeast(24.dp)
                     } else 96.dp
@@ -602,52 +617,42 @@ internal fun ImmersiveArtworkPlayer(
             },
             modifier = Modifier.fillMaxSize()
         )
+        }
 
         // Library keeps the separate Artist circle visible above its sheet.
         // Now Playing still supports the artwork's right-swipe gesture.
         val pill = navigationPillBounds
         val root = playerBounds
-        val bubble = artistButtonBounds
-        if (presentingLibrary && portalVisible && bubble != null && root != null) {
-            Box(
-                Modifier.offset {
-                    IntOffset(
-                        navigationProfileLeftPx(
-                            bubble.left - root.left,
-                            48.dp.toPx(),
-                            pillExpansion.value
-                        ).roundToInt(),
-                        (bubble.top - root.top).roundToInt()
+        if (pill != null && root != null) PlayerNavigationScaleHost(density, overlayDensity, shownProgress) {
+            val navigationDensity = LocalDensity.current
+            val centerX = pill.left - root.left + with(density) { (actionPillWidth - 66.dp).toPx() / 2 }
+            val anchorX = centerX - with(navigationDensity) { (actionPillWidth - 66.dp).toPx() / 2 }
+            val anchorY = pill.top - root.top + with(density) { 28.dp.toPx() } -
+                with(navigationDensity) { 28.dp.toPx() }
+            if (presentingLibrary && portalVisible) {
+                Box(
+                    Modifier.offset {
+                        IntOffset(
+                            navigationProfileLeftPx(
+                                anchorX - 66.dp.toPx(), 48.dp.toPx(), pillExpansion.value
+                            ).roundToInt(),
+                            anchorY.roundToInt()
+                        )
+                    }.size(56.dp).graphicsLayer { alpha = shownProgress().coerceIn(0f, 1f) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    ImmersiveNavigationSurface(50.dp, lightMode, Modifier.matchParentSize())
+                    SolidNavigationOverlay(50.dp, shownProgress, Modifier.matchParentSize())
+                    ImmersiveAction(
+                        lightMode, NusaNavigationIcons.Discover, "Discover", onDiscovery, libraryOpen,
+                        iconSize = 25.dp, iconTint = Color.White,
+                        liquidMotion = liquidGlassEnabled, inactiveAlpha = 1f
                     )
-                }.size(56.dp).graphicsLayer {
-                    alpha = shownProgress().coerceIn(0f, 1f)
-                },
-                contentAlignment = Alignment.Center
-            ) {
-                ImmersiveNavigationSurface(
-                    radius = 50.dp,
-                    lightMode = lightMode,
-                    modifier = Modifier.matchParentSize()
-                )
-                SolidNavigationOverlay(
-                    radius = 50.dp,
-                    progress = shownProgress,
-                    modifier = Modifier.matchParentSize()
-                )
-                ImmersiveAction(
-                    lightMode, NusaNavigationIcons.Discover,
-                    "Discover",
-                    onDiscovery, libraryOpen,
-                    iconSize = 25.dp, iconTint = Color.White,
-                    liquidMotion = liquidGlassEnabled,
-                    inactiveAlpha = 1f
-                )
+                }
             }
-        }
-        if (pill != null && root != null) {
             ImmersiveOverlayActionPill(
-                anchorX = pill.left - root.left,
-                anchorY = pill.top - root.top,
+                anchorX = anchorX,
+                anchorY = anchorY,
                 progress = shownProgress,
                 fullWidth = actionPillWidth,
                 widthExpansion = { pillExpansion.value },

@@ -32,6 +32,7 @@ internal fun ImmersiveArtworkScene(
     dynamicGlow: Bitmap? = null,
     glowReveal: () -> Float = { 0f }
 ) {
+    val displayScale = currentPlayerScale()
     // Only real blurred cover pixels create the ambience; black is used only
     // if the device has not loaded album artwork at all.
     BoxWithConstraints(modifier.background(if (lightMode) Color(0xFFF8F9FB) else Color.Black)) {
@@ -90,6 +91,10 @@ internal fun ImmersiveArtworkScene(
                     if (sideFade != null) drawRect(sideFade, blendMode = BlendMode.DstIn)
                 }
             }) {
+            Box(Modifier.matchParentSize().then(if (displayScale > 1f) Modifier.graphicsLayer {
+                scaleX = displayScale
+                scaleY = displayScale
+            } else Modifier)) {
             Crossfade(targetState = artwork, animationSpec = tween(if (animateChanges) 360 else 0), label = "immersiveHero",
                 modifier = Modifier.fillMaxSize()) { cover ->
                 if (cover != null) Image(cover.asImageBitmap(), description,
@@ -100,6 +105,7 @@ internal fun ImmersiveArtworkScene(
                     modifier = Modifier.size(52.dp).align(Alignment.Center))
             }
             animatedArtwork()
+            }
         }
 
 
