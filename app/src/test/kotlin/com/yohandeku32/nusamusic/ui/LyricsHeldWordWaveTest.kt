@@ -6,12 +6,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LyricsHeldWordWaveTest {
-    @Test fun interlinearPaddingDoesNotSplitAnAuthoredCjkWordButWhitespaceStillDoes() {
-        val units = listOf(LyricsHeldWordUnit("明", 1000, 4000, 0f, 34f),
-            LyricsHeldWordUnit("天", 4000, 4500, 60f, 94f))
+    @Test fun interlinearPaddingDoesNotSplitLatinWordFragmentsButWhitespaceStillDoes() {
+        val units = listOf(LyricsHeldWordUnit("me", 1000, 4000, 0f, 34f),
+            LyricsHeldWordUnit("lo", 4000, 4500, 60f, 94f))
         assertTrue(!LyricsHeldWordWave(units).hasHold(1))
         assertTrue(LyricsHeldWordWave(units, Float.POSITIVE_INFINITY).hasHold(1))
-        val separated = units.toMutableList().apply { this[0] = this[0].copy(content = "明 ") }
+        val separated = units.toMutableList().apply { this[0] = this[0].copy(content = "me ") }
         assertTrue(!LyricsHeldWordWave(separated, Float.POSITIVE_INFINITY).hasHold(1))
     }
 

@@ -12,6 +12,14 @@ internal data class LyricsHeldWordUnit(
     val reliableHold: Boolean = true
 )
 
+/** CJK words cannot be inferred from absent spaces; each authored unit owns its interval. */
+internal fun lyricUnitHasCjk(content: String): Boolean = content.codePoints().anyMatch {
+    when (Character.UnicodeScript.of(it)) {
+        Character.UnicodeScript.HAN, Character.UnicodeScript.HIRAGANA, Character.UnicodeScript.KATAKANA -> true
+        else -> false
+    }
+}
+
 internal data class LyricsHeldWordPose(
     val liftDp: Float = 0f,
     val scaleY: Float = 1f,
@@ -143,6 +151,7 @@ internal class LyricsHeldWordWave(units: List<LyricsHeldWordUnit>, joinedGapDp: 
             // Whitespace in text OR a measured inter-run gap separates words.
             // A unit containing multiple words is not a safe wave target.
             while (last + 1 < units.size &&
+                !lyricUnitHasCjk(units[last].content) && !lyricUnitHasCjk(units[last + 1].content) &&
                 !units[last].content.lastOrNull().let { it?.isWhitespace() ?: true } &&
                 !units[last + 1].content.firstOrNull().let { it?.isWhitespace() ?: true } &&
                 units[last + 1].pathStartDp - units[last].pathEndDp <= joinedGapDp &&

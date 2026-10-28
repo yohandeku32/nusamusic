@@ -78,7 +78,8 @@ internal class LyricsLetterWave(units: List<LyricsHeldWordUnit>, joinedGapDp: Fl
             while (index + 1 < units.size) {
                 val current = units[index]
                 val next = units[index + 1]
-                if (current.content.lastOrNull()?.isWhitespace() != false ||
+                if (lyricUnitHasCjk(current.content) || lyricUnitHasCjk(next.content) ||
+                    current.content.lastOrNull()?.isWhitespace() != false ||
                     next.content.firstOrNull()?.isWhitespace() != false ||
                     current.content.trim().any(Char::isWhitespace) ||
                     next.content.trim().any(Char::isWhitespace) ||

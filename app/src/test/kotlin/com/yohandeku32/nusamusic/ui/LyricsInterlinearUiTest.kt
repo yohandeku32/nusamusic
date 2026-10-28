@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.sp
 import com.mocharealm.accompanist.lyrics.core.model.karaoke.KaraokeLine
 import com.mocharealm.accompanist.lyrics.ui.composable.lyrics.measureSyllablesAndDetermineAnimation
 import com.yohandeku32.nusamusic.data.LyricsDecoder
+import com.yohandeku32.nusamusic.data.LyricsUnitKey
 import java.io.File
 import org.junit.Assert.*
 import org.junit.Rule
@@ -40,6 +41,7 @@ class LyricsInterlinearUiTest {
     private var plan: LyricsInterlinearLayout? = null
     private var sought: Int? = null
     private var height = 0
+    private val sourceInferred = mutableStateOf(emptySet<LyricsUnitKey>())
     private val original = "镜子里面只剩自己呢"
     private val phonetic = "jing zi li mian zhi sheng zi ji ne"
 
@@ -66,7 +68,7 @@ class LyricsInterlinearUiTest {
                 Column(Modifier.requiredWidth(width.dp).height(760.dp).background(Color(0xFF141820)).padding(16.dp, 32.dp)) {
                     CenteredKaraokeLine(line, { now.intValue }, motion, style,
                         onSeek = { sought = it.start }, onMainHeight = { height = it }, alignEnd = right,
-                        pronunciation = reading)
+                        pronunciation = reading, inferredEnds = sourceInferred.value)
                 }
             }
         }
@@ -164,5 +166,38 @@ class LyricsInterlinearUiTest {
         assertTrue(first.sameAs(restored))
         assertEquals(beforeHeight, height)
         first.recycle(); paused.recycle(); restored.recycle()
+    }
+
+    private fun sameRegion(a: Bitmap, b: Bitmap, left: Int, top: Int, right: Int, bottom: Int): Boolean {
+        for (y in top until bottom) for (x in left until right)
+            if (a.getPixel(x, y) != b.getPixel(x, y)) return false
+        return true
+    }
+
+    @Test fun onlyTheHeldMainCharacterMovesWhileBothNeighborsAndTheReadingRemainIndependent() {
+        val xml = """<tt xmlns:m="http://www.w3.org/ns/ttml#metadata"><body><p begin="1s" end="5s"><span begin="1s" end="1.5s">你</span><span begin="1.5s" end="4.5s">好</span><span begin="4.5s" end="5s">吗</span><span m:role="x-roman"><span begin="1s" end="1.5s">ni</span><span begin="1.5s" end="4.5s">hao</span><span begin="4.5s" end="5s">ma</span></span></p></body></tt>"""
+        now.intValue = 2_760
+        show(xml = xml)
+        val layout = requireNotNull(plan)
+        val animated = bitmap()
+        preview("isolated-cjk-main-hold")
+        compose.runOnIdle {
+            sourceInferred.value = setOf(LyricsUnitKey(1000, "你"), LyricsUnitKey(1500, "好"), LyricsUnitKey(4500, "吗"))
+        }
+        compose.waitForIdle()
+        val neutralMain = bitmap()
+        for (index in listOf(0, 2)) {
+            val cell = layout.cells[index]
+            val equal = sameRegion(animated, neutralMain, 32 + cell.left.toInt() + 4, 40,
+                32 + (cell.left + cell.width).toInt() - 4, 84)
+            assertTrue("Non-held main character $index must keep its original pixels", equal)
+        }
+        val held = layout.cells[1]
+        assertFalse("The actual held main character must retain its expression",
+            sameRegion(animated, neutralMain, 32 + held.left.toInt() + 4, 32,
+                32 + (held.left + held.width).toInt() - 4, 84))
+        assertTrue("Correct pronunciation animation must not change with the main-only control",
+            sameRegion(animated, neutralMain, 32, 90, 379, 125))
+        animated.recycle(); neutralMain.recycle()
     }
 }
