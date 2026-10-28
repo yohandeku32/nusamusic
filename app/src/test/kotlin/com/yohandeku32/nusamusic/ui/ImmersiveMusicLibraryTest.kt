@@ -59,9 +59,10 @@ class ImmersiveMusicLibraryTest {
 
     @Composable
     private fun library(light: Boolean, bottom: Dp = 24.dp, visible: Boolean = true,
-        empty: Boolean = false, access: Boolean = true, importEnabled: Boolean = false) {
+        empty: Boolean = false, access: Boolean = true, importEnabled: Boolean = false,
+        activeSong: Song? = songs.first()) {
         ImmersiveMusicLibrary(
-            songs = if (empty) emptyList() else songs, currentSong = songs.first(), isPlaying = true,
+            songs = if (empty) emptyList() else songs, currentSong = activeSong, isPlaying = true,
             isVisible = visible, lightMode = light, hasMusicAccess = access,
             isScanning = false, emptyMessage = "No music yet",
             onReturnToPlayer = { returns++ },
@@ -76,12 +77,14 @@ class ImmersiveMusicLibraryTest {
     }
 
     private fun show(light: Boolean = true, width: Int = 411, scale: Float = 1f, overlay: Boolean = false,
-        empty: Boolean = false, access: Boolean = true, importEnabled: Boolean = false) {
+        empty: Boolean = false, access: Boolean = true, importEnabled: Boolean = false,
+        activeSong: Song? = songs.first()) {
         compose.setContent {
             CompositionLocalProvider(LocalDensity provides Density(1f, scale)) {
                 MaterialTheme(colorScheme = if (light) darkColorScheme() else lightColorScheme()) {
                     Box(Modifier.requiredWidth(width.dp).fillMaxHeight()) {
-                        if (!overlay) library(light, empty = empty, access = access, importEnabled = importEnabled) else {
+                        if (!overlay) library(light, empty = empty, access = access,
+                            importEnabled = importEnabled, activeSong = activeSong) else {
                             ImmersiveArtworkPlayer(
                                 title = "Track 01", artist = "Artist 1", composerNames = "",
                                 titleFontFamily = FontFamily.Default, titleFontSize = 32f,
@@ -92,7 +95,7 @@ class ImmersiveMusicLibraryTest {
                                 onRepeat = {}, onFavorite = {}, onLyrics = {}, onDiscovery = {},
                                 libraryOpen = true, libraryLightMode = light, liquidGlassEnabled = false,
                                 libraryContent = { settled, padding ->
-                                    library(light, padding, settled, empty, access, importEnabled)
+                                    library(light, padding, settled, empty, access, importEnabled, activeSong)
                                 },
                                 onLibrary = {}, onShare = {}, onSettings = {},
                                 artwork = { modifier, _, _ -> Box(modifier.background(Color.DarkGray)) },
@@ -227,6 +230,53 @@ class ImmersiveMusicLibraryTest {
         action.performClick()
         compose.onNodeWithText("Play next").performClick()
         assertEquals(songs.last(), next)
+    }
+
+    @Test fun floatingLocateJumpsToPlayingSongWithoutReplayingIt() {
+        show(activeSong = songs.last())
+        compose.onNodeWithTag("locate-now-playing").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Locate now playing song").assertIsDisplayed()
+        compose.onNodeWithTag("locate-now-playing").performClick()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithText("Track 40").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithText("Track 40").assertIsDisplayed()
+        compose.onNodeWithTag("locate-now-playing").assertDoesNotExist()
+        assertNull("Locate should scroll, not restart playback", played)
+    }
+
+    @Test fun floatingLocateClearsFilteringWhenPlayingSongIsExcluded() {
+        show(activeSong = songs.last())
+        compose.onNodeWithText("Search songs, artists, albums").performClick()
+        compose.onNode(hasSetTextAction()).performTextInput("Track 02")
+        compose.onNodeWithContentDescription("Close search").performClick()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithText("1 song").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("locate-now-playing").assertIsDisplayed().performClick()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithText("40 songs").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithText("Track 40").assertIsDisplayed()
+        compose.onNodeWithTag("locate-now-playing").assertDoesNotExist()
+        assertNull(played)
+    }
+
+    @Test fun floatingLocateIsAboveNavigationAtLargeFontAndAbsentWithoutPlayback() {
+        show(light = false, width = 320, scale = 1.5f, overlay = true,
+            activeSong = songs.last())
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithTag("locate-now-playing").fetchSemanticsNodes().isNotEmpty()
+        }
+        val locator = compose.onNodeWithTag("locate-now-playing").getUnclippedBoundsInRoot()
+        val navigation = compose.onNodeWithContentDescription("Back to Now Playing")
+            .getUnclippedBoundsInRoot()
+        assertTrue("Floating control must clear navigation", locator.bottom <= navigation.top)
+    }
+
+    @Test fun floatingLocateDoesNotAppearWithoutAnActiveSong() {
+        show(activeSong = null)
+        compose.onNodeWithTag("locate-now-playing").assertDoesNotExist()
     }
 
     @Test fun finalSongRemainsAboveRealOverlayNavigation() {
