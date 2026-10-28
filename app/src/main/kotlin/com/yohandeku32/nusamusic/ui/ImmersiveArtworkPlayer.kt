@@ -107,7 +107,8 @@ internal fun ImmersiveArtworkPlayer(
     quality: @Composable () -> Unit,
     lyrics: @Composable (Modifier) -> Unit = {},
     modifier: Modifier = Modifier,
-    contentInsets: WindowInsets = WindowInsets.safeDrawing
+    contentInsets: WindowInsets = WindowInsets.safeDrawing,
+    composerRole: String = "COMPOSER"
 ) {
     var playerBounds by remember { mutableStateOf<Rect?>(null) }
     var navigationPillBounds by remember { mutableStateOf<Rect?>(null) }
@@ -312,7 +313,7 @@ internal fun ImmersiveArtworkPlayer(
                 }
         ) {
             Text(
-                text = "COMPOSER",
+                text = composerRole,
                 fontSize = 10.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = Color.White.copy(alpha = 0.58f)

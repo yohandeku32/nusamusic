@@ -48,6 +48,12 @@ Text layout and row height remain stable during expression. Setting the platform
 
 These are supplied lyric annotations. Aruna does not generate translations or pronunciation when a source has none. Original TTML remains in the stored lyric and existing saved metadata. See the [companion-text change record](implementation-timeline/lyrics/2026-10-28-add-ttml-translations-and-pronunciation.md).
 
+## Authorship credits
+
+File composer/lyricist tags retain priority. If a role is missing, the selected TTML's `head/metadata` can supply explicit `composers/composer`, `lyricists/lyricist` or general `songwriters/songwriter` lists, including iTunes/source metadata containers with different namespace prefixes. Generic songwriters retain their own role: the Immersive header uses **SONGWRITERS** when there is no composer, while the shared credit block uses **Written by**. Available composers still lead the header; absent authors retain **Unknown composer**.
+
+Voice agents, performers, copyright owners, lyric-file editors and sung text are not inferred as authors. Names are trimmed, deduplicated in source order and bounded to 32 names of at most 2,048 characters per role. A matching online TTML can fill absent credits even if its timing is not selected; a different lyric text cannot. General authors are never copied into composer/lyricist fields. Old cached raw TTML recovers these credits on decode; new songwriter properties survive restart without invalidating older cache entries. Reading credits does not write audio tags. See the [TTML credit fallback record](implementation-timeline/lyrics/2026-10-28-use-ttml-credits-when-tags-are-empty.md).
+
 ## Character motion and following
 
 All lyric motion samples the playback clock. Pausing holds the current pose; a real seek evaluates the destination pose. Changing songs replaces the song's lyric state. The active frame publisher follows the activity lifecycle and stops publishing playback frames when it is not started.
@@ -61,7 +67,7 @@ All lyric motion samples the playback clock. Pausing holds the current pose; a r
 
 The painter caches complete grapheme layouts, gradients, projection resources and glow palettes. Combining accents stay with their base letter. Joining scripts, RTL runs and unsupported sequences retain their shaped text runs. Fill and halo share the same position; the painter does not cut moving strips through letter strokes.
 
-Duet alignment follows the TTML voice information, including right-aligned wrapped rows for the secondary voice. Backing vocals follow their own authored windows. Available translations and composer/lyricist credits display with the lyrics. Instrumental countdowns use authored gaps and relinquish their layout space when they finish.
+Duet alignment follows the TTML voice information, including right-aligned wrapped rows for the secondary voice. Backing vocals follow their own authored windows. Available translations and composer/lyricist/songwriter credits display with the lyrics. Instrumental countdowns use authored gaps and relinquish their layout space when they finish.
 
 Automatic following yields to manual scrolling and resumes after the browsing grace period. Each visible sentence also has a bounded visual follower: the active sentence leads and upcoming sentences catch up more gradually. Its main lyric, translation and attached backing move together; simultaneous duet onsets share a phase. The extra offset is capped at 35% of the shortest visible row height, within 8–32dp, to preserve spacing. Countdown layout stays separate.
 

@@ -20,7 +20,8 @@ data class DecodedLyrics(
     /** Indices into lyrics.lines whose explicitly tagged duet singer belongs on the right. */
     val duetRightLines: Set<Int> = emptySet(),
     /** Final decoded row indices, including accompaniment rows. */
-    val pronunciations: Map<Int, LyricsPronunciation> = emptyMap()
+    val pronunciations: Map<Int, LyricsPronunciation> = emptyMap(),
+    val credits: SongCredits = SongCredits()
 )
 
 private data class TtmlVoiceEntry(
@@ -34,7 +35,8 @@ private data class NormalizedTtml(
     val voices: List<TtmlVoiceEntry>,
     val declaredAgents: List<String>,
     val nonSingerAgents: Set<String>,
-    val primaryAgent: String
+    val primaryAgent: String,
+    val credits: SongCredits
 )
 
 /** Adapts common local-file dialects to Accompanist's timed model. */
@@ -55,12 +57,14 @@ object LyricsDecoder {
         var declaredAgents: List<String> = emptyList()
         var nonSingerAgents: Set<String> = emptySet()
         var primaryAgent = ""
+        var credits = SongCredits()
         val parsed = if (content.startsWith('<')) {
             val normalized = normalizeTtml(content, duration, inferredEnds)
             taggedVoices = normalized.voices
             declaredAgents = normalized.declaredAgents
             nonSingerAgents = normalized.nonSingerAgents
             primaryAgent = normalized.primaryAgent
+            credits = normalized.credits
             val ttml = TTMLParser.parse(normalized.xml)
             ttml.copy(lines = ttml.lines.map { line ->
                 if (line is KaraokeLine && (line.start to line.syllables.joinToString("") { it.content }.trim()) in normalized.lineOnly)
@@ -154,7 +158,7 @@ object LyricsDecoder {
                 sourceVoices[sourceIndex]?.companion?.pronunciation?.let { put(index, it) }
             }
         }
-        return DecodedLyrics(parsed.copy(lines = sortedLines), inferredEnds.toSet(), duetRight, pronunciations)
+        return DecodedLyrics(parsed.copy(lines = sortedLines), inferredEnds.toSet(), duetRight, pronunciations, credits)
     }
 
     private fun time(match: MatchResult): Int = (
@@ -498,6 +502,7 @@ object LyricsDecoder {
             speaker(it, inheritedOnly = true)
         }.orEmpty()
         val rendered = render(root, 0, duration, 0)
-        return NormalizedTtml(rendered, lineOnly, taggedVoices, declaredAgents, nonSingerAgents, primaryAgent)
+        return NormalizedTtml(rendered, lineOnly, taggedVoices, declaredAgents, nonSingerAgents, primaryAgent,
+            readTtmlCredits(root))
     }
 }

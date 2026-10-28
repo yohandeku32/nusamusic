@@ -307,12 +307,14 @@ internal fun preferLyrics(local: SongLyrics, remote: SongLyrics): SongLyrics {
     // source with singer identities until an online file preserves them too.
     val losesDuetIdentity = local.duetRightLines.isNotEmpty() &&
         remote.duetRightLines.isEmpty()
+    val combinedCredits = if (canUpgrade) local.stored.credits.withFallback(remote.stored.credits)
+        else local.stored.credits
     return if (canUpgrade && !losesDuetIdentity &&
         (improvesTiming || addsBacking)
     ) remote.copy(
-        // Local composer/lyricist credits always survive a valid online upgrade.
-        stored = remote.stored.copy(credits = local.stored.credits)
-    ) else local
+        stored = remote.stored.copy(credits = combinedCredits)
+    ) else if (combinedCredits != local.stored.credits)
+        local.copy(stored = local.stored.copy(credits = combinedCredits)) else local
 }
 
 internal object EmbeddedLyricsSelector {
@@ -330,7 +332,8 @@ internal object EmbeddedLyricsSelector {
             val units = decoded?.lines?.filterIsInstance<KaraokeLine>()?.sumOf { it.syllables.size } ?: 0
             val candidateScore = when { units > 0 -> 3_000_000L + units; decoded != null -> 2_000_000L + decoded.lines.size; else -> 1L }
             if (candidateScore > score) {
-                best = SongLyrics(StoredLyrics(raw, "embedded", plain = decoded == null, credits = credits), decoded,
+                best = SongLyrics(StoredLyrics(raw, "embedded", plain = decoded == null,
+                    credits = credits.withFallback(timing?.credits ?: SongCredits())), decoded,
                     timing?.inferredEnds.orEmpty(), timing?.duetRightLines.orEmpty(),
                     pronunciations = timing?.pronunciations.orEmpty())
                 score = candidateScore

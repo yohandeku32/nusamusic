@@ -56,4 +56,11 @@ class LyricsDiskStoreTest {
             .writeText("version=1\ncontent=Lyrics\nsource=embedded\ncheckedAt=100")
         assertTrue(LyricsDiskStore(temp.root).read("song")!!.credits.isEmpty)
     }
+
+    @Test fun ttmlSongwritersSurviveRestartWithoutChangingTheAuthoredRoles() {
+        val entry = StoredLyrics("Lyrics", "lrc.red", credits = SongCredits(
+            composers = listOf("Composer"), songwriters = listOf("Writer 世界", "Second")))
+        LyricsDiskStore(temp.root).write("song", entry)
+        assertEquals(entry, LyricsDiskStore(temp.root).read("song"))
+    }
 }
