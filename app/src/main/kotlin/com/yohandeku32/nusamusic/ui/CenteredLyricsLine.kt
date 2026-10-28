@@ -7,10 +7,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.MotionDurationScale
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.TransformOrigin
@@ -22,8 +20,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.TextLayoutResult
-import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDirection
@@ -137,7 +133,7 @@ internal fun CenteredKaraokeLine(
             }
         }
         line.translation?.takeIf { it.isNotBlank() }?.let {
-            LyricsTranslation(it, style, alignEnd, sourcePose) { lyricPresence(line.start, line.end, time(), motion.resetAt) }
+            LyricsTranslation(it, style, alignEnd) { lyricPresence(line.start, line.end, time(), motion.resetAt) }
         }
     }
 }
@@ -185,27 +181,18 @@ internal fun TimedVocalContent(
 @Composable
 private fun LyricsTranslation(
     text: String, style: TextStyle, alignEnd: Boolean,
-    sourcePose: () -> LyricsCompanionPose = { LyricsCompanionPose.Rest }, presence: () -> Float
+    presence: () -> Float
 ) {
-    var layout by remember(text, style) { mutableStateOf<TextLayoutResult?>(null) }
-    val density = LocalDensity.current
-    val halo = remember(density) { Shadow(Color.White.copy(alpha = 0.5f), Offset.Zero, with(density) { 2.dp.toPx() }) }
     Text(
         text = text,
-        modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 2.dp)
-            .lyricsCompanionMotion(sourcePose, 0.65f).graphicsLayer {
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 2.dp).graphicsLayer {
             alpha = 0.68f + 0.32f * presence()
-        }.drawBehind {
-            val glow = sourcePose().glow * presence()
-            if (glow > 0f) layout?.let { drawText(it, color = Color.White, alpha = 0.18f * glow,
-                shadow = halo) }
         },
         style = style.copy(
             fontSize = (style.fontSize.value * 0.65f).coerceAtLeast(14f).sp,
             lineHeight = (style.lineHeight.value * 0.65f).coerceAtLeast(20f).sp
         ),
         color = Color.White,
-        onTextLayout = { layout = it },
         textAlign = if (alignEnd) TextAlign.End else TextAlign.Start
     )
 }

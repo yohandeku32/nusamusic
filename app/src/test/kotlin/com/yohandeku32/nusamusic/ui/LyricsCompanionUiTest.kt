@@ -249,7 +249,7 @@ class LyricsCompanionUiTest {
         return total.toFloat() / count
     }
 
-    @Test fun heldPronunciationMovesAndTranslationFollowsTheSourcePoseWithoutReflow() {
+    @Test fun heldPronunciationMovesWhileSentenceTranslationKeepsItsOwnBaseline() {
         show(sourceXml = heldXml())
         compose.runOnIdle { now.intValue = 2_260 }
         compose.waitForIdle()
@@ -263,10 +263,46 @@ class LyricsCompanionUiTest {
         val still = bitmap()
         val restingBounds = compose.onNodeWithText(translation, useUnmergedTree = true).getUnclippedBoundsInRoot()
         assertEquals(height, measured)
-        assertTrue("Translation must follow the source's upward hold", activeBounds.top < restingBounds.top - 0.5.dp)
+        assertEquals("Sentence translation must not inherit the source's held-note pose", restingBounds, activeBounds)
         assertTrue("Pronunciation must visibly rise during its authored hold", brightY(moving, pinyin) < brightY(still, pinyin) - 0.75f)
         preview("held-companions-reduced-motion")
         moving.recycle(); still.recycle()
+    }
+
+    @Test fun shortWordWavesDoNotMoveOrResizeTheSentenceTranslation() {
+        val shortXml = """<tt xmlns:m="http://www.w3.org/ns/ttml#metadata"><body><p begin="1s" end="2.8s"><span begin="1s" end="1.9s">kata </span><span begin="1.9s" end="2.8s">lain</span><span m:role="x-roman"><span begin="1s" end="1.9s">kata</span><span begin="1.9s" end="2.8s">lain</span></span><span m:role="x-translation">$translation</span></p></body></tt>"""
+        show(sourceXml = shortXml)
+        val node = compose.onNodeWithText(translation, useUnmergedTree = true)
+        for (sample in listOf(1_300, 1_600, 1_900, 2_200, 2_500)) {
+            compose.runOnIdle { now.intValue = sample; durationScale.amount.floatValue = 1f }
+            compose.waitForIdle()
+            val animatedBounds = node.getUnclippedBoundsInRoot()
+            val rowHeight = measured
+            compose.runOnIdle { durationScale.amount.floatValue = 0f }
+            compose.waitForIdle()
+            assertEquals("A short source word must not displace its sentence translation at $sample ms",
+                node.getUnclippedBoundsInRoot(), animatedBounds)
+            assertEquals(rowHeight, measured)
+        }
+        node.performTouchInput { click() }
+        assertEquals(1_000, sought)
+    }
+
+    @Test fun thirdTranslationBelowPairedCjkReadingsStaysFixedThroughoutBothKindsOfVocal() {
+        val xml = """<tt xmlns:m="http://www.w3.org/ns/ttml#metadata"><body><p begin="1s" end="4.9s"><span begin="1s" end="4s">明</span><span begin="4s" end="4.9s">天</span><span m:role="x-roman"><span begin="1s" end="4s">ming</span><span begin="4s" end="4.9s">tian</span></span><span m:role="x-translation">$translation</span></p></body></tt>"""
+        show(sourceXml = xml)
+        val node = compose.onNodeWithText(translation, useUnmergedTree = true)
+        val anchor = node.getUnclippedBoundsInRoot()
+        val rowHeight = measured
+        for (sample in listOf(1_500, 2_260, 3_200, 4_250, 4_550, 5_200)) {
+            compose.runOnIdle { now.intValue = sample }
+            compose.waitForIdle()
+            assertEquals("The third row must keep its own position and size at $sample ms", anchor, node.getUnclippedBoundsInRoot())
+            assertEquals(rowHeight, measured)
+        }
+        preview("stable-third-translation-cjk")
+        node.performTouchInput { click() }
+        assertEquals(1_000, sought)
     }
 
     @Test fun companionPoseFreezesOnPauseAndSeekingBackRestoresTheSamePixels() {
