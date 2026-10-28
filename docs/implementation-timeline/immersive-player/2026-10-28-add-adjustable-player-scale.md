@@ -1,7 +1,7 @@
 # Add adjustable main-player scale
 
 > Date: 2026-10-28
-> Status: verified locally; PR CI pending
+> Status: verified
 > Change type: feature
 > Scope: Immersive Now Playing scale, preferences, responsive controls and overlay boundaries
 
@@ -21,6 +21,8 @@ The control is in the Immersive appearance group. It does not change Android dis
 
 - Four preference tests and six native scale tests passed. Fifteen related navigation, centering and glow checks passed in the combined run; the scale case was then rechecked using physical screen bounds rather than node-local dp units.
 - Native tests cover 100% pixel equality with the unwrapped player, enlargement of artwork and physical touch targets, actual taps, 320dp/568dp with 1.5x system text, 800dp/400dp landscape, real Library scrolling and final-row clearance, normal Library density, keyboard adjustment, persisted selection and Reset.
-- Default-player pixels were also compared with the preceding Hi-Res native preview and were unchanged. Lint completed with 0 errors, 120 warnings and 3 hints. Full PR CI results are recorded after completion.
+- Default-player pixels were also compared with the preceding Hi-Res native preview and were unchanged. Lint completed with 0 errors, 120 warnings and 3 hints.
+- [PR CI run 40625507465](https://github.com/yohandeku32/nusamusic/actions/runs/40625507465) compiled source 289a7cba683bbf8853e78e01a241cca1f427e315 and ran 636 tests: 632 passed. All ten new scale checks passed. The remaining failures are the three pre-existing ImmersiveArtistHeroTest layout cases and the previously intermittent indonesianLibraryLocalizesSortingSearchMenusAndWarning failure. That search test also failed before this feature (run 40616469091) and passed in the preceding Hi-Res run 40620336115. No claim is made that this feature repairs that intermittent failure.
+- Player-scale-previews was uploaded as artifact 12789052737. The final source change after verification records results only.
 
 Previews use labelled test artwork and synthetic song rows. Physical-device animated artwork, screen-reader operation, frame pacing and real collections remain acceptance checks.
