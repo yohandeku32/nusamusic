@@ -1,7 +1,7 @@
 # Follow artwork through navigation glass
 
 > Date: 2026-10-28
-> Status: verification in progress
+> Status: verified with device acceptance remaining
 > Change type: fix
 > Scope: Now Playing navigation material and artwork-colour handoff
 
@@ -17,4 +17,9 @@ The user requested a less grey, less solid navigation surface that follows artwo
 
 ## Verification
 
-Native render, contrast, navigation action, reduced-motion and compatibility checks are in progress. Results are recorded after completion. Physical-device Haze rendering and GPU/frame pacing remain acceptance checks; native test previews are labelled test content.
+- Fifteen focused checks passed: seven new native material tests plus the existing navigation-centering and glow UI checks. They cover artwork hue changes, visible backdrop detail, a single material at full Haze reveal, waiting for a missing source, white-glyph contrast on white artwork, unchanged disabled appearance, reduced motion, and navigation callbacks.
+- The reduced-motion regression changes Android's actual animator flag after mounting the surface and advances/waits for each frame. Its exact pixel comparison retains the requirement that the colour is already final within three frames. Advancing a single 48ms block did not synchronize the view/recomposition work and produced a false intermediate snapshot.
+- The Haze tests explicitly use the platform scrim path. Native software-canvas capture cannot exercise the hardware blur backend; the full player callback check uses its saved disabled-glass path. These tests do not claim physical-device Haze verification.
+- Full-suite PR CI and final lint results are recorded after completion. Native test previews are labelled test content and uploaded as Navigation-glass-previews.
+
+Physical-device Haze rendering, GPU/frame pacing and storage/loading delays on real collections remain acceptance checks.

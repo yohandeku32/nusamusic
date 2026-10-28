@@ -168,16 +168,20 @@ class NavigationGlassUiTest {
     }
 
     @Test fun reducedMotionAppliesArtworkColourWithoutWaitingForTheTween() {
-        motionScale.floatValue = 0f
-        ReflectionHelpers.callStaticMethod<Unit>(ValueAnimator::class.java, "setDurationScale", ClassParameter.from(Float::class.javaPrimitiveType, 0f))
-        assertFalse(ValueAnimator.areAnimatorsEnabled())
         surface()
-        compose.runOnIdle { palette.value = Color(0xFF2159D0) }
-        compose.mainClock.advanceTimeBy(48)
-        compose.waitForIdle()
+        compose.runOnIdle {
+            motionScale.floatValue = 0f
+            ReflectionHelpers.callStaticMethod<Unit>(ValueAnimator::class.java, "setDurationScale", ClassParameter.from(Float::class.javaPrimitiveType, 0f))
+            assertFalse(ValueAnimator.areAnimatorsEnabled())
+            palette.value = Color(0xFF2159D0)
+        }
+        repeat(3) {
+            compose.mainClock.advanceTimeByFrame()
+            compose.waitForIdle()
+        }
         val immediate = pixels(image("reduced-motion-blue"))
         settle()
-        assertArrayEquals(immediate, pixels(image()))
+        assertArrayEquals(immediate, pixels(image("reduced-motion-settled")))
     }
 
     @Test fun savedDisabledGlassKeepsPlayerNavigationActions() {
