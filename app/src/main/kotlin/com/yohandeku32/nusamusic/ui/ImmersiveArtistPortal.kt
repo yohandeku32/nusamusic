@@ -14,8 +14,6 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeSource
 
 /**
  * Full-screen compositor-only Artist overlay. The upper-left corner stays
@@ -39,7 +37,6 @@ internal fun ImmersiveArtistPortal(
     onSwipeCancelled: () -> Unit = {},
     canSwipeDown: () -> Boolean = { true },
     swipeFromHeaderOnly: Boolean = false,
-    hazeState: HazeState?,
     profile: @Composable () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -137,10 +134,6 @@ internal fun ImmersiveArtistPortal(
                     alpha = ((p - 0.04f) / 0.94f).coerceIn(0f, 1f)
                     clip = false
                 }
-                .then(
-                    if (hazeState != null) Modifier.hazeSource(hazeState)
-                    else Modifier
-                )
         ) {
             profile()
         }

@@ -1,17 +1,14 @@
 package com.yohandeku32.nusamusic.ui
 
-import android.animation.ValueAnimator
-
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalDensity
@@ -21,8 +18,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeSource
+import androidx.compose.ui.unit.sp
 import java.io.File
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -32,51 +28,65 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
-import org.robolectric.util.ReflectionHelpers
-import org.robolectric.util.ReflectionHelpers.ClassParameter
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], qualifiers = "w411dp-h891dp")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@OptIn(ExperimentalTestApi::class)
 class NavigationGlassUiTest {
-    private var motionScale = mutableFloatStateOf(1f)
-    private val scale = object : MotionDurationScale { override val scaleFactor get() = motionScale.floatValue }
-    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>(effectContext = scale)
-    private val palette = mutableStateOf(Color(0xFFB82732))
-    private val background = mutableStateOf(Color(0xFF28343C))
+    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+    private val background = mutableStateOf(Color(0xFF832E36))
+    private val reference = mutableStateOf(false)
     private val enabled = mutableStateOf(true)
-    private val direct = mutableStateOf(false)
     private val library = mutableStateOf(false)
-    private val blur = HazeState(initialBlurEnabled = false)
     private val previousLocale = Locale.getDefault()
     private var settings = 0
     private var lyrics = 0
+    private var discoveries = 0
 
     @Before fun english() { Locale.setDefault(Locale.ENGLISH) }
-    @After fun restore() {
-        Locale.setDefault(previousLocale)
-        ReflectionHelpers.callStaticMethod<Unit>(ValueAnimator::class.java, "setDurationScale", ClassParameter.from(Float::class.javaPrimitiveType, 1f))
-    }
+    @After fun restore() { Locale.setDefault(previousLocale) }
 
-    private fun surface(live: Boolean = false, light: Boolean = false, split: Boolean = false, record: Boolean = true) {
+    private fun surface(light: Boolean = false) {
         compose.mainClock.autoAdvance = false
         compose.setContent {
             CompositionLocalProvider(LocalDensity provides Density(1f)) {
                 Box(Modifier.size(240.dp, 80.dp).background(background.value).testTag("navigation-preview")) {
-                    if (live && record) Box(Modifier.fillMaxSize().hazeSource(blur).background(background.value))
-                    if (split) Row(Modifier.fillMaxSize()) {
-                        Box(Modifier.weight(1f).fillMaxHeight().background(Color(0xFFBA3045)))
-                        Box(Modifier.weight(1f).fillMaxHeight().background(Color(0xFF244ABF)))
-                    }
-                    if (direct.value) Box(Modifier.padding(12.dp).fillMaxSize().immersiveGlassPill(
-                        emphasized = enabled.value, liquidGlass = enabled.value, lightMode = light,
-                        hazeState = if (live && record) blur else null,
-                        artworkTint = if (enabled.value) palette.value else null
-                    )) else ContinuousLiquidGlassSurface(
-                        radius = 100.dp, lightMode = light, liquidGlassEnabled = enabled.value,
-                        hazeState = if (live) blur else null, hazeAlpha = 1f,
-                        artworkTint = palette.value, modifier = Modifier.padding(12.dp).fillMaxSize()
+                    if (reference.value) Box(
+                        Modifier.padding(12.dp).fillMaxSize().immersiveGlassPill(7.dp, light)
+                    ) else ImmersiveNavigationSurface(
+                        radius = 100.dp, lightMode = light, modifier = Modifier.padding(12.dp).fillMaxSize()
+                    )
+                }
+            }
+        }
+        settle()
+    }
+
+    private fun player(light: Boolean = false, width: Int = 411, height: Int = 800, fontScale: Float = 1f, hasSong: Boolean = true) {
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f, fontScale)) {
+                MaterialTheme(colorScheme = if (light) lightColorScheme() else darkColorScheme()) {
+                    ImmersiveArtworkPlayer(
+                        title = "Aruna", artist = "Hi-Res navigation preview", composerNames = "",
+                        titleFontFamily = FontFamily.Serif, titleFontSize = 34f,
+                        hasSong = hasSong, isPlaying = false, lightMode = light, isFavorite = false,
+                        shuffleEnabled = false, repeatMode = 0, lyricsOpen = false, lyricsEnabled = true,
+                        onPlayPause = {}, onPrevious = {}, onNext = {}, onShuffle = {}, onRepeat = {}, onFavorite = {},
+                        onLyrics = { lyrics++ }, onDiscovery = { discoveries++ }, onLibrary = { library.value = true },
+                        onHome = { library.value = false }, onLibraryClose = { library.value = false },
+                        libraryOpen = library.value, libraryLightMode = light,
+                        glassArtworkColor = background.value, liquidGlassEnabled = enabled.value,
+                        libraryContent = { _, _ -> Box(Modifier.fillMaxSize().background(if (light) Color.White else Color.Black)) },
+                        onShare = {}, onSettings = { settings++ },
+                        artwork = { modifier, _, _ -> Box(modifier.background(background.value)) },
+                        progress = {}, quality = {
+                            Box(Modifier.immersiveGlassPill(7.dp, light).padding(horizontal = 9.dp, vertical = 4.dp)) {
+                                Text("Hi-Res", color = if (light) Color(0xFF171A20) else Color.White,
+                                    fontSize = 11.sp, lineHeight = 13.sp)
+                            }
+                        },
+                        modifier = Modifier.size(width.dp, height.dp).testTag("navigation-preview")
                     )
                 }
             }
@@ -113,113 +123,78 @@ class NavigationGlassUiTest {
         bitmap.getPixels(it, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
     }
 
-    @Test fun fallbackKeepsBackdropColourAndVisibleDetail() {
-        surface(split = true)
-        val bitmap = image("fallback-spatial-colour")
-        val left = Color(bitmap.getPixel(60, 40))
-        val right = Color(bitmap.getPixel(180, 40))
-        assertTrue(left.red - left.blue > 0.14f)
-        assertTrue(right.blue - right.red > 0.14f)
-        assertTrue("Backdrop detail must survive the material", left.red - right.red > 0.17f)
+    private fun materialPixels(bitmap: Bitmap) = IntArray(120 * 32).also {
+        bitmap.getPixels(it, 0, 120, 60, 24, 120, 32)
     }
 
-    @Test fun platformFallbackFollowsNewArtworkWithoutASecondOpaqueBase() {
-        surface(live = true)
-        val red = image("haze-fallback-red")
-        compose.runOnIdle { palette.value = Color(0xFF2159D0) }
+    private fun matchesHiRes(light: Boolean) {
+        surface(light)
+        val navigation = image(if (light) "hires-light-navigation" else "hires-dark-navigation")
+        compose.runOnIdle { reference.value = true }
         settle()
-        val blue = image("haze-fallback-blue")
-        assertFalse(pixels(red).contentEquals(pixels(blue)))
-        compose.runOnIdle { direct.value = true }
-        settle()
-        assertArrayEquals("Full Haze reveal must not retain a second tinted base", pixels(blue), pixels(image()))
-        compose.runOnIdle { direct.value = false; background.value = Color(0xFF2159D0) }
-        settle()
-        image("artwork-blue").recycle()
-        compose.runOnIdle { palette.value = Color(0xFFB82732); background.value = palette.value }
-        settle()
-        image("artwork-red").recycle()
+        val badge = image(if (light) "hires-light-reference" else "hires-dark-reference")
+        assertArrayEquals("The shared material must match outside the different corner radii",
+            materialPixels(badge), materialPixels(navigation))
     }
 
-    @Test fun missingBackdropKeepsTheArtworkFallbackVisible() {
-        surface(live = true, record = false)
-        val material = pixels(image("waiting-for-backdrop"))
-        compose.runOnIdle { direct.value = true }
-        settle()
-        assertArrayEquals(material, pixels(image()))
-    }
+    @Test fun darkNavigationMatchesHiResMaterial() = matchesHiRes(false)
+    @Test fun lightNavigationMatchesHiResMaterial() = matchesHiRes(true)
 
-    @Test fun savedDisabledAppearanceDoesNotChangeWithTheArtwork() {
-        enabled.value = false
+    @Test fun artworkChangesShowThroughWithoutAnExtraColourTween() {
         surface()
-        val before = pixels(image())
-        compose.runOnIdle { palette.value = Color(0xFF2159D0); direct.value = true }
+        compose.runOnIdle { background.value = Color(0xFF235DC2) }
+        repeat(3) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
+        val immediate = image("hires-artwork-blue")
+        val colour = Color(immediate.getPixel(120, 40))
+        assertTrue(colour.blue - colour.red > 0.35f)
         settle()
-        assertArrayEquals(before, pixels(image("disabled-original")))
+        assertArrayEquals(pixels(immediate), pixels(image()))
+        compose.runOnIdle { background.value = Color(0xFFB82732) }
+        settle()
+        image("hires-artwork-red").recycle()
     }
 
-    @Test fun whiteArtworkKeepsWhiteNavigationGlyphContrast() {
-        palette.value = Color.White
+    @Test fun lightMaterialSupportsDarkInk() {
         background.value = Color.White
-        surface(live = true, light = true)
-        val bitmap = image("light-white-artwork")
-        val plate = Color(bitmap.getPixel(120, 40))
-        assertTrue("White glyph needs at least 3:1 against its plate", 1.05f / (plate.luminance() + 0.05f) >= 3f)
+        surface(light = true)
+        val plate = Color(image("hires-white-artwork").getPixel(120, 40))
+        val ink = Color(0xFF171A20)
+        assertTrue((plate.luminance() + 0.05f) / (ink.luminance() + 0.05f) >= 4.5f)
     }
 
-    @Test fun reducedMotionAppliesArtworkColourWithoutWaitingForTheTween() {
-        surface()
-        compose.runOnIdle {
-            motionScale.floatValue = 0f
-            ReflectionHelpers.callStaticMethod<Unit>(ValueAnimator::class.java, "setDurationScale", ClassParameter.from(Float::class.javaPrimitiveType, 0f))
-            assertFalse(ValueAnimator.areAnimatorsEnabled())
-            palette.value = Color(0xFF2159D0)
-        }
-        repeat(3) {
-            compose.mainClock.advanceTimeByFrame()
-            compose.waitForIdle()
-        }
-        val immediate = pixels(image("reduced-motion-blue"))
-        settle()
-        assertArrayEquals(immediate, pixels(image("reduced-motion-settled")))
-    }
-
-    @Test fun savedDisabledGlassKeepsPlayerNavigationActions() {
-        compose.mainClock.autoAdvance = false
-        compose.setContent {
-            CompositionLocalProvider(LocalDensity provides Density(1f)) {
-                MaterialTheme {
-                    ImmersiveArtworkPlayer(
-                        title = "Aruna", artist = "Navigation preview", composerNames = "", titleFontFamily = FontFamily.Serif,
-                        titleFontSize = 34f, hasSong = true, isPlaying = false, isFavorite = false,
-                        shuffleEnabled = false, repeatMode = 0, lyricsOpen = false, lyricsEnabled = true,
-                        onPlayPause = {}, onPrevious = {}, onNext = {}, onShuffle = {}, onRepeat = {}, onFavorite = {},
-                        onLyrics = { lyrics++ }, onDiscovery = {}, onLibrary = { library.value = true },
-                        onHome = { library.value = false }, onLibraryClose = { library.value = false },
-                        libraryOpen = library.value, glassArtworkColor = palette.value, liquidGlassEnabled = false,
-                        libraryContent = { _, _ -> Box(Modifier.fillMaxSize().background(Color(0xFF090A0D))) },
-                        onShare = {}, onSettings = { settings++ },
-                        artwork = { modifier, _, _ -> Box(modifier.background(palette.value)) },
-                        progress = {}, quality = {}, modifier = Modifier.size(411.dp, 800.dp).testTag("navigation-preview")
-                    )
-                }
-            }
-        }
-        settle()
-        val red = image("player-disabled-red")
-        compose.runOnIdle { palette.value = Color(0xFF2159D0) }
-        settle()
-        val blue = image("player-disabled-blue")
-        assertNotEquals(red.getPixel(240, 750), blue.getPixel(240, 750))
+    @Test fun nativePlayerKeepsActionsAndLibraryReturn() {
+        player()
+        image("hires-player-dark").recycle()
         compose.onNodeWithContentDescription("Settings").performClick()
         compose.onNodeWithContentDescription("Open lyrics").performClick()
+        compose.onNodeWithContentDescription("Discover").performClick()
         assertEquals(1, settings)
         assertEquals(1, lyrics)
+        assertEquals(1, discoveries)
         compose.onNodeWithContentDescription("Library").performClick()
         settle()
         compose.onNodeWithContentDescription("Back to Now Playing").performClick()
         settle()
         compose.onNodeWithContentDescription("Library").assertIsDisplayed()
-        image("player-disabled-returned").recycle()
+    }
+
+    @Test fun legacyGlassPreferenceCannotReintroduceTheOpaqueLayer() {
+        background.value = Color.Black
+        player(hasSong = false)
+        val before = pixels(image("hires-player-empty"))
+        compose.runOnIdle { enabled.value = false }
+        settle()
+        assertArrayEquals(before, pixels(image()))
+    }
+
+    @Test fun narrowLightPlayerWithLargeTextKeepsNavigationReachable() {
+        background.value = Color(0xFFF8F9FB)
+        player(light = true, width = 320, height = 568, fontScale = 1.5f)
+        compose.onNodeWithTag("navigation-preview").performTouchInput { swipeUp() }
+        settle()
+        compose.onNodeWithContentDescription("Library").assertIsDisplayed()
+        image("hires-player-light-large-text").recycle()
+        compose.onNodeWithContentDescription("Settings").performClick()
+        assertEquals(1, settings)
     }
 }

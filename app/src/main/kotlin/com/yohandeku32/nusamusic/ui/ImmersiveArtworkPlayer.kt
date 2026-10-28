@@ -59,8 +59,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeSource
 import java.util.Locale
 
 private fun immersiveText(id: String, en: String) =
@@ -123,10 +121,6 @@ internal fun ImmersiveArtworkPlayer(
     val pillExpansion = remember { Animatable(0f) }
     // Both content sources are recorded beneath the same small glass
     // controls: current-player artwork and the currently visible portal.
-    val glassBackdrop = remember { HazeState() }
-    // One liquid material is shared by Home, Artist and Library. Keep live
-    // Haze on the idle Now Playing screen as well, but never re-record a
-    // moving full-screen source while entering or leaving a portal.
     var portalSettled by remember { mutableStateOf(false) }
     val dragScope = rememberCoroutineScope()
     var dragActive by remember { mutableStateOf(false) }
@@ -141,19 +135,6 @@ internal fun ImmersiveArtworkPlayer(
     // of waiting for LaunchedEffect to mount the portal a frame later.
     val portalVisible = overlayOpen || portalMounted
     val presentingLibrary = if (overlayOpen) libraryOpen else lastOverlayIsLibrary
-    // In Library the two lower navigation controls are fully black and
-    // the Artist portal bubble is absent; do not capture that full-screen
-    // list as a Haze source. Artist's elevated bubble keeps its glass.
-    val liveGlassReady = liquidGlassEnabled &&
-        (!portalVisible || (portalSettled && !presentingLibrary))
-    val liveBackdrop = if (liveGlassReady) glassBackdrop else null
-    // Crossfade ONLY the real blur layer. The same refractive satin surface
-    // remains underneath on Home and both portals at every animation frame.
-    val liveGlassAlpha by animateFloatAsState(
-        targetValue = if (liveGlassReady) 1f else 0f,
-        animationSpec = tween(125, easing = FastOutSlowInEasing),
-        label = "continuousLiquidGlassBackdrop"
-    )
     LaunchedEffect(discoveryOpen, libraryOpen) {
         if (overlayOpen) {
             dragActive = false
@@ -281,9 +262,7 @@ internal fun ImmersiveArtworkPlayer(
                 .coerceIn(maxHeight * 0.45f, maxHeight * 0.80f)
         val heroHeight by animateDpAsState(requestedHero, tween(220), label = "immersiveHeroHeight")
         artwork(
-            Modifier.matchParentSize().then(
-                if (liveGlassReady) Modifier.hazeSource(glassBackdrop) else Modifier
-            ),
+            Modifier.matchParentSize(),
             heroHeight, if (wide) (1f - controlsFraction + 0.06f) else 1f
         )
         // Rightward drags on the artwork open Discovery; leave vertical scroll,
@@ -533,13 +512,9 @@ internal fun ImmersiveArtworkPlayer(
                             },
                             contentAlignment = Alignment.Center
                         ) {
-                            ContinuousLiquidGlassSurface(
+                            ImmersiveNavigationSurface(
                                 radius = 50.dp,
                                 lightMode = lightMode,
-                                liquidGlassEnabled = liquidGlassEnabled,
-                                hazeState = liveBackdrop,
-                                hazeAlpha = liveGlassAlpha,
-                                artworkTint = glassArtworkColor,
                                 modifier = Modifier.matchParentSize()
                             )
                             ImmersiveAction(
@@ -547,7 +522,7 @@ internal fun ImmersiveArtworkPlayer(
                                 "Discover",
                                 onDiscovery, !discoveryOpen && !libraryOpen,
                                 iconSize = 25.dp,
-                                iconTint = if (liquidGlassEnabled) Color.White else null,
+                                iconTint = if (lightMode) Color(0xFF171A20) else Color.White,
                                 liquidMotion = liquidGlassEnabled,
                                 inactiveAlpha = 1f
                             )
@@ -608,7 +583,6 @@ internal fun ImmersiveArtworkPlayer(
                     (presentingLibrary || canCloseDiscoveryBySwipe())
             },
             swipeFromHeaderOnly = presentingLibrary,
-            hazeState = liveBackdrop,
             profile = {
                 if (presentingLibrary) {
                     val navigationTop = listOfNotNull(
@@ -650,13 +624,9 @@ internal fun ImmersiveArtworkPlayer(
                 },
                 contentAlignment = Alignment.Center
             ) {
-                ContinuousLiquidGlassSurface(
+                ImmersiveNavigationSurface(
                     radius = 50.dp,
                     lightMode = lightMode,
-                    liquidGlassEnabled = liquidGlassEnabled,
-                    hazeState = liveBackdrop,
-                    hazeAlpha = liveGlassAlpha,
-                    artworkTint = glassArtworkColor,
                     modifier = Modifier.matchParentSize()
                 )
                 SolidNavigationOverlay(
@@ -688,10 +658,7 @@ internal fun ImmersiveArtworkPlayer(
                 presentingLibrary = presentingLibrary && portalVisible,
                 overlayOpen = overlayOpen,
                 showSolidPill = portalVisible,
-                hazeState = liveBackdrop,
                 liquidGlassEnabled = liquidGlassEnabled,
-                hazeAlpha = liveGlassAlpha,
-                artworkTint = glassArtworkColor,
                 hasSong = hasSong,
                 onLyrics = onLyrics,
                 onLibrary = onLibrary,
@@ -703,13 +670,8 @@ internal fun ImmersiveArtworkPlayer(
 }
 
 /**
- * One measured navigation row on every screen. The backdrop layers fade
- * smoothly between the Now Playing capsule and Haze's live frosted glass
- * while the portal settles. This avoids abrupt style swaps on Home.
- */
-/**
  * Solid only at full portal reveal; transparency is draw-layer only,
- * preserving the compositional layout and Home's source-backed glass.
+ * preserving the compositional layout and Home's Hi-Res material.
  */
 @Composable
 private fun SolidNavigationOverlay(
@@ -738,10 +700,7 @@ private fun ImmersiveOverlayActionPill(
     presentingLibrary: Boolean,
     overlayOpen: Boolean,
     showSolidPill: Boolean,
-    hazeState: HazeState?,
     liquidGlassEnabled: Boolean,
-    hazeAlpha: Float,
-    artworkTint: Color,
     hasSong: Boolean,
     onLyrics: () -> Unit,
     onLibrary: () -> Unit,
@@ -750,7 +709,7 @@ private fun ImmersiveOverlayActionPill(
 ) {
     val density = LocalDensity.current
     val iconColor by animateColorAsState(
-        targetValue = if (liquidGlassEnabled || overlayOpen) Color.White
+        targetValue = if (showSolidPill) Color.White
             else if (lightMode) Color(0xFF171A20) else Color.White,
         animationSpec = tween(390, easing = FastOutSlowInEasing),
         label = "frostedPillIconColor"
@@ -783,16 +742,9 @@ private fun ImmersiveOverlayActionPill(
             layout(targetWidth, targetHeight) { placeable.placeRelative(0, 0) }
         }
     ) {
-        // The original Home glass remains mounted as black fades out,
-        // preventing the last-frame material swap on return.
-        ContinuousLiquidGlassSurface(
+        ImmersiveNavigationSurface(
             radius = 100.dp,
             lightMode = lightMode,
-            liquidGlassEnabled = liquidGlassEnabled,
-            // Never render live blur underneath an opaque portal pill.
-            hazeState = if (showSolidPill) null else hazeState,
-            hazeAlpha = hazeAlpha,
-            artworkTint = artworkTint,
             modifier = Modifier.matchParentSize()
         )
         if (showSolidPill) {
