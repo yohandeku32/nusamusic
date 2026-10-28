@@ -83,6 +83,15 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      - name: Upload Navigation glass previews
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Navigation-glass-previews
+          path: app/build/reports/navigation-glass-preview/*.png
+          if-no-files-found: ignore
+          retention-days: 7
+
       # PR #178 runs compilation/tests only. Keep APK generation available
       # for manual dispatch, main pushes and the existing PR #176 exception.
       - name: Assemble debug APK for main, manual, or NusaMusic PR 176

@@ -2027,11 +2027,16 @@ private fun NusaMusicApp(
     }
     // Already computed and cached with each track; never resample the
     // bitmap on the UI thread just to recolor the navigation glass.
-    var playerGlassArtworkColor by remember(currentSong?.uri) {
+    var playerGlassArtworkColor by remember {
         mutableStateOf(
             currentSong?.let { ImmersiveArtworkCache.cached(it)?.backdrop }?.let { Color(it) }
-                ?: Color(0xFF29303B)
+                ?: Color(0xFF141414)
         )
+    }
+    LaunchedEffect(currentSong?.uri) {
+        currentSong?.let { ImmersiveArtworkCache.cached(it)?.backdrop }?.let {
+            playerGlassArtworkColor = Color(it)
+        }
     }
     // Color belongs to the current track, not the selected app theme.
     // Reuse cached art where possible; extract only when Vinyl is active.

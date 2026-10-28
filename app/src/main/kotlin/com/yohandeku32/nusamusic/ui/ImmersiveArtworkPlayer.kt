@@ -97,7 +97,7 @@ internal fun ImmersiveArtworkPlayer(
     libraryOpen: Boolean = false,
     libraryLightMode: Boolean = false,
     liquidGlassEnabled: Boolean = true,
-    glassArtworkColor: Color = Color(0xFF29303B),
+    glassArtworkColor: Color = Color(0xFF141414),
     onLibraryClose: () -> Unit = {},
     onHome: () -> Unit = {},
     libraryContent: @Composable (Boolean, Dp) -> Unit = { _, _ -> },
