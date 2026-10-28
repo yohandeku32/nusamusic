@@ -49,6 +49,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -57,6 +58,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -67,6 +69,9 @@ import androidx.compose.ui.unit.sp
 import com.yohandeku32.nusamusic.R
 import com.yohandeku32.nusamusic.data.AudioCodecLoader
 import com.yohandeku32.nusamusic.model.Song
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.LocateFixed
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.first
@@ -201,6 +206,22 @@ internal fun ImmersiveMusicLibrary(
     }
     val currentlyVisible by rememberUpdatedState(isVisible)
     val listState = rememberLazyListState()
+    val scrollScope = androidx.compose.runtime.rememberCoroutineScope()
+    var pendingLocateSongId by remember { mutableStateOf<Long?>(null) }
+    // Locate by track ID: search and sorting can change the row index.
+    val nowPlayingIndex = remember(visibleSongs, currentSong?.id) {
+        visibleSongs.indexOfFirst { it.id == currentSong?.id }
+    }
+    val hasNowPlaying = remember(songs, currentSong?.id) {
+        currentSong != null && songs.any { it.id == currentSong.id }
+    }
+    val showNowPlayingLocator by remember(listState, nowPlayingIndex) {
+        derivedStateOf {
+            val visible = listState.layoutInfo.visibleItemsInfo
+            nowPlayingIndex < 0 ||
+                (visible.isNotEmpty() && visible.none { it.index == nowPlayingIndex })
+        }
+    }
     val density = LocalDensity.current
     val imeInsets = WindowInsets.ime
     // Observe only visibility (not every pixel of the IME animation).
@@ -236,7 +257,15 @@ internal fun ImmersiveMusicLibrary(
         // remeasure and fights the portal animation. Publish once settled.
         snapshotFlow { currentlyVisible }.first { it }
         visibleSongs = result
-        if (listState.firstVisibleItemIndex != 0 || listState.firstVisibleItemScrollOffset != 0) {
+        // A press from a filtered artist, album or search restores the full
+        // list and navigates only after that updated order is published.
+        val locateIndex = pendingLocateSongId?.let { id ->
+            result.indexOfFirst { it.id == id }
+        } ?: -1
+        if (locateIndex >= 0) {
+            listState.scrollToItem(locateIndex)
+            pendingLocateSongId = null
+        } else if (listState.firstVisibleItemIndex != 0 || listState.firstVisibleItemScrollOffset != 0) {
             listState.scrollToItem(0)
         }
     }
@@ -473,11 +502,15 @@ internal fun ImmersiveMusicLibrary(
                         }
                     }
                 } else {
+                    Box(Modifier.fillMaxSize()) {
                     LazyColumn(
                         state = listState, modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(
                             start = 12.dp, end = 12.dp, top = 2.dp,
-                            bottom = bottomContentPadding.coerceAtLeast(24.dp))
+                            // The last track/menu stays above the floating
+                            // control as well as the player navigation.
+                            bottom = bottomContentPadding.coerceAtLeast(24.dp) +
+                                (if (hasNowPlaying) 74.dp else 0.dp))
                     ) {
                         itemsIndexed(
                             items = visibleSongs,
@@ -519,6 +552,46 @@ internal fun ImmersiveMusicLibrary(
                                     modifier = Modifier.fillMaxWidth().padding(top = 70.dp))
                             }
                         }
+                    }
+                    // Reuse the navigation glass over the static Library
+                    // surface; avoid capturing extra blurred frames.
+                    if (hasNowPlaying && isVisible && !searchDialogOpen &&
+                        !imeVisible && showNowPlayingLocator) {
+                        IconButton(
+                            onClick = {
+                                val id = currentSong?.id ?: return@IconButton
+                                if (nowPlayingIndex >= 0) {
+                                    // Direct positioning avoids composing
+                                    // hundreds of intermediary rows.
+                                    scrollScope.launch { listState.scrollToItem(nowPlayingIndex) }
+                                } else {
+                                    pendingLocateSongId = id
+                                    search = ""
+                                    focus = null
+                                }
+                            },
+                            modifier = Modifier.align(Alignment.BottomEnd)
+                                .padding(
+                                    end = 20.dp,
+                                    bottom = bottomContentPadding.coerceAtLeast(24.dp) + 12.dp
+                                )
+                                .size(54.dp)
+                                .shadow(7.dp, RoundedCornerShape(100.dp))
+                                .background(palette.surface.copy(alpha = 0.94f), RoundedCornerShape(100.dp))
+                                .immersiveGlassPill(radius = 100.dp, lightMode = lightMode)
+                                .testTag("locate-now-playing")
+                        ) {
+                            Icon(
+                                Lucide.LocateFixed,
+                                contentDescription = libraryText(
+                                    "Temukan lagu yang sedang diputar",
+                                    "Locate now playing song"
+                                ),
+                                tint = palette.primaryText,
+                                modifier = Modifier.size(23.dp)
+                            )
+                        }
+                    }
                     }
                 }
             }
