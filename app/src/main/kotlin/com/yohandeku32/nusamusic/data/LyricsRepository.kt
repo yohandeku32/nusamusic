@@ -25,7 +25,8 @@ data class SongLyrics(
     val duetRightLines: Set<Int> = emptySet(),
     // User-visible reason only when neither local nor online lyrics exist.
     val onlineNotice: String? = null,
-    val pronunciations: Map<Int, LyricsPronunciation> = emptyMap()
+    val pronunciations: Map<Int, LyricsPronunciation> = emptyMap(),
+    val ttmlCredits: SongCredits = SongCredits()
 )
 
 /**
@@ -309,12 +310,13 @@ internal fun preferLyrics(local: SongLyrics, remote: SongLyrics): SongLyrics {
         remote.duetRightLines.isEmpty()
     val combinedCredits = if (canUpgrade) local.stored.credits.withFallback(remote.stored.credits)
         else local.stored.credits
+    val ttmlCredits = if (canUpgrade) local.ttmlCredits.withFallback(remote.ttmlCredits) else local.ttmlCredits
     return if (canUpgrade && !losesDuetIdentity &&
         (improvesTiming || addsBacking)
     ) remote.copy(
-        stored = remote.stored.copy(credits = combinedCredits)
-    ) else if (combinedCredits != local.stored.credits)
-        local.copy(stored = local.stored.copy(credits = combinedCredits)) else local
+        stored = remote.stored.copy(credits = combinedCredits), ttmlCredits = ttmlCredits
+    ) else if (combinedCredits != local.stored.credits || ttmlCredits != local.ttmlCredits)
+        local.copy(stored = local.stored.copy(credits = combinedCredits), ttmlCredits = ttmlCredits) else local
 }
 
 internal object EmbeddedLyricsSelector {
@@ -335,7 +337,7 @@ internal object EmbeddedLyricsSelector {
                 best = SongLyrics(StoredLyrics(raw, "embedded", plain = decoded == null,
                     credits = credits.withFallback(timing?.credits ?: SongCredits())), decoded,
                     timing?.inferredEnds.orEmpty(), timing?.duetRightLines.orEmpty(),
-                    pronunciations = timing?.pronunciations.orEmpty())
+                    pronunciations = timing?.pronunciations.orEmpty(), ttmlCredits = timing?.credits ?: SongCredits())
                 score = candidateScore
             }
         }

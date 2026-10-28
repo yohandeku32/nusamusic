@@ -40,7 +40,7 @@ Non-CJK lyrics, missing/ambiguous timing, unsupported bidirectional mixtures, an
 
 The TTML decoder supports inline `ttm:role="x-translation"` and `x-roman` (also `x-romanization` and `x-transliteration`) spans. It also reads iTunes metadata `translations/translation/text` and `transliterations/transliteration/text`, resolving each `for` to the corresponding lyric `itunes:key` (or XML ID). Namespace prefixes may vary. Inline values take precedence; if metadata supplies several languages for one key, the first nonempty authored variant is used. No language selection control or automatic translation service is added.
 
-Timed pronunciation spans retain their own `begin`/`end` or `dur`. Adjacent pinyin spans receive readable spaces. Fully timed pronunciation uses the main lyric renderer: progressive fill, connected letter waves and held-note projection/halos, drawn at the companion's smaller scale. The bold text retains its 58% white base and full-white highlight. The main engine's existing rapid-word and reliable-hold rules still apply.
+Timed pronunciation spans retain their own `begin`/`end` or `dur`. CJK source readings receive readable spaces between adjacent pinyin/romaji spans. Latin source readings retain authored syllable joins and word separators, so `men` + `cin` + `tai` + `mu` stays `mencintaimu`. Fully timed pronunciation uses the main lyric renderer: progressive fill, connected letter waves and held-note projection/halos, drawn at the companion's smaller scale. The bold text retains its 58% white base and full-white highlight. The main engine's existing rapid-word and reliable-hold rules still apply.
 
 The sentence translation (the third text level) keeps its own baseline and text size while the original and pronunciation animate. It does not receive the source word's lift, vertical swell or halo pulse. It retains line-level activation from 68% white to full white and the existing tap-to-seek target. Source/pronunciation animation and shared scrolling, sentence following and backing-row visibility retain their existing owners. No translation word timestamps are guessed. Pause holds playback-driven effects; seeking evaluates the destination's line activation.
 
@@ -50,9 +50,13 @@ These are supplied lyric annotations. Aruna does not generate translations or pr
 
 ## Authorship credits
 
-File composer/lyricist tags retain priority. If a role is missing, the selected TTML's `head/metadata` can supply explicit `composers/composer`, `lyricists/lyricist` or general `songwriters/songwriter` lists, including iTunes/source metadata containers with different namespace prefixes. Generic songwriters retain their own role: the Immersive header uses **SONGWRITERS** when there is no composer, while the shared credit block uses **Written by**. Available composers still lead the header; absent authors retain **Unknown composer**.
+The Immersive header reads only `SongLyrics.ttmlCredits`, with **SONGWRITERS** as its fixed label. It prefers the selected TTML's `songwriters/songwriter` list, then its explicitly authored `composers/composer` list. File composer/lyricist tags never supply this header. Without TTML authorship it displays **Unknown songwriter**. Explicit roles remain separate in the metadata model; the shared credit block can still display **Written by** for general songwriters.
 
 Voice agents, performers, copyright owners, lyric-file editors and sung text are not inferred as authors. Names are trimmed, deduplicated in source order and bounded to 32 names of at most 2,048 characters per role. A matching online TTML can fill absent credits even if its timing is not selected; a different lyric text cannot. General authors are never copied into composer/lyricist fields. Old cached raw TTML recovers these credits on decode; new songwriter properties survive restart without invalidating older cache entries. Reading credits does not write audio tags. See the [TTML credit fallback record](implementation-timeline/lyrics/2026-10-28-use-ttml-credits-when-tags-are-empty.md).
+
+## TTML syllable spacing
+
+Whitespace-only indentation containing line breaks or tabs between child elements is ignored in syllable TTML. Compact and pretty-printed `men`/`cin`/`tai`/`mu` spans therefore render as the same word. Explicit ordinary spaces, whitespace inside text spans, CDATA and inherited `xml:space="preserve"` remain meaningful; a nearer `xml:space="default"` restores indentation handling. Line-only prose is retained. Timings, translation/voice associations and stored raw TTML are unchanged. See the [spacing correction record](implementation-timeline/lyrics/2026-10-28-preserve-ttml-syllable-joins.md).
 
 ## Character motion and following
 

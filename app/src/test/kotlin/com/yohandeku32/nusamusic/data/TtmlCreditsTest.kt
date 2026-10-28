@@ -91,6 +91,7 @@ class TtmlCreditsTest {
         assertSame(local.synced, result.synced)
         assertEquals(local.stored.content, result.stored.content)
         assertEquals(remote.stored.credits, result.stored.credits)
+        assertEquals(remote.ttmlCredits, result.ttmlCredits)
     }
 
     @Test fun aTimingUpgradeRetainsLocalTagsAndTheRemoteAuthorFallback() {
@@ -100,6 +101,7 @@ class TtmlCreditsTest {
         assertSame(remote.synced, result.synced)
         assertEquals(listOf("Tagged composer"), result.stored.credits.composers)
         assertEquals(remote.stored.credits.songwriters, result.stored.credits.songwriters)
+        assertEquals(remote.ttmlCredits, result.ttmlCredits)
     }
 
     @Test fun differentSongTextCannotSupplyCredits() {
@@ -121,5 +123,16 @@ class TtmlCreditsTest {
         assertTrue(select("<tt><head><metadata>$authors</metadata></head>").stored.credits.isEmpty)
         assertTrue(select("[00:01]Halo").stored.credits.isEmpty)
         assertTrue(select(ttml("")).stored.credits.isEmpty)
+    }
+
+    @Test fun ttmlProvenanceNeverIncludesComposerOrLyricistNamesFromTheAudioFile() {
+        val tags = SongCredits(listOf("Tagged composer"), listOf("Tagged lyricist"))
+        val result = select(ttml(authors), tags)
+        assertEquals(tags.composers, result.stored.credits.composers)
+        assertTrue(result.ttmlCredits.composers.isEmpty())
+        assertTrue(result.ttmlCredits.lyricists.isEmpty())
+        assertEquals(listOf("Writer 世界", "Second"), result.ttmlCredits.songwriters)
+        val taggedOnly = select("[00:01]Halo", tags)
+        assertTrue(taggedOnly.ttmlCredits.isEmpty)
     }
 }

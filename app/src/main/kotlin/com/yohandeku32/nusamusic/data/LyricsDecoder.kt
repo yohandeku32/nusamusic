@@ -371,7 +371,7 @@ object LyricsDecoder {
         fun mainText(node: Node): String = when {
             node is Element && (isBacking(node) || TtmlCompanionReader.isCompanion(node)) -> ""
             node.nodeType == Node.TEXT_NODE || node.nodeType == Node.CDATA_SECTION_NODE ->
-                node.nodeValue.orEmpty()
+                ttmlTextNode(node)
             else -> buildString {
                 for (i in 0 until node.childNodes.length) {
                     append(mainText(node.childNodes.item(i)))
@@ -432,7 +432,7 @@ object LyricsDecoder {
             .replace(">", "&gt;").replace("\"", "&quot;")
         fun render(node: Node, parentStart: Int, parentEnd: Int, depth: Int): String {
             require(depth <= 64 && ++nodes <= 20_000)
-            if (node !is Element) return if (node.nodeType == Node.TEXT_NODE || node.nodeType == Node.CDATA_SECTION_NODE) escaped(node.nodeValue.orEmpty()) else ""
+            if (node !is Element) return if (node.nodeType == Node.TEXT_NODE || node.nodeType == Node.CDATA_SECTION_NODE) escaped(ttmlTextNode(node)) else ""
             val name = node.localName ?: node.nodeName
             if (TtmlCompanionReader.isCompanion(node) ||
                 name in setOf("translations", "transliterations", "translation", "transliteration")) return ""

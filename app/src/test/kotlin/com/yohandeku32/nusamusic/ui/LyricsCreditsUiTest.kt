@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import com.yohandeku32.nusamusic.data.EmbeddedLyricsSelector
 import com.yohandeku32.nusamusic.data.SongCredits
+import com.yohandeku32.nusamusic.data.SongLyrics
 import java.io.File
 import org.junit.Assert.*
 import org.junit.Rule
@@ -38,15 +39,15 @@ class LyricsCreditsUiTest {
         <songwriter>Writer 世界</songwriter><songwriter>Second Writer</songwriter>
         </songwriters></iTunesMetadata></metadata></head><body><p begin="1s" end="3s">Halo</p></body></tt>"""
 
-    private fun show(credits: SongCredits, width: Int = 411, fontScale: Float = 1f) {
+    private fun show(data: SongLyrics, width: Int = 411, fontScale: Float = 1f) {
+        val credits = data.stored.credits
+        val authors = data.ttmlCredits
         compose.setContent {
             CompositionLocalProvider(LocalDensity provides Density(1f, fontScale)) {
                 MaterialTheme(colorScheme = darkColorScheme()) {
                     Box(Modifier.requiredSize(width.dp, 800.dp).background(Color(0xFF141820))) {
                         ImmersiveArtworkPlayer(title = "Credit preview", artist = "Test song",
-                            composerNames = credits.composers.ifEmpty { credits.songwriters }.joinToString(", "),
-                            composerRole = if (credits.composers.isEmpty() && credits.songwriters.isNotEmpty())
-                                "SONGWRITERS" else "COMPOSER",
+                            composerNames = authors.songwriters.ifEmpty { authors.composers }.joinToString(", "),
                             titleFontFamily = FontFamily.SansSerif, titleFontSize = 34f, hasSong = true,
                             isPlaying = false, isFavorite = false, shuffleEnabled = false, repeatMode = 0,
                             lyricsOpen = true, lyricsEnabled = true, onPlayPause = {}, onPrevious = {}, onNext = {},
@@ -74,8 +75,7 @@ class LyricsCreditsUiTest {
     }
 
     @Test fun ttmlSongwritersReplaceUnknownWithoutClaimingTheyAreComposersOrLyricists() {
-        val credits = EmbeddedLyricsSelector.select(listOf(xml), 10_000).stored.credits
-        show(credits)
+        show(EmbeddedLyricsSelector.select(listOf(xml), 10_000))
         compose.onNodeWithText("SONGWRITERS").assertIsDisplayed()
         compose.onNodeWithText("Written by").assertIsDisplayed()
         compose.onAllNodesWithText("Writer 世界, Second Writer").assertCountEquals(2)
@@ -85,28 +85,36 @@ class LyricsCreditsUiTest {
         preview("ttml-songwriter-fallback")
     }
 
-    @Test fun taggedComposerRemainsTheHeaderWhileSongwriterCreditsKeepTheirRole() {
-        val credits = EmbeddedLyricsSelector.select(listOf(xml), 10_000, SongCredits(listOf("Tagged composer"))).stored.credits
-        show(credits)
-        compose.onNodeWithText("COMPOSER").assertIsDisplayed()
-        compose.onAllNodesWithText("Tagged composer").assertCountEquals(2)
+    @Test fun ttmlAuthorsRemainTheHeaderEvenWhenTheFileHasAComposerTag() {
+        show(EmbeddedLyricsSelector.select(listOf(xml), 10_000, SongCredits(listOf("Tagged composer"))))
+        compose.onNodeWithText("SONGWRITERS").assertIsDisplayed()
+        compose.onAllNodesWithText("Writer 世界, Second Writer").assertCountEquals(2)
+        compose.onAllNodesWithText("Tagged composer").assertCountEquals(1)
         compose.onNodeWithText("Composed by").assertIsDisplayed()
         compose.onNodeWithText("Written by").assertIsDisplayed()
-        compose.onNodeWithText("SONGWRITERS").assertDoesNotExist()
+        compose.onNodeWithText("COMPOSER").assertDoesNotExist()
     }
 
     @Test fun missingCreditsRetainTheExistingUnknownState() {
-        show(SongCredits())
-        compose.onNodeWithText("Unknown composer").assertIsDisplayed()
+        show(EmbeddedLyricsSelector.select(listOf("[00:01]Halo"), 10_000))
+        compose.onNodeWithText("Unknown songwriter").assertIsDisplayed()
+        compose.onNodeWithText("SONGWRITERS").assertIsDisplayed()
         compose.onNodeWithText("Written by").assertDoesNotExist()
     }
 
     @Test fun fallbackHeaderStaysInsideANarrowLargeTextViewport() {
-        show(EmbeddedLyricsSelector.select(listOf(xml), 10_000).stored.credits, width = 320, fontScale = 1.8f)
+        show(EmbeddedLyricsSelector.select(listOf(xml), 10_000), width = 320, fontScale = 1.8f)
         val header = compose.onAllNodesWithText("Writer 世界, Second Writer")[0]
         header.assertIsDisplayed()
         val bounds = header.getUnclippedBoundsInRoot()
         assertTrue(bounds.left >= 0.dp && bounds.right <= 320.dp)
         preview("ttml-songwriter-narrow-large-text")
+    }
+
+    @Test fun aFileComposerCannotFillAHeaderWithoutTtmlAuthorship() {
+        show(EmbeddedLyricsSelector.select(listOf("[00:01]Halo"), 10_000, SongCredits(listOf("Tagged composer"))))
+        compose.onNodeWithText("Unknown songwriter").assertIsDisplayed()
+        compose.onNodeWithText("SONGWRITERS").assertIsDisplayed()
+        compose.onAllNodesWithText("Tagged composer").assertCountEquals(1)
     }
 }

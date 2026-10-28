@@ -2649,12 +2649,10 @@ private fun NusaMusicApp(
                         val playerViewportHeight = maxHeight
                         if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
                             PlayerScaleHost(playerScale) {
-                                val lyricCredits = currentSong?.let { lyricsState.forSong(it).data?.stored?.credits }
+                                val lyricCredits = currentSong?.let { lyricsState.forSong(it).data?.ttmlCredits }
                                 ImmersiveArtworkPlayer(
                                     title = currentSong?.title ?: nusaText("Pilih lagu", "Choose a song"),
-                                    composerNames = lyricCredits?.let { it.composers.ifEmpty { it.songwriters }.joinToString(", ") }.orEmpty(),
-                                    composerRole = if (lyricCredits?.composers.isNullOrEmpty() &&
-                                        !lyricCredits?.songwriters.isNullOrEmpty()) "SONGWRITERS" else "COMPOSER",
+                                    composerNames = lyricCredits?.let { it.songwriters.ifEmpty { it.composers }.joinToString(", ") }.orEmpty(),
                                     artist = currentSong?.artist ?: nusaText("Perpustakaan musik lokal Anda", "Your local music library"),
                                     titleFontFamily = if (uiPrefs.contains("title_font_family")) titleFontFamily else FontFamily.SansSerif,
                                     titleFontSize = titleFontSize,
