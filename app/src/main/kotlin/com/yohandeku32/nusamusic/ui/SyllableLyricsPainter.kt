@@ -110,7 +110,9 @@ internal class SyllableLyricsPainter(
     alignEnd: Boolean = false,
     viewportWidthPx: Float = 0f,
     inferredEnds: Set<LyricsUnitKey> = emptySet(),
-    textMeasurer: TextMeasurer
+    textMeasurer: TextMeasurer,
+    private val baseAlpha: Float = 0.4f,
+    private val highlightAlpha: Float = 0.85f
 ) {
     private class Letter(
         val result: TextLayoutResult,
@@ -238,6 +240,33 @@ internal class SyllableLyricsPainter(
     }
 
     private val frameClock = LyricsFrameTimeSmoother()
+    private var companionAt = Int.MIN_VALUE
+    private var companionRevision = Int.MIN_VALUE
+    private var companionValue = LyricsCompanionPose.Rest
+
+    /** Whole-line followers sample the source's measured wave, not translated word timings. */
+    fun companionPose(waveTime: Int, playbackRevision: Int): LyricsCompanionPose {
+        val now = frameClock.sample(waveTime, playbackRevision)
+        if (now == companionAt && playbackRevision == companionRevision) return companionValue
+        var lift = 0f
+        var depth = 0f
+        var glow = 0f
+        for (glyph in glyphs) {
+            val center = (glyph.pathStartDp + glyph.pathEndDp) * 0.5f
+            val pose = heldWords.pose(glyph.index, now, center)
+            val short = if (heldWords.hasHold(glyph.index))
+                wordWave.wordLiftDp(glyph.index, now) else wordWave.liftDp(glyph.index, center, now)
+            lift = minOf(lift, pose.liftDp * 0.70f + short)
+            depth = maxOf(depth, pose.depth)
+            glyph.controller.update(now)
+            glow = maxOf(glow, glyph.controller.glow, heldVocalGlowEnergy(pose.depth, glyph.controller.glow))
+        }
+        companionAt = now
+        companionRevision = playbackRevision
+        companionValue = if (lift == 0f && depth == 0f && glow == 0f) LyricsCompanionPose.Rest
+            else LyricsCompanionPose(lift, 1f + 0.055f * depth, glow)
+        return companionValue
+    }
 
     fun draw(scope: DrawScope, now: Int, focus: Float, waveTime: Int,
              playbackRevision: Int) = with(scope) {
@@ -320,7 +349,7 @@ internal class SyllableLyricsPainter(
             // TextLayoutResult reuses AndroidTextPaint: a null drawStyle retains
             // the last Stroke. Reset every ordinary pass explicitly to Fill.
             if (!halo) {
-                drawText(result, color = Color.White.copy(alpha = 0.4f),
+                drawText(result, color = Color.White.copy(alpha = baseAlpha),
                     topLeft = position, shadow = Shadow.None, drawStyle = Fill)
             }
             if (strength <= 0f || progress <= 0f) return@withLyricsScale
@@ -391,10 +420,10 @@ internal class SyllableLyricsPainter(
             } else {
                 if (progress >= 1f) {
                     drawText(result, color = Color.White, topLeft = position,
-                        alpha = strength * 0.85f, shadow = Shadow.None, drawStyle = Fill)
+                        alpha = strength * highlightAlpha, shadow = Shadow.None, drawStyle = Fill)
                 } else {
                     drawText(result, brush = glyph.fill.brush, topLeft = position,
-                        alpha = strength * 0.85f, shadow = Shadow.None, drawStyle = Fill)
+                        alpha = strength * highlightAlpha, shadow = Shadow.None, drawStyle = Fill)
                 }
                 val unit = glyph.layout.syllable
                 // On held vocals, the curving mountain glow should lead;

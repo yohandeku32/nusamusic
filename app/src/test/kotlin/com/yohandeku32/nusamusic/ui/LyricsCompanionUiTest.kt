@@ -11,6 +11,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.MotionDurationScale
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.InputMode
@@ -43,7 +45,11 @@ import org.robolectric.annotation.GraphicsMode
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @OptIn(ExperimentalTestApi::class)
 class LyricsCompanionUiTest {
-    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+    private val durationScale = object : MotionDurationScale {
+        val amount = mutableFloatStateOf(1f)
+        override val scaleFactor get() = amount.floatValue
+    }
+    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>(effectContext = durationScale)
     private val now = mutableIntStateOf(0)
     private val motion = LyricsMotionState(0)
     private var sought: Int? = null
@@ -59,8 +65,8 @@ class LyricsCompanionUiTest {
         <body><p a:key="L1" begin="1s" end="9s"><span begin="1s" end="2s">晚</span><span begin="2s" end="3s">安</span><span begin="3s" end="4s">愿</span><span begin="4s" end="5s">你</span><span begin="5s" end="6s">今</span><span begin="6s" end="7s">夜</span><span begin="7s" end="8s">好</span><span begin="8s" end="9s">梦</span><span m:role="x-translation">$translation</span></p></body></tt>
     """.trimIndent()
 
-    private fun show(width: Int = 411, fontScale: Float = 1f, right: Boolean = false, lineTimed: Boolean = false) {
-        val decoded = LyricsDecoder.decodeWithTiming(xml, 10_000)
+    private fun show(width: Int = 411, fontScale: Float = 1f, right: Boolean = false, lineTimed: Boolean = false, sourceXml: String = xml) {
+        val decoded = LyricsDecoder.decodeWithTiming(sourceXml, 10_000)
         val line = decoded.lyrics.lines.single() as KaraokeLine
         compose.setContent {
             CompositionLocalProvider(LocalDensity provides Density(1f, fontScale)) {
@@ -227,5 +233,70 @@ class LyricsCompanionUiTest {
         compose.onNodeWithText(translation, useUnmergedTree = true).assertIsDisplayed().performTouchInput { click() }
         assertEquals(1_000, sought)
         preview("lyrics-viewport")
+    }
+
+    private fun heldXml() = """<tt xmlns:m="http://www.w3.org/ns/ttml#metadata"><body><p begin="1s" end="4s"><span begin="1s" end="4s">Aaa</span><span m:role="x-roman"><span begin="1s" end="4s">aaa</span></span><span m:role="x-translation">$translation</span></p></body></tt>"""
+
+    private fun brightY(image: Bitmap, bounds: androidx.compose.ui.unit.DpRect): Float {
+        var total = 0L
+        var count = 0
+        for (y in (bounds.top.value.toInt() - 6).coerceAtLeast(0) until (bounds.bottom.value.toInt() + 6).coerceAtMost(image.height)) {
+            for (x in bounds.left.value.toInt() until bounds.right.value.toInt()) {
+                if (android.graphics.Color.red(image.getPixel(x, y)) >= 235) { total += y; count++ }
+            }
+        }
+        assertTrue("Bright pronunciation strokes must remain visible", count > 0)
+        return total.toFloat() / count
+    }
+
+    @Test fun heldPronunciationMovesAndTranslationFollowsTheSourcePoseWithoutReflow() {
+        show(sourceXml = heldXml())
+        compose.runOnIdle { now.intValue = 2_260 }
+        compose.waitForIdle()
+        val pinyin = compose.onNodeWithContentDescription("aaa", useUnmergedTree = true).getUnclippedBoundsInRoot()
+        val activeBounds = compose.onNodeWithText(translation, useUnmergedTree = true).getUnclippedBoundsInRoot()
+        val height = measured
+        val moving = bitmap()
+        preview("held-companions-moving")
+        compose.runOnIdle { durationScale.amount.floatValue = 0f }
+        compose.waitForIdle()
+        val still = bitmap()
+        val restingBounds = compose.onNodeWithText(translation, useUnmergedTree = true).getUnclippedBoundsInRoot()
+        assertEquals(height, measured)
+        assertTrue("Translation must follow the source's upward hold", activeBounds.top < restingBounds.top - 0.5.dp)
+        assertTrue("Pronunciation must visibly rise during its authored hold", brightY(moving, pinyin) < brightY(still, pinyin) - 0.75f)
+        preview("held-companions-reduced-motion")
+        moving.recycle(); still.recycle()
+    }
+
+    @Test fun companionPoseFreezesOnPauseAndSeekingBackRestoresTheSamePixels() {
+        show(sourceXml = heldXml())
+        compose.runOnIdle { now.intValue = 1_700 }
+        compose.waitForIdle()
+        val first = bitmap()
+        compose.mainClock.advanceTimeBy(250)
+        compose.waitForIdle()
+        val paused = bitmap()
+        assertTrue(first.sameAs(paused))
+        compose.runOnIdle { now.intValue = 3_200 }
+        compose.waitForIdle()
+        compose.runOnIdle { now.intValue = 1_700; motion.reset(1_700) }
+        compose.waitForIdle()
+        val restored = bitmap()
+        assertTrue("A seek must restore the destination pose without replay", first.sameAs(restored))
+        first.recycle(); paused.recycle(); restored.recycle()
+    }
+
+    @Test fun rapidPronunciationDoesNotAcquireAnInventedHeldNote() {
+        val shortXml = """<tt xmlns:m="http://www.w3.org/ns/ttml#metadata"><body><p begin="1s" end="2s"><span begin="1s" end="1.5s">wan </span><span begin="1.5s" end="2s">an</span><span m:role="x-roman"><span begin="1s" end="1.5s">wan</span><span begin="1.5s" end="2s">an</span></span><span m:role="x-translation">$translation</span></p></body></tt>"""
+        show(sourceXml = shortXml)
+        compose.runOnIdle { now.intValue = 1_700 }
+        compose.waitForIdle()
+        val normal = bitmap()
+        compose.runOnIdle { durationScale.amount.floatValue = 0f }
+        compose.waitForIdle()
+        val reduced = bitmap()
+        assertTrue("Rapid words must keep the same stationary glyphs", normal.sameAs(reduced))
+        normal.recycle(); reduced.recycle()
     }
 }
