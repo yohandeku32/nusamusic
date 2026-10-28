@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yohandeku32.nusamusic.data.SongCredits
 import com.yohandeku32.nusamusic.data.LyricsUnitKey
+import com.yohandeku32.nusamusic.data.LyricsPronunciation
 import com.mocharealm.accompanist.lyrics.core.model.ISyncedLine
 import com.mocharealm.accompanist.lyrics.core.model.SyncedLyrics
 import com.mocharealm.accompanist.lyrics.core.model.karaoke.KaraokeLine
@@ -47,7 +48,8 @@ internal fun SyncedLyricsView(
     listState: LazyListState, motionState: LyricsMotionState,
     onSeek: (ISyncedLine) -> Unit, fontSize: Float, credits: SongCredits = SongCredits(), modifier: Modifier = Modifier,
     inferredEnds: Set<LyricsUnitKey> = emptySet(),
-    duetRightLines: Set<Int> = emptySet()
+    duetRightLines: Set<Int> = emptySet(),
+    pronunciations: Map<Int, LyricsPronunciation> = emptyMap()
 ) {
     val clock = remember { LyricsPlaybackClock(position, visible) }
     SideEffect { clock.update(position, visible) }
@@ -313,10 +315,10 @@ internal fun SyncedLyricsView(
                         if (main is KaraokeLine) CenteredKaraokeLine(main, clock.read, motionState,
                             normalStyle, seekLine, onMainHeight = { mainHeights[index] = it },
                             expressions = expressions[main], alignEnd = duetRight,
-                            inferredEnds = inferredEnds)
+                            inferredEnds = inferredEnds, pronunciation = pronunciations[row.sourceIndex])
                         else if (main is SyncedLine) LineSyncedLyricsRow(main, clock.read, motionState,
                             normalStyle, onMainHeight = { mainHeights[index] = it },
-                            alignEnd = duetRight) { seekLine(main) }
+                            alignEnd = duetRight, pronunciation = pronunciations[row.sourceIndex]) { seekLine(main) }
                     }
                     // Preserve the original backing-vocal blur and opacity.
                     if (row.backing.isNotEmpty()) Column(Modifier.fillMaxWidth().graphicsLayer {
@@ -339,7 +341,7 @@ internal fun SyncedLyricsView(
                                     CenteredKaraokeLine(voice, clock.read, motionState, backgroundStyle, seekLine,
                                         expressions = expressions[voice],
                                         alignEnd = backing.index in duetRightLines,
-                                        inferredEnds = inferredEnds)
+                                        inferredEnds = inferredEnds, pronunciation = pronunciations[backing.index])
                                 }
                             }
                         }

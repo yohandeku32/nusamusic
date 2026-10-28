@@ -30,6 +30,16 @@ Fields can contain plain text, LRC, Enhanced LRC or TTML. The decoder prefers au
 
 Readers use bounded metadata reads and skip audio payloads where seeking is available. Unsupported compression/encryption, malformed fields, unsupported SYLT time formats and files outside the reader limits may be ignored. Supported metadata does not by itself guarantee that the audio container can be played on a given device.
 
+### Translations and pronunciation
+
+Available translations and pronunciation (including pinyin) appear underneath the original lyric. Karaoke and line-synced rows share this behavior. Companion text belongs to the same measured, tappable row: its height participates in automatic following, it moves with the original lyric, and tapping either text seeks to the original's start. Duet companions follow their own singer's alignment; backing companions follow their backing-vocal visibility window.
+
+The TTML decoder supports inline `ttm:role="x-translation"` and `x-roman` (also `x-romanization` and `x-transliteration`) spans. It also reads iTunes metadata `translations/translation/text` and `transliterations/transliteration/text`, resolving each `for` to the corresponding lyric `itunes:key` (or XML ID). Namespace prefixes may vary. Inline values take precedence; if metadata supplies several languages for one key, the first nonempty authored variant is used. No language selection control or automatic translation service is added.
+
+Timed pronunciation spans retain their own `begin`/`end` or `dur`. Adjacent pinyin spans receive readable spaces, and their words brighten with the playback clock. Missing or invalid optional timestamps leave the pronunciation readable without inventing timings. Companion spans cannot enter sung words, extend vocal ends, or determine duet alignment. LRC translations at the same timestamp retain their existing behavior.
+
+These are supplied lyric annotations. Aruna does not generate translations or pronunciation when a source has none. Original TTML remains in the stored lyric and existing saved metadata. See the [companion-text change record](implementation-timeline/lyrics/2026-10-28-add-ttml-translations-and-pronunciation.md).
+
 ## Character motion and following
 
 All lyric motion samples the playback clock. Pausing holds the current pose; a real seek evaluates the destination pose. Changing songs replaces the song's lyric state. The active frame publisher follows the activity lifecycle and stops publishing playback frames when it is not started.

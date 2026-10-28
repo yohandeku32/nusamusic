@@ -74,6 +74,15 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      - name: Upload Lyrics companion previews
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Lyrics-companion-previews
+          path: app/build/reports/lyrics-companion-preview/*.png
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Upload First launch previews
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4

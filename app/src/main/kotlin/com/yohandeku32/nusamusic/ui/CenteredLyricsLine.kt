@@ -21,12 +21,14 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.mocharealm.accompanist.lyrics.core.model.ISyncedLine
 import com.mocharealm.accompanist.lyrics.core.model.karaoke.KaraokeLine
 import com.mocharealm.accompanist.lyrics.core.model.synced.SyncedLine
 import com.mocharealm.accompanist.lyrics.ui.composable.lyrics.*
 import com.mocharealm.accompanist.lyrics.ui.utils.isRtl
 import com.yohandeku32.nusamusic.data.LyricsUnitKey
+import com.yohandeku32.nusamusic.data.LyricsPronunciation
 
 /** Measurements are retained; playback-time effects invalidate drawing/layers only. */
 @Composable
@@ -35,7 +37,8 @@ internal fun CenteredKaraokeLine(
     style: TextStyle, onSeek: (ISyncedLine) -> Unit, onMainHeight: (Int) -> Unit = {},
     expressions: List<LyricsAdaptiveExpression>? = null,
     alignEnd: Boolean = false,
-    inferredEnds: Set<LyricsUnitKey> = emptySet()
+    inferredEnds: Set<LyricsUnitKey> = emptySet(),
+    pronunciation: LyricsPronunciation? = null
 ) {
     val textMeasurer = rememberTextMeasurer()
     val density = LocalDensity.current
@@ -86,10 +89,9 @@ internal fun CenteredKaraokeLine(
                     playbackRevision = motion.revision)
             }
         }
+        pronunciation?.let { LyricsPronunciationRow(it, style, alignEnd, time) }
+        line.translation?.takeIf { it.isNotBlank() }?.let { LyricsTranslation(it, style, alignEnd) }
     }
-    // Show available translations as soon as their lyric row is on screen.
-    // Their visibility must not depend on a syllable becoming active.
-    line.translation?.takeIf { it.isNotBlank() }?.let { LyricsTranslation(it, style, alignEnd) }
 }
 
 @Composable
@@ -132,20 +134,16 @@ internal fun TimedVocalContent(
     }) { content() }
 }
 
-/** Static secondary text: translation is visible from first composition.
- * Preserve the original type scale, padding and translucency, and leave
- * timed vocal spacing exclusively to backing vocals.
- */
 @Composable
 private fun LyricsTranslation(text: String, style: TextStyle, alignEnd: Boolean = false) {
     Text(
         text = text,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 2.dp),
         style = style.copy(
-            fontSize = style.fontSize * 0.65f,
-            lineHeight = style.lineHeight * 0.65f
+            fontSize = (style.fontSize.value * 0.65f).coerceAtLeast(14f).sp,
+            lineHeight = (style.lineHeight.value * 0.65f).coerceAtLeast(20f).sp
         ),
-        color = Color.White.copy(alpha = 0.6f),
+        color = Color.White.copy(alpha = 0.82f),
         textAlign = if (alignEnd) TextAlign.End else TextAlign.Start
     )
 }
@@ -153,7 +151,7 @@ private fun LyricsTranslation(text: String, style: TextStyle, alignEnd: Boolean 
 @Composable
 internal fun LineSyncedLyricsRow(
     line: SyncedLine, time: () -> Int, motion: LyricsMotionState, style: TextStyle, onMainHeight: (Int) -> Unit = {},
-    alignEnd: Boolean = false, onSeek: () -> Unit
+    alignEnd: Boolean = false, pronunciation: LyricsPronunciation? = null, onSeek: () -> Unit
 ) {
     val voices = remember(line) { LyricsVocalWindows(line) }
     val live by remember(line, time, motion) { derivedStateOf {
@@ -165,6 +163,7 @@ internal fun LineSyncedLyricsRow(
         Text(line.content, Modifier.fillMaxWidth().graphicsLayer {
             alpha = 0.4f + 0.6f * lyricPresence(line.start, line.end, visualTime(), motion.resetAt)
         }, style = style, color = Color.White, textAlign = if (alignEnd) TextAlign.End else TextAlign.Start)
-        // A start-only line/translation cannot establish a separate vocal interval.
+        pronunciation?.let { LyricsPronunciationRow(it, style, alignEnd, time) }
+        line.translation?.takeIf { it.isNotBlank() }?.let { LyricsTranslation(it, style, alignEnd) }
     }
 }

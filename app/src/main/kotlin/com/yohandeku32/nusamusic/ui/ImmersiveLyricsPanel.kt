@@ -231,7 +231,8 @@ fun ImmersiveLyricsPanel(
                     credits = com.yohandeku32.nusamusic.data.SongCredits(),
                     modifier = Modifier.fillMaxSize(),
                     inferredEnds = data.inferredEnds,
-                    duetRightLines = data.duetRightLines
+                    duetRightLines = data.duetRightLines,
+                    pronunciations = data.pronunciations
                 )
             }
 

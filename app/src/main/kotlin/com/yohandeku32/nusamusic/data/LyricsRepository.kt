@@ -24,7 +24,8 @@ data class SongLyrics(
     val inferredEnds: Set<LyricsUnitKey> = emptySet(),
     val duetRightLines: Set<Int> = emptySet(),
     // User-visible reason only when neither local nor online lyrics exist.
-    val onlineNotice: String? = null
+    val onlineNotice: String? = null,
+    val pronunciations: Map<Int, LyricsPronunciation> = emptyMap()
 )
 
 /**
@@ -330,7 +331,8 @@ internal object EmbeddedLyricsSelector {
             val candidateScore = when { units > 0 -> 3_000_000L + units; decoded != null -> 2_000_000L + decoded.lines.size; else -> 1L }
             if (candidateScore > score) {
                 best = SongLyrics(StoredLyrics(raw, "embedded", plain = decoded == null, credits = credits), decoded,
-                    timing?.inferredEnds.orEmpty(), timing?.duetRightLines.orEmpty())
+                    timing?.inferredEnds.orEmpty(), timing?.duetRightLines.orEmpty(),
+                    pronunciations = timing?.pronunciations.orEmpty())
                 score = candidateScore
             }
         }

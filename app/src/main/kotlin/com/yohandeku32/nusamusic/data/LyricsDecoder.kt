@@ -18,12 +18,15 @@ data class DecodedLyrics(
     val lyrics: SyncedLyrics,
     val inferredEnds: Set<LyricsUnitKey>,
     /** Indices into lyrics.lines whose explicitly tagged duet singer belongs on the right. */
-    val duetRightLines: Set<Int> = emptySet()
+    val duetRightLines: Set<Int> = emptySet(),
+    /** Final decoded row indices, including accompaniment rows. */
+    val pronunciations: Map<Int, LyricsPronunciation> = emptyMap()
 )
 
 private data class TtmlVoiceEntry(
     val start: Int, val isAccompaniment: Boolean, val agentId: String,
-    val explicitRight: Boolean? = null
+    val explicitRight: Boolean? = null,
+    val companion: TtmlCompanion = TtmlCompanion()
 )
 private data class NormalizedTtml(
     val xml: String,
@@ -85,6 +88,7 @@ object LyricsDecoder {
             }
         }.map { line ->
             fun start(time: Int) = time.coerceIn(0, Int.MAX_VALUE - 1)
+            val companion = voiceByLine[line]?.companion
             val normalizedLine = when (line) {
                 is KaraokeLine -> {
                     val syllables = line.syllables.map { syllable ->
@@ -94,9 +98,11 @@ object LyricsDecoder {
                     val sung = syllables.filter { it.content.isNotBlank() }
                     val begin = sung.minOf { it.start }
                     // Container and whitespace timing can include an instrumental passage.
-                    line.copy(start = begin, end = sung.maxOf { it.end }.coerceAtLeast(begin + 1), syllables = syllables)
+                    line.copy(start = begin, end = sung.maxOf { it.end }.coerceAtLeast(begin + 1), syllables = syllables,
+                        translation = companion?.translation ?: line.translation)
                 }
-                is SyncedLine -> line.copy(start = start(line.start), end = line.end.coerceAtLeast(start(line.start) + 1))
+                is SyncedLine -> line.copy(start = start(line.start), end = line.end.coerceAtLeast(start(line.start) + 1),
+                    translation = companion?.translation ?: line.translation)
                 else -> line
             }
             sourceVoices += voiceByLine[line]
@@ -143,7 +149,12 @@ object LyricsDecoder {
                 sourceVoices[sourceIndex]?.let { if (isRightVoice(it)) add(index) }
             }
         }
-        return DecodedLyrics(parsed.copy(lines = sortedLines), inferredEnds.toSet(), duetRight)
+        val pronunciations = buildMap {
+            sortedIndices.forEachIndexed { index, sourceIndex ->
+                sourceVoices[sourceIndex]?.companion?.pronunciation?.let { put(index, it) }
+            }
+        }
+        return DecodedLyrics(parsed.copy(lines = sortedLines), inferredEnds.toSet(), duetRight, pronunciations)
     }
 
     private fun time(match: MatchResult): Int = (
@@ -260,6 +271,8 @@ object LyricsDecoder {
         val styleElements = HashMap<String, Element>()
         val regionElements = HashMap<String, Element>()
         val allElements = root.getElementsByTagName("*")
+        require(allElements.length <= 20_000)
+        val companions = TtmlCompanionReader(root, ::ttmlTime)
         for (i in 0 until allElements.length) {
             val el = allElements.item(i) as? Element ?: continue
             if (el.localName != "style" && el.localName != "region") continue
@@ -341,10 +354,10 @@ object LyricsDecoder {
             return false
         }
 
-        fun withinBacking(node: Node, parent: Element): Boolean {
+        fun withinSecondary(node: Node, parent: Element): Boolean {
             var cursor: Node? = node
             while (cursor is Element && cursor !== parent) {
-                if (isBacking(cursor)) return true
+                if (isBacking(cursor) || TtmlCompanionReader.isCompanion(cursor)) return true
                 cursor = cursor.parentNode
             }
             return false
@@ -352,7 +365,7 @@ object LyricsDecoder {
 
         // Keep nested backing vocals out of line-only content classification.
         fun mainText(node: Node): String = when {
-            node is Element && isBacking(node) -> ""
+            node is Element && (isBacking(node) || TtmlCompanionReader.isCompanion(node)) -> ""
             node.nodeType == Node.TEXT_NODE || node.nodeType == Node.CDATA_SECTION_NODE ->
                 node.nodeValue.orEmpty()
             else -> buildString {
@@ -371,7 +384,7 @@ object LyricsDecoder {
                     attr.nodeName.endsWith(":role") &&
                         attr.nodeValue in setOf("x-bg", "x-translation")
                 }
-                span.localName == "span" &&
+                span.localName == "span" && !TtmlCompanionReader.isCompanion(span) &&
                     span.textContent.replace("  ", "").isNotEmpty() && !hasExcludedRole
             }
 
@@ -398,7 +411,7 @@ object LyricsDecoder {
             val spans = element.getElementsByTagName("*")
             for (i in 0 until spans.length) {
                 val span = spans.item(i) as? Element ?: continue
-                if (span.localName != "span" || withinBacking(span, element)) continue
+                if (span.localName != "span" || withinSecondary(span, element)) continue
                 val attrs = span.attributes
                 for (j in 0 until attrs.length) {
                     val attr = attrs.item(j)
@@ -417,6 +430,8 @@ object LyricsDecoder {
             require(depth <= 64 && ++nodes <= 20_000)
             if (node !is Element) return if (node.nodeType == Node.TEXT_NODE || node.nodeType == Node.CDATA_SECTION_NODE) escaped(node.nodeValue.orEmpty()) else ""
             val name = node.localName ?: node.nodeName
+            if (TtmlCompanionReader.isCompanion(node) ||
+                name in setOf("translations", "transliterations", "translation", "transliteration")) return ""
             val start = node.getAttribute("begin").takeIf { it.isNotBlank() }?.let(::ttmlTime) ?: parentStart
             val end = node.getAttribute("end").takeIf { it.isNotBlank() }?.let(::ttmlTime)
                 ?: node.getAttribute("dur").takeIf { it.isNotBlank() }?.let { (start.toLong() + ttmlTime(it)).coerceAtMost(Int.MAX_VALUE.toLong()).toInt() }
@@ -439,7 +454,7 @@ object LyricsDecoder {
                 (node.parentNode as? Element)?.localName == "p" && hasSungSpans(node)) {
                 val voiceId = speaker(node)
                 val right = explicitRight(node)
-                taggedVoices += TtmlVoiceEntry(start, true, voiceId, right)
+                taggedVoices += TtmlVoiceEntry(start, true, voiceId, right, companions.read(node, node.parentNode as Element))
             }
             if (name == "p") {
                 val spans = node.getElementsByTagName("*")
@@ -451,24 +466,29 @@ object LyricsDecoder {
                 val right = explicitRight(node) ?: buildSet {
                     for (i in 0 until spans.length) {
                         val span = spans.item(i) as? Element ?: continue
-                        if (span.localName != "span" || span.textContent.isBlank() ||
-                            withinBacking(span, node)) continue
+                        if (span.localName != "span" || TtmlCompanionReader.isCompanion(span) || span.textContent.isBlank() ||
+                            withinSecondary(span, node)) continue
                         explicitRight(span)?.let { add(it) }
                     }
                 }.singleOrNull()
                 val plainParagraph = (0 until node.childNodes.length).none {
-                    node.childNodes.item(it) is Element
+                    val child = node.childNodes.item(it) as? Element
+                    child != null && !TtmlCompanionReader.isCompanion(child)
                 }
                 if (hasSungSpans(node) || (plainParagraph && leadText.isNotEmpty())) {
-                    taggedVoices += TtmlVoiceEntry(start, false, voiceId, right)
+                    taggedVoices += TtmlVoiceEntry(start, false, voiceId, right, companions.read(node))
                 }
                 val hasTimedUnit = (0 until spans.length).any { index ->
                     val element = spans.item(index) as Element
-                    (element.localName ?: element.nodeName) == "span" && element.hasAttribute("begin")
+                    (element.localName ?: element.nodeName) == "span" && element.hasAttribute("begin") &&
+                        !withinSecondary(element, node)
                 }
                 if (!hasTimedUnit) lineOnly += start to leadText
             }
-            if (name == "p" && (0 until node.childNodes.length).none { node.childNodes.item(it) is Element }) {
+            if (name == "p" && (0 until node.childNodes.length).none {
+                val child = node.childNodes.item(it) as? Element
+                child != null && !TtmlCompanionReader.isCompanion(child)
+            }) {
                 children = "<span begin=\"${clock(start)}\" end=\"${clock(end)}\">$children</span>"
             }
             return "<$name$attributes>$children</$name>"
