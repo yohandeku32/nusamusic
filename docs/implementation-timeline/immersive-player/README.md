@@ -2,6 +2,7 @@
 
 Artwork, ambient rendering, and presentation preferences for the main player.
 
+- [2026-10-30: Improve Canvas matching and cache reuse](2026-10-30-improve-canvas-matching-and-cache-reuse.md)
 - [2026-10-29: Smooth mini lyric line transitions](../lyrics/2026-10-29-smooth-mini-transitions-and-separate-role-lists.md)
 - [2026-10-29: Use SaltUI for Immersive navigation icons](2026-10-29-use-saltui-navigation-icons.md)
 - [2026-10-29: Add mini lyrics and pilot SaltUI lyric settings](2026-10-29-add-mini-lyrics-and-saltui-settings.md)

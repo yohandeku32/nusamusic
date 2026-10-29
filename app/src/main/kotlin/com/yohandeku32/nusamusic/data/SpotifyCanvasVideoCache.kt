@@ -5,8 +5,10 @@ import androidx.annotation.OptIn
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.cache.CacheDataSource
+import androidx.media3.datasource.cache.Cache
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -19,6 +21,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import java.io.File
+import java.net.URL
 
 /**
  * Process-wide, disk-backed cache for Spotify Canvas MP4 loops only.
@@ -80,10 +83,7 @@ internal object SpotifyCanvasVideoCache {
             .setConnectTimeoutMs(4_000)
             .setReadTimeoutMs(8_000)
             .setAllowCrossProtocolRedirects(false)
-        return CacheDataSource.Factory()
-            .setCache(cache)
-            .setUpstreamDataSourceFactory(upstream)
-            .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+        return spotifyCanvasDataSourceFactory(cache, upstream)
     }
 
     fun mediaSourceFactory(context: Context): DefaultMediaSourceFactory? {
@@ -114,33 +114,18 @@ internal object SpotifyCanvasVideoCache {
                 // Up to five prepared tracks but only one low-priority reader.
                 val maxBytes = if (immediateNext) 10L * 1024 * 1024
                     else 3L * 1024 * 1024
-                val reader = factory.createDataSource()
                 try {
                     // Foreground video wins at startup or during a stall.
                     // Do not start a secondary request that competes with it.
                     if (!waitForForeground()) return@withLock
                     currentCoroutineContext().ensureActive()
-                    reader.open(DataSpec.Builder().setUri(url).build())
-                    val buffer = ByteArray(32 * 1024)
-                    var readBytes = 0L
-                    while (readBytes < maxBytes) {
-                        currentCoroutineContext().ensureActive()
-                        if (!waitForForeground()) break
-                        val length = minOf(buffer.size.toLong(), maxBytes - readBytes).toInt()
-                        val count = reader.read(buffer, 0, length)
-                        if (count == -1) break
-                        if (count > 0) readBytes += count
-                    }
+                    fillSpotifyCanvasCache(factory.createDataSource(), url, maxBytes) { foregroundBufferingUrl != null }
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (_: Exception) {
                     // A slow or temporarily unavailable CDN does not erase
                     // the selected provider or previously committed bytes.
                     currentCoroutineContext().ensureActive()
-                } finally {
-                    // close also when open() failed halfway, otherwise a
-                    // stale upstream connection may hold a cache span lock.
-                    runCatching { reader.close() }
                 }
             }
         }
@@ -155,4 +140,40 @@ internal object SpotifyCanvasVideoCache {
         }
         return foregroundBufferingUrl == null
     }
+}
+
+@OptIn(UnstableApi::class)
+internal fun spotifyCanvasDataSourceFactory(cache: Cache, upstream: DataSource.Factory): CacheDataSource.Factory =
+    CacheDataSource.Factory().setCache(cache).setUpstreamDataSourceFactory(upstream)
+        .setCacheKeyFactory { it.key ?: spotifyCanvasCacheKey(it.uri.toString()) }
+        .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+
+/** Preserve the common legacy key while sharing trusted host/query-order aliases. */
+internal fun spotifyCanvasCacheKey(value: String): String {
+    if (!SpotifyCanvasArtworkLoader.isSpotifyCanvasVideo(value)) return value
+    val url = URL(value)
+    if (url.host.equals("canvaz.scdn.co", true)) return value
+    val id = url.query.split('&').first { it.startsWith("id=") }.substringAfter('=')
+    return "https://www.spotycovs.lol/api/canvas?id=$id&stream=1"
+}
+
+@OptIn(UnstableApi::class)
+internal suspend fun fillSpotifyCanvasCache(
+    reader: DataSource, url: String, maxBytes: Long, shouldYield: () -> Boolean
+) {
+    try {
+        currentCoroutineContext().ensureActive()
+        if (maxBytes <= 0L || shouldYield()) return
+        reader.open(DataSpec.Builder().setUri(url).build())
+        val buffer = ByteArray(32 * 1024)
+        var readBytes = 0L
+        while (readBytes < maxBytes) {
+            currentCoroutineContext().ensureActive()
+            // Release the writer when playback needs bandwidth; never wait while holding its span.
+            if (shouldYield()) break
+            val count = reader.read(buffer, 0, minOf(buffer.size.toLong(), maxBytes - readBytes).toInt())
+            if (count == -1) break
+            if (count > 0) readBytes += count
+        }
+    } finally { runCatching { reader.close() } }
 }

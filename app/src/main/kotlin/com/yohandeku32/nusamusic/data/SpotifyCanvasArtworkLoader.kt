@@ -24,14 +24,13 @@ import java.util.Locale
 import javax.net.ssl.HttpsURLConnection
 
 /**
- * Second-choice animated artwork for personal/local listening.
+ * Spotify Canvas lookup for personal/local listening.
  *
  * Spotycovs is an independent, unofficial public resolver. It searches a
  * Spotify track by artist/title and returns Canvas data, without any Spotify
  * cookie, access token, or user credentials embedded in NusaMusic.
  *
- * Apple Music remains the first choice; this loader must ONLY be called after
- * Apple artwork is unavailable or its video stream cannot play.
+ * The shared artwork resolver owns the listener's selected provider order.
  *
  * Third-party availability and the undocumented Spotify API are best effort.
  * Calls run on Dispatchers.IO, are bounded, and use a small LRU/TTL cache.
@@ -244,10 +243,10 @@ internal object SpotifyCanvasArtworkLoader {
     }
 
     private fun normalized(value: String): String = Normalizer.normalize(value, Normalizer.Form.NFD)
-        .replace(Regex("\\p{M}+"), "")
+        .replace(Regex("(?<=\\p{IsLatin})\\p{M}+"), "")
         .lowercase(Locale.ROOT)
         .replace(Regex("\\s*(?:\\(.*?\\)|\\[.*?])"), "")
-        .replace(Regex("[^a-z0-9]+"), " ")
+        .replace(Regex("[^\\p{L}\\p{N}\\p{M}]+"), " ")
         .trim()
 
     internal fun similarTitle(expected: String, actual: String): Boolean {
@@ -264,17 +263,16 @@ internal object SpotifyCanvasArtworkLoader {
             (left == right || right.startsWith("$left ") || left.startsWith("$right "))
     }
 
-    private fun canvasVideoUrl(root: JSONObject): String? {
-        // Spotycovs returns a proxied /api/canvas?id=...&stream=1 MP4,
-        // not a canvaz.scdn.co CDN link. Accept ONLY that exact trusted
+    internal fun canvasVideoUrl(root: JSONObject): String? {
+        // A resolver may return the proxied /api/canvas?id=...&stream=1 MP4.
+        // Accept only that exact trusted
         // streaming route or a genuine Spotify CDN MP4; unrelated URLs
         // from third-party JSON must never reach the Android video player.
         fun direct(obj: JSONObject): String? {
-            for (name in listOf("canvasUrl", "videoUrl", "video_url", "mediaUrl", "url")) {
-                val value = obj.optString(name)
-                if (isSpotifyCanvasVideo(value)) return value
-            }
-            return null
+            val candidates = listOf("canvasUrl", "videoUrl", "video_url", "mediaUrl", "url")
+                .map { obj.optString(it) }.filter(::isSpotifyCanvasVideo)
+            return candidates.firstOrNull { URL(it).host.equals("canvaz.scdn.co", true) }
+                ?: candidates.firstOrNull()
         }
         fun fromArray(arr: JSONArray?): String? {
             if (arr == null) return null

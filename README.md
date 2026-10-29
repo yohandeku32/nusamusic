@@ -55,6 +55,8 @@ Enable animated artwork in the Immersive player settings. Choose **Apple first**
 
 Artwork lookup uses song metadata and external resolvers. The current Spotify resolver uses the independent Spotycovs service without a Spotify login. Provider availability and matching can vary. Aruna caches video data and can prefetch artwork for up to five upcoming tracks in the actual playback queue, including shuffle order. Prefetching uses network data.
 
+Canvas matching supports non-Latin titles and artist names. Equivalent trusted proxy links share cached video bytes, and prefetch yields when the active player needs bandwidth. See the [Canvas cache and matching verification](docs/implementation-timeline/immersive-player/2026-10-30-improve-canvas-matching-and-cache-reuse.md) for measured results and limits.
+
 ## Network use and storage
 
 Local playback does not require an account. Optional features make network requests:
