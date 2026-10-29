@@ -25,6 +25,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import com.moriafly.salt.ui.Icon as SaltIcon
+import com.moriafly.salt.ui.icons.SaltIcons
+import com.moriafly.salt.ui.icons.ArrowBack
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.animation.core.spring
@@ -544,7 +547,7 @@ internal fun ImmersiveArtworkPlayer(
                                 iconSize = 25.dp,
                                 iconTint = if (lightMode) Color(0xFF171A20) else Color.White,
                                 liquidMotion = liquidGlassEnabled,
-                                inactiveAlpha = 1f
+                                inactiveAlpha = 1f, saltIcon = true
                             )
                         }
                     }
@@ -652,7 +655,7 @@ internal fun ImmersiveArtworkPlayer(
                     ImmersiveAction(
                         lightMode, NusaNavigationIcons.Discover, "Discover", onDiscovery, libraryOpen,
                         iconSize = 25.dp, iconTint = Color.White,
-                        liquidMotion = liquidGlassEnabled, inactiveAlpha = 1f
+                        liquidMotion = liquidGlassEnabled, inactiveAlpha = 1f, saltIcon = true
                     )
                 }
             }
@@ -775,9 +778,9 @@ private fun ImmersiveOverlayActionPill(
                 if (lyricsOpen) immersiveText("Tutup lirik", "Close lyrics")
                 else immersiveText("Buka lirik", "Open lyrics"),
                 onLyrics, hasSong, active = lyricsOpen, iconSize = 23.dp,
-                iconTint = iconColor, liquidMotion = liquidGlassEnabled
+                iconTint = iconColor, liquidMotion = liquidGlassEnabled, saltIcon = true
             )
-            // A single stable 50dp slot morphs Library into Home. Keeping
+            // A single stable 50dp slot morphs Library into the return arrow. Keeping
             // the same measured slot prevents the entire navigation row from
             // redistributing its icons in the middle of a page transition.
             Crossfade(
@@ -788,7 +791,7 @@ private fun ImmersiveOverlayActionPill(
                 ImmersiveAction(
                     lightMode,
                     if (showingLibraryHome)
-                        Lucide.House
+                        SaltIcons.ArrowBack
                     else NusaNavigationIcons.Library,
                     if (showingLibraryHome)
                         immersiveText("Kembali ke pemutar", "Back to Now Playing")
@@ -796,14 +799,14 @@ private fun ImmersiveOverlayActionPill(
                     if (showingLibraryHome) onHome else onLibrary,
                     enabled = showingLibraryHome == libraryOpen,
                     iconSize = 23.dp, iconTint = iconColor,
-                    liquidMotion = liquidGlassEnabled
+                    liquidMotion = liquidGlassEnabled, saltIcon = true
                 )
             }
             ImmersiveAction(
                 lightMode, Lucide.Settings,
                 immersiveText("Pengaturan", "Settings"),
                 onSettings, iconSize = 23.dp, iconTint = iconColor,
-                liquidMotion = liquidGlassEnabled
+                liquidMotion = liquidGlassEnabled, saltIcon = true
             )
             // Artist alone needs the additional Home action. Library
             // already uses the first, fixed-width slot for its Home button.
@@ -813,10 +816,10 @@ private fun ImmersiveOverlayActionPill(
                 exit = fadeOut(tween(90))
             ) {
                 ImmersiveAction(
-                    lightMode, Lucide.House,
+                    lightMode, SaltIcons.ArrowBack,
                     immersiveText("Kembali ke pemutar", "Back to Now Playing"),
                     onHome, iconSize = 23.dp, iconTint = iconColor,
-                    liquidMotion = liquidGlassEnabled
+                    liquidMotion = liquidGlassEnabled, saltIcon = true
                 )
             }
         }
@@ -882,7 +885,8 @@ private fun ImmersiveAction(
     iconTint: Color? = null,
     liquidMotion: Boolean = false,
     touchSize: Dp = 50.dp,
-    inactiveAlpha: Float = 0.68f
+    inactiveAlpha: Float = 0.68f,
+    saltIcon: Boolean = false
 ) {
     // iOS-inspired liquid press response is a restrained native Compose
     // spring, not a screen-wide transform or heavy shader animation.
@@ -935,8 +939,9 @@ private fun ImmersiveAction(
             }
             .semantics { selected = active }
     ) {
-        Icon(icon, label, tint = (iconTint ?: if (lightMode) Color(0xFF171A20) else Color.White)
-            .copy(alpha = if (!enabled) 0.26f else if (active) 1f else inactiveAlpha),
-            modifier = Modifier.size(iconSize))
+        val tint = (iconTint ?: if (lightMode) Color(0xFF171A20) else Color.White)
+            .copy(alpha = if (!enabled) 0.26f else if (active) 1f else inactiveAlpha)
+        if (saltIcon) SaltIcon(icon, label, tint = tint, modifier = Modifier.size(iconSize))
+        else Icon(icon, label, tint = tint, modifier = Modifier.size(iconSize))
     }
 }

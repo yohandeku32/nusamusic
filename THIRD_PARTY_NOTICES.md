@@ -3,7 +3,8 @@
 ## SaltUI
 
 Aruna uses [Moriafly/SaltUI](https://github.com/Moriafly/SaltUI), pinned to
-**2.6.0-beta03**, for the lyric Settings switches and reload action. SaltUI is
+**2.6.0-beta03**, for the lyric Settings switches, reload action, Immersive
+navigation icon component and its built-in ArrowBack glyph. SaltUI is
 Copyright (C) 2023–2025 Moriafly and distributed under Apache License 2.0.
 Its license is included in `app/src/main/assets/licenses/saltui-apache-2.0.txt`.
 The integration uses public Compose components; the optional hidden-API
