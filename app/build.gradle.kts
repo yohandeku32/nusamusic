@@ -100,6 +100,10 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.ui:ui-text-google-fonts")
     implementation("androidx.compose.material3:material3:1.4.0")
+    implementation("io.github.moriafly:salt-ui:2.6.0-beta03") {
+        // The Settings pilot uses public components, not SaltUI's window/reflection helpers.
+        exclude(group = "org.lsposed.hiddenapibypass", module = "hiddenapibypass")
+    }
     implementation("androidx.compose.material:material-icons-extended")
     // Actual Lucide ImageVector pack, loaded lazily per used icon.
     implementation("com.composables:icons-lucide-cmp:2.2.1")

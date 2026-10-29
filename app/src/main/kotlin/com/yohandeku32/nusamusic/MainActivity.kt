@@ -2049,6 +2049,7 @@ private fun NusaMusicApp(
         context.getSharedPreferences("ui_preferences", android.content.Context.MODE_PRIVATE)
     }
     var playerScale by remember { mutableFloatStateOf(PlayerScalePreference.read(uiPrefs)) }
+    var miniLyricsEnabled by remember { mutableStateOf(com.yohandeku32.nusamusic.ui.MiniLyricsPreference.read(uiPrefs)) }
     var titleFontSize by remember {
         mutableStateOf(uiPrefs.getFloat("title_font_size", 34f))
     }
@@ -2437,6 +2438,11 @@ private fun NusaMusicApp(
             }
 
             PlayerSettingsContent(
+                miniLyricsEnabled = miniLyricsEnabled,
+                onMiniLyricsChange = { enabled ->
+                    miniLyricsEnabled = enabled
+                    com.yohandeku32.nusamusic.ui.MiniLyricsPreference.write(uiPrefs, enabled)
+                },
                 lyricsFontSize = lyricsFontSize,
                 onLyricsFontSizeChange = { lyricsFontSize = it },
                 onLyricsFontSizeChangeFinished = {
@@ -2651,6 +2657,14 @@ private fun NusaMusicApp(
                             PlayerScaleHost(playerScale) {
                                 val lyricCredits = currentSong?.let { lyricsState.forSong(it).data?.ttmlCredits }
                                 ImmersiveArtworkPlayer(
+                                    miniLyrics = if (miniLyricsEnabled && LYRICS_ENABLED) ({ lightMode ->
+                                        if (!showSettings && pagerState.settledPage == playerPage) {
+                                            com.yohandeku32.nusamusic.ui.MiniLyricsHost(
+                                                currentSong, lyricsState, positionMsState, readPlaybackPosition,
+                                                readPlaybackEpoch, isPlaying, lyricsPlaybackEpoch,
+                                                onlineLyricsEnabled, lightMode)
+                                        }
+                                    }) else null,
                                     title = currentSong?.title ?: nusaText("Pilih lagu", "Choose a song"),
                                     composerNames = lyricCredits?.let { it.songwriters.ifEmpty { it.composers }.joinToString(", ") }.orEmpty(),
                                     artist = currentSong?.artist ?: nusaText("Perpustakaan musik lokal Anda", "Your local music library"),

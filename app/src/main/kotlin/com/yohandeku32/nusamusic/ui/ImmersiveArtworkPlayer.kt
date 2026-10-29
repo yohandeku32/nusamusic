@@ -107,7 +107,8 @@ internal fun ImmersiveArtworkPlayer(
     quality: @Composable () -> Unit,
     lyrics: @Composable (Modifier) -> Unit = {},
     modifier: Modifier = Modifier,
-    contentInsets: WindowInsets = WindowInsets.safeDrawing
+    contentInsets: WindowInsets = WindowInsets.safeDrawing,
+    miniLyrics: (@Composable (Boolean) -> Unit)? = null
 ) {
     var playerBounds by remember { mutableStateOf<Rect?>(null) }
     var navigationPillBounds by remember { mutableStateOf<Rect?>(null) }
@@ -405,6 +406,11 @@ internal fun ImmersiveArtworkPlayer(
                         modifier = Modifier.weight(1f),
                         horizontalAlignment = Alignment.Start
                     ) {
+                        if (miniLyrics != null && hasSong) {
+                            Box(Modifier.fillMaxWidth().height(with(density) { 23.sp.toDp() + 16.dp })) {
+                                if (!lyricsOpen && !overlayOpen) miniLyrics(lightMode)
+                            }
+                        }
                         Text(
                             text = title,
                             fontFamily = titleFontFamily,

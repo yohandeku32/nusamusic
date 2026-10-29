@@ -43,6 +43,8 @@ import com.yohandeku32.nusamusic.BuildConfig
 import com.yohandeku32.nusamusic.LYRICS_ENABLED
 import com.yohandeku32.nusamusic.TITLE_FONT_OPTIONS
 import com.yohandeku32.nusamusic.model.PlayerPresentationMode
+import com.moriafly.salt.ui.ItemSwitcher
+import com.moriafly.salt.ui.ItemButton
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -51,6 +53,7 @@ private fun settingsText(id: String, en: String): String =
 
 /** Presentation only: the player owns preferences and the existing folder/font launchers. */
 @Composable
+@OptIn(com.moriafly.salt.ui.UnstableSaltUiApi::class)
 internal fun PlayerSettingsContent(
     lyricsFontSize: Float,
     onLyricsFontSizeChange: (Float) -> Unit,
@@ -97,7 +100,9 @@ internal fun PlayerSettingsContent(
     dynamicGlowEnabled: Boolean = false,
     onDynamicGlowChange: (Boolean) -> Unit = {},
     playerScale: Float = 1f,
-    onPlayerScaleChange: (Float) -> Unit = {}
+    onPlayerScaleChange: (Float) -> Unit = {},
+    miniLyricsEnabled: Boolean = false,
+    onMiniLyricsChange: (Boolean) -> Unit = {}
 ) {
     val colors = MaterialTheme.colorScheme
     val listState = rememberLazyListState()
@@ -321,16 +326,17 @@ internal fun PlayerSettingsContent(
             }
             if (LYRICS_ENABLED && playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) item(key = "lyrics") {
                 SettingsSection(settingsText("Lirik", "Lyrics")) {
-                    SettingToggle(
-                        title = settingsText("Lirik online", "Online lyrics"),
-                        subtitle = settingsText(
+                    MiniLyricsSetting(miniLyricsEnabled, onMiniLyricsChange)
+                    SettingsDivider()
+                    ArunaSaltTheme { ItemSwitcher(
+                        text = settingsText("Lirik online", "Online lyrics"),
+                        sub = settingsText(
                             "Cari lirik TTML dan backing vocal dari internet. Jika mati, hanya gunakan lirik yang tersimpan di perangkat.",
                             "Find TTML and backing vocals online. When off, use only lyrics stored on your device."
                         ),
-                        checked = onlineLyricsEnabled,
-                        onCheckedChange = onOnlineLyricsChange,
-                        icon = Icons.Default.CloudDownload
-                    )
+                        state = onlineLyricsEnabled,
+                        onChange = onOnlineLyricsChange
+                    ) }
                     SettingsDivider()
                     Surface(
                         shape = RoundedCornerShape(18.dp),
@@ -357,9 +363,8 @@ internal fun PlayerSettingsContent(
                     RangeLabels("18 sp", "48 sp")
                     if (hasLyricsSong) {
                         SettingsDivider()
-                        TextButton(onClick = onRetryLyrics, enabled = !lyricsLoading) {
-                            Text(settingsText("Muat ulang lirik", "Reload lyrics"))
-                        }
+                        ArunaSaltTheme { ItemButton(onClick = onRetryLyrics, enabled = !lyricsLoading,
+                            text = settingsText("Muat ulang lirik", "Reload lyrics")) }
                     }
                     Text(settingsText("Lirik dari metadata audio.", "Lyrics from audio metadata."), color = colors.onSurfaceVariant)
                 }
@@ -746,6 +751,14 @@ internal fun DynamicGlowSetting(checked: Boolean, artworkEnabled: Boolean, onCha
             "Turn on Animated artwork to see this effect."),
         checked, onChange
     )
+}
+
+@Composable
+internal fun MiniLyricsSetting(checked: Boolean, onChange: (Boolean) -> Unit) {
+    ArunaSaltTheme { ItemSwitcher(state = checked, onChange = onChange,
+        text = settingsText("Mini lirik", "Mini lyrics"),
+        sub = settingsText("Satu baris lirik beranimasi di atas judul pada player Immersive.",
+            "One animated lyric line above the title in the Immersive player.")) }
 }
 
 @Composable

@@ -48,6 +48,14 @@ Text layout and row height remain stable during expression. Setting the platform
 
 These are supplied lyric annotations. Aruna does not generate translations or pronunciation when a source has none. Original TTML remains in the stored lyric and existing saved metadata. See the [companion-text change record](implementation-timeline/lyrics/2026-10-28-add-ttml-translations-and-pronunciation.md).
 
+## Optional mini lyrics
+
+Immersive Settings → Lyrics → **Mini lyrics** enables one animated main lyric line above the normal player's title. The saved preference defaults to off. It uses the same parsed lyric cache, online setting, syllable painter and Media3 clock as full lyrics. Pronunciation, translations and backing vocals are not duplicated in this compact row. Intros, long rests, missing data and ended lines remain blank.
+
+Long lines stay unwrapped and pan with the vocal cursor. Pause retains the pose; seeking and track changes replace it immediately. Reduced motion keeps timed highlighting, light player mode uses dark ink, and hidden mini views stop frame sampling. Disabling restores the previous player geometry. While enabled, hiding the mini row for full lyrics/overlays retains its layout space.
+
+The Mini lyrics and Online lyrics switches and Reload lyrics button use SaltUI 2.6.0-beta03, with an Aruna palette bridge and the existing preference/reload callbacks. This is a Settings pilot, not a whole-app theme migration. See the [implementation and verification record](implementation-timeline/immersive-player/2026-10-29-add-mini-lyrics-and-saltui-settings.md).
+
 ## Authorship credits
 
 The Immersive header reads only `SongLyrics.ttmlCredits`, with **SONGWRITERS** as its fixed label. It prefers the selected TTML's `songwriters/songwriter` list, then its explicitly authored `composers/composer` list. File composer/lyricist tags never supply this header. Without TTML authorship it displays **Unknown songwriter**. Explicit roles remain separate in the metadata model; the shared credit block can still display **Written by** for general songwriters.

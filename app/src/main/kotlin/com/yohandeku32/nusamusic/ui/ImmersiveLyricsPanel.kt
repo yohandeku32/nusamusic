@@ -28,12 +28,7 @@ import com.composables.icons.lucide.Clock3
 import com.yohandeku32.nusamusic.data.SongLyrics
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.repeatOnLifecycle
 import com.yohandeku32.nusamusic.model.Song
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.Locale
@@ -180,29 +175,10 @@ fun ImmersiveLyricsPanel(
 
     // Retain the original frame-clock driver. Pause freezes all renderers,
     // while Media3 seeks update the epoch and re-anchor lyric follow motion.
-    val playback = remember(song?.uri) {
-        LyricsPlaybackState(readPlaybackPosition(), readPlaybackEpoch())
-    }
+    val playback = rememberLyricsFramePlayback(song?.uri, positionMs, readPlaybackPosition,
+        readPlaybackEpoch, isPlaying, playbackEpoch)
     val framePosition = playback.position
     val motion = playback.motion
-    val readPosition by rememberUpdatedState(readPlaybackPosition)
-    val readEpoch by rememberUpdatedState(readPlaybackEpoch)
-    val playing by rememberUpdatedState(isPlaying)
-    val epoch by rememberUpdatedState(playbackEpoch)
-    val positionSource by rememberUpdatedState(positionMs)
-    val owner = LocalLifecycleOwner.current
-    LaunchedEffect(song?.uri, owner) {
-        owner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            snapshotFlow { playing to epoch }.collectLatest { (running, _) ->
-                playback.publish(readPosition(), readEpoch())
-                if (running) while (isActive) withFrameNanos {
-                    playback.publish(readPosition(), readEpoch())
-                } else snapshotFlow { positionSource.value }.collect {
-                    playback.publish(readPosition(), readEpoch())
-                }
-            }
-        }
-    }
 
     Box(modifier) {
         val data = entry?.data
