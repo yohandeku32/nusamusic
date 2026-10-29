@@ -55,4 +55,42 @@ class MiniLyricsTest {
         assertSame(line, mini.lineAt(1500))
         assertNull(MiniLyricsTimeline(emptyList<ISyncedLine>()).lineAt(1500))
     }
+
+    @Test fun transitionWindowsFollowDuetTakeoversReturnsAndInstrumentalResumption() {
+        val lead = line("Lead", 1000, 5000)
+        val guest = line("Guest", 2000, 3500)
+        val timeline = MiniLyricsTimeline(listOf(lead, guest))
+        assertEquals(MiniLyricsCue(lead, 1000, 2000), timeline.cueAt(1999))
+        assertEquals(MiniLyricsCue(guest, 2000, 3500), timeline.cueAt(2000))
+        assertEquals(MiniLyricsCue(lead, 3500, 5000), timeline.cueAt(3500))
+        val rest = lead.copy(end = 8000, syllables = listOf(
+            KaraokeSyllable("Before", 1000, 2000), KaraokeSyllable("After", 6000, 8000)))
+        val resumed = MiniLyricsTimeline(listOf(rest))
+        assertEquals(MiniLyricsCue(rest, 1000, 2000), resumed.cueAt(1500))
+        assertNull(resumed.cueAt(4000))
+        assertEquals(MiniLyricsCue(rest, 6000, 8000), resumed.cueAt(6000))
+    }
+
+    @Test fun oneLineTransitionsAreBoundedContinuousAndDeterministicAtMultipleFrameRates() {
+        val cue = MiniLyricsCue(line("Line", 1000, 3000), 1000, 3000)
+        assertEquals(0f, miniLyricsLinePose(cue, 1000).alpha, 0f)
+        assertEquals(1f, miniLyricsLinePose(cue, 1180).alpha, 0f)
+        assertEquals(0f, miniLyricsLinePose(cue, 3000).alpha, 0f)
+        assertEquals(4f, miniLyricsLinePose(cue, 1000).offsetDp, 0f)
+        assertEquals(-3f, miniLyricsLinePose(cue, 3000).offsetDp, 0f)
+        for (fps in listOf(60, 90, 120)) {
+            var previous = 0f
+            for (step in 0..(fps * 180 / 1000)) {
+                val now = 1000 + step * 1000 / fps
+                val pose = miniLyricsLinePose(cue, now)
+                assertTrue(pose.alpha in previous..1f)
+                assertTrue(pose.offsetDp in 0f..4f)
+                assertEquals(pose, miniLyricsLinePose(cue, now))
+                previous = pose.alpha
+            }
+        }
+        val short = cue.copy(start = 1000, end = 1090)
+        assertEquals(1f, miniLyricsLinePose(short, 1045).alpha, 0f)
+        assertEquals(1f, miniLyricsLinePose(cue, 2200).alpha, 0f)
+    }
 }

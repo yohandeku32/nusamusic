@@ -149,4 +149,49 @@ class TtmlCompanionsTest {
         assertEquals("wan an", selected.pronunciations[0]?.text)
         assertEquals("Selamat malam", (selected.synced!!.lines.single() as SyncedLine).translation)
     }
+
+    @Test fun roleListsKeepPronunciationAndTranslationOutOfTheSungLine() {
+        val result = decode(body = """
+            <p begin="1s" end="3s"><span begin="1s" end="3s">晚安</span>
+                <span m:role="lyrics x-roman"><span begin="1s" end="3s">wan an</span></span>
+                <span m:role="x-provider-note x-translation">Selamat malam</span>
+            </p>
+        """)
+        val line = result.lyrics.lines.single() as KaraokeLine
+        assertEquals("晚安", line.syllables.joinToString("") { it.content }.trim())
+        assertEquals("wan an", result.pronunciations[0]?.text)
+        assertEquals("Selamat malam", line.translation)
+        assertEquals(3_000, line.end)
+    }
+
+    @Test fun wrappedCompanionsKeepTheirOwnRowAndCannotLeakFromBacking() {
+        val result = decode(body = """
+            <p begin="1s" end="4s"><span begin="1s" end="3s">Lead</span>
+                <span><span m:role="x-roman">liid</span><span m:role="x-translation">Utama</span></span>
+                <span m:role="x-bg" begin="2s" end="4s"><span begin="2s" end="4s">Echo</span>
+                    <span><span m:role="x-roman">eko</span><span m:role="x-translation">Gema</span></span></span>
+            </p>
+        """)
+        assertEquals(listOf("Lead", "Echo"), result.lyrics.lines.map { (it as KaraokeLine).syllables.joinToString("") { unit -> unit.content }.trim() })
+        assertEquals(listOf("liid", "eko"), result.pronunciations.values.map { it.text })
+        assertEquals(listOf("Utama", "Gema"), result.lyrics.lines.map { (it as KaraokeLine).translation })
+    }
+
+    @Test fun rolesUseWholeWhitespaceSeparatedTokensAndPreserveBackingIdentity() {
+        val result = decode(body = """
+            <p begin="1s" end="4s"><span begin="1s" end="3s" m:role="x-romanized">Lead</span>
+                <span m:role="lyrics&#x9;x-romanization">liid</span>
+                <span m:role="lyrics x-bg" begin="2s" end="4s"><span begin="2s" end="4s">Echo</span>
+                    <span m:role="x-translation x-note">Gema</span></span>
+            </p>
+        """)
+        assertEquals(2, result.lyrics.lines.size)
+        assertEquals("Lead", (result.lyrics.lines[0] as KaraokeLine).syllables.single().content)
+        assertEquals("liid", result.pronunciations[0]?.text)
+        val backing = result.lyrics.lines[1] as KaraokeLine
+        assertTrue(backing.isAccompaniment)
+        assertEquals("Echo", backing.syllables.single().content)
+        assertEquals("Gema", backing.translation)
+        assertNull((result.lyrics.lines[0] as KaraokeLine).translation)
+    }
 }

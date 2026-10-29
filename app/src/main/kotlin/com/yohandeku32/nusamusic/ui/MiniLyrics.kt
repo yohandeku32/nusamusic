@@ -16,6 +16,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -46,10 +47,46 @@ internal object MiniLyricsPreference {
 internal class MiniLyricsTimeline(lines: List<ISyncedLine>) {
     private val main = lines.filterNot { it is KaraokeLine && it.isAccompaniment }
     private val timeline = LyricsTimeline(main)
-    fun lineAt(now: Int): ISyncedLine? {
-        val frame = timeline.frame(now)
-        return main.getOrNull(frame.anchor)?.takeIf { frame.anchor in frame.active && frame.gap == null }
+    private val cues = buildList<MiniLyricsCue> {
+        val starts = main.indices.groupBy { main[it].start }
+        val ends = main.indices.groupBy { main[it].end }
+        val active = java.util.TreeSet(compareByDescending<Int> { main[it].start }.thenBy { it })
+        val edges = (starts.keys + ends.keys +
+            timeline.gaps.flatMap { listOf(it.start, it.end) }).distinct().sorted()
+        var gapIndex = 0
+        for ((start, end) in edges.zipWithNext()) {
+            ends[start]?.forEach { active.remove(it) }
+            starts[start]?.forEach { active.add(it) }
+            while (gapIndex < timeline.gaps.size && timeline.gaps[gapIndex].end <= start) gapIndex++
+            if (timeline.gaps.getOrNull(gapIndex)?.let { start >= it.start } == true) continue
+            val line = active.firstOrNull()?.let { main[it] } ?: continue
+            val previous = lastOrNull()
+            if (previous != null && previous.line === line && previous.end == start)
+                set(lastIndex, previous.copy(end = end))
+            else add(MiniLyricsCue(line, start, end))
+        }
     }
+    fun cueAt(now: Int): MiniLyricsCue? {
+        var low = 0
+        var high = cues.size
+        while (low < high) {
+            val middle = (low + high) / 2
+            if (cues[middle].start <= now) low = middle + 1 else high = middle
+        }
+        return cues.getOrNull(low - 1)?.takeIf { now < it.end }
+    }
+    fun lineAt(now: Int): ISyncedLine? = cueAt(now)?.line
+}
+
+internal data class MiniLyricsCue(val line: ISyncedLine, val start: Int, val end: Int)
+internal data class MiniLyricsLinePose(val alpha: Float, val offsetDp: Float)
+
+/** A single visible row eases through each authored boundary, using playback rather than UI time. */
+internal fun miniLyricsLinePose(cue: MiniLyricsCue, now: Int): MiniLyricsLinePose {
+    val third = ((cue.end.toLong() - cue.start) / 3f).coerceAtLeast(1f)
+    val entering = heldWordEase((now.toLong() - cue.start) / minOf(180f, third))
+    val leaving = heldWordEase((cue.end.toLong() - now) / minOf(120f, third))
+    return MiniLyricsLinePose(minOf(entering, leaving), 4f * (1f - entering) - 3f * (1f - leaving))
 }
 
 @Composable
@@ -75,18 +112,28 @@ internal fun MiniLyricsLine(data: SongLyrics?, position: State<Long>, motion: Ly
     val lines = current.synced?.lines.orEmpty()
     val timeline = remember(lines) { MiniLyricsTimeline(lines) }
     val active by remember(timeline, position) { derivedStateOf {
-        timeline.lineAt(position.value.coerceIn(0L, Int.MAX_VALUE.toLong()).toInt())
+        timeline.cueAt(position.value.coerceIn(0L, Int.MAX_VALUE.toLong()).toInt())
     } }
     val time = remember(position) { { position.value.coerceIn(0L, Int.MAX_VALUE.toLong()).toInt() } }
     val ink = if (lightMode) Color(0xFF171A20) else Color.White
-    val line = active ?: return
-    when (line) {
-        is KaraokeLine -> key(line, current.inferredEnds) {
-            MiniKaraokeLine(line, current, time, motion, ink)
+    val cue = active ?: return
+    val durationScale = rememberCoroutineScope().coroutineContext[MotionDurationScale]
+    Box(Modifier.fillMaxWidth().clipToBounds()) {
+        Box(Modifier.fillMaxWidth().graphicsLayer {
+            val pose = if (durationScale?.scaleFactor == 0f) MiniLyricsLinePose(1f, 0f)
+                else miniLyricsLinePose(cue, time())
+            alpha = pose.alpha
+            translationY = pose.offsetDp * density
+        }) {
+            when (val line = cue.line) {
+                is KaraokeLine -> key(line, current.inferredEnds) {
+                    MiniKaraokeLine(line, current, time, motion, ink)
+                }
+                is SyncedLine -> Text(line.content, color = ink.copy(alpha = 0.9f), fontSize = 18.sp,
+                    lineHeight = 23.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth().clearAndSetSemantics { contentDescription = line.content })
+            }
         }
-        is SyncedLine -> Text(line.content, color = ink.copy(alpha = 0.9f), fontSize = 18.sp,
-            lineHeight = 23.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.fillMaxWidth().clearAndSetSemantics { contentDescription = line.content })
     }
 }
 

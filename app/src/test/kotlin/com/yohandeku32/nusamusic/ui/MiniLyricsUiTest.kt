@@ -189,4 +189,21 @@ class MiniLyricsUiTest {
         compose.onNodeWithContentDescription("Line timed lyrics", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithContentDescription("baris berikutnya", useUnmergedTree = true).assertDoesNotExist()
     }
+
+    @Test fun lineChangesEaseInWithPlaybackTimeAndFreezeWhilePaused() {
+        data.value = EmbeddedLyricsSelector.select(listOf("[00:01]First line\n[00:03]Next line\n[00:05]Last line"), 8000)
+        now.longValue = 3030
+        show()
+        val entering = bitmap("mini-line-entering")
+        compose.mainClock.advanceTimeBy(500)
+        assertTrue("Pause must freeze the transition as well as the word animation", entering.sameAs(bitmap()))
+        compose.runOnIdle { now.longValue = 3240 }
+        compose.waitForIdle()
+        val settled = bitmap("mini-line-settled")
+        assertFalse("Changing a lyric line must ease in instead of appearing at full opacity instantly", entering.sameAs(settled))
+        compose.runOnIdle { now.longValue = 3030; motion.reset(3030) }
+        compose.waitForIdle()
+        assertTrue("Seeking must restore the exact transition pose", entering.sameAs(bitmap()))
+        entering.recycle(); settled.recycle()
+    }
 }

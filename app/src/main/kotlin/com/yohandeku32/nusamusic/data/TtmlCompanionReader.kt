@@ -40,7 +40,16 @@ internal class TtmlCompanionReader(root: Element, private val time: (String) -> 
     }
 
     fun read(element: Element, parent: Element? = null): TtmlCompanion {
-        val inline = element.children().filter { isCompanion(it) }
+        val inline = buildList<Element> {
+            fun collect(parent: Element, depth: Int) {
+                require(depth <= 64)
+                for (child in parent.children()) when {
+                    isCompanion(child) -> add(child)
+                    !isBacking(child) -> collect(child, depth + 1)
+                }
+            }
+            collect(element, 0)
+        }
         val separateSyllables = hasCjkSource(element)
         val ownKey = key(element)
         val inheritedKey = parent?.let(::key).orEmpty()
@@ -52,9 +61,9 @@ internal class TtmlCompanionReader(root: Element, private val time: (String) -> 
             bracket?.groupValues?.get(2) ?: rawTranslation
         } else bracket?.groupValues?.get(1) ?: rawTranslation
         return TtmlCompanion(
-            translation = inline.firstOrNull { role(it) == "x-translation" }?.let { text(it) }
+            translation = inline.firstOrNull { "x-translation" in roles(it) }?.let { text(it) }
                 ?.takeIf { it.isNotBlank() } ?: metadataTranslation?.trim()?.takeIf { it.isNotBlank() },
-            pronunciation = inline.firstOrNull { role(it) in pronunciationRoles }?.let { pronunciation(it, separateSyllables) }
+            pronunciation = inline.firstOrNull { roles(it).any { role -> role in pronunciationRoles } }?.let { pronunciation(it, separateSyllables) }
                 ?: pronunciations[ownKey]?.let { pronunciation(it, separateSyllables) }
         )
     }
@@ -102,10 +111,12 @@ internal class TtmlCompanionReader(root: Element, private val time: (String) -> 
 
     companion object {
         private val pronunciationRoles = setOf("x-roman", "x-romanization", "x-transliteration")
+        private val backingRoles = setOf("x-bg", "bg", "background", "backing")
+        private val roleSeparator = Regex("[\\t\\r\\n ]+")
 
         private fun hasCjkSource(node: Node, depth: Int = 0): Boolean {
             require(depth <= 64)
-            if (node is Element && (isCompanion(node) || (depth > 0 && role(node) == "x-bg"))) return false
+            if (node is Element && (isCompanion(node) || (depth > 0 && isBacking(node)))) return false
             if (node.nodeType == Node.TEXT_NODE || node.nodeType == Node.CDATA_SECTION_NODE) {
                 return node.nodeValue.orEmpty().codePoints().anyMatch {
                     Character.UnicodeScript.of(it) in setOf(Character.UnicodeScript.HAN,
@@ -115,11 +126,13 @@ internal class TtmlCompanionReader(root: Element, private val time: (String) -> 
             return (0 until node.childNodes.length).any { hasCjkSource(node.childNodes.item(it), depth + 1) }
         }
 
-        fun isCompanion(element: Element) = role(element) == "x-translation" || role(element) in pronunciationRoles
+        fun isCompanion(element: Element) = roles(element).any { it == "x-translation" || it in pronunciationRoles }
+        fun isBacking(element: Element) = roles(element).any { it in backingRoles }
 
-        private fun role(element: Element): String = (0 until element.attributes.length)
+        private fun roles(element: Element): List<String> = (0 until element.attributes.length)
             .map { element.attributes.item(it) }
             .firstOrNull { (it.localName ?: it.nodeName) == "role" }?.nodeValue.orEmpty().trim().lowercase()
+            .split(roleSeparator).filter { it.isNotEmpty() }
 
         private fun key(element: Element): String = (0 until element.attributes.length)
             .map { element.attributes.item(it) }

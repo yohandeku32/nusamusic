@@ -137,6 +137,22 @@ class LyricsCompanionUiTest {
         preview("line-synced-translation")
     }
 
+    @Test fun annotationsWithMultipleRolesStayBelowTheOriginalThroughoutPlayback() {
+        val source = """<tt xmlns:m="http://www.w3.org/ns/ttml#metadata"><body><p begin="1s" end="5s"><span begin="1s" end="5s">Lead</span><span m:role="lyrics x-roman"><span begin="1s" end="5s">liid</span></span><span m:role="x-note x-translation">Utama</span></p></body></tt>"""
+        show(sourceXml = source)
+        val main = compose.onNodeWithContentDescription("Lead", useUnmergedTree = true)
+        val reading = compose.onNodeWithContentDescription("liid", useUnmergedTree = true)
+        val translation = compose.onNodeWithText("Utama", useUnmergedTree = true)
+        for (time in listOf(1000, 1800, 3000, 4400, 4990)) {
+            compose.runOnIdle { now.intValue = time; motion.reset(time) }
+            compose.waitForIdle()
+            main.assertIsDisplayed(); reading.assertIsDisplayed(); translation.assertIsDisplayed()
+            assertTrue(reading.getUnclippedBoundsInRoot().top >= main.getUnclippedBoundsInRoot().bottom)
+            assertTrue(translation.getUnclippedBoundsInRoot().top >= reading.getUnclippedBoundsInRoot().bottom)
+        }
+        preview("multi-role-companions-separate")
+    }
+
     @Test fun pronunciationAndTranslationWrapAt320dpWithLargeSystemText() {
         show(width = 320, fontScale = 1.8f)
         for (node in listOf(

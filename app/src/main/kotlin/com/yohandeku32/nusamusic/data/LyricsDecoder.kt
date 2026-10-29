@@ -346,16 +346,7 @@ object LyricsDecoder {
             }
         }
         fun isBacking(element: Element): Boolean {
-            val attrs = element.attributes
-            for (i in 0 until attrs.length) {
-                val attribute = attrs.item(i)
-                val name = (attribute.localName ?: attribute.nodeName.substringAfter(':')).lowercase()
-                if (name == "role" &&
-                    attribute.nodeValue.trim().lowercase() in
-                        setOf("x-bg", "bg", "background", "backing")
-                ) return true
-            }
-            return false
+            return TtmlCompanionReader.isBacking(element)
         }
 
         fun withinSecondary(node: Node, parent: Element): Boolean {
@@ -383,13 +374,8 @@ object LyricsDecoder {
             (0 until container.childNodes.length).any { i ->
                 val span = container.childNodes.item(i) as? Element
                     ?: return@any false
-                val hasExcludedRole = (0 until span.attributes.length).any { j ->
-                    val attr = span.attributes.item(j)
-                    attr.nodeName.endsWith(":role") &&
-                        attr.nodeValue in setOf("x-bg", "x-translation")
-                }
                 span.localName == "span" && !TtmlCompanionReader.isCompanion(span) &&
-                    span.textContent.replace("  ", "").isNotEmpty() && !hasExcludedRole
+                    !isBacking(span) && mainText(span).isNotBlank()
             }
 
         // Resolve the nearest TTML metadata ttm:agent, plus commonly exported
@@ -447,7 +433,9 @@ object LyricsDecoder {
             val attributes = buildString {
                 for (i in 0 until node.attributes.length) {
                     val attr = node.attributes.item(i)
-                    if (attr.nodeName !in setOf("begin", "end", "dur")) append(" ${attr.nodeName}=\"${escaped(attr.nodeValue)}\"")
+                    val value = if (name == "span" && (attr.localName ?: attr.nodeName) == "role" && isBacking(node))
+                        "x-bg" else attr.nodeValue
+                    if (attr.nodeName !in setOf("begin", "end", "dur")) append(" ${attr.nodeName}=\"${escaped(value)}\"")
                 }
                 if (name in setOf("p", "span")) append(" begin=\"${clock(start)}\" end=\"${clock(end)}\"")
             }
