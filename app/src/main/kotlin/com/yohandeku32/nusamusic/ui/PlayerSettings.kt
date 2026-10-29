@@ -32,6 +32,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -42,13 +43,17 @@ import com.yohandeku32.nusamusic.BuildConfig
 import com.yohandeku32.nusamusic.LYRICS_ENABLED
 import com.yohandeku32.nusamusic.TITLE_FONT_OPTIONS
 import com.yohandeku32.nusamusic.model.PlayerPresentationMode
+import com.moriafly.salt.ui.ItemSwitcher
+import com.moriafly.salt.ui.ItemButton
 import java.util.Locale
+import kotlin.math.roundToInt
 
 private fun settingsText(id: String, en: String): String =
     if (Locale.getDefault().language.equals("id", ignoreCase = true)) id else en
 
 /** Presentation only: the player owns preferences and the existing folder/font launchers. */
 @Composable
+@OptIn(com.moriafly.salt.ui.UnstableSaltUiApi::class)
 internal fun PlayerSettingsContent(
     lyricsFontSize: Float,
     onLyricsFontSizeChange: (Float) -> Unit,
@@ -56,6 +61,8 @@ internal fun PlayerSettingsContent(
     hasLyricsSong: Boolean,
     lyricsLoading: Boolean,
     onRetryLyrics: () -> Unit,
+    onlineLyricsEnabled: Boolean,
+    onOnlineLyricsChange: (Boolean) -> Unit,
     titleFontSize: Float,
     onTitleFontSizeChange: (Float) -> Unit,
     onTitleFontSizeChangeFinished: () -> Unit,
@@ -68,10 +75,14 @@ internal fun PlayerSettingsContent(
     onResetCustomTitleFont: () -> Unit,
     playerPresentationMode: PlayerPresentationMode,
     onPresentationSelected: (PlayerPresentationMode) -> Unit,
+    libraryLightMode: Boolean,
+    onLibraryLightModeChange: (Boolean) -> Unit,
     animatedArtworkEnabled: Boolean,
     roundedCarouselCorners: Boolean,
     onRoundedCarouselCornersChange: (Boolean) -> Unit,
     onAnimatedArtworkChange: (Boolean) -> Unit,
+    artworkSourceOrder: String,
+    onArtworkSourceOrderChange: (String) -> Unit,
     realisticControls: Boolean,
     onRealisticControlsChange: (Boolean) -> Unit,
     crossfadeEnabled: Boolean,
@@ -85,7 +96,13 @@ internal fun PlayerSettingsContent(
     onRemoveMusicFolder: (String) -> Unit,
     onScanMusic: () -> Unit,
     onDismiss: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    dynamicGlowEnabled: Boolean = false,
+    onDynamicGlowChange: (Boolean) -> Unit = {},
+    playerScale: Float = 1f,
+    onPlayerScaleChange: (Float) -> Unit = {},
+    miniLyricsEnabled: Boolean = false,
+    onMiniLyricsChange: (Boolean) -> Unit = {}
 ) {
     val colors = MaterialTheme.colorScheme
     val listState = rememberLazyListState()
@@ -220,14 +237,6 @@ internal fun PlayerSettingsContent(
                             modifier = Modifier.weight(1f)
                         )
                         SettingModeTile(
-                            label = "Vinyl",
-                            icon = Icons.Default.GraphicEq,
-                            selected = playerPresentationMode == PlayerPresentationMode.VINYL,
-                            enabled = PlayerPresentationMode.VINYL.isAvailable,
-                            onClick = { onPresentationSelected(PlayerPresentationMode.VINYL) },
-                            modifier = Modifier.weight(1f)
-                        )
-                        SettingModeTile(
                             label = settingsText("Imersif", "Immersive"),
                             icon = Icons.Default.CropOriginal,
                             selected = playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK,
@@ -237,6 +246,21 @@ internal fun PlayerSettingsContent(
                         )
                     }
                     SettingsDivider()
+                    if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
+                        PlayerScaleSetting(playerScale, onPlayerScaleChange)
+                        SettingsDivider()
+                        SettingToggle(
+                            settingsText("Daftar lagu terang", "Light song list"),
+                            settingsText(
+                                "Hanya daftar lagu dan pencarian. Tampilan pemutar tetap gelap.",
+                                "Song list and search only. Now Playing stays dark."
+                            ),
+                            libraryLightMode,
+                            onLibraryLightModeChange,
+                            icon = Icons.Default.LightMode
+                        )
+                        SettingsDivider()
+                    }
                     if (playerPresentationMode == PlayerPresentationMode.CD) {
                         SettingToggle(
                             settingsText("Sudut carousel", "Carousel corners"),
@@ -249,16 +273,71 @@ internal fun PlayerSettingsContent(
                     SettingToggle(
                         settingsText("Animasi sampul", "Animated artwork"),
                         settingsText(
-                            "Apple Music → Spotify Canvas. Judul dan artis dikirim saat pencarian.",
-                            "Apple Music → Spotify Canvas. Searches share title and artist."
+                            "Mengikuti prioritas sumber animasi di bawah.",
+                            "Uses your chosen animation source priority below."
                         ),
                         animatedArtworkEnabled, onAnimatedArtworkChange,
                         icon = Icons.Default.AutoAwesome
                     )
+                    if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
+                        SettingsDivider()
+                        DynamicGlowSetting(dynamicGlowEnabled, animatedArtworkEnabled, onDynamicGlowChange)
+                    }
+                    if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK &&
+                        animatedArtworkEnabled
+                    ) {
+                        SettingsDivider()
+                        var sourceMenuOpen by remember { mutableStateOf(false) }
+                        val sourceOptions = listOf(
+                            "APPLE_FIRST" to settingsText("Apple Music dahulu", "Apple Music first"),
+                            "SPOTIFY_FIRST" to settingsText("Spotify Canvas dahulu", "Spotify Canvas first"),
+                            "APPLE_ONLY" to settingsText("Apple Music saja", "Apple Music only"),
+                            "SPOTIFY_ONLY" to settingsText("Spotify Canvas saja", "Spotify Canvas only")
+                        )
+                        Box {
+                            SettingAction(
+                                title = settingsText("Sumber animasi", "Animation source"),
+                                subtitle = sourceOptions.firstOrNull { it.first == artworkSourceOrder }?.second
+                                    ?: sourceOptions.first().second,
+                                icon = Icons.Default.AutoAwesome,
+                                onClick = { sourceMenuOpen = true }
+                            )
+                            DropdownMenu(
+                                expanded = sourceMenuOpen,
+                                onDismissRequest = { sourceMenuOpen = false }
+                            ) {
+                                sourceOptions.forEach { (value, title) ->
+                                    DropdownMenuItem(
+                                        text = { Text(title) },
+                                        onClick = {
+                                            sourceMenuOpen = false
+                                            onArtworkSourceOrderChange(value)
+                                        },
+                                        trailingIcon = {
+                                            if (artworkSourceOrder == value)
+                                                Icon(Icons.Default.Check, null)
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
             if (LYRICS_ENABLED && playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) item(key = "lyrics") {
                 SettingsSection(settingsText("Lirik", "Lyrics")) {
+                    MiniLyricsSetting(miniLyricsEnabled, onMiniLyricsChange)
+                    SettingsDivider()
+                    ArunaSaltTheme { ItemSwitcher(
+                        text = settingsText("Lirik online", "Online lyrics"),
+                        sub = settingsText(
+                            "Cari lirik TTML dan backing vocal dari internet. Jika mati, hanya gunakan lirik yang tersimpan di perangkat.",
+                            "Find TTML and backing vocals online. When off, use only lyrics stored on your device."
+                        ),
+                        state = onlineLyricsEnabled,
+                        onChange = onOnlineLyricsChange
+                    ) }
+                    SettingsDivider()
                     Surface(
                         shape = RoundedCornerShape(18.dp),
                         color = colors.primary.copy(alpha = 0.08f)
@@ -284,9 +363,8 @@ internal fun PlayerSettingsContent(
                     RangeLabels("18 sp", "48 sp")
                     if (hasLyricsSong) {
                         SettingsDivider()
-                        TextButton(onClick = onRetryLyrics, enabled = !lyricsLoading) {
-                            Text(settingsText("Muat ulang lirik", "Reload lyrics"))
-                        }
+                        ArunaSaltTheme { ItemButton(onClick = onRetryLyrics, enabled = !lyricsLoading,
+                            text = settingsText("Muat ulang lirik", "Reload lyrics")) }
                     }
                     Text(settingsText("Lirik dari metadata audio.", "Lyrics from audio metadata."), color = colors.onSurfaceVariant)
                 }
@@ -303,7 +381,7 @@ internal fun PlayerSettingsContent(
                         ) {
                             SettingCaption(settingsText("PRATINJAU", "PREVIEW"))
                             Text(
-                                "Nusa Music",
+                                "Aruna",
                                 fontFamily = titleFontFamily,
                                 fontSize = titleFontSize.sp,
                                 lineHeight = (titleFontSize * 1.2f).sp,
@@ -467,11 +545,11 @@ internal fun PlayerSettingsContent(
                 }
             }
             item(key = "about") {
-                SettingsSection(settingsText("Tentang Nusa", "About Nusa")) {
+                SettingsSection(settingsText("Tentang Aruna", "About Aruna")) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         SettingIcon(Icons.Default.MusicNote)
                         Column(Modifier.weight(1f)) {
-                            Text("Nusa Music", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text("Aruna", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                             Text(settingsText("Versi ${BuildConfig.VERSION_NAME}", "Version ${BuildConfig.VERSION_NAME}"), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
                         }
                     }
@@ -483,6 +561,32 @@ internal fun PlayerSettingsContent(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+internal fun PlayerScaleSetting(value: Float, onChange: (Float) -> Unit) {
+    val scale = PlayerScalePreference.normalize(value)
+    val percentage = "${(scale * 100).roundToInt()}%"
+    Column {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(settingsText("Skala player utama", "Now Playing scale"),
+                Modifier.weight(1f), fontWeight = FontWeight.Medium)
+            SettingValue(percentage)
+        }
+        Text(settingsText("Perbesar artwork, teks, dan tombol player utama.",
+            "Enlarge the artwork, text and controls in Now Playing."),
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Slider(value = scale, onValueChange = { onChange(PlayerScalePreference.normalize(it)) },
+            valueRange = PlayerScalePreference.MIN..PlayerScalePreference.MAX, steps = 4,
+            modifier = Modifier.semantics {
+                contentDescription = settingsText("Skala player utama", "Now Playing scale")
+                stateDescription = percentage
+            })
+        RangeLabels("100%", "125%")
+        TextButton(onClick = { onChange(1f) }, enabled = scale != 1f) {
+            Text(settingsText("Atur ulang", "Reset"))
         }
     }
 }
@@ -635,6 +739,26 @@ private fun SettingIcon(icon: ImageVector, enabled: Boolean = true) {
             tint = colors.primary.copy(alpha = if (enabled) 0.95f else 0.32f)
         )
     }
+}
+
+@Composable
+internal fun DynamicGlowSetting(checked: Boolean, artworkEnabled: Boolean, onChange: (Boolean) -> Unit) {
+    SettingToggle(
+        settingsText("Pantulan cahaya dinamis", "Dynamic artwork glow"),
+        if (artworkEnabled) settingsText("Cahaya latar mengikuti animasi sampul.",
+            "Background light follows the animated artwork.")
+        else settingsText("Aktifkan Animasi sampul untuk melihat efeknya.",
+            "Turn on Animated artwork to see this effect."),
+        checked, onChange
+    )
+}
+
+@Composable
+internal fun MiniLyricsSetting(checked: Boolean, onChange: (Boolean) -> Unit) {
+    ArunaSaltTheme { ItemSwitcher(state = checked, onChange = onChange,
+        text = settingsText("Mini lirik", "Mini lyrics"),
+        sub = settingsText("Satu baris lirik beranimasi di atas judul pada player Immersive.",
+            "One animated lyric line above the title in the Immersive player.")) }
 }
 
 @Composable

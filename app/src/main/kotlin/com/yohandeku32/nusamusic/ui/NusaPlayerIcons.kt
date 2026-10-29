@@ -199,6 +199,49 @@ internal object NusaPlayerIcons {
         moveTo(7.7f, 11.15f); lineTo(15.15f, 11.15f)
         moveTo(7.7f, 15.05f); lineTo(12.85f, 15.05f)
     }
+    val Settings = outline("settings") {
+        // A rounded 2dp outline gear from the same icon family as Artist,
+        // Library and Home. No filled Material icon or mismatched weight.
+        moveTo(10.35f, 2.75f); lineTo(13.65f, 2.75f)
+        lineTo(14.25f, 5f); lineTo(15.82f, 5.68f)
+        lineTo(17.78f, 4.48f); lineTo(20f, 6.72f)
+        lineTo(18.82f, 8.68f); lineTo(19.52f, 10.3f)
+        lineTo(21.75f, 10.85f); lineTo(21.75f, 13.15f)
+        lineTo(19.52f, 13.7f); lineTo(18.82f, 15.32f)
+        lineTo(20f, 17.28f); lineTo(17.78f, 19.52f)
+        lineTo(15.82f, 18.32f); lineTo(14.25f, 19f)
+        lineTo(13.65f, 21.25f); lineTo(10.35f, 21.25f)
+        lineTo(9.75f, 19f); lineTo(8.18f, 18.32f)
+        lineTo(6.22f, 19.52f); lineTo(4f, 17.28f)
+        lineTo(5.18f, 15.32f); lineTo(4.48f, 13.7f)
+        lineTo(2.25f, 13.15f); lineTo(2.25f, 10.85f)
+        lineTo(4.48f, 10.3f); lineTo(5.18f, 8.68f)
+        lineTo(4f, 6.72f); lineTo(6.22f, 4.48f)
+        lineTo(8.18f, 5.68f); lineTo(9.75f, 5f)
+        close()
+        moveTo(15.15f, 12f)
+        curveTo(15.15f, 13.74f, 13.74f, 15.15f, 12f, 15.15f)
+        curveTo(10.26f, 15.15f, 8.85f, 13.74f, 8.85f, 12f)
+        curveTo(8.85f, 10.26f, 10.26f, 8.85f, 12f, 8.85f)
+        curveTo(13.74f, 8.85f, 15.15f, 10.26f, 15.15f, 12f)
+        close()
+    }
+    val Home = outline("home") {
+        // Soft, rounded roof and a clean doorway; coherent with the pill
+        // icon family's 2dp stroke and rounded joins.
+        moveTo(3.5f, 10.3f); lineTo(12f, 3.5f)
+        lineTo(20.5f, 10.3f)
+        moveTo(5.65f, 9.4f); lineTo(5.65f, 18.15f)
+        quadTo(5.65f, 20.2f, 7.7f, 20.2f)
+        lineTo(16.3f, 20.2f)
+        quadTo(18.35f, 20.2f, 18.35f, 18.15f)
+        lineTo(18.35f, 9.4f)
+        moveTo(10f, 20.2f); lineTo(10f, 14.8f)
+        quadTo(10f, 13.85f, 11f, 13.85f)
+        lineTo(13f, 13.85f)
+        quadTo(14f, 13.85f, 14f, 14.8f)
+        lineTo(14f, 20.2f)
+    }
     val Artist = outline("artist") {
         moveTo(12f, 12.2f)
         curveTo(14.25f, 12.2f, 15.7f, 10.7f, 15.7f, 8.5f)

@@ -122,7 +122,7 @@ object ArtistImageLoader {
             readTimeout = 8_000
             instanceFollowRedirects = true
             setRequestProperty("Accept", "application/json")
-            setRequestProperty("User-Agent", "NusaMusic/1.0")
+            setRequestProperty("User-Agent", "Aruna/1.0")
         }
 
         return try {
@@ -155,7 +155,7 @@ object ArtistImageLoader {
             connectTimeout = 8_000
             readTimeout = 10_000
             instanceFollowRedirects = true
-            setRequestProperty("User-Agent", "NusaMusic/1.0")
+            setRequestProperty("User-Agent", "Aruna/1.0")
         }
 
         return try {

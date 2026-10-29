@@ -80,6 +80,10 @@ android {
         buildConfig = true
     }
 
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
+
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -96,7 +100,13 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.ui:ui-text-google-fonts")
     implementation("androidx.compose.material3:material3:1.4.0")
+    implementation("io.github.moriafly:salt-ui:2.6.0-beta03") {
+        // The Settings pilot uses public components, not SaltUI's window/reflection helpers.
+        exclude(group = "org.lsposed.hiddenapibypass", module = "hiddenapibypass")
+    }
     implementation("androidx.compose.material:material-icons-extended")
+    // Actual Lucide ImageVector pack, loaded lazily per used icon.
+    implementation("com.composables:icons-lucide-cmp:2.2.1")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.4")
     implementation("androidx.media3:media3-exoplayer:1.9.3")
     // Persistent, bounded video cache for Spotify Canvas (Media3 SimpleCache).
@@ -116,5 +126,10 @@ dependencies {
         implementation(files(localFfmpegAar))
     }
     testImplementation("junit:junit:4.13.2")
+    // Real JSONObject for pure JVM online-lyrics contract tests.
+    testImplementation("org.json:json:20240303")
+    testImplementation("org.robolectric:robolectric:4.17")
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

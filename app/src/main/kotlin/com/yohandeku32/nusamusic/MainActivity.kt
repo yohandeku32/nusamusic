@@ -1,6 +1,8 @@
 package com.yohandeku32.nusamusic
 
 import android.Manifest
+import androidx.compose.material3.TextButton
+import androidx.lifecycle.compose.currentStateAsState
 import android.database.ContentObserver
 import android.content.ComponentName
 import android.content.pm.PackageManager
@@ -39,6 +41,7 @@ import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
@@ -146,16 +149,22 @@ import com.yohandeku32.nusamusic.data.ArtworkBlur
 import com.yohandeku32.nusamusic.data.ImmersiveArtworkCache
 import com.yohandeku32.nusamusic.data.ImmersiveArtworkSnapshot
 import com.yohandeku32.nusamusic.data.AppleMusicAnimatedArtworkLoader
+import com.yohandeku32.nusamusic.data.AnimatedArtworkQueuePreloader
+import com.yohandeku32.nusamusic.data.ArtworkSourceOrder
+import com.yohandeku32.nusamusic.data.AppleTallVideoCache
+import com.yohandeku32.nusamusic.data.upcomingPlaybackIndices
 import com.yohandeku32.nusamusic.data.SpotifyCanvasArtworkLoader
 import com.yohandeku32.nusamusic.data.SpotifyCanvasVideoCache
 import com.yohandeku32.nusamusic.data.AudioCodecInfo
 import com.yohandeku32.nusamusic.data.AudioCodecLoader
-import com.yohandeku32.nusamusic.data.ArtistImageLoader
-import com.yohandeku32.nusamusic.data.ArtistBiographyLoader
 import com.yohandeku32.nusamusic.data.ArtistNameUtils
+import com.yohandeku32.nusamusic.data.AppleArtistPortraitLoader
+import com.yohandeku32.nusamusic.data.portraitPrefetchArtists
 import com.yohandeku32.nusamusic.data.MusicRepository
 import com.yohandeku32.nusamusic.data.MediaStoreCheckpoint
 import com.yohandeku32.nusamusic.data.LyricsRepository
+import com.yohandeku32.nusamusic.data.LyricsPendingSaveQueue
+import com.yohandeku32.nusamusic.data.SongLyrics
 import com.yohandeku32.nusamusic.model.PlayerPresentationMode
 import com.yohandeku32.nusamusic.model.LibraryContentState
 import com.yohandeku32.nusamusic.model.Song
@@ -170,15 +179,21 @@ import com.yohandeku32.nusamusic.ui.CdPlayer
 import com.yohandeku32.nusamusic.ui.TurntablePlayer
 import com.yohandeku32.nusamusic.ui.TurntableLabels
 import com.yohandeku32.nusamusic.ui.VinylSongList
+import com.yohandeku32.nusamusic.ui.ImmersiveMusicLibrary
+import com.yohandeku32.nusamusic.ui.immersiveColors
 import com.yohandeku32.nusamusic.ui.ImmersiveArtworkPlayer
+import com.yohandeku32.nusamusic.ui.immersiveGlassPill
 import com.yohandeku32.nusamusic.ui.ImmersiveArtworkScene
 import com.yohandeku32.nusamusic.ui.ImmersiveArtistPage
 import com.yohandeku32.nusamusic.ui.ImmersiveArtistPageState
+import com.yohandeku32.nusamusic.ui.ImmersiveDiscoveryPage
 import com.yohandeku32.nusamusic.ui.ImmersiveLyricsPanel
 import com.yohandeku32.nusamusic.ui.ImmersiveLyricsState
 import com.yohandeku32.nusamusic.ui.MiuixHorizontalPager
 import com.yohandeku32.nusamusic.ui.animateMiuixScrollToPage
 import com.yohandeku32.nusamusic.ui.artworkBackdropColor
+import com.yohandeku32.nusamusic.ui.PlayerScaleHost
+import com.yohandeku32.nusamusic.ui.PlayerScalePreference
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -189,6 +204,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 
 private fun nusaText(
@@ -207,11 +223,23 @@ class MainActivity : ComponentActivity() {
     // Avoid checking every Media3 queue item whenever a carousel disc is tapped.
     private var queuedPlaybackOrder: List<Song>? = null
     private var pendingPlaySongJob: Job? = null
-    private var nextCanvasPrefetchJob: Job? = null
+    private var nextArtworkLookaheadJob: Job? = null
+    private var nextArtworkLookaheadIds: List<Long> = emptyList()
+    private var nextArtistPortraitJob: Job? = null
+    private var nextArtistPortraitIds: List<Long> = emptyList()
+    // At most two remote artist photos at once, regardless of queue changes.
+    private val artistPortraitSlots = kotlinx.coroutines.sync.Semaphore(2)
+    private var restoringPlaybackQueue = false
     private var songs by mutableStateOf<List<Song>>(emptyList())
     private var currentSong by mutableStateOf<Song?>(null)
+    private var pendingDeletedSong: Song? = null
+    private var deletionRequiresRetry = false
+    // Re-read the currently playing embedded metadata when an external app
+    // edits the audio file, without waiting for a manual Library rescan.
+    private var lyricsMetadataGeneration by mutableIntStateOf(0)
     private var isPlaying by mutableStateOf(false)
     private var lyricsPlaybackEpoch by mutableIntStateOf(0)
+    private val pendingLyricSaves by lazy { LyricsPendingSaveQueue(applicationContext) }
     private val playbackPositionState = mutableLongStateOf(0L)
     private var positionMs by playbackPositionState
     private var durationMs by mutableLongStateOf(0L)
@@ -246,6 +274,12 @@ class MainActivity : ComponentActivity() {
             super.onChange(selfChange, uri)
 
             if (!permissionGranted) return
+            // Android can notify the audio collection URI (not the song's
+            // item URI) when an external editor changes M4A/MP3 tags. An exact
+            // URI comparison misses those notifications and leaves Lyrics stale.
+            // A generation change refreshes only the current song's small
+            // metadata reader, NOT the whole audio payload or entire library.
+            if (currentSong != null) lyricsMetadataGeneration++
             if (isScanningMusic) {
                 // Never lose a change event received during a running scan.
                 mediaStoreRefreshPending = true
@@ -260,11 +294,15 @@ class MainActivity : ComponentActivity() {
         registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
             if (uri == null) return@registerForActivityResult
 
+            // Persist write access too when the DocumentsProvider grants it.
+            // This is required for explicit per-song SAF deletion. Providers
+            // with read-only folders can still be imported normally.
+            val read = Intent.FLAG_GRANT_READ_URI_PERMISSION
+            val write = Intent.FLAG_GRANT_WRITE_URI_PERMISSION
             runCatching {
-                contentResolver.takePersistableUriPermission(
-                    uri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
+                contentResolver.takePersistableUriPermission(uri, read or write)
+            }.onFailure {
+                runCatching { contentResolver.takePersistableUriPermission(uri, read) }
             }
 
             val uriString = uri.toString()
@@ -399,6 +437,23 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+    private val permanentDeleteLauncher = registerForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        val target = pendingDeletedSong
+        pendingDeletedSong = null
+        if (result.resultCode == android.app.Activity.RESULT_OK && target != null) {
+            if (deletionRequiresRetry) {
+                deletionRequiresRetry = false
+                lifecycleScope.launch { deleteWithGrantedPermission(target) }
+            } else {
+                completePermanentDeletion(target)
+            }
+        } else {
+            deletionRequiresRetry = false
+        }
+    }
+
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             permissionGranted = granted
@@ -414,6 +469,32 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+
+    // Android can restore a Compose text field's focus when the activity
+    // returns from the background, even while the library page is offscreen.
+    // Clear native focus AND request IME hide on both lifecycle boundaries.
+    private fun dismissRestoredKeyboard() {
+        currentFocus?.clearFocus()
+        window.decorView.clearFocus()
+        androidx.core.view.WindowInsetsControllerCompat(
+            window, window.decorView
+        ).hide(androidx.core.view.WindowInsetsCompat.Type.ime())
+    }
+
+    override fun onPause() {
+        dismissRestoredKeyboard()
+        super.onPause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // External tag editors may modify ID3/FLAC without notifying
+        // MediaStore. A foreground return rechecks the current song.
+        lyricsMetadataGeneration++
+        // Run after Android reapplies window focus; do not let a retained
+        // BasicTextField bring the keyboard up over the music player.
+        window.decorView.post { dismissRestoredKeyboard() }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -462,6 +543,10 @@ class MainActivity : ComponentActivity() {
             ?.takeIf { customTitleFontPath != null }
 
         permissionGranted = checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
+        val showWelcome = com.yohandeku32.nusamusic.ui.ArunaIntroPreferences.prepare(
+            uiPrefsForFonts(), existingUse = selectedMusicFolders.isNotEmpty() ||
+                libraryPrefs.all.isNotEmpty() || playbackPrefs.all.isNotEmpty()
+        )
 
         contentResolver.registerContentObserver(
             MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
@@ -472,6 +557,14 @@ class MainActivity : ComponentActivity() {
         // Restore the last track before Compose draws the first frame. The full
         // library and Media3 controller can finish initializing in the background.
         currentSong = readLastSongForLaunch()
+        // Start verifying the one visible badge before Compose inflates the
+        // expensive artwork/player tree. It shares AudioCodecLoader's cache
+        // with the Library, so no duplicate MediaExtractor runs.
+        currentSong?.let { launchSong ->
+            lifecycleScope.launch {
+                AudioCodecLoader.load(this@MainActivity, launchSong.uri)
+            }
+        }
         if (PlayerPresentationMode.fromPreference(
                 uiPrefsForFonts().getString("player_presentation_mode", null)
             ) == PlayerPresentationMode.IMMERSIVE_ARTWORK
@@ -483,9 +576,6 @@ class MainActivity : ComponentActivity() {
             }
         }
         loadCachedSongs()
-        if (!permissionGranted) {
-            permissionLauncher.launch(permission)
-        }
 
         val token = SessionToken(this, ComponentName(this, PlaybackService::class.java))
         val future = MediaController.Builder(this, token).buildAsync()
@@ -511,7 +601,8 @@ class MainActivity : ComponentActivity() {
                     positionMs = c.currentPosition.coerceAtLeast(0L)
                     durationMs = c.duration.coerceAtLeast(0L)
                     persistPlaybackState(c, force = true)
-                    scheduleNextCanvasPrefetch(c)
+                    scheduleArtworkLookahead(c)
+                    schedulePendingLyricCommit()
                 }
 
                 override fun onTimelineChanged(
@@ -520,18 +611,19 @@ class MainActivity : ComponentActivity() {
                 ) {
                     // Queue rebuilds, restores, and shuffled order can change
                     // the next song without changing the currently playing song.
-                    scheduleNextCanvasPrefetch(c)
+                    scheduleArtworkLookahead(c)
                 }
 
                 override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
                     shuffleEnabled = shuffleModeEnabled
                     persistPlaybackState(c, force = true)
-                    scheduleNextCanvasPrefetch(c)
+                    scheduleArtworkLookahead(c)
                 }
 
                 override fun onRepeatModeChanged(repeatModeValue: Int) {
                     repeatMode = repeatModeValue
                     persistPlaybackState(c, force = true)
+                    scheduleArtworkLookahead(c)
                 }
             })
 
@@ -540,6 +632,7 @@ class MainActivity : ComponentActivity() {
             syncCurrentSong(c)
             lifecycleScope.launch {
                 restorePlaybackStateIfNeeded(c)
+                schedulePendingLyricCommit()
             }
         }, mainExecutor)
 
@@ -574,18 +667,34 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             NusaMusicTheme {
+                com.yohandeku32.nusamusic.ui.ArunaIntroHost(
+                    preferences = uiPrefsForFonts(), showInitially = showWelcome,
+                    onChooseFolder = ::openMusicFolderPicker,
+                    onDeviceMusic = {
+                        if (permissionGranted) scanMusic() else permissionLauncher.launch(permission)
+                    }
+                ) { openLibrary ->
                 NusaMusicApp(
+                    startInLibrary = openLibrary,
                     songs = songs,
                     currentSong = currentSong,
                     isPlaying = isPlaying,
                     positionMsState = playbackPositionState,
                     lyricsPlaybackEpoch = lyricsPlaybackEpoch,
+                    lyricsMetadataGeneration = lyricsMetadataGeneration,
                     readPlaybackPosition = { controller?.currentPosition?.coerceAtLeast(0L) ?: positionMs },
                     readPlaybackEpoch = { lyricsPlaybackEpoch },
                     durationMs = durationMs,
                     permissionGranted = permissionGranted,
                     onPlay = ::playSong,
+                    onPlayNext = ::queueSongNext,
+                    onDeleteSong = ::requestPermanentSongDeletion,
                     onTogglePlay = ::togglePlay,
+                    onQueueLyrics = { song, lyrics ->
+                        pendingLyricSaves.enqueue(song, lyrics)
+                        schedulePendingLyricCommit()
+                    },
+                    isLyricsQueued = { song -> pendingLyricSaves.isQueued(song.id) },
                     customTitleFontPath = customTitleFontPath,
                     customTitleFontName = customTitleFontName,
                     onChooseCustomTitleFont = {
@@ -648,10 +757,33 @@ class MainActivity : ComponentActivity() {
                     onRemoveMusicFolder = ::removeMusicFolder,
                     onRequestPermission = { permissionLauncher.launch(permission) }
                 )
+                }
             }
         }
 
         window.decorView.post { hideStatusBar() }
+    }
+
+    /**
+     * Media3 must release the previous track before SAF rewrites it. Never
+     * pause the current song and never truncate its currently opened source.
+     * A durable pending request also resumes after reopening NusaMusic.
+     */
+    private fun schedulePendingLyricCommit() {
+        lifecycleScope.launch {
+            // Allow decoder/media source handoff to finish after a transition.
+            delay(1_400L)
+            if (controller == null) return@launch
+            pendingLyricSaves.finishInactive(
+                currentSongId = { controller?.currentMediaItem?.mediaId?.toLongOrNull() },
+                onResult = { _, success, message ->
+                    if (success) lyricsMetadataGeneration++
+                    android.widget.Toast.makeText(
+                        this@MainActivity, message, android.widget.Toast.LENGTH_LONG
+                    ).show()
+                }
+            )
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -800,6 +932,7 @@ class MainActivity : ComponentActivity() {
 
         // Start with the saved track, then build the surrounding queue in small
         // batches. This avoids one large setMediaItems() call freezing the UI.
+        restoringPlaybackQueue = true
         c.shuffleModeEnabled = false
         c.setMediaItems(listOf(mediaItems[index]), 0, savedPosition)
 
@@ -836,6 +969,8 @@ class MainActivity : ComponentActivity() {
         } else {
             isPlaying = false
         }
+        restoringPlaybackQueue = false
+        scheduleArtworkLookahead(c)
     }
 
     private fun toggleShuffle() {
@@ -843,6 +978,7 @@ class MainActivity : ComponentActivity() {
             c.shuffleModeEnabled = !c.shuffleModeEnabled
             shuffleEnabled = c.shuffleModeEnabled
             persistPlaybackState(c, force = true)
+            scheduleArtworkLookahead(c)
         }
     }
 
@@ -1085,7 +1221,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun scanMusic() {
-        // Pull-to-refresh reconciles the user-selected folders as well.
+        // Explicit settings/manual scan: reconcile selected SAF folders too.
         automaticMusicScanJob?.cancel()
         startMusicScan(scanSelectedFolders = true, showToast = true)
     }
@@ -1167,6 +1303,26 @@ class MainActivity : ComponentActivity() {
             )
             .build()
 
+    private fun queueSongNext(song: Song) {
+        val c = controller ?: return
+        if (c.currentMediaItemIndex < 0 || c.mediaItemCount == 0) {
+            playSong(song, listOf(song))
+            return
+        }
+        // Inserting a track requires one MediaController call; do not
+        // rebuild the entire Media3 queue when tapping "Play next".
+        pendingPlaySongJob?.cancel()
+        pendingPlaySongJob = null
+        c.addMediaItem(
+            (c.currentMediaItemIndex + 1).coerceAtMost(c.mediaItemCount),
+            mediaItemFor(song)
+        )
+        queuedPlaybackOrder = null
+        android.widget.Toast.makeText(
+            this, "Added to Up Next", android.widget.Toast.LENGTH_SHORT
+        ).show()
+    }
+
     private fun playSong(song: Song, orderedSongs: List<Song>) {
         val c = controller ?: return
         val queueSongs = orderedSongs.ifEmpty { songs }
@@ -1215,38 +1371,252 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Warm the next real Media3 queue item (including shuffle order), never a
-     * guessed library neighbor. A 1.8 s debounce coalesces queue restores and
-     * rapid skips. At most one 512 KiB speculative Canvas request runs at once.
-     * No player/decoder is created until the user actually plays that song.
+     * Prefetch the current Artist portrait and those of the next six REAL
+     * Media3 queue items. The timeline handles shuffle, repeat, and Play Next;
+     * the library's display/sort order is never used as a proxy for playback.
+     * All disk/network IO is off-main and is bounded by two fetch slots.
      */
-    private fun scheduleNextCanvasPrefetch(player: MediaController) {
-        nextCanvasPrefetchJob?.cancel()
-        nextCanvasPrefetchJob = null
+    private fun scheduleArtistPortraitLookahead(player: MediaController) {
+        if (restoringPlaybackQueue) return
+        val immersive = PlayerPresentationMode.fromPreference(
+            uiPrefsForFonts().getString("player_presentation_mode", null)
+        ) == PlayerPresentationMode.IMMERSIVE_ARTWORK
+        if (!immersive || songs.isEmpty() || player.mediaItemCount == 0 ||
+            player.currentTimeline.isEmpty
+        ) {
+            nextArtistPortraitJob?.cancel()
+            nextArtistPortraitJob = null
+            nextArtistPortraitIds = emptyList()
+            return
+        }
+        val timeline = player.currentTimeline
+        val repeat = if (player.repeatMode == Player.REPEAT_MODE_ALL)
+            Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
+        val next = upcomingPlaybackIndices(
+            currentIndex = player.currentMediaItemIndex,
+            itemCount = player.mediaItemCount,
+            limit = 6,
+            nextIndex = { index ->
+                timeline.getNextWindowIndex(index, repeat, player.shuffleModeEnabled)
+            }
+        )
+        val ids = (listOfNotNull(player.currentMediaItem?.mediaId?.toLongOrNull()) +
+            next.mapNotNull { player.getMediaItemAt(it).mediaId.toLongOrNull() })
+            .distinct()
+        if (ids == nextArtistPortraitIds) return
+        nextArtistPortraitJob?.cancel()
+        nextArtistPortraitIds = ids
+        if (ids.isEmpty()) return
 
+        val librarySnapshot = songs
+        nextArtistPortraitJob = lifecycleScope.launch {
+            val artists = withContext(Dispatchers.Default) {
+                val byId = librarySnapshot.associateBy { it.id }
+                portraitPrefetchArtists(
+                    ids.mapNotNull(byId::get).map { it.artist }
+                )
+            }
+            kotlinx.coroutines.supervisorScope {
+                artists.forEachIndexed { index, name ->
+                    launch(Dispatchers.IO) {
+                        // The foreground player gets its first frame first.
+                        // Current Artist starts earliest; upcoming Artists
+                        // follow in playback order without saturating data.
+                        delay(if (index == 0) 120L else 500L + (index - 1) * 140L)
+                        artistPortraitSlots.withPermit {
+                            AppleArtistPortraitLoader.warm(this@MainActivity, name)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Keep exactly five real upcoming Media3 entries warm, including its
+     * shuffled order. Do not guess the next tracks from library sorting.
+     * No ExoPlayer instances are created here (five decoders would stutter);
+     * metadata resolution is capped at two and video-byte IO at one.
+     */
+    private fun scheduleArtworkLookahead(player: MediaController) {
+        // Portrait lookahead runs even when animated video artwork is disabled.
+        scheduleArtistPortraitLookahead(player)
+        if (restoringPlaybackQueue) return
         val preferences = uiPrefsForFonts()
-        if (!preferences.getBoolean("animated_artwork_enabled", true) ||
+        val sourceOrder = ArtworkSourceOrder.fromPreference(
+            preferences.getString("animated_artwork_source_order", null)
+        )
+        val enabled = preferences.getBoolean("animated_artwork_enabled", true) &&
             PlayerPresentationMode.fromPreference(
                 preferences.getString("player_presentation_mode", null)
-            ) != PlayerPresentationMode.IMMERSIVE_ARTWORK
-        ) return
-
-        val nextIndex = player.nextMediaItemIndex
-        if (nextIndex !in 0 until player.mediaItemCount) return
-        val nextId = player.getMediaItemAt(nextIndex).mediaId.toLongOrNull() ?: return
-        val librarySnapshot = songs
-
-        nextCanvasPrefetchJob = lifecycleScope.launch {
-            delay(1_800L)
-            val candidate = withContext(Dispatchers.Default) {
-                librarySnapshot.firstOrNull { it.id == nextId }
-            } ?: return@launch
-            if (currentSong?.id == candidate.id) return@launch
-
-            val url = SpotifyCanvasArtworkLoader.findCanvasUrl(this@MainActivity, candidate)
-                ?: return@launch
-            SpotifyCanvasVideoCache.prefetchNext(this@MainActivity, url)
+            ) == PlayerPresentationMode.IMMERSIVE_ARTWORK
+        if (!enabled || songs.isEmpty() || player.mediaItemCount <= 1) {
+            nextArtworkLookaheadJob?.cancel()
+            nextArtworkLookaheadJob = null
+            nextArtworkLookaheadIds = emptyList()
+            return
         }
+
+        val timeline = player.currentTimeline
+        if (timeline.isEmpty) return
+        val mode = if (player.repeatMode == Player.REPEAT_MODE_ALL)
+            Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
+        val indices = upcomingPlaybackIndices(
+            currentIndex = player.currentMediaItemIndex,
+            itemCount = player.mediaItemCount,
+            limit = 5,
+            nextIndex = { index ->
+                timeline.getNextWindowIndex(index, mode, player.shuffleModeEnabled)
+            }
+        )
+        val ids = indices.mapNotNull { index ->
+            player.getMediaItemAt(index).mediaId.toLongOrNull()
+        }
+        if (ids == nextArtworkLookaheadIds) return
+        nextArtworkLookaheadJob?.cancel()
+        nextArtworkLookaheadIds = ids
+        if (ids.isEmpty()) return
+        val library = songs
+        nextArtworkLookaheadJob = lifecycleScope.launch {
+            // Give the foreground Canvas/Apple decoder time to acquire its
+            // first frame before speculative network reads begin.
+            delay(1_100L)
+            val ordered = withContext(Dispatchers.Default) {
+                val byId = library.associateBy { it.id }
+                ids.mapNotNull(byId::get)
+            }
+            kotlinx.coroutines.supervisorScope {
+                // Resolve two metadata requests concurrently, but fetch actual
+                // video bytes strictly in playback order (next track first).
+                // A faster response from song five must not take the
+                // bandwidth allocated to the immediate Next track.
+                val lookups = ordered.mapIndexed { offset, song ->
+                    async {
+                        delay(offset * 90L)
+                        AnimatedArtworkQueuePreloader.resolve(
+                            this@MainActivity, song, sourceOrder
+                        )
+                    }
+                }
+                for ((offset, song) in ordered.withIndex()) {
+                    lookups[offset].await()
+                    AnimatedArtworkQueuePreloader.preload(
+                        this@MainActivity, song, priority = offset,
+                        order = sourceOrder
+                    )
+                }
+            }
+        }
+    }
+
+    // Re-evaluate after a library scan, mode switch or animated-artwork
+    // setting change; controller timeline may have existed before songs loaded.
+    internal fun refreshArtworkLookahead(reset: Boolean = false) {
+        if (reset) {
+            nextArtworkLookaheadIds = emptyList()
+            nextArtistPortraitIds = emptyList()
+        }
+        controller?.let(::scheduleArtworkLookahead)
+    }
+
+    /**
+     * Two distinct confirmations: NusaMusic asks first, then Android grants
+     * access to delete the actual MediaStore item (Android 11+). Files from a
+     * user-picked SAF folder require the provider's write grant.
+     */
+    private fun requestPermanentSongDeletion(song: Song) {
+        val uri = runCatching { Uri.parse(song.uri) }.getOrNull() ?: return
+        if (uri.scheme != "content") {
+            deletionError("Only songs from device storage can be deleted.")
+            return
+        }
+        if (pendingDeletedSong != null) return
+        pendingDeletedSong = song
+        deletionRequiresRetry = false
+        if (uri.authority == MediaStore.AUTHORITY && Build.VERSION.SDK_INT >= 30) {
+            val request = runCatching {
+                MediaStore.createDeleteRequest(contentResolver, listOf(uri))
+            }
+            request.onSuccess { intentSender ->
+                val intent = androidx.activity.result.IntentSenderRequest.Builder(
+                    intentSender.intentSender
+                ).build()
+                permanentDeleteLauncher.launch(intent)
+            }.onFailure {
+                pendingDeletedSong = null
+                deletionError("Unable to request permission to delete this song.")
+            }
+        } else {
+            lifecycleScope.launch { deleteWithGrantedPermission(song) }
+        }
+    }
+
+    private suspend fun deleteWithGrantedPermission(song: Song) {
+        val uri = Uri.parse(song.uri)
+        try {
+            val removed = withContext(Dispatchers.IO) {
+                when {
+                    android.provider.DocumentsContract.isDocumentUri(this@MainActivity, uri) ->
+                        android.provider.DocumentsContract.deleteDocument(contentResolver, uri)
+                    uri.authority == MediaStore.AUTHORITY ->
+                        contentResolver.delete(uri, null, null) > 0
+                    else -> false
+                }
+            }
+            pendingDeletedSong = null
+            deletionRequiresRetry = false
+            if (removed) completePermanentDeletion(song)
+            else deletionError("File could not be deleted. Re-select its folder with write access.")
+        } catch (e: android.app.RecoverableSecurityException) {
+            if (Build.VERSION.SDK_INT >= 29) {
+                pendingDeletedSong = song
+                deletionRequiresRetry = true
+                val request = androidx.activity.result.IntentSenderRequest.Builder(
+                    e.userAction.actionIntent.intentSender
+                ).build()
+                permanentDeleteLauncher.launch(request)
+            } else {
+                pendingDeletedSong = null
+                deletionError("Storage provider denied deletion.")
+            }
+        } catch (_: Exception) {
+            pendingDeletedSong = null
+            deletionRequiresRetry = false
+            deletionError("Storage provider denied deletion. Grant folder write access.")
+        }
+    }
+
+    private fun completePermanentDeletion(song: Song) {
+        // Remove the deleted item from the active Media3 queue as well as
+        // the Library, so a Next/Previous action never opens a dead URI.
+        controller?.let { player ->
+            for (index in player.mediaItemCount - 1 downTo 0) {
+                if (player.getMediaItemAt(index).mediaId == song.id.toString()) {
+                    player.removeMediaItem(index)
+                }
+            }
+            if (player.mediaItemCount == 0) {
+                player.stop()
+                currentSong = null
+                isPlaying = false
+                positionMs = 0L
+                durationMs = 0L
+            } else syncCurrentSong(player)
+        }
+        songs = songs.filterNot { it.id == song.id && it.uri == song.uri }
+        val updatedSongs = songs
+        lifecycleScope.launch(Dispatchers.IO) {
+            persistCachedSongs(updatedSongs, null)
+        }
+        lyricsMetadataGeneration++
+        startMusicScan(scanSelectedFolders = selectedMusicFolders.isNotEmpty(), showToast = false)
+        android.widget.Toast.makeText(
+            this, "Song permanently deleted", android.widget.Toast.LENGTH_SHORT
+        ).show()
+    }
+
+    private fun deletionError(message: String) {
+        android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_LONG).show()
     }
 
     private fun nextSong() {
@@ -1294,8 +1664,12 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        nextCanvasPrefetchJob?.cancel()
-        nextCanvasPrefetchJob = null
+        nextArtistPortraitJob?.cancel()
+        nextArtistPortraitJob = null
+        nextArtistPortraitIds = emptyList()
+        nextArtworkLookaheadJob?.cancel()
+        nextArtworkLookaheadJob = null
+        nextArtworkLookaheadIds = emptyList()
         pendingPlaySongJob?.cancel()
         pendingPlaySongJob = null
         automaticMusicScanJob?.cancel()
@@ -1558,10 +1932,15 @@ private fun NusaMusicApp(
     readPlaybackPosition: () -> Long,
     readPlaybackEpoch: () -> Int,
     lyricsPlaybackEpoch: Int,
+    lyricsMetadataGeneration: Int,
     durationMs: Long,
     permissionGranted: Boolean,
     onPlay: (Song, List<Song>) -> Unit,
+    onPlayNext: (Song) -> Unit,
+    onDeleteSong: (Song) -> Unit,
     onTogglePlay: () -> Unit,
+    onQueueLyrics: suspend (Song, SongLyrics) -> Unit,
+    isLyricsQueued: (Song) -> Boolean,
     customTitleFontPath: String?,
     customTitleFontName: String?,
     onChooseCustomTitleFont: () -> Unit,
@@ -1583,30 +1962,94 @@ private fun NusaMusicApp(
     onScanMusic: () -> Unit,
     onSelectMusicFolder: () -> Unit,
     onRemoveMusicFolder: (String) -> Unit,
-    onRequestPermission: () -> Unit
+    onRequestPermission: () -> Unit,
+    startInLibrary: Boolean = false
 ) {
     var isFavorite by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
-    var biographyExpanded by remember { mutableStateOf(false) }
+    var artistOverlayOpen by remember { mutableStateOf(false) }
+    var discoveryArtistName by remember { mutableStateOf<String?>(null) }
+    val discoveryListState = androidx.compose.foundation.lazy.rememberLazyListState()
+    var libraryOverlayOpen by remember { mutableStateOf(startInLibrary) }
+    // Decode animated artwork only after either immersive overlay has fully
+    // closed; restarting Media3 while the pill is moving causes a brief hitch.
+    var immersiveVideoSuspended by remember { mutableStateOf(false) }
+    LaunchedEffect(artistOverlayOpen, libraryOverlayOpen) {
+        if (artistOverlayOpen || libraryOverlayOpen) {
+            immersiveVideoSuspended = true
+        } else if (immersiveVideoSuspended) {
+            delay(630L)
+            immersiveVideoSuspended = false
+        }
+    }
+    var deleteFromLibrary by remember { mutableStateOf<Song?>(null) }
     val artistKey = ArtistNameUtils.cacheKey(currentSong?.artist)
-    var artistBiography by remember(artistKey) {
-        mutableStateOf(ArtistBiographyLoader.cached(currentSong?.artist))
-    }
-    var biographyLoading by remember(artistKey) {
-        mutableStateOf(false)
-    }
 
     val context = androidx.compose.ui.platform.LocalContext.current
+    // Restore verified Hi-Res badges as soon as the library becomes available,
+    // before the user opens or flings through the song list. All disk IO stays
+    // off the main thread; badge cache lookups inside rows are synchronous.
+    LaunchedEffect(songs) {
+        AudioCodecLoader.warmVerifiedBadges(context, songs)
+    }
+    var onlineLyricsEnabled by remember {
+        mutableStateOf(context.getSharedPreferences(
+            "ui_preferences", android.content.Context.MODE_PRIVATE
+        ).getBoolean("online_lyrics_enabled", true))
+    }
     val lyricsState = remember(context) { ImmersiveLyricsState(LyricsRepository(context)) }
+    LaunchedEffect(currentSong?.uri, lyricsMetadataGeneration, onlineLyricsEnabled) {
+        val activeSong = currentSong ?: return@LaunchedEffect
+        if (!LYRICS_ENABLED || lyricsMetadataGeneration == 0) return@LaunchedEffect
+        // File changes from other tag editors (especially M4A) may not
+        // increment MediaStore generation or file size. Re-read the audio's
+        // actual metadata on every foreground return / notification without
+        // forcing a slow network request or discarding online cache.
+        delay(420L)
+        lyricsState.load(
+            activeSong, this, onlineEnabled = onlineLyricsEnabled,
+            refreshEmbeddedOnly = true
+        )
+    }
     val artistPageStates = remember { androidx.collection.LruCache<String, ImmersiveArtistPageState>(8) }
-    val artistPageState = remember(artistKey) {
-        artistPageStates.get(artistKey) ?: ImmersiveArtistPageState(
-            ArtistNameUtils.firstArtist(currentSong?.artist)
-        ).also { artistPageStates.put(artistKey, it) }
+    val discoveryArtistKey = ArtistNameUtils.cacheKey(discoveryArtistName)
+    val artistPageState = remember(discoveryArtistKey) {
+        artistPageStates.get(discoveryArtistKey) ?: ImmersiveArtistPageState(
+            ArtistNameUtils.firstArtist(discoveryArtistName)
+        ).also { artistPageStates.put(discoveryArtistKey, it) }
+    }
+    // Artist opens on a true-black surface. Reuse only the existing cover,
+    // avoiding backdrop bitmap decoding and blur work during this animation.
+    var artistTransitionCover by remember(currentSong?.uri) {
+        mutableStateOf(currentSong?.let { song ->
+            ImmersiveArtworkCache.cached(song)?.cover ?: ArtworkLoader.cached(
+                song.uri, 1_600, song.albumId.takeIf { it > 0L }?.toString()
+            )
+        })
+    }
+    // Already computed and cached with each track; never resample the
+    // bitmap on the UI thread just to recolor the navigation glass.
+    var playerGlassArtworkColor by remember {
+        mutableStateOf(
+            currentSong?.let { ImmersiveArtworkCache.cached(it)?.backdrop }?.let { Color(it) }
+                ?: Color(0xFF141414)
+        )
+    }
+    LaunchedEffect(currentSong?.uri) {
+        currentSong?.let { ImmersiveArtworkCache.cached(it)?.backdrop }?.let {
+            playerGlassArtworkColor = Color(it)
+        }
+    }
+    // Color belongs to the current track, not the selected app theme.
+    // Reuse cached art where possible; extract only when Vinyl is active.
+    var vinylAccentColor by remember(currentSong?.uri) {
+        mutableStateOf(Color(0xFFAAB0B8))
     }
     val uiPrefs = remember(context) {
         context.getSharedPreferences("ui_preferences", android.content.Context.MODE_PRIVATE)
     }
+    var playerScale by remember { mutableFloatStateOf(PlayerScalePreference.read(uiPrefs)) }
+    var miniLyricsEnabled by remember { mutableStateOf(com.yohandeku32.nusamusic.ui.MiniLyricsPreference.read(uiPrefs)) }
     var titleFontSize by remember {
         mutableStateOf(uiPrefs.getFloat("title_font_size", 34f))
     }
@@ -1627,9 +2070,55 @@ private fun NusaMusicApp(
             )
         )
     }
-    val showArtistBiography = playerPresentationMode != PlayerPresentationMode.CD
+    LaunchedEffect(currentSong?.uri, playerPresentationMode) {
+        val active = currentSong ?: return@LaunchedEffect
+        if (playerPresentationMode != PlayerPresentationMode.VINYL) return@LaunchedEffect
+        val cacheKey = active.albumId.takeIf { it > 0L }?.toString()
+        val image = ArtworkLoader.cached(
+            uriString = active.uri, maxSize = 256, cacheKey = cacheKey
+        ) ?: ArtworkLoader.load(
+            context = context, uriString = active.uri, maxSize = 256, cacheKey = cacheKey
+        )
+        if (image != null) {
+            vinylAccentColor = withContext(kotlinx.coroutines.Dispatchers.Default) {
+                vinylAccentFromArtwork(image)
+            }
+        }
+    }
+    // Cover the brief startup window before Media3 restores its queue.
+    // The queue lookahead also includes this Artist; the loader shares cache
+    // and de-duplicates requests when both paths are active.
+    LaunchedEffect(artistKey, playerPresentationMode) {
+        if (playerPresentationMode != PlayerPresentationMode.IMMERSIVE_ARTWORK) {
+            return@LaunchedEffect
+        }
+        val name = ArtistNameUtils.firstArtist(currentSong?.artist)
+        if (name.isBlank()) return@LaunchedEffect
+        delay(380L)
+        AppleArtistPortraitLoader.warm(context, name)
+    }
+    // This option themes ONLY the Immersive song library and its search.
+    // Reuse the existing preference on upgrade so the chosen color persists.
+    var libraryLightMode by remember {
+        mutableStateOf(
+            uiPrefs.getBoolean("immersive_library_light_mode",
+                uiPrefs.getBoolean("immersive_light_mode", false))
+        )
+    }
+    // Retain the saved rendering choice after removing its settings row.
+    val liquidGlassEnabled = remember {
+        uiPrefs.getBoolean("immersive_liquid_glass_enabled", true)
+    }
     var animatedArtworkEnabled by remember {
         mutableStateOf(uiPrefs.getBoolean("animated_artwork_enabled", true))
+    }
+    var dynamicGlowEnabled by remember {
+        mutableStateOf(com.yohandeku32.nusamusic.ui.DynamicGlowPreference.read(uiPrefs))
+    }
+    var artworkSourceOrder by remember {
+        mutableStateOf(ArtworkSourceOrder.fromPreference(
+            uiPrefs.getString("animated_artwork_source_order", null)
+        ))
     }
     var roundedCarouselCorners by remember {
         mutableStateOf(uiPrefs.getBoolean("rounded_carousel_corners", true))
@@ -1768,16 +2257,24 @@ private fun NusaMusicApp(
         listOf('#') + ('A'..'Z')
     }
 
-    // The artist sits to the left, so a rightward swipe from the player opens it.
+    // Artist is a rising in-player overlay; only Now Playing and Library
+    // participate in horizontal pager gestures.
     val artistPageEnabled = playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
-    val playerPage = if (artistPageEnabled) 1 else 0
-    val libraryPage = playerPage + 1
-    var libraryWasVisible by remember { mutableStateOf(false) }
+    val playerPage = 0
+    val libraryPage = 1
+    var libraryWasVisible by remember { mutableStateOf(startInLibrary) }
     val pagerState = androidx.compose.runtime.key(artistPageEnabled) {
         androidx.compose.foundation.pager.rememberPagerState(
-            initialPage = if (libraryWasVisible) libraryPage else playerPage,
-            pageCount = { if (artistPageEnabled) 3 else 2 }
+            initialPage = if (!artistPageEnabled && libraryWasVisible)
+                libraryPage else playerPage,
+            pageCount = { if (artistPageEnabled) 1 else 2 }
         )
+    }
+    LaunchedEffect(playerPresentationMode) {
+        if (!artistPageEnabled) {
+            artistOverlayOpen = false
+            libraryOverlayOpen = false
+        }
     }
     val playerScrollState =
         androidx.compose.foundation.lazy.rememberLazyListState()
@@ -1789,6 +2286,15 @@ private fun NusaMusicApp(
         derivedStateOf { !libraryListState.isScrollInProgress }
     }
     val scope = rememberCoroutineScope()
+    fun openDiscoveryArtist(name: String, albumKey: String? = null) {
+        val key = ArtistNameUtils.cacheKey(name)
+        val state = artistPageStates.get(key) ?: ImmersiveArtistPageState(name).also {
+            artistPageStates.put(key, it)
+        }
+        state.selectedAlbumKey = albumKey
+        discoveryArtistName = name
+        scope.launch { state.listState.scrollToItem(0) }
+    }
     var alphabetVisible by remember { mutableStateOf(false) }
     var alphabetDragging by remember { mutableStateOf(false) }
     var alphabetHideJob by remember { mutableStateOf<Job?>(null) }
@@ -1831,6 +2337,10 @@ private fun NusaMusicApp(
     }
 
     // Opening the library must not change the user's manually chosen scroll position.
+    LaunchedEffect(songs, playerPresentationMode, animatedArtworkEnabled, artworkSourceOrder) {
+        (context as? MainActivity)?.refreshArtworkLookahead()
+    }
+
     LaunchedEffect(pagerState.settledPage, lyricsRequested, playerPage) {
         libraryWasVisible = pagerState.settledPage == libraryPage
         onPlaybackPageVisibilityChanged(
@@ -1851,16 +2361,32 @@ private fun NusaMusicApp(
         }
     }
 
-    LaunchedEffect(artistKey, showArtistBiography) {
-        biographyLoading = false
-        if (!showArtistBiography) return@LaunchedEffect
-        if (artistBiography != null) return@LaunchedEffect
-        biographyLoading =
-            ArtistNameUtils.firstArtist(currentSong?.artist).isNotBlank()
-        artistBiography = currentSong?.let {
-            ArtistBiographyLoader.load(context, it)
-        }
-        biographyLoading = false
+    deleteFromLibrary?.let { candidate ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { deleteFromLibrary = null },
+            title = {
+                Text(nusaText("Hapus lagu permanen?", "Delete song permanently?"))
+            },
+            text = {
+                Text(nusaText(
+                    "“${candidate.title}” akan dihapus dari penyimpanan perangkat, bukan hanya dari daftar lagu. Tindakan ini tidak dapat dibatalkan.",
+                    "“${candidate.title}” will be deleted from device storage, not just the song list. This cannot be undone."
+                ))
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    deleteFromLibrary = null
+                    onDeleteSong(candidate)
+                }) {
+                    Text(nusaText("Hapus permanen", "Delete permanently"), color = Color(0xFFD54A4A))
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { deleteFromLibrary = null }) {
+                    Text(nusaText("Batal", "Cancel"))
+                }
+            }
+        )
     }
 
     if (showSettings) {
@@ -1912,6 +2438,11 @@ private fun NusaMusicApp(
             }
 
             PlayerSettingsContent(
+                miniLyricsEnabled = miniLyricsEnabled,
+                onMiniLyricsChange = { enabled ->
+                    miniLyricsEnabled = enabled
+                    com.yohandeku32.nusamusic.ui.MiniLyricsPreference.write(uiPrefs, enabled)
+                },
                 lyricsFontSize = lyricsFontSize,
                 onLyricsFontSizeChange = { lyricsFontSize = it },
                 onLyricsFontSizeChangeFinished = {
@@ -1919,7 +2450,21 @@ private fun NusaMusicApp(
                 },
                 hasLyricsSong = currentSong != null,
                 lyricsLoading = LYRICS_ENABLED && currentSong?.let { lyricsState.forSong(it).loading } == true,
-                onRetryLyrics = { currentSong?.let { lyricsState.load(it, scope, retry = true) } },
+                onRetryLyrics = {
+                    currentSong?.let {
+                        lyricsState.load(it, scope, retry = true, onlineEnabled = onlineLyricsEnabled)
+                    }
+                },
+                onlineLyricsEnabled = onlineLyricsEnabled,
+                onOnlineLyricsChange = { enabled ->
+                    if (onlineLyricsEnabled != enabled) {
+                        onlineLyricsEnabled = enabled
+                        uiPrefs.edit().putBoolean("online_lyrics_enabled", enabled).apply()
+                        currentSong?.let {
+                            lyricsState.load(it, scope, retry = true, onlineEnabled = enabled)
+                        }
+                    }
+                },
                 titleFontSize = titleFontSize,
                 onTitleFontSizeChange = { titleFontSize = it },
                 onTitleFontSizeChangeFinished = {
@@ -1941,6 +2486,21 @@ private fun NusaMusicApp(
                 onChooseCustomTitleFont = onChooseCustomTitleFont,
                 onResetCustomTitleFont = onResetCustomTitleFont,
                 playerPresentationMode = playerPresentationMode,
+                playerScale = playerScale,
+                onPlayerScaleChange = { value ->
+                    val normalized = PlayerScalePreference.normalize(value)
+                    if (playerScale != normalized) {
+                        playerScale = normalized
+                        PlayerScalePreference.write(uiPrefs, normalized)
+                    }
+                },
+                libraryLightMode = libraryLightMode,
+                onLibraryLightModeChange = { light ->
+                    libraryLightMode = light
+                    uiPrefs.edit()
+                        .putBoolean("immersive_library_light_mode", light)
+                        .apply()
+                },
                 onPresentationSelected = { mode ->
                     if (mode.isAvailable) {
                         playerPresentationMode = mode
@@ -1948,6 +2508,11 @@ private fun NusaMusicApp(
                     }
                 },
                 animatedArtworkEnabled = animatedArtworkEnabled,
+                dynamicGlowEnabled = dynamicGlowEnabled,
+                onDynamicGlowChange = { enabled ->
+                    dynamicGlowEnabled = enabled
+                    com.yohandeku32.nusamusic.ui.DynamicGlowPreference.write(uiPrefs, enabled)
+                },
                 roundedCarouselCorners = roundedCarouselCorners,
                 onRoundedCarouselCornersChange = { rounded ->
                     roundedCarouselCorners = rounded
@@ -1956,6 +2521,17 @@ private fun NusaMusicApp(
                 onAnimatedArtworkChange = { enabled ->
                     animatedArtworkEnabled = enabled
                     uiPrefs.edit().putBoolean("animated_artwork_enabled", enabled).apply()
+                },
+                artworkSourceOrder = artworkSourceOrder.name,
+                onArtworkSourceOrderChange = { preference ->
+                    val chosen = ArtworkSourceOrder.fromPreference(preference)
+                    if (chosen != artworkSourceOrder) {
+                        artworkSourceOrder = chosen
+                        uiPrefs.edit()
+                            .putString("animated_artwork_source_order", chosen.name)
+                            .apply()
+                        (context as? MainActivity)?.refreshArtworkLookahead(reset = true)
+                    }
                 },
                 realisticControls = realisticControls,
                 onRealisticControlsChange = { realistic ->
@@ -1994,8 +2570,49 @@ private fun NusaMusicApp(
     androidx.activity.compose.BackHandler(
         enabled = lyricsRequested && pagerState.settledPage == playerPage && !showSettings
     ) { lyricsRequested = false }
+    // The Library is now an in-player overlay rather than a pager destination.
+    // Physical Android Back must dismiss it even when its search isn't active.
+    androidx.activity.compose.BackHandler(
+        enabled = libraryOverlayOpen && !showSettings
+    ) { libraryOverlayOpen = false }
     LaunchedEffect(pagerState.settledPage) {
         if (pagerState.settledPage != playerPage) lyricsRequested = false
+    }
+    LaunchedEffect(pagerState.settledPage) {
+        if (pagerState.settledPage != playerPage) {
+            artistOverlayOpen = false
+            libraryOverlayOpen = false
+        }
+    }
+
+    val keyboardForPager = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    val focusForPager = androidx.compose.ui.platform.LocalFocusManager.current
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    // The Activity window can hide its keyboard while Compose still remembers
+    // a focused BasicTextField. Clear Compose focus on both backgrounding and
+    // return; otherwise Android reopens Gboard on top of the main player.
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            when (event) {
+                androidx.lifecycle.Lifecycle.Event.ON_PAUSE,
+                androidx.lifecycle.Lifecycle.Event.ON_STOP,
+                androidx.lifecycle.Lifecycle.Event.ON_RESUME -> {
+                    keyboardForPager?.hide()
+                    focusForPager.clearFocus(force = true)
+                }
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    // Off-screen pages remain composed for swiping. Explicitly clear their
+    // text focus so the IME cannot follow a reverse swipe to Now Playing.
+    LaunchedEffect(pagerState.settledPage) {
+        if (pagerState.settledPage != libraryPage) {
+            keyboardForPager?.hide()
+            focusForPager.clearFocus(force = true)
+        }
     }
 
     Scaffold(
@@ -2012,78 +2629,252 @@ private fun NusaMusicApp(
             MiuixHorizontalPager(
                 state = pagerState,
                 backgroundColor = pageBackdrop,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
+                userScrollEnabled = !artistPageEnabled &&
+                    !artistOverlayOpen && !libraryOverlayOpen,
+                // The library has its own surface, but NO artificial backing
+                // patch. The previous overlapping page now supplies the real
+                // corner pixels while swiping in either direction.
+                pageSurface = { page ->
+                    if (artistPageEnabled && page == libraryPage) {
+                        immersiveColors(libraryLightMode).background
+                    } else pageBackdrop
+                },
+                onHorizontalSwipeStarted = {
+                    // Avoid running expensive global focus/IME callbacks on
+                    // player <-> artist gestures where no keyboard is open.
+                    if (pagerState.settledPage == libraryPage) {
+                        keyboardForPager?.hide()
+                        focusForPager.clearFocus(force = true)
+                    }
+                }
             ) { page ->
                 when {
-                    artistPageEnabled && page == 0 -> ImmersiveArtistPage(
-                        artistName = currentSong?.artist,
-                        songs = songs,
-                        currentSong = currentSong,
-                        biography = artistBiography,
-                        biographyLoading = biographyLoading,
-                        isVisible = pagerState.settledPage == 0,
-                        state = artistPageState,
-                        onVisible = { artistPageState.loadPortrait(context, scope) },
-                        onBack = { scope.launch { pagerState.animateMiuixScrollToPage(playerPage) } },
-                        onPlay = onPlay,
-                        artwork = { song, modifier ->
-                            ArtworkView(song = song, maxSizePx = 512, modifier = modifier, grainOverlay = false)
-                        }
-                    )
                     page == playerPage -> {
                         BoxWithConstraints(Modifier.fillMaxSize()) {
                         val playerViewportHeight = maxHeight
                         if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
-                            ImmersiveArtworkPlayer(
-                                title = currentSong?.title ?: nusaText("Pilih lagu", "Choose a song"),
-                                composerNames = currentSong?.let { lyricsState.forSong(it).data?.stored?.credits?.composers?.joinToString(", ") } ?: "",
-                                artist = currentSong?.artist ?: nusaText("Perpustakaan musik lokal Anda", "Your local music library"),
-                                titleFontFamily = if (uiPrefs.contains("title_font_family")) titleFontFamily else FontFamily.SansSerif,
-                                titleFontSize = titleFontSize,
-                                hasSong = currentSong != null,
-                                isPlaying = isPlaying,
-                                isFavorite = isFavorite,
-                                shuffleEnabled = shuffleEnabled,
-                                repeatMode = repeatMode,
-                                lyricsOpen = lyricsRequested,
-                                lyricsEnabled = LYRICS_ENABLED,
-                                onPlayPause = if (currentSong == null) onRequestPermission else onTogglePlay,
-                                onPrevious = onPrevious, onNext = onNext,
-                                onShuffle = onToggleShuffle, onRepeat = onToggleRepeat,
-                                onFavorite = { isFavorite = !isFavorite },
-                                onLyrics = { lyricsRequested = !lyricsRequested },
-                                onArtist = { scope.launch { pagerState.animateMiuixScrollToPage(0); lyricsRequested = false } },
-                                onLibrary = { scope.launch { pagerState.animateMiuixScrollToPage(libraryPage) } },
-                                onShare = { onShare(currentSong) },
-                                onSettings = { showSettings = true },
-                                artwork = { artworkModifier, heroHeight, heroWidth ->
-                                    ImmersiveArtwork(
-                                        currentSong, animatedArtworkEnabled, heroHeight, heroWidth,
-                                        artworkModifier, lyricsMode = lyricsRequested
-                                    )
-                                },
-                                progress = { progressModifier ->
-                                    PlaybackProgress(positionMsState, durationMs, currentSong != null && durationMs > 0,
-                                        onSeek, immersive = true, modifier = progressModifier)
-                                },
-                                quality = { AudioQualityPill(song = currentSong, immersive = true) },
-                                lyrics = { lyricsModifier ->
-                                    ImmersiveLyricsPanel(
-                                        song = currentSong,
-                                        positionMs = positionMsState,
-                                        readPlaybackPosition = readPlaybackPosition,
-                                        readPlaybackEpoch = readPlaybackEpoch,
-                                        isPlaying = isPlaying,
-                                        playbackEpoch = lyricsPlaybackEpoch,
-                                        durationMs = durationMs,
-                                        state = lyricsState,
-                                        onSeek = onSeek,
-                                        fontSize = lyricsFontSize,
-                                        modifier = lyricsModifier
-                                    )
-                                },
-                                modifier = Modifier.fillMaxSize()
-                            )
+                            PlayerScaleHost(playerScale) {
+                                val lyricCredits = currentSong?.let { lyricsState.forSong(it).data?.ttmlCredits }
+                                ImmersiveArtworkPlayer(
+                                    miniLyrics = if (miniLyricsEnabled && LYRICS_ENABLED) ({ lightMode ->
+                                        if (!showSettings && pagerState.settledPage == playerPage) {
+                                            com.yohandeku32.nusamusic.ui.MiniLyricsHost(
+                                                currentSong, lyricsState, positionMsState, readPlaybackPosition,
+                                                readPlaybackEpoch, isPlaying, lyricsPlaybackEpoch,
+                                                onlineLyricsEnabled, lightMode)
+                                        }
+                                    }) else null,
+                                    title = currentSong?.title ?: nusaText("Pilih lagu", "Choose a song"),
+                                    composerNames = lyricCredits?.let { it.songwriters.ifEmpty { it.composers }.joinToString(", ") }.orEmpty(),
+                                    artist = currentSong?.artist ?: nusaText("Perpustakaan musik lokal Anda", "Your local music library"),
+                                    titleFontFamily = if (uiPrefs.contains("title_font_family")) titleFontFamily else FontFamily.SansSerif,
+                                    titleFontSize = titleFontSize,
+                                    hasSong = currentSong != null,
+                                    isPlaying = isPlaying,
+                                    isFavorite = isFavorite,
+                                    shuffleEnabled = shuffleEnabled,
+                                    repeatMode = repeatMode,
+                                    lyricsOpen = lyricsRequested,
+                                    lyricsEnabled = LYRICS_ENABLED,
+                                    onPlayPause = if (currentSong == null) onRequestPermission else onTogglePlay,
+                                    onPrevious = onPrevious, onNext = onNext,
+                                    onShuffle = onToggleShuffle, onRepeat = onToggleRepeat,
+                                    onFavorite = { isFavorite = !isFavorite },
+                                    onLyrics = {
+                                        artistOverlayOpen = false
+                                        libraryOverlayOpen = false
+                                        lyricsRequested = !lyricsRequested
+                                    },
+                                    onDiscovery = {
+                                        if (!artistOverlayOpen || libraryOverlayOpen) {
+                                            lyricsRequested = false
+                                            discoveryArtistName = null
+                                            libraryOverlayOpen = false
+                                            artistOverlayOpen = true
+                                        }
+                                    },
+                                    discoveryOpen = artistOverlayOpen,
+                                    canCloseDiscoveryBySwipe = {
+                                        val state = if (discoveryArtistName == null) discoveryListState
+                                            else artistPageState.listState
+                                        state.firstVisibleItemIndex == 0 && state.firstVisibleItemScrollOffset < 12
+                                    },
+                                    onDiscoveryClose = { artistOverlayOpen = false },
+                                    discoveryContent = { settled ->
+                                        val selectedArtist = discoveryArtistName
+                                        if (selectedArtist == null) {
+                                            ImmersiveDiscoveryPage(
+                                                songs = songs, currentSong = currentSong, isPlaying = isPlaying,
+                                                listState = discoveryListState, isVisible = artistOverlayOpen,
+                                                isSettled = settled,
+                                                onBack = { artistOverlayOpen = false },
+                                                onArtist = { openDiscoveryArtist(it) },
+                                                onAlbum = { openDiscoveryArtist(it.artist, it.albumKey) },
+                                                onPlay = { selected, queue ->
+                                                    artistOverlayOpen = false
+                                                    onPlay(selected, queue)
+                                                },
+                                                onTogglePlay = onTogglePlay,
+                                                onLibrary = {
+                                                    artistOverlayOpen = false
+                                                    libraryOverlayOpen = true
+                                                },
+                                                artwork = { track, tile ->
+                                                    ArtworkView(track, maxSizePx = 320, modifier = tile,
+                                                        loadAllowed = settled, grainOverlay = false)
+                                                }
+                                            )
+                                        } else {
+                                        ImmersiveArtistPage(
+                                            artistName = selectedArtist,
+                                            songs = songs,
+                                            currentSong = currentSong,
+                                            isVisible = artistOverlayOpen,
+                                            state = artistPageState,
+                                            onBack = { discoveryArtistName = null },
+                                            onPlay = { selected, queue ->
+                                                artistOverlayOpen = false
+                                                onPlay(selected, queue)
+                                            },
+                                            artwork = { song, modifier ->
+                                                ArtworkView(song, maxSizePx = 512, modifier = modifier,
+                                                    grainOverlay = false)
+                                            },
+                                            heroArtwork = { song, modifier ->
+                                                val cover = artistTransitionCover
+                                                if (song.uri == currentSong?.uri && cover != null) {
+                                                    Image(bitmap = cover.asImageBitmap(),
+                                                        contentDescription = song.title,
+                                                        contentScale = ContentScale.Crop,
+                                                        modifier = modifier)
+                                                } else {
+                                                    ArtworkView(song, maxSizePx = 512,
+                                                        modifier = modifier, grainOverlay = false)
+                                                }
+                                            },
+                                            overlayMode = true
+                                        )
+                                        }
+                                    },
+                                    libraryOpen = libraryOverlayOpen,
+                                    libraryLightMode = libraryLightMode,
+                                    liquidGlassEnabled = liquidGlassEnabled,
+                                    glassArtworkColor = playerGlassArtworkColor,
+                                    onLibraryClose = { libraryOverlayOpen = false },
+                                    onHome = {
+                                        artistOverlayOpen = false
+                                        libraryOverlayOpen = false
+                                    },
+                                    libraryContent = { settled, bottomContentPadding ->
+                                        ImmersiveMusicLibrary(
+                                            songs = songs,
+                                            currentSong = currentSong,
+                                            isPlaying = isPlaying,
+                                            isVisible = libraryOverlayOpen && settled,
+                                            bottomContentPadding = bottomContentPadding,
+                                            lightMode = libraryLightMode,
+                                            hasMusicAccess = hasMusicAccess,
+                                            isScanning = isScanningMusic,
+                                            emptyMessage = emptyLibraryMessage,
+                                            onReturnToPlayer = { libraryOverlayOpen = false },
+                                            onPlay = { selected, queue ->
+                                                libraryOverlayOpen = false
+                                                onPlay(selected, queue)
+                                            },
+                                            onPlayNext = onPlayNext,
+                                            onDeleteSong = onDeleteSong,
+                                            onShare = { onShare(it) },
+                                            onTogglePlay = onTogglePlay,
+                                            onScanMusic = onScanMusic,
+                                            onRequestPermission = onRequestPermission,
+                                            onChooseMusicFolder = onSelectMusicFolder,
+                                            artwork = { track, tileModifier, settled, index ->
+                                                ArtworkView(
+                                                    song = track,
+                                                    maxSizePx = 144,
+                                                    // Cached album thumbnails are available
+                                                    // instantly; defer misses until the
+                                                    // Library entrance finishes. Stagger
+                                                    // each visible row to avoid frame spikes.
+                                                    loadAllowed = settled,
+                                                    loadDelayMs = 40L +
+                                                        (index.coerceIn(0, 12) * 28L),
+                                                    grainOverlay = false,
+                                                    modifier = tileModifier
+                                                )
+                                            }
+                                        )
+                                    },
+                                    onLibrary = {
+                                        artistOverlayOpen = false
+                                        lyricsRequested = false
+                                        libraryOverlayOpen = true
+                                    },
+                                    onShare = { onShare(currentSong) },
+                                    onSettings = {
+                                        artistOverlayOpen = false
+                                        libraryOverlayOpen = false
+                                        showSettings = true
+                                    },
+                                    artwork = { artworkModifier, heroHeight, heroWidth ->
+                                        ImmersiveArtwork(
+                                            currentSong, animatedArtworkEnabled, heroHeight, heroWidth,
+                                            artworkModifier, lyricsMode = lyricsRequested,
+                                            sourceOrder = artworkSourceOrder,
+                                            dynamicGlowEnabled = dynamicGlowEnabled,
+                                            playerPageVisible = pagerState.settledPage == playerPage &&
+                                                !artistOverlayOpen && !libraryOverlayOpen &&
+                                                !immersiveVideoSuspended,
+                                            pageReveal = {
+                                                // Renderer reads the changing pager
+                                                // offset only inside graphicsLayer.
+                                                // Fade live TextureView early on BOTH
+                                                // swipe directions; the existing cover
+                                                // stays warm beneath it.
+                                                kotlin.math.abs(
+                                                    playerPage - pagerState.currentPage -
+                                                        pagerState.currentPageOffsetFraction
+                                                ).coerceIn(0f, 1f)
+                                            },
+                                            onCoverReady = { uri, cover ->
+                                                if (uri == currentSong?.uri) artistTransitionCover = cover
+                                            },
+                                            onPaletteReady = { uri, palette ->
+                                                if (uri == currentSong?.uri) playerGlassArtworkColor = palette
+                                            }
+                                        )
+                                    },
+                                    progress = { progressModifier ->
+                                        PlaybackProgress(
+                                            positionMsState,
+                                            durationMs.takeIf { it > 0L } ?: currentSong?.durationMs ?: 0L,
+                                            currentSong != null,
+                                            onSeek, immersive = true, modifier = progressModifier
+                                        )
+                                    },
+                                    quality = { AudioQualityPill(song = currentSong, immersive = true) },
+                                    lyrics = { lyricsModifier ->
+                                        ImmersiveLyricsPanel(
+                                            song = currentSong,
+                                            positionMs = positionMsState,
+                                            readPlaybackPosition = readPlaybackPosition,
+                                            readPlaybackEpoch = readPlaybackEpoch,
+                                            isPlaying = isPlaying,
+                                            playbackEpoch = lyricsPlaybackEpoch,
+                                            durationMs = durationMs,
+                                            state = lyricsState,
+                                            onSeek = onSeek,
+                                            fontSize = lyricsFontSize,
+                                            onlineLyricsEnabled = onlineLyricsEnabled,
+                                            modifier = lyricsModifier,
+                                            onQueueLyrics = onQueueLyrics,
+                                            isLyricsQueued = isLyricsQueued
+                                        )
+                                    },
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
                             return@BoxWithConstraints
                         }
                         if (playerPresentationMode == PlayerPresentationMode.CD) {
@@ -2224,6 +3015,15 @@ private fun NusaMusicApp(
                                                     modifier = recordModifier
                                                 )
                                             },
+                                            accentColor = vinylAccentColor,
+                                            sleeve = { sleeveModifier ->
+                                                ArtworkView(
+                                                    song = currentSong,
+                                                    maxSizePx = 512,
+                                                    modifier = sleeveModifier,
+                                                    grainOverlay = false
+                                                )
+                                            },
                                             quality = { AudioQualityPill(song = currentSong) },
                                             footer = {
                                                 Row(
@@ -2264,20 +3064,46 @@ private fun NusaMusicApp(
                                 }
                             }
 
-                            if (showArtistBiography && !artistPageEnabled) {
-                                item {
-                                    ArtistBiographySection(
-                                        artistName = currentSong?.artist,
-                                        biography = artistBiography,
-                                        loading = biographyLoading
-                                    )
-                                }
-                            }
                         }
                         }
                     }
 
                     page == libraryPage -> {
+                        if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
+                            ImmersiveMusicLibrary(
+                                songs = songs,
+                                currentSong = currentSong,
+                                isPlaying = isPlaying,
+                                isVisible = pagerState.settledPage == libraryPage &&
+                                    !pagerState.isScrollInProgress,
+                                lightMode = libraryLightMode,
+                                hasMusicAccess = hasMusicAccess,
+                                isScanning = isScanningMusic,
+                                emptyMessage = emptyLibraryMessage,
+                                onReturnToPlayer = {
+                                    scope.launch { pagerState.animateMiuixScrollToPage(playerPage) }
+                                },
+                                onPlay = onPlay,
+                                onPlayNext = onPlayNext,
+                                onDeleteSong = onDeleteSong,
+                                onShare = { onShare(it) },
+                                onTogglePlay = onTogglePlay,
+                                onScanMusic = onScanMusic,
+                                onRequestPermission = onRequestPermission,
+                                onChooseMusicFolder = onSelectMusicFolder,
+                                artwork = { track, tileModifier, settled, index ->
+                                    ArtworkView(
+                                        song = track,
+                                        maxSizePx = 144,
+                                        loadAllowed = settled,
+                                        loadDelayMs = 40L +
+                                            (index.coerceIn(0, 12) * 28L),
+                                        grainOverlay = false,
+                                        modifier = tileModifier
+                                    )
+                                }
+                            )
+                        } else {
                         val vinylLibrary = playerPresentationMode == PlayerPresentationMode.VINYL
                         val cdLibrary = playerPresentationMode == PlayerPresentationMode.CD
                         // Match the CD player's charcoal background and lime
@@ -2397,6 +3223,7 @@ private fun NusaMusicApp(
                                         songs = filtered,
                                         currentSongId = currentSong?.id,
                                         onPlay = { onPlay(it, filtered) },
+                                        onRequestDelete = { deleteFromLibrary = it },
                                         artwork = { song, artworkModifier ->
                                             ArtworkView(song = song, maxSizePx = 512, modifier = artworkModifier)
                                         },
@@ -2416,6 +3243,7 @@ private fun NusaMusicApp(
                                         pauseLabel = nusaText("Jeda", "Pause"),
                                         unknownArtistLabel = nusaText("Artis tidak dikenal", "Unknown artist"),
                                         onPlay = { onPlay(it, filtered) },
+                                        onRequestDelete = { deleteFromLibrary = it },
                                         onTogglePlay = onTogglePlay,
                                         artwork = { song, artworkModifier ->
                                             ArtworkView(song = song, maxSizePx = 256, modifier = artworkModifier)
@@ -2451,7 +3279,8 @@ private fun NusaMusicApp(
                                             loadDetails = libraryRowLoadsEnabled,
                                             onPlay = { selectedSong ->
                                                 onPlay(selectedSong, filtered)
-                                            }
+                                            },
+                                            onRequestDelete = { deleteFromLibrary = it }
                                         )
                                     }
                                 } else if (!permissionGranted && selectedMusicFolders.isEmpty()) {
@@ -2464,37 +3293,36 @@ private fun NusaMusicApp(
                                         ) {
                                             Text(
                                                 nusaText(
-                                                    "Izinkan Nusa mengakses file audio Anda.",
-                                                    "Give Nusa access to your audio files."
+                                                    "Tambahkan musik untuk mulai mendengarkan.",
+                                                    "Add music to start listening."
                                                 ),
                                                 color = Color(0xFF9D9D9D),
                                                 fontSize = 14.sp
                                             )
                                             Spacer(Modifier.height(12.dp))
-                                            FilledIconButton(onClick = onRequestPermission) {
-                                                Icon(
-                                                    Icons.Default.FolderOpen,
-                                                    contentDescription = nusaText(
-                                                        "Izinkan akses musik",
-                                                        "Allow music access"
-                                                    )
-                                                )
-                                            }
+                                            com.yohandeku32.nusamusic.ui.MusicImportActions(
+                                                onChooseFolder = onSelectMusicFolder,
+                                                onDeviceMusic = onRequestPermission,
+                                                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)
+                                            )
                                         }
                                     }
                                 } else {
                                     item {
-                                        Box(
+                                        Column(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .padding(top = 80.dp),
-                                            contentAlignment = Alignment.Center
+                                            horizontalAlignment = Alignment.CenterHorizontally
                                         ) {
                                             Text(
                                                 emptyLibraryMessage,
                                                 color = Color(0xFF9D9D9D),
                                                 fontSize = 14.sp
                                             )
+                                            if (!isScanningMusic && songs.isEmpty()) TextButton(onClick = onSelectMusicFolder) {
+                                                Text(nusaText("Pilih folder musik", "Choose a music folder"))
+                                            }
                                         }
                                     }
                                 }
@@ -2759,6 +3587,7 @@ private fun NusaMusicApp(
 
                         }
                         } // Library-only theme
+                        } // Legacy CD/Vinyl library
                     }
                 }
             }
@@ -2892,114 +3721,6 @@ private fun PrototypeAlbumRecordCard(
     }
 }
 
-@Composable
-private fun ArtistBiographySection(
-    artistName: String?,
-    biography: com.yohandeku32.nusamusic.data.ArtistBiography?,
-    loading: Boolean
-) {
-    val displayArtist = ArtistNameUtils.firstArtist(artistName).ifBlank { "Unknown artist" }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Color.Black)
-            .padding(horizontal = 28.dp, vertical = 24.dp)
-    ) {
-        if (loading) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(180.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    nusaText("Memuat biografi artis…", "Loading artist biography…"),
-                    color = Color(0xFF9A9A9A),
-                    fontSize = 14.sp
-                )
-            }
-        } else if (biography == null) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 72.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = displayArtist,
-                    color = Color.White,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center
-                )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    if (ArtistBiographyLoader.isConfigured()) {
-                        nusaText("Biografi tidak tersedia", "Biography not available")
-                    } else {
-                        nusaText(
-                            "Atur LASTFM_API_KEY di local.properties atau environment",
-                            "Set LASTFM_API_KEY in local.properties or the environment"
-                        )
-                    },
-                    color = Color(0xFF8A8A8A),
-                    fontSize = 14.sp,
-                    textAlign = TextAlign.Center
-                )
-            }
-        } else {
-            Text(
-                nusaText("TENTANG ARTIS", "ABOUT THE ARTIST"),
-                color = Color(0xFF8E8E8E),
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.6.sp
-            )
-            Spacer(Modifier.height(7.dp))
-            Text(
-                text = biography.artistName,
-                color = Color.White,
-                fontSize = 24.sp,
-                lineHeight = 28.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 2,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-            )
-            Spacer(Modifier.height(16.dp))
-            val biographyScrollState =
-                androidx.compose.foundation.rememberScrollState()
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(178.dp)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(Color(0xFF111111))
-                    .padding(horizontal = 18.dp, vertical = 16.dp)
-                    .verticalScroll(biographyScrollState)
-            ) {
-                Text(
-                    text = biography.text,
-                    color = Color(0xFFE7E7E7),
-                    fontSize = 15.sp,
-                    lineHeight = 23.sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-            Text(
-                text = nusaText(
-                    "Sumber: Last.fm (" + biography.sourceLanguage.uppercase() + ")",
-                    "Source: Last.fm (" + biography.sourceLanguage.uppercase() + ")"
-                ),
-                color = Color(0xFF777777),
-                fontSize = 11.sp,
-                modifier = Modifier.padding(start = 4.dp, top = 8.dp)
-            )
-        }
-    }
-}
-
 private enum class AudioQualityBadge {
     LOSSLESS,
     HI_RES,
@@ -3010,11 +3731,17 @@ private enum class AudioQualityBadge {
 private fun AudioQualityPill(
     song: Song?,
     immersive: Boolean = false,
+    immersiveLightMode: Boolean = false,
     onBadgeVisibilityChanged: ((Boolean) -> Unit)? = null
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    var codecInfo by remember { mutableStateOf<AudioCodecInfo?>(null) }
-    var resolvedCodecUri by remember { mutableStateOf<String?>(null) }
+    // Use already verified codec data immediately when a row/player exists
+    // instead of waiting one extra LaunchedEffect frame to reveal Hi-Res.
+    val initialCodec = song?.uri?.let(AudioCodecLoader::cached)
+    var codecInfo by remember(song?.uri) { mutableStateOf(initialCodec) }
+    var resolvedCodecUri by remember(song?.uri) {
+        mutableStateOf(if (initialCodec != null) song?.uri else null)
+    }
     var showMetadataDialog by remember(song?.uri) { mutableStateOf(false) }
 
     LaunchedEffect(song?.uri) {
@@ -3066,10 +3793,16 @@ private fun AudioQualityPill(
                 Box(
                     modifier = Modifier
                         .padding(top = if (immersive) 0.dp else 4.dp)
-                        .clip(RoundedCornerShape(7.dp))
-                        .background(
-                            if (immersive) Color.White.copy(alpha = 0.10f)
-                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                        .then(
+                            // Preserve the original compact rounded rectangle;
+                            // only its translucent glass material matches the
+                            // bottom controls, not their capsule silhouette.
+                            if (immersive) Modifier.immersiveGlassPill(7.dp, immersiveLightMode)
+                            else Modifier
+                                .clip(RoundedCornerShape(7.dp))
+                                .background(
+                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                                )
                         )
                         .clickable(enabled = metadataMatchesSong && info != null) {
                             showMetadataDialog = true
@@ -3082,8 +3815,9 @@ private fun AudioQualityPill(
                         fontSize = if (immersive) 11.sp else 10.sp,
                         lineHeight = if (immersive) 13.sp else 12.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = if (immersive) Color.White
-                            else MaterialTheme.colorScheme.onSurface
+                        color = if (immersive) {
+                            if (immersiveLightMode) Color(0xFF171A20) else Color.White
+                        } else MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
@@ -3092,7 +3826,7 @@ private fun AudioQualityPill(
                     modifier = Modifier
                         .padding(top = if (immersive) 0.dp else 4.dp)
                         .then(
-                            if (immersive) Modifier
+                            if (immersive) Modifier.immersiveGlassPill(100.dp, immersiveLightMode)
                             else Modifier
                                 .clip(RoundedCornerShape(50))
                                 .background(MaterialTheme.colorScheme.surfaceVariant)
@@ -3100,7 +3834,7 @@ private fun AudioQualityPill(
                         .clickable(enabled = metadataMatchesSong && info != null) {
                             showMetadataDialog = true
                         }
-                        .padding(horizontal = if (immersive) 0.dp else 8.dp, vertical = 3.dp),
+                        .padding(horizontal = if (immersive) 9.dp else 8.dp, vertical = if (immersive) 4.dp else 3.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -3125,8 +3859,9 @@ private fun AudioQualityPill(
                         lineHeight = if (immersive) 12.sp else 11.sp,
                         letterSpacing = (-0.35).sp,
                         maxLines = 1,
-                        color = if (immersive) Color.White
-                            else MaterialTheme.colorScheme.onSurface
+                        color = if (immersive) {
+                            if (immersiveLightMode) Color(0xFF171A20) else Color.White
+                        } else MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
@@ -3336,41 +4071,15 @@ private fun MetadataDivider(hiRes: Boolean = false) {
 
 @Composable
 private fun ArtistAvatar(song: Song?, modifier: Modifier = Modifier) {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    var artistBitmap by remember(song?.artist) { mutableStateOf<Bitmap?>(null) }
-    val grayscaleMatrix = remember {
-        ColorMatrix().apply { setToSaturation(0f) }
-    }
-    val grayscaleFilter = remember(grayscaleMatrix) {
-        ColorFilter.colorMatrix(grayscaleMatrix)
-    }
-
-    LaunchedEffect(song?.artist) {
-        artistBitmap = ArtistImageLoader.load(
-            context = context,
-            artistName = ArtistNameUtils.firstArtist(song?.artist),
-            maxSize = 256
-        )
-    }
-
-    if (artistBitmap != null) {
-        androidx.compose.foundation.Image(
-            bitmap = artistBitmap!!.asImageBitmap(),
-            contentDescription = ArtistNameUtils.firstArtist(song?.artist),
-            contentScale = ContentScale.Crop,
-            colorFilter = grayscaleFilter,
-            modifier = modifier
-        )
-    } else {
-        // Keep the avatar monochrome even while the artist portrait is being
-        // resolved and when album art is used as the fallback.
-        ArtworkView(
-            song = song,
-            maxSizePx = 96,
-            modifier = modifier,
-            monochrome = true
-        )
-    }
+    // Local art is available immediately; never start a Deezer request for a
+    // small control that needs to respond at 90/120Hz.
+    ArtworkView(
+        song = song,
+        maxSizePx = 128,
+        modifier = modifier,
+        monochrome = true,
+        grainOverlay = false
+    )
 }
 
 @Composable
@@ -3409,6 +4118,7 @@ private fun SimpleProgressBar(
     enabled: Boolean,
     onSeek: (Long) -> Unit,
     immersive: Boolean = false,
+    immersiveLightMode: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val fraction = if (durationMs > 0L) {
@@ -3416,7 +4126,9 @@ private fun SimpleProgressBar(
     } else {
         0f
     }
-    val primary = if (immersive) Color.White else MaterialTheme.colorScheme.primary
+    val primary = if (immersive) {
+        if (immersiveLightMode) Color(0xFF20242D) else Color.White
+    } else MaterialTheme.colorScheme.primary
 
     androidx.compose.foundation.Canvas(
         modifier = modifier
@@ -3451,13 +4163,14 @@ private fun SimpleProgressBar(
             }
     ) {
         val y = size.height / 2f
-        val stroke = (if (immersive) 3.25.dp else 5.dp).toPx()
+        val stroke = (if (immersive) 4.25.dp else 5.dp).toPx()
         val startX = stroke / 2f
         val endX = (size.width - startX).coerceAtLeast(startX)
 
         drawLine(
             color = if (immersive) {
-                Color.White.copy(alpha = 0.22f)
+                if (immersiveLightMode) Color.Black.copy(alpha = 0.19f)
+                else Color.White.copy(alpha = 0.22f)
             } else {
                 Color(0xFFD0CDC6)
             },
@@ -3486,6 +4199,7 @@ private fun PlaybackProgress(
     enabled: Boolean,
     onSeek: (Long) -> Unit,
     immersive: Boolean = false,
+    immersiveLightMode: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val positionMs by positionMsState
@@ -3497,13 +4211,17 @@ private fun PlaybackProgress(
             enabled = enabled,
             onSeek = onSeek,
             immersive = immersive,
+            immersiveLightMode = immersiveLightMode,
             modifier = Modifier.fillMaxWidth()
         )
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            val textColor = if (immersive) Color.White.copy(alpha = 0.75f) else MaterialTheme.colorScheme.onBackground
+            val textColor = if (immersive) {
+                if (immersiveLightMode) Color(0xFF30343A).copy(alpha = 0.77f)
+                else Color.White.copy(alpha = 0.75f)
+            } else MaterialTheme.colorScheme.onBackground
             Text(formatTime(positionMs), fontSize = 12.sp, color = textColor)
             Text(formatTime(durationMs), fontSize = 12.sp, color = textColor)
         }
@@ -3852,6 +4570,38 @@ private fun RealisticControlButton(
 }
 
 
+/**
+ * Select a readable, saturated-but-not-neon accent from the current album art.
+ * The small sample and HSV conversion run off the UI thread once per track.
+ * Neutral covers fall back to brushed-silver rather than a fixed red theme.
+ */
+private fun vinylAccentFromArtwork(bitmap: Bitmap): Color {
+    val hsv = FloatArray(3)
+    val weights = FloatArray(12)
+    for (row in 0 until 8) {
+        for (column in 0 until 8) {
+            val x = ((column + 0.5f) / 8f * bitmap.width).toInt()
+                .coerceIn(0, bitmap.width - 1)
+            val y = ((row + 0.5f) / 8f * bitmap.height).toInt()
+                .coerceIn(0, bitmap.height - 1)
+            android.graphics.Color.colorToHSV(bitmap.getPixel(x, y), hsv)
+            val saturation = hsv[1]
+            val value = hsv[2]
+            if (saturation < 0.22f || value < 0.16f || value > 0.97f) continue
+            val bucket = ((hsv[0] / 30f).toInt()).coerceIn(0, weights.lastIndex)
+            weights[bucket] += saturation * value
+        }
+    }
+    val winningIndex = weights.indices.maxByOrNull { weights[it] } ?: 0
+    if (weights[winningIndex] < 0.50f) return Color(0xFFAAB0B8)
+    val hue = winningIndex * 30f + 15f
+    return Color(
+        android.graphics.Color.HSVToColor(
+            floatArrayOf(hue, 0.62f, 0.88f)
+        )
+    )
+}
+
 @Composable
 private fun VinylRecord(
     song: Song?,
@@ -4044,13 +4794,26 @@ private fun ImmersiveArtwork(
     heroHeight: androidx.compose.ui.unit.Dp,
     heroWidthFraction: Float = 1f,
     modifier: Modifier = Modifier,
-    lyricsMode: Boolean = false
+    lyricsMode: Boolean = false,
+    lightMode: Boolean = false,
+    sourceOrder: ArtworkSourceOrder = ArtworkSourceOrder.APPLE_FIRST,
+    playerPageVisible: Boolean = true,
+    pageReveal: () -> Float = { 0f },
+    onCoverReady: (String, Bitmap) -> Unit = { _, _ -> },
+    onPaletteReady: (String, Color) -> Unit = { _, _ -> },
+    dynamicGlowEnabled: Boolean = false
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     // Open the persistent MP4 cache off the UI thread while Apple is searched.
     // Reuses one cache for all Canvas players; no disk work on a draw frame.
     LaunchedEffect(animatedArtworkEnabled) {
-        if (animatedArtworkEnabled) SpotifyCanvasVideoCache.prepare(context)
+        if (animatedArtworkEnabled) {
+            // Both caches share Android's database provider. Initialize them
+            // sequentially on IO (inside prepare) to avoid startup DB lock
+            // contention while the artwork screen is first composed.
+            AppleTallVideoCache.prepare(context)
+            SpotifyCanvasVideoCache.prepare(context)
+        }
     }
     // Retain the current frame while the next song's artwork is decoded. Resetting
     // these states on every URI change briefly exposed the empty placeholder.
@@ -4061,7 +4824,20 @@ private fun ImmersiveArtwork(
         }
     }
     var artwork by remember { mutableStateOf(initialCover) }
+    var artworkSongUri by remember {
+        mutableStateOf(song?.uri.takeIf { initialCover != null })
+    }
+    val latestCoverReady by rememberUpdatedState(onCoverReady)
+    LaunchedEffect(artwork, artworkSongUri) {
+        val cover = artwork
+        val uri = artworkSongUri
+        if (cover != null && uri != null) latestCoverReady(uri, cover)
+    }
     var staticBlur by remember { mutableStateOf(initialSnapshot?.blur) }
+    // Do not swap to the plain cover or a black placeholder between Next
+    // presses. Hold whichever real ambient was last visible until the next
+    // cover / animated frame has finished preparing its own blur.
+    var retainedAmbientBlur by remember { mutableStateOf(initialSnapshot?.blur) }
     var backdrop by remember { mutableStateOf(initialSnapshot?.let { Color(it.backdrop) } ?: Color(0xFF141414)) }
     var hasPresentedArtwork by remember { mutableStateOf(initialCover != null) }
     LaunchedEffect(artwork) {
@@ -4073,18 +4849,25 @@ private fun ImmersiveArtwork(
     var animatedArtworkUrl by remember(song?.id, song?.uri) { mutableStateOf<String?>(null) }
     var artworkProvider by remember(song?.uri) { mutableStateOf(AnimatedArtworkProvider.APPLE_MUSIC) }
     var spotifyFallbackRequested by remember(song?.uri) { mutableStateOf(false) }
+    var spotifyPlaybackFailed by remember(song?.uri) { mutableStateOf(false) }
     var animatedFirstFrameUrl by remember(song?.uri) { mutableStateOf<String?>(null) }
     // Freeze the first usable animated frame's colours for the entire song,
     // including when an unavailable stream switches to an alternative URL.
     var frozenAnimatedBlur by remember(song?.uri) { mutableStateOf<Bitmap?>(null) }
     var frozenAnimatedBackdrop by remember(song?.uri) { mutableStateOf<Color?>(null) }
+    var dynamicGlow by remember(song?.uri, animatedArtworkUrl) { mutableStateOf<Bitmap?>(null) }
+    val durationScale = rememberCoroutineScope().coroutineContext[androidx.compose.ui.MotionDurationScale]
+    val lifecycleState by androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+    val glowActive = dynamicGlowEnabled && animatedArtworkEnabled && !lyricsMode && playerPageVisible &&
+        lifecycleState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED) &&
+        (durationScale?.scaleFactor ?: 1f) > 0f
+    LaunchedEffect(glowActive) { if (!glowActive) dynamicGlow = null }
 
     LaunchedEffect(song?.uri, song?.albumId) {
         val targetSong = song
         if (targetSong == null) {
-            artwork = null
-            staticBlur = null
-            backdrop = Color(0xFF141414)
+            // Keep the previous artwork through transient Media3 null items.
+            // Clearing it exposes the page background for one frame.
             return@LaunchedEffect
         }
 
@@ -4093,14 +4876,17 @@ private fun ImmersiveArtwork(
             ?.toString()
 
         suspend fun publish(bitmap: Bitmap?) {
-            val prepared = bitmap?.let { prepareImmersiveArtwork(it) }
+            // Never replace a visible image with null during a slow lookup.
+            if (bitmap == null) return
+            val prepared = prepareImmersiveArtwork(bitmap)
+            // Publish the actual cover + its blur in the same snapshot.
             artwork = bitmap
-            staticBlur = prepared?.first
-            backdrop = prepared?.second ?: Color(0xFF141414)
-            if (bitmap != null && prepared != null) {
-                ImmersiveArtworkCache.save(context, targetSong,
-                    ImmersiveArtworkSnapshot(bitmap, prepared.first, prepared.second.toArgb()))
-            }
+            artworkSongUri = targetSong.uri
+            staticBlur = prepared.first
+            retainedAmbientBlur = prepared.first
+            backdrop = prepared.second
+            ImmersiveArtworkCache.save(context, targetSong,
+                ImmersiveArtworkSnapshot(bitmap, prepared.first, prepared.second.toArgb()))
         }
 
         // Restore the small prepared preview before reopening the audio file.
@@ -4108,7 +4894,9 @@ private fun ImmersiveArtwork(
         val restored = ImmersiveArtworkCache.restore(context, targetSong)
         if (restored != null) {
             artwork = restored.cover
+            artworkSongUri = targetSong.uri
             staticBlur = restored.blur
+            retainedAmbientBlur = restored.blur
             backdrop = Color(restored.backdrop)
         }
 
@@ -4119,21 +4907,31 @@ private fun ImmersiveArtwork(
             allowSmallerPreview = false
         )
         if (cachedFullArtwork != null) {
-            if (cachedFullArtwork !== artwork) publish(cachedFullArtwork)
-            else if (staticBlur == null) publish(cachedFullArtwork)
-            else if (restored != null) ImmersiveArtworkCache.save(context, targetSong, restored)
+            if (restored != null) {
+                // The restored blur is already the correct album. Avoid
+                // regenerating it and restarting a full-screen crossfade on
+                // every Next -> Previous revisit.
+                artwork = cachedFullArtwork
+                artworkSongUri = targetSong.uri
+            } else if (cachedFullArtwork !== artwork || staticBlur == null) {
+                publish(cachedFullArtwork)
+            }
             return@LaunchedEffect
         }
 
-        // The vinyl view normally has a 512 px cover in memory already. Present it
-        // immediately, then crossfade to the full-resolution immersive cover.
+        // Show the ready thumbnail immediately, but do NOT start another
+        // full-screen blur transition for it. The blur retains its previous
+        // frame until the new full cover is prepared. Avoid two successive
+        // fullscreen fades (preview -> full -> video), which caused flashes
+        // during consecutive Next presses on 90/120Hz devices.
         val cachedPreview = ArtworkLoader.cached(
             uriString = targetSong.uri,
             maxSize = 512,
             cacheKey = albumCacheKey
         )
         if (restored == null && cachedPreview != null && cachedPreview !== artwork) {
-            publish(cachedPreview)
+            artwork = cachedPreview
+            artworkSongUri = targetSong.uri
         }
 
         val loaded = ArtworkLoader.load(
@@ -4142,86 +4940,80 @@ private fun ImmersiveArtwork(
             maxSize = 1_600,
             cacheKey = albumCacheKey
         )
-        if (loaded != null && loaded !== artwork) publish(loaded)
-        else if (loaded == null && restored == null && cachedPreview == null) publish(null)
+        if (loaded != null && restored == null) {
+            publish(loaded)
+        } else if (loaded != null && loaded !== artwork) {
+            // Existing disk-restored ambient is valid for this track; the
+            // higher-resolution hero can change without a second blur fade.
+            artwork = loaded
+            artworkSongUri = targetSong.uri
+        } else if (loaded == null && restored == null && cachedPreview != null) {
+            // Full-size extraction can fail for some formats; settle on the
+            // thumbnail's blur rather than keeping another song's ambience.
+            publish(cachedPreview)
+        }
     }
 
     LaunchedEffect(
-        song?.id, song?.title, song?.artist, song?.album, animatedArtworkEnabled, spotifyFallbackRequested
+        song?.id, song?.title, song?.artist, song?.album,
+        animatedArtworkEnabled, spotifyFallbackRequested, spotifyPlaybackFailed, sourceOrder
     ) {
         if (!animatedArtworkEnabled || song == null) {
             animatedArtworkUrl = null
             return@LaunchedEffect
         }
-        // Start BOTH metadata lookups without serially blocking Spotify on a
-        // slow Apple catalog search. Apple wins immediately when available
-        // within a short priority window; after that whichever provider
-        // resolves first can be shown. A late Apple hit may upgrade Spotify
-        // only BEFORE the Canvas video renders its first frame, so a playing
-        // Canvas never flickers/rebuffers halfway through the track.
-        if (!spotifyFallbackRequested) {
-            coroutineScope {
-                val apple = async {
-                    AppleMusicAnimatedArtworkLoader.loadAnimatedArtworkUrl(context, song)
+        // Use the same provider decision prepared for the next five songs.
+        // Respect the selected provider order without late lookup results
+        // replacing a stream that is already playing.
+        if (spotifyPlaybackFailed && sourceOrder == ArtworkSourceOrder.SPOTIFY_FIRST) {
+            // The preferred Spotify stream failed after bounded Media3
+            // recovery: only now try Apple artwork, with no provider race.
+            artworkProvider = AnimatedArtworkProvider.APPLE_MUSIC
+            animatedArtworkUrl =
+                AppleMusicAnimatedArtworkLoader.loadAnimatedArtworkUrl(context, song)
+        } else if (!spotifyFallbackRequested) {
+            val candidate = AnimatedArtworkQueuePreloader.ready(song, sourceOrder)
+                ?: AnimatedArtworkQueuePreloader.resolve(context, song, sourceOrder)
+            if (candidate != null) {
+                artworkProvider = when (candidate.provider) {
+                    AnimatedArtworkQueuePreloader.Provider.APPLE_TALL ->
+                        AnimatedArtworkProvider.APPLE_MUSIC
+                    AnimatedArtworkQueuePreloader.Provider.SPOTIFY_CANVAS ->
+                        AnimatedArtworkProvider.SPOTIFY_CANVAS
                 }
-                val spotify = async {
-                    SpotifyCanvasArtworkLoader.findCanvasUrl(context, song)
-                }
-                try {
-                    val fastAppleUrl = withTimeoutOrNull(400L) { apple.await() }
-                    if (fastAppleUrl != null) {
-                        artworkProvider = AnimatedArtworkProvider.APPLE_MUSIC
-                        animatedArtworkUrl = fastAppleUrl
-                    } else {
-                        // If Apple answered "missing" early, this selects the
-                        // completed null and waits for Spotify. Otherwise
-                        // Spotify can win as soon as it has a valid Canvas.
-                        val (source, firstUrl) = select<Pair<AnimatedArtworkProvider, String?>> {
-                            apple.onAwait { AnimatedArtworkProvider.APPLE_MUSIC to it }
-                            spotify.onAwait { AnimatedArtworkProvider.SPOTIFY_CANVAS to it }
-                        }
-                        when (source) {
-                            AnimatedArtworkProvider.APPLE_MUSIC -> {
-                                artworkProvider = if (firstUrl != null) {
-                                    AnimatedArtworkProvider.APPLE_MUSIC
-                                } else AnimatedArtworkProvider.SPOTIFY_CANVAS
-                                animatedArtworkUrl = firstUrl ?: spotify.await()
-                            }
-                            AnimatedArtworkProvider.SPOTIFY_CANVAS -> {
-                                if (firstUrl == null) {
-                                    artworkProvider = AnimatedArtworkProvider.APPLE_MUSIC
-                                    animatedArtworkUrl = apple.await()
-                                } else {
-                                    // Fast Canvas first; leave Apple searching.
-                                    artworkProvider = AnimatedArtworkProvider.SPOTIFY_CANVAS
-                                    animatedArtworkUrl = firstUrl
-                                    val eventualAppleUrl = apple.await()
-                                    if (eventualAppleUrl != null &&
-                                        animatedArtworkUrl == firstUrl &&
-                                        animatedFirstFrameUrl != firstUrl
-                                    ) {
-                                        artworkProvider = AnimatedArtworkProvider.APPLE_MUSIC
-                                        animatedArtworkUrl = eventualAppleUrl
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } finally {
-                    if (apple.isActive) apple.cancel()
-                    if (spotify.isActive) spotify.cancel()
-                }
+                animatedArtworkUrl = candidate.url
+            } else {
+                animatedArtworkUrl = null
             }
         } else {
-            // All Apple playback candidates failed. Never repeat its lookup.
-            artworkProvider = AnimatedArtworkProvider.SPOTIFY_CANVAS
-            animatedArtworkUrl = SpotifyCanvasArtworkLoader.findCanvasUrl(context, song)
+            // All Apple playback variants failed. Spotify remains an alternate
+            // only when selected in settings.
+            if (sourceOrder == ArtworkSourceOrder.APPLE_ONLY) {
+                animatedArtworkUrl = null
+            } else {
+                artworkProvider = AnimatedArtworkProvider.SPOTIFY_CANVAS
+                animatedArtworkUrl = SpotifyCanvasArtworkLoader.findCanvasUrl(context, song)
+            }
         }
     }
 
-    val activeBlur = if (animatedArtworkEnabled && animatedArtworkUrl != null) {
-        frozenAnimatedBlur ?: staticBlur
-    } else staticBlur
+    // Static cover and first animated frame both have a prepared palette.
+    // Publish once per actual colour change; ignore retained previous tracks.
+    val latestPaletteReady by rememberUpdatedState(onPaletteReady)
+    LaunchedEffect(
+        song?.uri, artworkSongUri, backdrop, frozenAnimatedBackdrop,
+        animatedArtworkEnabled, animatedArtworkUrl
+    ) {
+        val uri = song?.uri
+        if (uri != null && artworkSongUri == uri) {
+            latestPaletteReady(uri,
+                if (animatedArtworkEnabled && animatedArtworkUrl != null) {
+                    frozenAnimatedBackdrop ?: backdrop
+                } else backdrop
+            )
+        }
+    }
+    val activeBlur = retainedAmbientBlur ?: staticBlur
     val targetScrimOpacity = remember(activeBlur) { immersiveScrimOpacity(activeBlur) }
     val scrimOpacity by animateFloatAsState(
         targetValue = targetScrimOpacity,
@@ -4248,53 +5040,89 @@ private fun ImmersiveArtwork(
         artwork = artwork,
         blur = activeBlur,
         backdrop = animatedBackdrop,
+        lightMode = lightMode,
         heroHeight = heroHeight,
         heroWidthFraction = heroWidthFraction,
         heroOpacity = heroOpacity,
         scrimOpacity = scrimOpacity,
         animateChanges = hasPresentedArtwork,
         description = song?.title,
+        dynamicGlow = if (glowActive) dynamicGlow else null,
+        glowReveal = pageReveal,
         animatedArtwork = {
             val activeUrl = animatedArtworkUrl
             if (animatedArtworkEnabled && activeUrl != null) {
-                AnimatedArtworkVideoBackground(
-                    url = activeUrl,
-                    playbackVisible = !lyricsMode,
-                    modifier = Modifier.fillMaxSize(),
-                    captureBackdrop = frozenAnimatedBlur == null,
-                    onBackdropReady = { blurredFrame, frameColor ->
-                        if (animatedArtworkUrl == activeUrl && frozenAnimatedBlur == null) {
-                            frozenAnimatedBlur = blurredFrame
-                            frozenAnimatedBackdrop = frameColor
-                        }
-                    },
-                    onFirstFrame = {
-                        if (animatedArtworkUrl == activeUrl) animatedFirstFrameUrl = activeUrl
-                    },
-                    onUnavailable = {
-                        if (animatedArtworkUrl == activeUrl) {
-                            when (artworkProvider) {
-                                AnimatedArtworkProvider.APPLE_MUSIC -> {
-                                    val alternative = AppleMusicAnimatedArtworkLoader.nextPlaybackUrl(activeUrl)
-                                    if (alternative != null) {
-                                        animatedArtworkUrl = alternative
-                                    } else {
-                                        // Apple streams can exist but be unplayable.
-                                        // After exhausting candidates try Spotify once.
-                                        animatedArtworkUrl = null
-                                        spotifyFallbackRequested = true
+                // A new video URL must get its OWN animation state. Without
+                // this key, animateFloatAsState carries alpha=1 from the old
+                // TextureView, exposing the new player's empty/black surface
+                // for 1–3 frames each time Next is pressed.
+                androidx.compose.runtime.key(song?.uri, activeUrl) {
+                    AnimatedArtworkVideoBackground(
+                        url = activeUrl,
+                        playbackVisible = !lyricsMode && playerPageVisible,
+                        // During any horizontal swipe, leave the already-decoded
+                        // still cover on screen and hide the live TextureView
+                        // over the first 14% of travel. Keep the decoder/player
+                        // alive: reversing the gesture needs no new stream.
+                        modifier = Modifier.fillMaxSize().graphicsLayer {
+                            val fraction = (pageReveal() / 0.14f).coerceIn(0f, 1f)
+                            val eased = fraction * fraction * (3f - 2f * fraction)
+                            alpha = 1f - eased
+                        },
+                        captureBackdrop = frozenAnimatedBlur == null,
+                        dynamicGlowEnabled = glowActive,
+                        onGlowReady = { frame ->
+                            if (glowActive && animatedArtworkUrl == activeUrl) dynamicGlow = frame
+                        },
+                        onBackdropReady = { blurredFrame, frameColor ->
+                            if (animatedArtworkUrl == activeUrl && frozenAnimatedBlur == null) {
+                                frozenAnimatedBlur = blurredFrame
+                                retainedAmbientBlur = blurredFrame
+                                frozenAnimatedBackdrop = frameColor
+                            }
+                        },
+                        onFirstFrame = {
+                            if (animatedArtworkUrl == activeUrl) animatedFirstFrameUrl = activeUrl
+                        },
+                        onUnavailable = {
+                            if (animatedArtworkUrl == activeUrl) {
+                                when (artworkProvider) {
+                                    AnimatedArtworkProvider.APPLE_MUSIC -> {
+                                        AnimatedArtworkQueuePreloader.invalidate(song, activeUrl)
+                                        val alternative = AppleMusicAnimatedArtworkLoader.nextPlaybackUrl(activeUrl)
+                                        if (alternative != null) {
+                                            animatedArtworkUrl = alternative
+                                        } else {
+                                            // A failed Apple fallback after
+                                            // Spotify-first must not return to
+                                            // the same failed Canvas repeatedly.
+                                            animatedArtworkUrl = null
+                                            if (AnimatedArtworkQueuePreloader.spotifyAfterAppleFailure(
+                                                    sourceOrder, spotifyPlaybackFailed
+                                                )) {
+                                                spotifyFallbackRequested = true
+                                            }
+                                        }
                                     }
-                                }
-                                AnimatedArtworkProvider.SPOTIFY_CANVAS -> {
-                                    // Evict a stale cached URL so replay
-                                    // requests a new Canvas instead of looping.
-                                    SpotifyCanvasArtworkLoader.invalidate(context, activeUrl)
-                                    animatedArtworkUrl = null
+                                    AnimatedArtworkProvider.SPOTIFY_CANVAS -> {
+                                        // A CDN stall is not evidence the Canvas
+                                        // URL disappeared. Retain the verified
+                                        // lookup across Next -> Previous, so the
+                                        // song can play again with a fresh player.
+                                        // Only hide this exhausted player instance.
+                                        // In Spotify-first mode, try Apple artwork
+                                        // once. For Spotify-only stay on the static
+                                        // cover until the user revisits this song.
+                                        animatedArtworkUrl = null
+                                        if (sourceOrder == ArtworkSourceOrder.SPOTIFY_FIRST) {
+                                            spotifyPlaybackFailed = true
+                                        }
+                                    }
                                 }
                             }
                         }
-                    }
-                )
+                    )
+                }
             }
         },
         modifier = modifier
@@ -4309,18 +5137,25 @@ private fun AnimatedArtworkVideoBackground(
     captureBackdrop: Boolean,
     onBackdropReady: (Bitmap, Color) -> Unit,
     onFirstFrame: () -> Unit,
-    onUnavailable: () -> Unit
+    onUnavailable: () -> Unit,
+    dynamicGlowEnabled: Boolean = false,
+    onGlowReady: (Bitmap) -> Unit = {}
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
+    val isCanvasStream = remember(url) { SpotifyCanvasArtworkLoader.isSpotifyCanvasVideo(url) }
     var videoReady by remember(url) { mutableStateOf(false) }
     var videoVisible by remember(url) { mutableStateOf(false) }
     var playbackRetryCount by remember(url) { mutableIntStateOf(0) }
+    // A stalled stream is different from a provider switch: keep the last
+    // rendered frame visible while Media3 performs a bounded recovery.
+    var bufferingSinceMs by remember(url) { mutableLongStateOf(0L) }
     var artworkPlayerView by remember { mutableStateOf<androidx.media3.ui.PlayerView?>(null) }
     val onBackdropReadyCallback by rememberUpdatedState(onBackdropReady)
     val onUnavailableCallback by rememberUpdatedState(onUnavailable)
     val onFirstFrameCallback by rememberUpdatedState(onFirstFrame)
     val shouldCaptureBackdrop by rememberUpdatedState(captureBackdrop)
     val shouldPlayVideo by rememberUpdatedState(playbackVisible)
+    val onGlowReadyCallback by rememberUpdatedState(onGlowReady)
 
     val player = remember(url) {
         val trackSelector = androidx.media3.exoplayer.trackselection.DefaultTrackSelector(context).apply {
@@ -4332,21 +5167,31 @@ private fun AnimatedArtworkVideoBackground(
                 .build()
         }
         val builder = androidx.media3.exoplayer.ExoPlayer.Builder(context)
-        if (SpotifyCanvasArtworkLoader.isSpotifyCanvasVideo(url)) {
-            // Fast repeat playback: reuse disk-backed MP4 bytes if available.
-            // Apple Music HLS must keep its original MediaSource factory.
+        val isSpotifyCanvas = SpotifyCanvasArtworkLoader.isSpotifyCanvasVideo(url)
+        if (isSpotifyCanvas) {
             SpotifyCanvasVideoCache.mediaSourceFactory(context)?.let {
+                builder.setMediaSourceFactory(it)
+            }
+        } else {
+            // Reuse the very same Apple HLS playlist/segment bytes fetched for
+            // songs 2-6 in the speculative playback queue.
+            AppleTallVideoCache.mediaSourceFactory(context)?.let {
                 builder.setMediaSourceFactory(it)
             }
         }
         builder
             .setTrackSelector(trackSelector)
-            // Canvas is a short muted background loop, not the audio player.
-            // Begin when roughly half a second is buffered instead of the
-            // default 1 s, while keeping a larger reserve for rebuffering.
+            // The external Spotify proxy can briefly throttle between
+            // repeat loops. Give Canvas a larger background buffer than
+            // Apple's HLS stream, but still reveal the first frame quickly.
             .setLoadControl(
                 androidx.media3.exoplayer.DefaultLoadControl.Builder()
-                    .setBufferDurationsMs(2_500, 15_000, 350, 1_250)
+                    .setBufferDurationsMs(
+                        if (isSpotifyCanvas) 5_000 else 2_500,
+                        if (isSpotifyCanvas) 22_000 else 15_000,
+                        if (isSpotifyCanvas) 450 else 350,
+                        if (isSpotifyCanvas) 1_500 else 1_250
+                    )
                     .build()
             )
             .setAudioAttributes(
@@ -4378,12 +5223,34 @@ private fun AnimatedArtworkVideoBackground(
         }
     }
 
+    // Prevent speculative Apple/Spotify lookups and video downloads from
+    // taking bandwidth while the active Canvas is still filling its loop.
+    // READY may mean only ~450ms buffered; a first frame alone does not
+    // mean there is enough media to play smoothly.
+    fun protectForegroundCanvas() {
+        if (!isCanvasStream) return
+        val buffering = player.playbackState == Player.STATE_IDLE ||
+            player.playbackState == Player.STATE_BUFFERING
+        val bufferedAhead = (player.bufferedPosition - player.currentPosition).coerceAtLeast(0L)
+        val filling = player.isLoading && bufferedAhead < 3_500L
+        SpotifyCanvasVideoCache.setForegroundBuffering(
+            url, shouldPlayVideo && (buffering || filling)
+        )
+    }
+
     // Do not require a successful TextureView screenshot to reveal animated artwork.
     // Some devices render video correctly but never return a usable capture.
     LaunchedEffect(player, videoReady) {
-        // The first rendered video frame is already decoded and drawable:
-        // start the crossfade immediately, without an arbitrary timer.
-        videoVisible = videoReady
+        if (videoReady) {
+            // Media3 first-frame notification can precede the View hierarchy's
+            // next composition. Wait just one vsync to guarantee its TextureView
+            // is attached before showing alpha>0; otherwise a black rectangle
+            // can appear during rapid skips.
+            androidx.compose.runtime.withFrameNanos { }
+            videoVisible = true
+        } else {
+            videoVisible = false
+        }
     }
 
     LaunchedEffect(player, artworkPlayerView, videoVisible, playbackVisible) {
@@ -4391,8 +5258,8 @@ private fun AnimatedArtworkVideoBackground(
         // Start after the video has actually faded in: hidden TextureViews on
         // some devices return a black bitmap even when playback has started.
         if (!videoVisible || !shouldCaptureBackdrop || !playbackVisible) return@LaunchedEffect
-        delay(450L)
-        repeat(40) {
+        delay(650L)
+        repeat(8) {
             if (!shouldPlayVideo) return@LaunchedEffect
             androidx.compose.runtime.withFrameNanos { }
             val frame = ArtworkBlur.captureViewport(view)
@@ -4408,32 +5275,88 @@ private fun AnimatedArtworkVideoBackground(
                 }
                 frame.recycle()
             }
-            delay(150L)
+            delay(220L)
         }
     }
 
-    LaunchedEffect(player, playbackRetryCount) {
-        if (playbackRetryCount > 0) {
-            delay(750L * playbackRetryCount)
+    LaunchedEffect(player, artworkPlayerView, videoVisible, playbackVisible, dynamicGlowEnabled) {
+        val view = artworkPlayerView ?: return@LaunchedEffect
+        if (!dynamicGlowEnabled || !videoVisible || !playbackVisible) return@LaunchedEffect
+        com.yohandeku32.nusamusic.ui.sampleArtworkGlow(
+            position = { if (player.isPlaying) player.currentPosition else null },
+            capture = { ArtworkBlur.captureViewport(view, maxSize = 96) },
+            publish = { onGlowReadyCallback(it) }
+        )
+    }
+
+    LaunchedEffect(player, playbackRetryCount, playbackVisible) {
+        if (playbackRetryCount > 0 && playbackVisible) {
+            delay(650L * playbackRetryCount)
             if (!shouldPlayVideo) return@LaunchedEffect
+            // Resume an interrupted loop from the beginning on the SAME
+            // player/TextureView; don't wait on a stalled partial MP4 read.
+            player.seekTo(0L)
             player.prepare()
-            player.playWhenReady = true
+            player.playWhenReady = shouldPlayVideo
+        }
+    }
+
+    LaunchedEffect(player, bufferingSinceMs, playbackVisible, playbackRetryCount) {
+        if (!playbackVisible || bufferingSinceMs == 0L || !videoReady) return@LaunchedEffect
+        delay(6_500L)
+        if (!shouldPlayVideo || player.playbackState != Player.STATE_BUFFERING ||
+            bufferingSinceMs == 0L
+        ) return@LaunchedEffect
+        if (playbackRetryCount < 2) {
+            // An IO stream can stall indefinitely without emitting
+            // onPlayerError. Recover once, without hiding the last frame.
+            playbackRetryCount++
+            bufferingSinceMs = 0L
+        } else {
+            videoReady = false
+            videoVisible = false
+            onUnavailableCallback()
         }
     }
 
     androidx.compose.runtime.DisposableEffect(player, url) {
+        if (isCanvasStream && shouldPlayVideo) {
+            SpotifyCanvasVideoCache.setForegroundBuffering(url, true)
+        }
         val listener = object : Player.Listener {
             override fun onRenderedFirstFrame() {
+                protectForegroundCanvas()
                 videoReady = true
+                bufferingSinceMs = 0L
                 onFirstFrameCallback()
             }
 
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                protectForegroundCanvas()
+                bufferingSinceMs =
+                    if (playbackState == Player.STATE_BUFFERING && videoReady)
+                        android.os.SystemClock.elapsedRealtime()
+                    else 0L
+            }
+
+            override fun onIsLoadingChanged(isLoading: Boolean) {
+                protectForegroundCanvas()
+            }
+
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                videoReady = false
-                videoVisible = false
+                if (isCanvasStream) SpotifyCanvasVideoCache.setForegroundBuffering(url, false)
+                bufferingSinceMs = 0L
                 if (error.errorCode in 2000..2999 && playbackRetryCount < 2) {
+                    // Transient CDN/proxy IO errors should not make Canvas
+                    // disappear between retries after the first frame.
                     playbackRetryCount++
-                } else onUnavailableCallback()
+                } else {
+                    // Only give up after recovery is exhausted, not on every
+                    // buffering interruption or on a late Apple response.
+                    videoReady = false
+                    videoVisible = false
+                    onUnavailableCallback()
+                }
             }
         }
 
@@ -4441,6 +5364,7 @@ private fun AnimatedArtworkVideoBackground(
         player.prepare()
         player.playWhenReady = shouldPlayVideo
         onDispose {
+            if (isCanvasStream) SpotifyCanvasVideoCache.setForegroundBuffering(url, false)
             player.removeListener(listener)
             player.release()
         }
@@ -4451,6 +5375,19 @@ private fun AnimatedArtworkVideoBackground(
     // without the expensive HLS player setup or re-buffering from scratch.
     LaunchedEffect(player, playbackVisible) {
         player.playWhenReady = playbackVisible
+        protectForegroundCanvas()
+        if (isCanvasStream && playbackVisible) {
+            // ExoPlayer may remain in READY while downloading. Check buffered
+            // headroom until at least 3.5s is available, so prefetch cannot
+            // starve the currently moving Canvas loop during track changes.
+            repeat(24) {
+                delay(250L)
+                protectForegroundCanvas()
+                if (!shouldPlayVideo || !player.isLoading ||
+                    (player.bufferedPosition - player.currentPosition) >= 3_500L
+                ) return@LaunchedEffect
+            }
+        }
     }
 
     val videoAlpha by animateFloatAsState(
@@ -4518,6 +5455,31 @@ private fun ArtworkView(
 
     LaunchedEffect(song?.uri, maxSizePx, loadDelayMs, loadAllowed) {
         if (!loadAllowed) return@LaunchedEffect
+        // Recycled Library rows may already have a full-resolution-enough
+        // thumbnail in shared memory. Skip the delay, coroutine IO handoff,
+        // and metadata retriever entirely for those tracks.
+        val cachedExactOrLarger = song?.let {
+            ArtworkLoader.cached(
+                uriString = it.uri,
+                maxSize = maxSizePx,
+                cacheKey = it.albumId.takeIf { albumId -> albumId > 0L }?.toString(),
+                allowSmallerPreview = false
+            )
+        }
+        if (cachedExactOrLarger != null) {
+            bitmap = cachedExactOrLarger
+            return@LaunchedEffect
+        }
+        // Track rows that previously had no embedded image must not reopen
+        // the file and resample it every time LazyColumn recycles them.
+        if (song != null && ArtworkLoader.isMissingCached(
+                song.uri, maxSizePx,
+                song.albumId.takeIf { it > 0L }?.toString()
+            )
+        ) {
+            bitmap = null
+            return@LaunchedEffect
+        }
         // Skip IO for tracks that are replaced by rapid Shuffle transitions.
         if (song != null && loadDelayMs > 0L) delay(loadDelayMs)
         bitmap = song?.let {
@@ -4925,12 +5887,14 @@ private fun WornCoverArtwork(
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun LibrarySongListRow(
     song: Song,
     selected: Boolean,
     loadDetails: Boolean,
-    onPlay: (Song) -> Unit
+    onPlay: (Song) -> Unit,
+    onRequestDelete: (Song) -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     // Cached Hi-Res information appears on the first composed frame, even
@@ -4965,7 +5929,11 @@ private fun LibrarySongListRow(
                     Modifier
                 }
             )
-            .clickable { onPlay(song) }
+            .combinedClickable(
+                onClick = { onPlay(song) },
+                onLongClick = { onRequestDelete(song) },
+                onLongClickLabel = "Delete ${song.title} permanently"
+            )
             .padding(
                 horizontal = 8.dp,
                 vertical = 7.dp

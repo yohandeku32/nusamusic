@@ -1,198 +1,147 @@
-# Nusa
+# Aruna
 
-Nusa is an Android music player for files stored on your device. It's built with Kotlin and Jetpack Compose, with a vinyl record at the centre of the player screen.
+Aruna is an Android music player for the music stored on your device, built with Kotlin, Jetpack Compose and AndroidX Media3. Start with the Immersive player or choose CD in Settings, browse your collection, and follow synchronized lyrics while you listen.
 
-The current version is **3.13.4** (`versionCode 46`). It runs on Android 10 and newer and is still in active development.
+Requires **Android 10 (API 29) or newer**. The app is under active development.
 
-## Features
+Developed by [@yohandeku32](https://github.com/yohandeku32). The repository and Android application ID still use `nusamusic`; the app's display name is **Aruna**. Version information lives in [app/build.gradle.kts](app/build.gradle.kts).
 
-- A vinyl-style player with rotating artwork and reflections, a moving tonearm, and playback controls.
-- A dark CD player with rotating album artwork inside a clear jewel case, a tick-mark seek bar, and a swipeable row of discs. The case, reflections, and centre clip stay still while the disc rotates. Choose **CD** under **Player presentation** in settings, then swipe the bottom row and tap a disc to play that song. It uses the library's current sort order and the existing playback queue; the selected mode is saved between launches.
-- Immersive artwork with a dominant edge-to-edge cover, a softly blurred colour backdrop, left-aligned song details, and compact playback controls. Artist, lyrics, library, and share actions sit together in one large centred glass pill. The layout adapts to short screens, landscape, and larger text. Animated covers are optional, with local artwork as the fallback.
-- Background playback, notification controls, shuffle, and repeat through AndroidX Media3.
-- Crossfade from 1 to 12 seconds, with a default of 5 seconds when enabled.
-- A local library with album artwork, A–Z navigation, and sorting by title, artist, album, date added, or duration.
-- Startup distinguishes a library still loading from a confirmed empty collection. Cached songs appear as soon as they are ready; an initial scan shows a loading message until it completes, and a failed scan shows a retry message.
-- The Immersive art player keeps its footer free of library-empty/loading messages; library status remains on the library page. Its last static cover, blurred backdrop, and colours are saved as one small launch preview and warmed in the background on reopening, without waiting for the scanned library or reopening the audio file. The first usable cover appears immediately, with crossfades retained for subsequent cover changes. The full-resolution cover and optional animation continue loading in the background.
-- Music scanning through MediaStore and folders you select, including subfolders. Tracks shorter than 10 seconds are skipped.
-- Saved playback state, including the current track, position, shuffle, and repeat settings.
-- Artist portraits from Deezer and biographies from Last.fm.
-- In Immersive art, swipe right from the player to open the artist page (swipe left to return). It has a monochrome Deezer portrait fading into black, Last.fm biography, your five most-played local tracks, and a two-column grid of local albums. Tap an album to browse and play its tracks; the back button returns to the artist overview, then to the player. The library remains one leftward swipe from the player.
-- Main-page swipes use MIUIX-inspired motion: a full-width foreground slide, quarter-speed parallax on the covered page, a dimmed background, and rounded leading corners during the transition. Swipes and navigation buttons share critically damped spring settling. The effect follows drag progress directly, supports right-to-left layouts, and leaves the settled page square and fully opaque.
-- System fonts and custom TTF or OTF files for the player title.
+## First launch
 
-The folder scanner recognises AAC, ALAC, FLAC, M4A, MP3, OGG, OPUS, WAV, and WMA files. Playback support depends on the codecs available on the device.
+New listeners see a short Aruna welcome with three choices: choose a music folder, find audio on the device, or set up later. Access is requested after the listener chooses an import action. Cancelling a folder selection or declining audio access leaves import choices available in the empty song list. The welcome is shown once; existing settings and library history preserve returning-listener continuity.
 
-**Optional FFmpeg decoder:** Both the main player and crossfade player can use Media3's native FFmpeg audio renderer as a fallback when bundled. The standard APK **does not** include the native FFmpeg extension; build a matching 1.9.3 AAR or use the manual **Build FFmpeg-enabled Nusa APK** GitHub Actions workflow. FFmpeg decoding does not automatically add unsupported container extractors such as APE or WMA. See [FFmpeg Android integration](docs/FFMPEG_ANDROID.md).
+## Player and library
 
-Lossless and Hi-Res labels use audio metadata. The Hi-Res label appears when the reported bit depth is at least 24 bits; it doesn't confirm bit-perfect output to your headphones or DAC.
+| Player | Presentation |
+| --- | --- |
+| Immersive (default) | Large album artwork, a blurred backdrop, light/dark appearance and optional animated covers. |
+| CD | Rotating disc inside a jewel case, with a row of discs for choosing tracks. |
 
-## Optional CD sticker font (local only)
+Choose a presentation in Settings. A missing or unavailable saved mode uses Immersive; an explicitly saved CD choice is preserved. Playback includes background audio, notification controls, shuffle, repeat, saved playback position and optional crossfade from 1 to 12 seconds.
 
-The CD jewel-case sticker prints the **current artist name in UPPERCASE**, shortening long multi-word artist names to initials. To use the *Aerosoldier PERSONAL USE* font in a locally built APK, copy your legally obtained `Aerosoldier_PERSONAL_USE_ONLY.otf` into:
+In Immersive Settings, **Now Playing scale** enlarges the main player's artwork, text and controls from 100% to 125% in 5% steps. The choice is saved; **Reset** returns to 100%. The layout reflows on narrow screens and retains the system font-size preference.
 
-`app/src/main/assets/fonts/Aerosoldier_PERSONAL_USE_ONLY.otf`
+Aruna reads your device library through MediaStore and folders you select, including subfolders. It skips tracks shorter than 10 seconds. The library supports search, album and artist browsing, and sorting by title, artist, album, date added or duration.
 
-Create the `assets/fonts` folders if they do not exist, then rebuild the APK with Android Studio. The font file is intentionally **gitignored and not bundled with the public repository** due to its personal-use licensing. Without that local asset, the sticker uses the existing handwritten fallback font. Check your font licence before distributing an APK that contains it.
+Pull to refresh checks both the Android media index and manually selected folders, just like the explicit scan in Settings. Unchanged folder tags are reused; newly copied songs do not need to be indexed by Android before a selected-folder refresh can discover them.
 
-## Build
+The folder scanner recognizes AAC, ALAC, FLAC, M4A, MP3, OGG, OPUS, WAV and WMA extensions. Actual playback depends on the device's decoders and Media3's container support. Lossless and Hi-Res badges come from inspected audio metadata. A reported depth of at least 24 bits qualifies for the Hi-Res flag; the badge does not certify bit-perfect output to a DAC.
 
-You'll need:
+## Discovery and artists
 
-- JDK 21 or newer for the full test suite (Accompanist Core's JVM dependency uses Java 21 bytecode). Android source/target compatibility remains Java 17.
-- Android SDK Platform 36 and Build Tools 36.0.0.
-- Gradle 9.6.0 or newer, as required by Android Gradle Plugin 9.4.0.
+In Immersive mode, **Discover** opens a feed of albums, artists and recently played songs from your local collection. Artist rankings use listening history recorded on the device. Before there is listening history, the feed shows artists from your library.
 
-The project targets Android 16 (API 36), with a minimum of API 29. It uses AGP's built-in Kotlin support and the Compose compiler plugin 2.2.10.
+Open an artist or album from Discovery to browse that artist's local tracks and albums. Artist pages can show a Deezer portrait and a Last.fm biography. Playback and local browsing work without either service. About Aruna in Settings shows the app version and developer credit.
 
-Open the project in a compatible Android Studio version, or build from the repository root with the included Gradle wrapper.
+## Lyrics
 
-Set `ANDROID_HOME` to your SDK directory, or add its path to an ignored `local.properties` file:
+Open **Lyrics** from the Immersive player's controls. Lyrics replace the artwork foreground within the player while playback controls remain available. Tap Lyrics again to return to the artwork. In Settings, adjust lyric size, enable or disable online lyrics, or reload the current song's lyrics.
 
-```properties
+- Embedded lyrics load first. The reader accepts plain text, LRC, Enhanced LRC and TTML from supported audio metadata.
+- Fully timed embedded karaoke takes priority. When online lyrics are enabled, lrc.red can provide a more precisely synchronized version; LRCLIB provides a line-synced fallback.
+- Authored TTML timings drive word and syllable highlighting, duet alignment and backing vocals. Translations and composer/lyricist credits appear when supplied.
+- TTML translations and pronunciation (such as pinyin) appear beneath their original lyric, including line-synced lyrics and duet voices. Pronunciation words brighten using supplied timestamps. These texts come from the lyric file; Aruna does not generate translations.
+- Timed Chinese/Japanese readings align directly under the corresponding character or kanji group. The shared layout centers each reading and wraps it together with its original text when matching time boundaries are available.
+- Short vocal pulls use a wave across individual characters. Nearby short words share one continuously moving crest across word boundaries; long held notes retain their separate character-by-character 3D rise and release. Rapid words and uncertain timing avoid the extra character animation.
+- Animations use playback time, hold their pose on pause and resample after a seek. Tap a timed lyric row to seek; manual scrolling temporarily suspends automatic following.
+
+When online lyrics improve the file's existing lyrics, **Save** queues a metadata update to the original MP3, FLAC or M4A file. Grant access to the music folder when prompted. A clock means the original is still waiting to be written; switch songs so the player can release the file. Success is reported only after the original matches the verified output. Saving updates the standard readable lyric and authored timing without converting the audio.
+
+See [Lyrics: sources, timing and saving](docs/EMBEDDED_LYRICS.md) for supported metadata, folder access and verification details.
+
+## Animated artwork
+
+Enable animated artwork in the Immersive player settings. Choose **Apple first**, **Spotify first**, **Apple only** or **Spotify only**. Apple is the default priority and accepts portrait Tall artwork only. Spotify Canvas is an optional alternative; static local artwork remains the fallback.
+
+Artwork lookup uses song metadata and external resolvers. The current Spotify resolver uses the independent Spotycovs service without a Spotify login. Provider availability and matching can vary. Aruna caches video data and can prefetch artwork for up to five upcoming tracks in the actual playback queue, including shuffle order. Prefetching uses network data.
+
+Canvas matching supports non-Latin titles and artist names. Equivalent trusted proxy links share cached video bytes, and prefetch yields when the active player needs bandwidth. See the [Canvas cache and matching verification](docs/implementation-timeline/immersive-player/2026-10-30-improve-canvas-matching-and-cache-reuse.md) for measured results and limits.
+
+## Network use and storage
+
+Local playback does not require an account. Optional features make network requests:
+
+| Feature | Information used |
+| --- | --- |
+| Online lyrics | Song title, artist, album and duration for matching. |
+| Animated artwork | Song/album metadata for Apple Tall artwork or Spotify Canvas lookup and video downloads. |
+| Artist information | Artist names for portraits and biographies. |
+
+These lookup features do not upload the audio file. Disable online lyrics and animated artwork in Settings to stop those lookups. Listening history stays on the device. Cached provider content may be unavailable after Android clears app caches.
+
+## Build and checks
+
+Use **JDK 21** for development and tests. The project compiles Android sources for Java 17, targets API 36 and requires Android SDK Platform 36. Use a compatible Android Studio version and the included **Gradle 9.6.0 wrapper**; no separate Gradle installation is needed. Plugin versions are defined in [build.gradle.kts](build.gradle.kts).
+
+Clone the repository and open its root in Android Studio:
+
+~~~sh
+git clone https://github.com/yohandeku32/nusamusic.git
+cd nusamusic
+~~~
+
+Set `ANDROID_HOME` to your SDK directory, or create an ignored `local.properties` file:
+
+~~~properties
 sdk.dir=/path/to/android-sdk
-```
+~~~
 
-Build the debug APK:
+Run checks without packaging an APK:
 
-```sh
-./gradlew :app:assembleDebug
-```
-
-The APK is written to `app/build/outputs/apk/debug/app-debug.apk`.
-
-Push and pull-request checks compile Android sources and run unit tests without
-packaging an APK. Run **Nusa Android build** manually in GitHub Actions when an
-APK download is needed; only manual runs assemble and upload it.
-
-To run Android lint:
-
-```sh
+~~~sh
+./gradlew :app:testDebugUnitTest
 ./gradlew :app:lintDebug
-```
+~~~
 
-Run the unit tests with `./gradlew :app:testDebugUnitTest`. There are no instrumentation tests yet. Playback, folder permissions, and crossfade still need testing on Android devices.
+On Windows PowerShell, use `.\gradlew.bat` in place of `./gradlew`.
 
-Choose **Immersive artwork** in Player Settings to use animated album covers. Nusa first searches Apple Music via the m8tec artwork resolver. Only if Apple's animation is missing or all its video variants fail to play does Nusa search **Spotify Canvas** by local song artist and title via the independent [Spotycovs API](https://www.spotycovs.lol/). The Spotify resolver is unofficial, uses no Spotify login or cookie in the APK, and may change or become unavailable. Canvas playback accepts MP4 links from Spotify's `canvaz.scdn.co` CDN or Spotycovs' validated `/api/canvas?id=…&stream=1` video proxy, with strict HTTPS host/path checks. Apple and Spotify URL lookups run concurrently, with a short 400 ms Apple-first priority window; if Apple is slow and Canvas is ready, Canvas can appear without waiting for all Apple catalog attempts. An Apple match may replace the pending Canvas only before its first frame is displayed. Verified Spotify Canvas URL matches are stored privately for up to three days to avoid repeated resolver calls. Canvas videos use an app-private 64 MiB least-recently-used Media3 disk cache (Android may purge cache files). After a brief queue-stability delay, Nusa can preload at most 512 KiB of the actual next track's Canvas, including shuffle order. Prefetching uses network data and is disabled when animated artwork or immersive mode is off. Cached content is never uploaded. Local static artwork always remains as the final fallback. The artwork animation switch enables or disables both sources together. These lookups send artist and title metadata to external providers; the audio file itself is never uploaded.
+To build a debug APK when needed:
 
-## Last.fm biographies
+~~~sh
+./gradlew :app:assembleDebug
+~~~
 
-Biographies need a Last.fm API key. Local playback works without one.
+The output is `app/build/outputs/apk/debug/app-debug.apk`.
 
-Add your key to `local.properties`:
+The [Android workflow](.github/workflows/android-build.yml) is currently named **Nusa Android build**. It compiles and runs unit tests for matching source changes. PR #178 runs checks without packaging an APK. Manual runs, pushes to `main`, and the existing PR #176 exception can assemble and upload a debug APK. Its path filters cover Android sources, Gradle configuration and the workflow itself; a pull request containing only documentation does not match them.
 
-```properties
+Tests include JUnit and Robolectric/Compose checks. Physical-device testing is still needed for playback, folder access, animations, touch behavior and frame pacing; passing unit tests does not establish those results.
+
+### Last.fm biographies
+
+Local playback works without a Last.fm key. To enable biographies in your own build, add this to `local.properties`:
+
+~~~properties
 LASTFM_API_KEY=YOUR_LASTFM_API_KEY
-```
+~~~
 
-You can also use the `LASTFM_API_KEY` Gradle property or environment variable. The build uses the first non-empty value from `local.properties`, the Gradle property, then the environment variable. Keep keys and `local.properties` out of Git. The key is included in the APK at build time.
+The build also accepts a `LASTFM_API_KEY` Gradle property or environment variable, in that priority order after `local.properties`. Keep keys out of Git. The key is included in the resulting APK. Biography lookup tries Indonesian first, then English.
 
-The lookup uses the first artist in a multi-artist tag. It requests an Indonesian biography first and falls back to English if needed.
+### Optional FFmpeg decoder
 
-The artist page matches the same primary artist in local tags, ignoring case and extra whitespace. Album grouping uses album tags, including tracks scanned from selected folders. Deezer and Last.fm supply the portrait and biography only; all playable songs and albums come from your scanned local library. Without a connection or Last.fm key, local albums and playback remain available, and the page shows a portrait placeholder or a biography unavailable message.
+The standard build uses Android/Media3 decoders. FFmpeg is available only when a matching native Media3 1.9.3 AAR is supplied at `app/libs/media3-decoder-ffmpeg.aar`. Both the main and crossfade players can use it as a fallback. It does not add missing container extractors.
 
-Visited artist profiles keep their portrait, selected album, expanded biography, and scroll position while you swipe between the artist, player, and library pages. Up to eight profiles are kept in memory. Deezer portraits and successful Last.fm biographies are also saved on the device and reused after reopening the app, including offline. A swipe away does not cancel a portrait download, and failed lookups wait five minutes before retrying rather than requesting the same missing data on every visit. Local albums and listening-history rankings still update when your collection or playback history changes.
+See [FFmpeg Android integration](docs/FFMPEG_ANDROID.md) for the native build script, manual workflow and distribution notices.
 
-Most-played tracks use listening history stored on the device from this version onward; earlier plays cannot be reconstructed. A play counts once per track session after 30 seconds of listening, or half the track duration for shorter tracks. Pausing and seeking do not add listening time. Background playback is counted by the playback service, and repeat starts a new session. No listening history is sent to Deezer or Last.fm.
+### Optional CD sticker font
 
-## Immersive lyrics
+For a local build, place a legally obtained `Aerosoldier_PERSONAL_USE_ONLY.otf` at:
 
-Lyrics are available only in Immersive mode. The Lyrics button opens a rounded
-bottom sheet at 50% of the window height, with an artwork-derived background.
-Close, swipe down, or tap outside to dismiss. Settings → Lyrics controls font size.
+~~~text
+app/src/main/assets/fonts/Aerosoldier_PERSONAL_USE_ONLY.otf
+~~~
 
-Lyrics and credits come only from the current local audio file. The bounded
-reader supports ID3 USLT/SYLT/TXXX, FLAC and Ogg Vorbis/Opus comments, MP4/M4A
-lyrics atoms, and ID3 chunks in WAV/AIFF. Plain text stays unsynchronised;
-LRC/TTML line timing never becomes invented word or syllable timing.
-Enhanced LRC and TTML authored units drive the progressive syllable fill.
+The file is gitignored and is not included in the public repository. The CD sticker uses a fallback font when it is absent. Follow the font's license before distributing a build that includes it. Custom TTF/OTF player-title fonts can also be selected in the app.
 
-Syllable duration continuously controls the existing glow and motion. Notes
-under 250 ms use only progressive highlighting; 250–600 ms notes have minimal
-glow and subtle motion. Soft glow and breathing develop on longer notes, with
-elastic contours and micro-vibration reserved for sustained vocals. Runs of
-short syllables reduce decoration across a phrase, recovering gradually into
-a held note. Inferred LRC tails and inherited TTML container ends cannot trigger
-full sustained-vocal expression; their original highlight timestamps stay intact.
-Attack, sustain and release use playback time, while the traveling wave and
-slow breathing keep their global phase across syllable boundaries. Glow and
-sharp text share one intact glyph transform. Measured glyphs retain their
-gradients, matrices, expression profiles and shadow palette across frames.
-Audio-time effects freeze on pause and evaluate the new phase directly on seeks.
-During an evidenced long closing vowel, the entire lyric phrase (including
-earlier syllables and wrapped rows) blends into one shared floating/breathing
-transform. This keeps the complete last word and sentence moving together;
-the individual progressive fills and glow timing remain unchanged. Short
-endings and inferred metadata tails retain their adaptive treatment.
+## Source layout
 
-The V13 dynamic engine keeps timing, phrase analysis, expression and visual
-focus separate. `LyricsTimeline` retains the authored active windows;
-`LyricsPhraseAnalysis` prepares continuous duration/gap-weighted context from
-nearby earlier and later units. Look-ahead gently prepares the current note
-for an upcoming hold without activating future text. Each measured glyph
-retains a `LyricsExpressionController`; soft outgoing halos bridge adjacent
-notes while strong bloom releases naturally. Existing continuous wave,
-bubble, elastic contour and micro-vibration carriers keep their playback phase.
-Inferred timing remains limited to simple expression.
+| Path | Contents |
+| --- | --- |
+| [app/src/main/kotlin/com/yohandeku32/nusamusic/MainActivity.kt](app/src/main/kotlin/com/yohandeku32/nusamusic/MainActivity.kt) | App entry point, screen integration and navigation. |
+| [app/src/main/kotlin/com/yohandeku32/nusamusic/ui](app/src/main/kotlin/com/yohandeku32/nusamusic/ui) | Player presentations, Discovery, Settings and lyric rendering. |
+| [app/src/main/kotlin/com/yohandeku32/nusamusic/data](app/src/main/kotlin/com/yohandeku32/nusamusic/data) | Library scanning, metadata, artwork, lyric providers and file writers. |
+| [app/src/main/kotlin/com/yohandeku32/nusamusic/playback](app/src/main/kotlin/com/yohandeku32/nusamusic/playback) | Media3 playback service, queue and crossfade. |
+| [app/src/test](app/src/test) | Unit and Robolectric tests. |
+| [docs](docs) | Lyrics and native decoder guides. |
 
-`LyricsVisualFocusController` prepares a continuous scroll target just before
-the next main-line onset. One retained spring uses calmer response on rapid
-rows and never returns to an older overlapping main line. Blur/opacity share
-smooth line-cue transitions, with all active voices staying sharp and the
-existing backing-vocal depth retained. Authored instrumental countdowns,
-manual-scroll priority, first-row alignment and tap-to-seek retain their layout
-and interaction paths. Tests include synthetic embedded timing fixtures for
-rap, pop, ballad, long holds, mixed cadence, backing vocals and instrumental gaps;
-they do not substitute for listening/rendering/FPS tests on a physical device.
-
-One lifecycle-bound publisher reads actual player position and discontinuity
-epoch together on the UI thread. Only a real player event resets motion;
-a slow frame is never treated as a seek. Tap-to-seek issues one player request,
-without an optimistic second lyrics clock. Each song gets its own motion state.
-
-Touch-down immediately stops auto-follow through the scroll mutator's UserInput
-priority, before drag slop. One effect owns initial placement, distant rejoin
-and spring corrections. Seeks cancel its previous work; visible targets and
-manual resumption use smooth corrections instead of repeating an initial snap.
-The first vocal row sits 12.5% of the lyric viewport above the usual centre,
-including after seeking back; subsequent rows retain the existing follow anchor.
-Following yields to the full gesture/fling and then the browsing grace period.
-Duplicate timestamps keep the first authored anchor, and duplicate backing
-content has distinct source-index keys.
-
-Timed backing voices appear beneath the related main line. Their complete
-measured height, including padding, expands and collapses from audio time.
-Once the exit finishes, the backing is removed from composition and measurement.
-Authored silence between backing units also collapses the space. Following
-uses the main text height as its anchor so backing expansion does not shift
-the target. Three-dot countdowns exist only during authored gaps of at least
-three seconds. A temporary row above the associated lyric creates actual space,
-pushing that lyric and following rows down even in mid-song or intra-line gaps.
-Its height eases back to zero before singing resumes; completed countdowns
-leave no permanent space. The dots scroll with the lyrics during manual browsing.
-
-Composed by and Lyrics by sections appear after the final lyric when the file
-contains those roles: ID3 TCOM/TEXT (including v2.2 aliases), Vorbis
-COMPOSER/LYRICIST, MP4 ©wrt composer, or compatible freeform fields. Roles stay
-separate, absent names remain hidden, and credits survive the embedded cache.
-Credits scroll with the list and never become an automatic follow target.
-Following stops after the final vocal exit so users can browse the ending.
-
-Visible rows retain their text measurements; frame updates affect drawing,
-layers, and the active backing container's measurement. Manual scrolling
-suspends following until scrolling stops and 2.5 seconds pass. Up to eight
-parsed songs are retained in memory; the embedded disk cache has 120 entries.
-
-Accompanist Core 0.4.2 and UI 1.0.15 remain pinned for Compose 1.9.
-Unit tests cover metadata formats/credits, cache persistence, authored vocal
-windows, pause/seek behavior, backing height reclamation and simulated
-60/90/120 Hz timing. Rendering appearance, actual FPS, touch feel, and provider
-compatibility still require physical-device testing.
-
-## Development notes
-
-The app still needs more testing with large libraries, long playback sessions, and folder permissions after a restart. The USB DAC experiment is on hold, and bit-perfect hardware playback hasn't been verified.
-
-Most of the UI lives in `MainActivity.kt`. Music scanning and metadata loading are in `data/`; background playback and crossfade are in `playback/PlaybackService.kt`.
-
-The application ID is `com.yohandeku32.nusamusic`. See [third-party notices](THIRD_PARTY_NOTICES.md) for bundled assets and dependency notices.
+The application ID remains `com.yohandeku32.nusamusic`. See [third-party notices](THIRD_PARTY_NOTICES.md) for bundled assets and dependency notices. Large libraries, long playback sessions, storage permissions after restart and external DAC behavior still need device testing.

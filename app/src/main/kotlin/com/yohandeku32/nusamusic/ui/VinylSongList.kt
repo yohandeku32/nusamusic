@@ -5,7 +5,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -67,6 +68,7 @@ fun VinylSongList(
     pauseLabel: String,
     unknownArtistLabel: String,
     onPlay: (Song) -> Unit,
+    onRequestDelete: (Song) -> Unit,
     onTogglePlay: () -> Unit,
     artwork: @Composable (Song, Modifier) -> Unit,
     modifier: Modifier = Modifier
@@ -113,6 +115,7 @@ fun VinylSongList(
                     onClick = {
                         if (currentSongId == song.id) onTogglePlay() else onPlay(song)
                     },
+                    onLongClick = { onRequestDelete(song) },
                     artwork = artwork,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -155,6 +158,7 @@ fun VinylSongList(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun VinylSongRow(
     song: Song,
@@ -166,6 +170,7 @@ private fun VinylSongRow(
     pauseLabel: String,
     unknownArtistLabel: String,
     onClick: () -> Unit,
+    onLongClick: () -> Unit,
     artwork: @Composable (Song, Modifier) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -188,7 +193,13 @@ private fun VinylSongRow(
         Row(
             modifier = Modifier.fillMaxWidth()
                 .clip(RoundedCornerShape(50))
-                .clickable(role = Role.Button, onClickLabel = if (playing) pauseLabel else playLabel, onClick = onClick)
+                .combinedClickable(
+                    role = Role.Button,
+                    onClickLabel = if (playing) pauseLabel else playLabel,
+                    onLongClickLabel = "Delete ${song.title} permanently",
+                    onClick = onClick,
+                    onLongClick = onLongClick
+                )
                 .semantics { selected = current }
                 .padding(vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically

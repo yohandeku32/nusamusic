@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import android.os.Build
@@ -24,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yohandeku32.nusamusic.data.SongCredits
 import com.yohandeku32.nusamusic.data.LyricsUnitKey
+import com.yohandeku32.nusamusic.data.LyricsPronunciation
 import com.mocharealm.accompanist.lyrics.core.model.ISyncedLine
 import com.mocharealm.accompanist.lyrics.core.model.SyncedLyrics
 import com.mocharealm.accompanist.lyrics.core.model.karaoke.KaraokeLine
@@ -46,12 +48,20 @@ internal fun SyncedLyricsView(
     listState: LazyListState, motionState: LyricsMotionState,
     onSeek: (ISyncedLine) -> Unit, fontSize: Float, credits: SongCredits = SongCredits(), modifier: Modifier = Modifier,
     inferredEnds: Set<LyricsUnitKey> = emptySet(),
-    duetRightLines: Set<Int> = emptySet()
+    duetRightLines: Set<Int> = emptySet(),
+    pronunciations: Map<Int, LyricsPronunciation> = emptyMap()
 ) {
     val clock = remember { LyricsPlaybackClock(position, visible) }
     SideEffect { clock.update(position, visible) }
-    val display = remember(lyrics) { LyricsDisplayRows(lyrics.lines) }
+    val display = remember(lyrics, duetRightLines) {
+        LyricsDisplayRows(lyrics.lines, duetRightLines)
+    }
     val firstVocalRow = remember(display) { display.rows.indexOfFirst { it.main != null }.coerceAtLeast(0) }
+    val lineMotion = remember(display) {
+        LyricsLineMotion(display.rows.map { row ->
+            row.main?.start ?: row.backing.firstOrNull()?.value?.start ?: 0
+        }.toIntArray())
+    }
     // Analyze all timed syllables on Default, not during the first Compose
     // frame of the Lyrics panel. Pure CPU results are published once.
     val expressions by produceState<Map<KaraokeLine, List<LyricsAdaptiveExpression>>>(
@@ -108,8 +118,10 @@ internal fun SyncedLyricsView(
                 }
             } else emptyArray()
         }
-        LaunchedEffect(visible, interaction.canFollow, fontSize, maxHeight, maxWidth, motionState.revision) {
+        LaunchedEffect(display, visible, interaction.canFollow, fontSize, maxHeight, maxWidth, motionState.revision) {
             val motion = LyricsFollowMotion()
+            lineMotion.reset()
+            val directionGuard = LyricsFollowDirectionGuard()
             val interactionGeneration = interaction.generation
             if (!visible || !interaction.canFollow) return@LaunchedEffect
             snapshotFlow { listState.layoutInfo.totalItemsCount }.first { it == display.rows.size + if (credits.isEmpty) 0 else 1 }
@@ -143,6 +155,24 @@ internal fun SyncedLyricsView(
             var nextAnchor = 0f
             var targetBlend = 0f
             var targetResponse = 1f
+            var lastMotionTime = clock.read()
+            val durationScale = coroutineContext[MotionDurationScale]
+            fun advanceLines(now: Int, consumedPx: Float = 0f) {
+                val elapsed = now.toLong() - lastMotionTime
+                lastMotionTime = now
+                val items = listState.layoutInfo.visibleItemsInfo
+                val first = items.firstOrNull()?.index ?: return
+                val last = items.lastOrNull()?.index ?: return
+                var minimumHeight = Float.MAX_VALUE
+                for (item in items) if (item.index < display.rows.size && item.size > 0) {
+                    minimumHeight = minOf(minimumHeight, item.size / density)
+                }
+                val active = lineMotion.rank(targetRow) +
+                    (lineMotion.rank(nextRow) - lineMotion.rank(targetRow)) * targetBlend
+                lineMotion.advance(consumedPx / density, elapsed, first, last, active,
+                    if (minimumHeight.isFinite()) minimumHeight else fontSize * 1.25f,
+                    durationScale?.scaleFactor ?: 1f)
+            }
             fun updateTarget(now: Int): Boolean {
                 val current = frame
                 visualFocus.update(now)
@@ -175,10 +205,12 @@ internal fun SyncedLyricsView(
                     // One initial placement on opening; seeks and manual resumption never repeat this snap.
                     listState.scrollToItem(rejoinRow(), requestedOffset())
                     positioned = true
+                    directionGuard.markSettled()
                 } else if (now.toLong() < followEnd &&
                     listState.layoutInfo.visibleItemsInfo.none { it.index == rejoinRow() }) {
                     // One cancellable rejoin for distant seeks/browsing, owned by this same effect.
                     listState.animateScrollToItem(rejoinRow(), requestedOffset())
+                    directionGuard.markSettled()
                 }
                 while (isActive && interaction.canFollow) {
                     withFrameNanos { }
@@ -187,27 +219,38 @@ internal fun SyncedLyricsView(
                     if (audio.toLong() >= followEnd) break
                     if (!updateTarget(audio)) continue
                     val error = targetError()
-                    if (abs(error) <= 0.5f ||
+                    if (abs(error) <= 0.5f) directionGuard.markSettled()
+                    if (abs(error) <= 0.5f || directionGuard.isReverseCorrection(error) ||
                         (error > 0 && !listState.canScrollForward) || (error < 0 && !listState.canScrollBackward)) {
                         motion.reset()
+                        advanceLines(audio)
                         continue
                     }
                     // Keep one Default mutation for a correction. UserInput cancels it through MutatorMutex.
                     listState.scroll(MutatePriority.Default) {
-                        var previousFrame = withFrameNanos { it }
+                        var previousAudio = clock.read()
                         while (isActive && interaction.canFollow) {
-                            val frameNanos = withFrameNanos { it }
+                            withFrameNanos { }
                             if (!interaction.canFollow) break
-                            val deltaMs = ((frameNanos - previousFrame) / 1_000_000).coerceIn(1, 32)
-                            previousFrame = frameNanos
                             val latest = clock.read()
+                            val deltaMs = (latest.toLong() - previousAudio).coerceIn(0, 32)
+                            previousAudio = latest
+                            if (deltaMs == 0L) { advanceLines(latest); continue }
                             if (latest.toLong() >= followEnd) break
                             if (!updateTarget(latest)) break
                             val error = targetError()
-                            if (abs(error) <= 0.5f) break
+                            if (abs(error) <= 0.5f) {
+                                directionGuard.markSettled()
+                                advanceLines(latest)
+                                break
+                            }
+                            if (directionGuard.isReverseCorrection(error)) { advanceLines(latest); break }
                             val limit = (listState.layoutInfo.viewportSize.height / 6f).coerceAtLeast(1f)
-                            val step = motion.step(error, deltaMs, targetResponse).coerceIn(-limit, limit)
+                            val proposed = motion.step(error, deltaMs, targetResponse).coerceIn(-limit, limit)
+                            val step = directionGuard.step(proposed, error)
+                            if (step == 0f) break
                             val consumed = scrollBy(step)
+                            advanceLines(latest, consumed)
                             if (abs(step - consumed) > 0.5f) break
                         }
                     }
@@ -217,7 +260,7 @@ internal fun SyncedLyricsView(
                 // A user mutation may cancel only the scroll scope, without cancelling this effect.
                 if (!currentCoroutineContext().isActive) throw cancelled
                 interaction.cancelledAuto(interactionGeneration)
-            } finally { motion.reset() }
+            } finally { motion.reset(); lineMotion.reset() }
         }
         LazyColumn(
             state = listState, modifier = Modifier.fillMaxSize().pointerInput(interaction) {
@@ -240,6 +283,11 @@ internal fun SyncedLyricsView(
                     val gap = frame.gap?.takeIf { display.lineToRow[it.nextLine] == index }
                     if (gap != null) LyricsGapRow(gap, clock.read)
 
+                    Column(Modifier.fillMaxWidth().graphicsLayer {
+                        translationY = if (interaction.canFollow) lineMotion.offsetDp(index) * density else 0f
+                        clip = false
+                    }) {
+
                     // Keep the stronger main-text focus separate from backing
                     // vocals and countdown. Layer changes never affect layout.
                     fun visualDistanceDp(): Float {
@@ -257,12 +305,6 @@ internal fun SyncedLyricsView(
                         val focus = lyricsMainFocusDepth(visualDistanceDp(), main.start, main.end, now,
                             visualFocus.focusAmount(row.sourceIndex, now))
                         alpha = focus.opacity
-                        // Let upcoming lines rise gently into focus rather than appearing
-                        // as a rigid scrolling list. This is a GPU-only transform:
-                        // no text remeasurement, extra coroutine, or per-frame allocation.
-                        translationY = if (visualDistanceDp() > 0f) {
-                            (1f - focus.opacity).coerceIn(0f, 1f) * 14f * density
-                        } else 0f
                         renderEffect = if (blurEffects.isNotEmpty()) {
                             blurEffects[(focus.blurDp * 5f).roundToInt().coerceIn(0, blurEffects.lastIndex)]
                         } else null
@@ -272,10 +314,11 @@ internal fun SyncedLyricsView(
                     }) {
                         if (main is KaraokeLine) CenteredKaraokeLine(main, clock.read, motionState,
                             normalStyle, seekLine, onMainHeight = { mainHeights[index] = it },
-                            expressions = expressions[main], alignEnd = duetRight)
+                            expressions = expressions[main], alignEnd = duetRight,
+                            inferredEnds = inferredEnds, pronunciation = pronunciations[row.sourceIndex])
                         else if (main is SyncedLine) LineSyncedLyricsRow(main, clock.read, motionState,
                             normalStyle, onMainHeight = { mainHeights[index] = it },
-                            alignEnd = duetRight) { seekLine(main) }
+                            alignEnd = duetRight, pronunciation = pronunciations[row.sourceIndex]) { seekLine(main) }
                     }
                     // Preserve the original backing-vocal blur and opacity.
                     if (row.backing.isNotEmpty()) Column(Modifier.fillMaxWidth().graphicsLayer {
@@ -291,11 +334,18 @@ internal fun SyncedLyricsView(
                                 val voice = backing.value
                                 val voices = remember(voice) { LyricsVocalWindows(voice) }
                                 TimedVocalContent(voices, clock.read, motionState) {
+                                    // Speaker identity applies to ALL lyric rows,
+                                    // including TTML accompaniment/backing rows.
+                                    // Previously duetRightLines was checked only
+                                    // for main vocals, sending backing singer 2 left.
                                     CenteredKaraokeLine(voice, clock.read, motionState, backgroundStyle, seekLine,
-                                        expressions = expressions[voice])
+                                        expressions = expressions[voice],
+                                        alignEnd = backing.index in duetRightLines,
+                                        inferredEnds = inferredEnds, pronunciation = pronunciations[backing.index])
                                 }
                             }
                         }
+                    }
                     }
                 }
             }

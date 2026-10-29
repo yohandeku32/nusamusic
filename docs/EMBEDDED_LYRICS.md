@@ -1,86 +1,138 @@
-# Embedded Lyrics (Immersive only)
+# Lyrics in Aruna
 
-Tap Lyrics in the Immersive Now Playing controls. CD and Vinyl do not expose this feature.
-The modal has one open anchor at half the window height, full width, 28dp top corners,
-and a dark artwork-derived gradient. Dismiss with Back, the close button, an outside tap,
-or a downward swipe. The existing player remains visible behind it.
+Lyrics are available in the Immersive player. Tap **Lyrics** in the player controls to switch from artwork to lyrics, then tap it again to return. The lyric view occupies the player foreground, with playback controls still available.
 
-## Sources and timing
+In **Settings > Lyrics**, change the font size, toggle online lookup, or reload the current song's lyrics. A timed row seeks to its authored start when tapped. Manual browsing suspends automatic following until scrolling stops and the browsing grace period has passed.
 
-LyricsRepository opens only the current local audio URI on Dispatchers.IO. It never
-queries a lyric service, opens a sidecar, or reads previous imported/remote lyric caches.
+## Sources and synchronization
 
-| Container | Embedded metadata |
+`LyricsRepository` reads the local audio URI first. Fully timed embedded karaoke takes priority. When online lyrics are enabled and the local version is missing or less precisely synchronized, Aruna tries:
+
+1. lrc.red matching by title/artist and available album/duration metadata, followed by the ISRC-based `.ttml` download.
+2. lrc.red structured `.song.json` or `.lrc` data when needed.
+3. A bounded LRCLIB search for line-synced lyrics if lrc.red cannot provide a suitable result.
+
+Local lyrics can appear while online lookup runs. Only a better synchronized version replaces them. Network failures keep the available local lyrics. Reload bypasses lookup caches. Public providers receive matching metadata; these requests do not upload audio or require an Apple Music/Spotify login.
+
+The online and embedded caches are separate. Parsed lyrics are retained for up to eight songs in memory, and the bounded disk stores retain up to 120 entries each. Confirmed misses expire after six hours; network errors are not recorded as confirmed misses. Files saved in Aruna's private pending queue are separate from the provider caches.
+
+### Embedded metadata
+
+| Container | Readable lyric metadata |
 | --- | --- |
-| MP3 and ID3-prefixed audio | ID3v2.2/2.3/2.4 USLT/ULT, millisecond SYLT/SLT, lyric TXXX/TXX |
-| FLAC | Vorbis comment LYRICS, UNSYNCEDLYRICS, SYNCEDLYRICS and compatible lyric keys |
-| OGG Vorbis / Opus | Vorbis comment / OpusTags packets, including continued packets |
-| M4A / MP4 | ilst ©lyr, freeform lyric fields, ID32; moov may follow mdat |
-| WAV / AIFF | Embedded ID3 chunks |
+| MP3 and ID3-prefixed audio | ID3v2.2/2.3/2.4 USLT/ULT, millisecond SYLT/SLT, lyric TXXX/TXX frames. |
+| FLAC | Vorbis lyric comments, including plain and synchronized lyric fields. |
+| OGG Vorbis / Opus | Vorbis comments or OpusTags, including continued packets. |
+| M4A / MP4 | `ilst` lyrics, freeform lyric fields and ID32; `moov` may follow `mdat`. |
+| WAV / AIFF | Embedded ID3 chunks. |
 
-Fields may contain plain text, LRC, Enhanced LRC or timed TTML. The selector prefers
-unit-timed data, then line-timed data, then plain text. Authored adjacent units such as
-ber / sa / ma remain separate. No text is split to invent word or syllable timestamps.
-Line-only TTML and LRC use line focus. Plain text scrolls manually with no timed animation.
+Fields can contain plain text, LRC, Enhanced LRC or TTML. The decoder prefers authored word/syllable timing, then line timing, then plain text. It does not split a line to invent word timestamps. Start-only LRC and inherited TTML container ends remain distinguishable from reliable authored vocal ends.
 
-For start-only formats, a unit ends at the next authored start; the final unit uses the
-next line boundary or track duration. This is a boundary convention, not a vocal-duration
-estimate. Explicit Enhanced LRC terminal stamps and TTML end times take precedence.
-Unsupported MPEG-frame-count SYLT, compressed/encrypted ID3 frames, non-seekable content
-providers and metadata beyond the bounded limits are ignored. The fallback is exactly:
-No embedded lyrics available.
+Readers use bounded metadata reads and skip audio payloads where seeking is available. Unsupported compression/encryption, malformed fields, unsupported SYLT time formats and files outside the reader limits may be ignored. Supported metadata does not by itself guarantee that the audio container can be played on a given device.
 
-## Playback and performance
+### Translations and pronunciation
 
-The visible sheet samples MediaController.currentPosition on the Compose display clock.
-The controller accounts for playback speed; the UI adds no delayed tween or invented
-wall-clock timing. Pausing holds position, seek discontinuities update immediately, and
-changing songs replaces the keyed lyric view and cancels the previous metadata read.
-The frame loop runs only while playing and the lifecycle is STARTED.
+Available translations and pronunciation (including pinyin) appear underneath the original lyric. Karaoke and line-synced rows share this behavior. Companion text belongs to the same measured, tappable row: its height participates in automatic following, it moves with the original lyric, and tapping either text seeks to the original's start. Duet companions follow their own singer's alignment; backing companions follow their backing-vocal visibility window.
 
-Active/fading text layers and active gap indicators observe frame positions. A derived
-focus state changes list composition only at lyric boundaries. Text measurements are
-retained; the list is lazy. Manual drag/fling suspends following until 2.5 seconds after
-scrolling stops. Tapping a timed row seeks to its actual start.
+For Chinese and Japanese word-timed lyrics, pronunciation is centered directly beneath its corresponding character or kanji group. Source and reading intervals must share authored outer boundaries; a reading may cover multiple kanji, or several reading spans may cover one source group. Both texts share one layout and line break. Each cell reserves the larger text width, preventing adjacent pinyin/romaji from overlapping. A right-aligned duet shifts both text levels together, and paired height participates in lyric following. Visual spacing added for readings does not create word breaks in the source animation.
 
-Long-note glow breathes and sweeps slowly within the embedded unit interval.
-Onset movement has one damped pulse; it settles independently of the held-note glow.
-Row fades, mini-voice visibility, countdown phases and following all use audio time.
-The high-damping follow spring integrates audio deltas, so pause holds its position.
-Explicit player discontinuities reset following and suppress historical onset/fade replay.
+Non-CJK lyrics, missing/ambiguous timing, unsupported bidirectional mixtures, and an indivisible group wider than the viewport retain the existing separate reading row. Aruna does not guess character associations from text length or repeated words. Sentence translations retain their separate line below the paired source/pronunciation block.
 
-Countdowns are temporary overlays rather than list spacer rows. During the final 440 ms
-of an authored break, the already measured next row begins moving into place while the
-dots fade. Mini backing vocals use authored accompaniment flags and unioned unit windows;
-translations with unit timing follow those same windows, including explicit internal
-silence. Line-only translations stay hidden because their separate vocal activity cannot
-be established. Measured mini text slots remain stable while their layers fade/slide.
-Start-only unit intervals remain visual boundary conventions, never vocal detection.
+The TTML decoder supports inline `ttm:role="x-translation"` and `x-roman` (also `x-romanization` and `x-transliteration`) spans. It also reads iTunes metadata `translations/translation/text` and `transliterations/transliteration/text`, resolving each `for` to the corresponding lyric `itunes:key` (or XML ID). Namespace prefixes may vary. Inline values take precedence; if metadata supplies several languages for one key, the first nonempty authored variant is used. No language selection control or automatic translation service is added.
 
-Parsed lyrics are retained for up to 8 songs. A separate embedded-only disk cache retains
-up to 120 records, keyed by audio identity, duration, size and modification time where
-provided. Empty results expire after 6 hours. Settings > Lyrics > Reload embedded lyrics
-bypasses caches, useful after retagging a file through a provider without modification time.
-Reader limits: 16 MiB per metadata block, 32 MiB aggregate reads, 512 KiB per lyric field,
-32 candidate fields, bounded container nesting/packet/frame counts. Audio payloads and
-large mdat atoms are skipped with seeking rather than copied.
+Timed pronunciation spans retain their own `begin`/`end` or `dur`. CJK source readings receive readable spaces between adjacent pinyin/romaji spans. Latin source readings retain authored syllable joins and word separators, so `men` + `cin` + `tai` + `mu` stays `mencintaimu`. Fully timed pronunciation uses the main lyric renderer: progressive fill, connected letter waves and held-note projection/halos, drawn at the companion's smaller scale. The bold text retains its 58% white base and full-white highlight. The main engine's existing rapid-word and reliable-hold rules still apply.
+
+The sentence translation (the third text level) keeps its own baseline and text size while the original and pronunciation animate. It does not receive the source word's lift, vertical swell or halo pulse. It retains line-level activation from 68% white to full white and the existing tap-to-seek target. Source/pronunciation animation and shared scrolling, sentence following and backing-row visibility retain their existing owners. No translation word timestamps are guessed. Pause holds playback-driven effects; seeking evaluates the destination's line activation.
+
+Text layout and row height remain stable during expression. Setting the platform animation duration scale to zero removes pronunciation's additional geometry and the source-pose follower while keeping readable text and timing-based highlighting. Partial or untimed pronunciation retains its complete shaped-text fallback and any valid highlight ranges; in karaoke rows it can follow the source's whole-line pose. Missing timing never receives inferred vocal intervals. Companion spans cannot enter sung words, extend vocal ends, or determine duet alignment. LRC translations at the same timestamp retain their existing behavior.
+
+These are supplied lyric annotations. Aruna does not generate translations or pronunciation when a source has none. Original TTML remains in the stored lyric and existing saved metadata. See the [companion-text change record](implementation-timeline/lyrics/2026-10-28-add-ttml-translations-and-pronunciation.md).
+
+Role attributes are read as whitespace-separated tokens, so annotations such as `lyrics x-roman` and `x-translation x-note` remain outside sung text. Neutral annotation wrappers are traversed without taking backing annotations into the lead. Unknown role names are not matched by prefix. Stored raw TTML is preserved.
+
+## Optional mini lyrics
+
+Immersive Settings → Lyrics → **Mini lyrics** enables one animated main lyric line above the normal player's title. The saved preference defaults to off. It uses the same parsed lyric cache, online setting, syllable painter and Media3 clock as full lyrics. Pronunciation, translations and backing vocals are not duplicated in this compact row. Intros, long rests, missing data and ended lines remain blank.
+
+Long lines stay unwrapped and pan with the vocal cursor. Each visibility window eases in for up to 180ms and out for up to 120ms, with a small vertical movement in the same single row. Short windows use shorter transitions. Pause retains the pose; seeking and track changes evaluate the destination immediately. Zero system animation scale removes the additional fade/slide. Light player mode uses dark ink, and hidden mini views stop frame sampling. Disabling restores the previous player geometry. While enabled, hiding the mini row for full lyrics/overlays retains its layout space. See the [transition and annotation repair record](implementation-timeline/lyrics/2026-10-29-smooth-mini-transitions-and-separate-role-lists.md).
+
+The Mini lyrics and Online lyrics switches and Reload lyrics button use SaltUI 2.6.0-beta03, with an Aruna palette bridge and the existing preference/reload callbacks. This is a Settings pilot, not a whole-app theme migration. See the [implementation and verification record](implementation-timeline/immersive-player/2026-10-29-add-mini-lyrics-and-saltui-settings.md).
+
+## Authorship credits
+
+The Immersive header reads only `SongLyrics.ttmlCredits`, with **SONGWRITERS** as its fixed label. It prefers the selected TTML's `songwriters/songwriter` list, then its explicitly authored `composers/composer` list. File composer/lyricist tags never supply this header. Without TTML authorship it displays **Unknown songwriter**. Explicit roles remain separate in the metadata model; the shared credit block can still display **Written by** for general songwriters.
+
+Voice agents, performers, copyright owners, lyric-file editors and sung text are not inferred as authors. Names are trimmed, deduplicated in source order and bounded to 32 names of at most 2,048 characters per role. A matching online TTML can fill absent credits even if its timing is not selected; a different lyric text cannot. General authors are never copied into composer/lyricist fields. Old cached raw TTML recovers these credits on decode; new songwriter properties survive restart without invalidating older cache entries. Reading credits does not write audio tags. See the [TTML credit fallback record](implementation-timeline/lyrics/2026-10-28-use-ttml-credits-when-tags-are-empty.md).
+
+## TTML syllable spacing
+
+Whitespace-only indentation containing line breaks or tabs between child elements is ignored in syllable TTML. Compact and pretty-printed `men`/`cin`/`tai`/`mu` spans therefore render as the same word. Explicit ordinary spaces, whitespace inside text spans, CDATA and inherited `xml:space="preserve"` remain meaningful; a nearer `xml:space="default"` restores indentation handling. Line-only prose is retained. Timings, translation/voice associations and stored raw TTML are unchanged. See the [spacing correction record](implementation-timeline/lyrics/2026-10-28-preserve-ttml-syllable-joins.md).
+
+## Character motion and following
+
+All lyric motion samples the playback clock. Pausing holds the current pose; a real seek evaluates the destination pose. Changing songs replaces the song's lyric state. The active frame publisher follows the activity lifecycle and stops publishing playback frames when it is not started.
+
+- Adjacent, reliably timed units share a soft highlight cursor around word boundaries. A measured white shoulder, up to 12dp on each side, anticipates/releases by at most 90ms; short units use a smaller window. The cursor matches sweep position and velocity at the transition edges, including measured reading-cell padding and wrapped paths. Only fill crosses a boundary: held-note lift, scale and projection remain owned by the authored unit. Overlaps, gaps beyond 45ms, excessive spacing, RTL and inferred timing retain the existing fill. Reduced pronunciation motion removes geometry while retaining the same timed highlight.
+- Rapid words up to 650 ms avoid the extra character wave.
+- Reliable short pulls longer than 650 ms use a crest that travels across measured character centers. Rise and release use the word's duration instead of a fixed short cycle.
+- Nearby short pulls with gaps up to 120 ms share one continuous crest along the measured text path, with matching speed and acceleration at word joins. The small visual wave may anticipate or trail a word by up to 180 ms; karaoke timestamps remain authored, with the bounded fill shoulder described above. Real rests, rapid words, unreliable timing and sustained notes break this connection. Short runs that cannot separate graphemes keep their baseline anchored.
+- An authored held unit of at least 1,300 ms enables the separate sustained-vocal effect. Characters rise, project in 3D and release in sequence over the hold. The short-word handoff does not change that animation.
+- For Han, hiragana and katakana, each authored timing unit owns its animation interval even when there are no spaces. A held unit cannot pass its lift/projection to preceding or following units. A multi-character kanji word explicitly timed as one unit retains its internal character animation. Latin word fragments can still join as before; pronunciation timestamps and the paired reading layout are unchanged.
+
+The painter caches complete grapheme layouts, gradients, projection resources and glow palettes. Combining accents stay with their base letter. Joining scripts, RTL runs and unsupported sequences retain their shaped text runs. Fill and halo share the same position; the painter does not cut moving strips through letter strokes.
+
+Duet alignment follows the TTML voice information, including right-aligned wrapped rows for the secondary voice. Backing vocals follow their own authored windows. Available translations and composer/lyricist/songwriter credits display with the lyrics. Instrumental countdowns use authored gaps and relinquish their layout space when they finish.
+
+Automatic following yields to manual scrolling and resumes after the browsing grace period. Each visible sentence also has a bounded visual follower: the active sentence leads and upcoming sentences catch up more gradually. Its main lyric, translation and attached backing move together; simultaneous duet onsets share a phase. The extra offset is capped at 35% of the shortest visible row height, within 8–32dp, to preserve spacing. Countdown layout stays separate.
+
+Sentence followers retain velocity when the active cue changes, hold their pose on pause, and reset for seeks, visibility/viewport changes, reverse rejoining or manual browsing. Zero platform animation duration scale removes the additional sentence motion, including while paused. Word and syllable timing and the existing character effects are unchanged.
+
+The view retains measurements and updates drawing/layers from playback time. Tests of timing mathematics do not establish physical-device smoothness or visual equivalence to another player. See the [sentence-motion change record](implementation-timeline/lyrics/2026-10-27-add-flowing-sentence-motion.md) for ownership and verification.
+
+## Save lyrics to a song
+
+A **Save** button appears when downloaded lyrics improve on the file's existing embedded lyrics, including an upgrade from plain or line-synced text to authored word/syllable timing. Original-file embedding supports **MP3, FLAC and M4A**. Other containers remain read-only for embedding.
+
+1. On first use without a suitable stored grant, select the music folder using Android's folder picker. Grant access to a parent folder containing the songs, including any Artist/Album subfolders.
+2. Aruna stores the requested lyrics in its private pending queue and refreshes the displayed lyrics from that copy. Playback continues.
+3. A **clock icon** means the metadata write is pending, not completed. Switch songs so the player can release the original file. The durable queue is a draft, not evidence that another player can already read the lyric.
+4. Once the song is no longer the active playback source, Aruna resolves the original inside the authorized folder, verifies its identity, prepares the tagged copy and commits the metadata update.
+
+The folder grant persists for later songs in that tree. A different folder may need another grant. Android can restrict which storage roots may be selected. The app does not require a separate file picker for every song.
+
+### Metadata writers
+
+| Format | Written fields and preservation |
+| --- | --- |
+| MP3 | Updates canonical readable `USLT` and timed `TXXX:LYRICS`; legacy owned lyric descriptions are replaced. Described alternate translations, unrelated tags, artwork and MPEG frames are retained. |
+| FLAC | Updates ordinary `LYRICS` and timed `ARUNA_LYRICS`; legacy owned lyric fields are migrated. Unrelated metadata blocks, artwork and audio frames are retained. |
+| M4A | Updates ordinary `©lyr` and the owned `com.aruna:LYRICS` freeform atom. Legacy owned freeforms are migrated; audio offsets and unrelated atoms are retained. |
+
+The reader still accepts legacy owned fields in existing files. Only an explicit Save updates the selected song; existing files are not bulk-retagged. Saving does not convert or re-encode the audio.
+
+Before writing, Aruna compares the authorized file with the playing URI using a whole-file SHA-256 digest. It creates a backup and staged output, then verifies that `EmbeddedLyricsReader` can read the staged timing. After committing, it verifies the original against the staged output. A failed write attempts and verifies rollback; if rollback fails, the backup remains in Aruna's data folder, separate from disposable caches. Unsupported formats are rejected before queuing; unsafe metadata layouts are rejected rather than reported as successful writes. A failed Save offers a folder-access review on retry.
+
+Queued lyrics and completed file embedding are separate states. Verify completion before expecting another music player or tag editor to read the newly embedded metadata.
 
 ## Verification
 
-Run with Java 21+ and the project's configured Android SDK:
+From the repository root, use JDK 21 and the configured Android SDK:
 
-    ./gradlew :app:testDebugUnitTest :app:assembleDebug
+~~~sh
+./gradlew :app:testDebugUnitTest
+~~~
 
-Binary fixtures cover plain USLT, line/word/syllable Enhanced LRC, SYLT, UTF-16,
-ID3v2.4 TXXX, FLAC, OGG/Opus packet continuation, M4A freeform/©lyr metadata,
-moov-after-large-mdat seeking, missing/corrupt tags and non-monotonic timestamps.
-Clock/timeline tests cover pause-position stability, speed-adjusted audio samples,
-backward seeks, source replacement and boundary conditions.
+On Windows PowerShell, use `.\gradlew.bat :app:testDebugUnitTest`. This command runs checks without packaging an APK.
 
-Device acceptance checks (require an Android device): play tagged fixtures in Immersive;
-verify the half-height panel, close/swipe/outside dismissal, line taps, manual fling,
-pause/resume, seek, track changes and playback speed. Profile 60/90/120Hz hardware with
-animated artwork enabled. JVM tests and an APK build do not measure device frame pacing.
+Fixtures cover supported metadata containers, malformed input, lyric selection, saved timing, cache behavior and file-writer round trips. Motion tests cover pause/seek behavior, short-word handoffs, sustained characters, backing windows and simulated 60/90/120 Hz samples. Robolectric/Compose tests cover selected UI behavior.
 
-Format references: https://id3.org/id3v2.3.0 and
-https://www.xiph.org/vorbis/doc/v-comment.html
+On an Android device, verify:
+
+- Online lookup enabled/disabled, offline fallback and reload after retagging.
+- Short pulls, long holds, adjacent words, duet sides and backing vocals with a known TTML track.
+- Tap-to-seek, pause/resume, manual scrolling, track changes and large lyric fonts.
+- Save from a nested authorized folder for each supported write format, including app restart while queued and completion after changing tracks.
+- Independent tag-editor readback, unchanged audio/artwork and storage-provider error handling.
+- Frame pacing and touch behavior with animated artwork enabled on the actual device.
+
+For the implementation, start with [LyricsRepository](../app/src/main/kotlin/com/yohandeku32/nusamusic/data/LyricsRepository.kt), [SyllableLyricsPainter](../app/src/main/kotlin/com/yohandeku32/nusamusic/ui/SyllableLyricsPainter.kt) and [AudioLyricsEmbedder](../app/src/main/kotlin/com/yohandeku32/nusamusic/data/AudioLyricsEmbedder.kt). Return to the [main README](../README.md) for setup and build commands.

@@ -61,12 +61,12 @@ internal object ArtworkBlur {
 
     /** Capture the visible zoomed viewport, rather than the full oversized video surface. */
     @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
-    fun captureViewport(playerView: PlayerView): Bitmap? {
+    fun captureViewport(playerView: PlayerView, maxSize: Int = THUMBNAIL_SIZE): Bitmap? {
         val surface = playerView.videoSurfaceView as? TextureView ?: return null
         if (!surface.isAvailable || surface.width <= 0 || surface.height <= 0 ||
             playerView.width <= 0 || playerView.height <= 0
         ) return null
-        val scale = THUMBNAIL_SIZE.toFloat() / maxOf(surface.width, surface.height)
+        val scale = maxSize.coerceIn(1, THUMBNAIL_SIZE).toFloat() / maxOf(surface.width, surface.height)
         val width = (surface.width * scale).roundToInt().coerceAtLeast(1)
         val height = (surface.height * scale).roundToInt().coerceAtLeast(1)
         val frame = try {

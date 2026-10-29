@@ -13,6 +13,12 @@ internal class LyricsExpressionController(
         private set
 
     fun update(playbackMs: Int) {
+        if (endMs.toLong() - startMs <= LYRICS_DETAIL_MIN_MS ||
+            playbackMs <= startMs || playbackMs.toLong() >= endMs.toLong() + 160L) {
+            glow = 0f
+            wave = 0f
+            return
+        }
         val phrase = profile.phraseAt(startMs, playbackMs)
         wave = profile.wave * phrase
         glow = profile.glow * profile.glowEnvelope(startMs, endMs, playbackMs, connection) *
