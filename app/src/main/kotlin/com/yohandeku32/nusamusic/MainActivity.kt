@@ -2979,7 +2979,8 @@ private fun NusaMusicApp(
                                                 repeatOne = nusaText("Ulangi satu lagu", "Repeat one"),
                                                 seek = nusaText("Posisi pemutaran", "Playback position"),
                                                 settings = nusaText("Pengaturan", "Settings"),
-                                                more = nusaText("Opsi pemutaran", "Playback options")
+                                                more = nusaText("Opsi pemutaran", "Playback options"),
+                                                turntable = nusaText("Mesin vinyl", "Turntable")
                                             ),
                                             onPlayPause = {
                                                 when {
@@ -4682,7 +4683,7 @@ internal fun VinylRecord(
             Modifier
                 .fillMaxSize()
                 .drawWithCache {
-                    val painter = VinylShadowPainter(size, 16.dp.toPx(), 6.dp.toPx())
+                    val painter = VinylShadowPainter(size, 4.dp.toPx(), 1.dp.toPx())
                     onDrawBehind { with(painter) { drawShadow() } }
                 }
         )

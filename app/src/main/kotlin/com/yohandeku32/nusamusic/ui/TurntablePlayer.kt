@@ -49,7 +49,8 @@ data class TurntableLabels(
     val repeatOne: String,
     val seek: String,
     val settings: String,
-    val more: String
+    val more: String,
+    val turntable: String = "Turntable"
 )
 
 @Composable
@@ -118,7 +119,7 @@ fun TurntablePlayer(
             val textAllowance = with(density) {
                 (titleSize * 2.16f).sp.toDp() + 22.sp.toDp() + 20.sp.toDp()
             }
-            val minimumHeight = topPadding + 48.dp + headerGap + 60.dp + recordGap +
+            val minimumHeight = topPadding + 48.dp + headerGap + 112.dp + recordGap +
                 textAllowance + titleGap + progressGap + 48.dp + transportGap + transportSize +
                 footerGap + 48.dp + qualityGap + 44.dp + bottomPadding + navigationHeight +
                 if (hasSong) 0.dp else 96.dp
@@ -164,18 +165,14 @@ fun TurntablePlayer(
                     Modifier.fillMaxWidth().weight(1f),
                     contentAlignment = Alignment.BottomCenter
                 ) {
-                    val discSize = minOf(maxWidth * 0.75f, 380.dp, maxHeight)
-                    if (discSize > 0.dp) {
-                        Box(Modifier.size(discSize)) {
-                            record(Modifier.matchParentSize())
-                            VinylTonearm(
-                                isPlaying = isPlaying && isVisible,
-                                hasSong = hasSong,
-                                positionMsState = positionMsState,
-                                durationMs = durationMs,
-                                modifier = Modifier.matchParentSize()
-                            )
-                        }
+                    val deckSize = minOf(maxWidth - 32.dp, 416.dp, maxHeight - 8.dp)
+                    if (deckSize >= 88.dp) {
+                        VinylTurntableDeck(
+                            size = deckSize, isPlaying = isPlaying, isVisible = isVisible,
+                            hasSong = hasSong, positionMsState = positionMsState,
+                            durationMs = durationMs, repeatMode = repeatMode, labels = labels,
+                            onPlayPause = onPlayPause, onRepeat = onRepeat, record = record
+                        )
                     }
                 }
                 Spacer(Modifier.height(recordGap))

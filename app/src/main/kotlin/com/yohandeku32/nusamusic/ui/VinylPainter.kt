@@ -12,7 +12,7 @@ import kotlin.math.sin
 import kotlin.math.roundToInt
 import kotlin.random.Random
 
-internal const val VINYL_LABEL_FRACTION = 0.48f
+internal const val VINYL_LABEL_FRACTION = 0.56f
 
 internal fun vinylLabelDiameter(discDiameter: Int): Int {
     if (discDiameter <= 1) return discDiameter.coerceAtLeast(0)

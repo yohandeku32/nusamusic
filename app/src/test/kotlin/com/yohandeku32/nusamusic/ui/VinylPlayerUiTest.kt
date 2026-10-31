@@ -17,9 +17,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.InputMode
+import androidx.compose.ui.input.InputModeManager
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.text.font.FontFamily
@@ -58,11 +62,13 @@ class VinylPlayerUiTest {
     private val title = mutableStateOf("The Emptiness Machine")
     private val qualityVisible = mutableStateOf(true)
     private val qualityLabel = mutableStateOf("Hi-Res")
+    private lateinit var inputModeManager: InputModeManager
 
     private fun show(width: Int = 411, height: Int = 914, fontScale: Float = 1f, hasSong: Boolean = true,
         safeBottom: Int = 0, titleSize: Float = 34f) {
         compose.setContent {
             CompositionLocalProvider(LocalDensity provides Density(1f, fontScale)) {
+                inputModeManager = LocalInputModeManager.current
                 MaterialTheme(colorScheme = darkColorScheme()) {
                     LazyColumn(Modifier.requiredSize(width.dp, (height - safeBottom).dp).testTag("vinyl-preview")) {
                         item {
@@ -159,6 +165,7 @@ class VinylPlayerUiTest {
         compose.onNodeWithContentDescription("Seek").assertIsNotEnabled()
         compose.onNodeWithContentDescription("Play").assertIsEnabled()
         compose.onNodeWithContentDescription("Settings").assertIsEnabled()
+        compose.onNodeWithContentDescription("Turntable: Repeat").assertIsNotEnabled()
         compose.onNodeWithText("Choose a song").performScrollTo().assertIsDisplayed()
     }
 
@@ -224,13 +231,49 @@ class VinylPlayerUiTest {
 
     private fun assertEveryControlFits() {
         val viewport = compose.onNodeWithTag("vinyl-preview").getUnclippedBoundsInRoot()
-        for (description in listOf("Settings", "Seek", "Previous", "Play", "Next", "Lyrics", "Share", "Favorite")) {
+        for (description in listOf("Settings", "Seek", "Previous", "Play", "Next", "Lyrics", "Share", "Favorite",
+                "Turntable: Play", "Turntable: Repeat")) {
             val bounds = compose.onNodeWithContentDescription(description).getUnclippedBoundsInRoot()
             assertTrue("$description must fit above the screen bottom", bounds.bottom <= viewport.bottom)
             assertTrue("$description must fit below the screen top", bounds.top >= viewport.top)
         }
         val badge = compose.onNodeWithTag("quality").getUnclippedBoundsInRoot()
         assertTrue("Full Hi-Res touch target must be visible without scrolling", badge.bottom <= viewport.bottom)
+    }
+
+    @Test fun machineSwitchesOperatePlaybackAndExposeRepeatState() {
+        show()
+        compose.onNodeWithContentDescription("Turntable: Play").performClick()
+        compose.onNodeWithContentDescription("Pause").assertExists()
+        compose.onNodeWithContentDescription("Turntable: Pause").performClick()
+        assertEquals(2, plays)
+        val repeat = compose.onNodeWithContentDescription("Turntable: Repeat")
+        repeat.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Repeat off"))
+        repeat.performClick()
+        repeat.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Repeat one"))
+        repeat.performClick()
+        repeat.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Repeat all"))
+        repeat.performClick()
+        repeat.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Repeat off"))
+        snapshot("silver-machine-controls")
+    }
+
+    @Test fun machineControlsRetainTouchAreasAndKeyboardActivationOnShortScreens() {
+        show(width = 360, height = 640, safeBottom = 24, titleSize = 44f)
+        val deck = compose.onNodeWithTag("vinyl-deck").getUnclippedBoundsInRoot()
+        for (description in listOf("Turntable: Play", "Turntable: Repeat")) {
+            val bounds = compose.onNodeWithContentDescription(description).getUnclippedBoundsInRoot()
+            assertTrue((bounds.right - bounds.left).value >= 44f)
+            assertTrue((bounds.bottom - bounds.top).value >= 44f)
+            assertTrue(bounds.left >= deck.left && bounds.right <= deck.right)
+            assertTrue(bounds.top >= deck.top && bounds.bottom <= deck.bottom)
+        }
+        compose.runOnIdle { inputModeManager.requestInputMode(InputMode.Keyboard) }
+        compose.onNodeWithContentDescription("Turntable: Repeat")
+            .performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+        compose.onNodeWithContentDescription("Turntable: Repeat").assertIsFocused()
+        compose.onNodeWithContentDescription("Turntable: Repeat").performKeyInput { pressKey(Key.Enter) }
+        assertEquals(1, repeated.value)
     }
 
     @Test fun longTitleAndLargerTitlePreferenceFitAboveTheNavigationArea() {
