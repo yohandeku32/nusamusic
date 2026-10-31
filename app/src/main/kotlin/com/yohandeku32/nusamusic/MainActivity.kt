@@ -4726,6 +4726,7 @@ internal fun VinylRecord(
                 ArtworkView(
                     song = song,
                     maxSizePx = 512,
+                    retainWhileLoading = true,
                     modifier = Modifier.fillMaxSize()
                 )
                 Box(
@@ -5451,13 +5452,14 @@ private fun ArtworkView(
     fallbackMaxSizePx: Int? = null,
     loadDelayMs: Long = 0L,
     loadAllowed: Boolean = true,
-    grainOverlay: Boolean = true
+    grainOverlay: Boolean = true,
+    retainWhileLoading: Boolean = false
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val density = androidx.compose.ui.platform.LocalDensity.current
     // A cached carousel thumbnail is shown instantly until the full CD cover
     // is ready. Preserve default behaviour in Vinyl and other player modes.
-    var bitmap by remember(song?.uri, maxSizePx, fallbackMaxSizePx) {
+    var bitmap by remember(if (retainWhileLoading) null else song?.uri, maxSizePx, fallbackMaxSizePx) {
         mutableStateOf(
             song?.let {
                 val cacheKey = it.albumId.takeIf { albumId -> albumId > 0L }?.toString()

@@ -367,7 +367,7 @@ class VinylPlayerUiTest {
         assertEquals(1, qualityClicks)
         val face = compose.onNodeWithTag("vinyl-quality-face", useUnmergedTree = true).getUnclippedBoundsInRoot()
         val target = compose.onNodeWithTag("quality").getUnclippedBoundsInRoot()
-        assertEquals(16f, (face.bottom - face.top).value, 0.5f)
+        assertEquals(24f, (face.bottom - face.top).value, 0.5f)
         assertTrue((target.bottom - target.top).value >= 44f)
         snapshot("phone-compact-badge")
     }
@@ -451,7 +451,7 @@ class VinylPlayerUiTest {
         snapshot("aligned-machine-metadata")
     }
 
-    @Test fun plainQualityLabelSitsUnderTheArtistWithoutABackgroundShape() {
+    @Test fun blackQualityRectangleSitsUnderTheArtist() {
         show()
         val artist = compose.onNodeWithText("LINKIN PARK").getUnclippedBoundsInRoot()
         val face = compose.onNodeWithTag("vinyl-quality-face", useUnmergedTree = true).getUnclippedBoundsInRoot()
@@ -463,8 +463,8 @@ class VinylPlayerUiTest {
             val view = compose.activity.findViewById<View>(android.R.id.content)
             val image = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
             view.draw(Canvas(image))
-            assertEquals("The icon/text gap shows the page rather than a badge background", 0xFFF2F1EB.toInt(),
-                image.getPixel(face.left.value.roundToInt() + 18, face.top.value.roundToInt() + 1))
+            assertEquals("The icon/text gap has the requested black background", 0xFF000000.toInt(),
+                image.getPixel(face.left.value.roundToInt() + 24, face.top.value.roundToInt() + 8))
             assertTrue("The wave starts at the same edge as the chassis",
                 (4..44).any { y ->
                     (image.getPixel(progress.left.value.roundToInt() + 1, progress.top.value.roundToInt() + y) shr 16 and 255) < 210

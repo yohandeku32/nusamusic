@@ -25,6 +25,8 @@ import com.yohandeku32.nusamusic.data.ArtworkLoader
 import com.yohandeku32.nusamusic.model.Song
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Rule
@@ -39,8 +41,16 @@ import org.robolectric.shadows.ShadowMediaMetadataRetriever
 
 @Implements(MediaMetadataRetriever::class)
 class VinylPreviewMetadataRetriever : ShadowMediaMetadataRetriever() {
-    @Implementation protected fun getEmbeddedPicture(): ByteArray? = artwork
-    companion object { var artwork: ByteArray? = null }
+    @Implementation protected fun getEmbeddedPicture(): ByteArray? {
+        entered?.countDown()
+        gate?.let { check(it.await(20, TimeUnit.SECONDS)) }
+        return artwork
+    }
+    companion object {
+        @Volatile var artwork: ByteArray? = null
+        @Volatile var gate: CountDownLatch? = null
+        @Volatile var entered: CountDownLatch? = null
+    }
 }
 
 @RunWith(RobolectricTestRunner::class)
@@ -48,6 +58,58 @@ class VinylPreviewMetadataRetriever : ShadowMediaMetadataRetriever() {
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class VinylDeckArtworkTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+
+    @Test fun changingTracksKeepsTheOldCoverUntilTheNewCoverIsReady() = runBlocking {
+        fun cover(color: Int): ByteArray {
+            val bitmap = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888)
+            bitmap.eraseColor(color)
+            return ByteArrayOutputStream().also { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                .toByteArray().also { bitmap.recycle() }
+        }
+        val first = Song(1, "First fixture", "Fixture", "Fixture", "file:///first-${System.nanoTime()}.mp3", 4000, 0)
+        val second = first.copy(id = 2, uri = "file:///second-${System.nanoTime()}.mp3")
+        VinylPreviewMetadataRetriever.artwork = cover(android.graphics.Color.RED)
+        assertNotNull(ArtworkLoader.load(compose.activity, first.uri, 512))
+        val song = mutableStateOf(first)
+        compose.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f)) {
+                MaterialTheme { VinylRecord(song.value, false, Modifier.size(240.dp).testTag("record")) }
+            }
+        }
+        fun labelPixel(): Int {
+            val bounds = compose.onNodeWithTag("record").getUnclippedBoundsInRoot()
+            var pixel = 0
+            compose.runOnIdle {
+                val view = compose.activity.findViewById<View>(android.R.id.content)
+                val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+                view.draw(Canvas(bitmap))
+                pixel = bitmap.getPixel(bounds.left.value.toInt() + 145, bounds.top.value.toInt() + 120)
+                bitmap.recycle()
+            }
+            return pixel
+        }
+        val old = labelPixel()
+        assertTrue(android.graphics.Color.red(old) > android.graphics.Color.blue(old) + 80)
+        val release = CountDownLatch(1)
+        VinylPreviewMetadataRetriever.artwork = cover(android.graphics.Color.BLUE)
+        VinylPreviewMetadataRetriever.entered = CountDownLatch(1)
+        VinylPreviewMetadataRetriever.gate = release
+        try {
+            compose.runOnIdle { song.value = second }
+            compose.waitForIdle()
+            compose.waitUntil(5000) { VinylPreviewMetadataRetriever.entered!!.count == 0L }
+            assertEquals("The prior cover stays visible during a blocked decode", old, labelPixel())
+            release.countDown()
+            compose.waitUntil(5000) { ArtworkLoader.cached(second.uri, 512) != null }
+            val updated = labelPixel()
+            assertTrue("New cover replaces the retained cover", android.graphics.Color.blue(updated) >
+                android.graphics.Color.red(updated) + 80)
+        } finally {
+            release.countDown()
+            VinylPreviewMetadataRetriever.gate = null
+            VinylPreviewMetadataRetriever.entered = null
+        }
+    }
 
     @Test fun theDeckKeepsRealArtworkLoadingAndRendersItsLabelInsideTheRecord() = runBlocking {
         val cover = Bitmap.createBitmap(512, 512, Bitmap.Config.ARGB_8888)

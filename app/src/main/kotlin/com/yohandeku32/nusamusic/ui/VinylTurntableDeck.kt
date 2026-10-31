@@ -146,7 +146,7 @@ private class VinylDeckPainter(size: Size) {
 
         val power = Offset(width * 0.075f, height * 0.86f)
         drawCircle(Color(0xFF6B747A), edge * 0.017f, Offset(power.x, height * 0.75f))
-        drawCircle(if (playing) Color(0xFFDBD8AD) else Color(0xFF444C53), edge * 0.010f,
+        drawCircle(if (playing) Color(0xFFEF3E36) else Color(0xFF692A29), edge * 0.010f,
             Offset(power.x, height * 0.75f))
         drawRoundRect(Color(0xFF3C4349), power - Offset(edge * 0.016f, edge * 0.054f),
             Size(edge * 0.032f, edge * 0.111f), CornerRadius(edge * 0.012f))
