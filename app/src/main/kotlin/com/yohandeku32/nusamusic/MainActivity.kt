@@ -179,6 +179,7 @@ import com.yohandeku32.nusamusic.ui.CdPlayer
 import com.yohandeku32.nusamusic.ui.TurntablePlayer
 import com.yohandeku32.nusamusic.ui.VinylLyricsSection
 import com.yohandeku32.nusamusic.ui.VinylQualityBadge
+import com.yohandeku32.nusamusic.ui.rememberVinylWaveform
 import com.yohandeku32.nusamusic.ui.VinylPaper
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
@@ -2952,6 +2953,8 @@ private fun NusaMusicApp(
                                         .background(VinylPaper)
                                 ) {
                                     if (playerPresentationMode == PlayerPresentationMode.VINYL) {
+                                        val waveform = rememberVinylWaveform(currentSong,
+                                            pagerState.settledPage == playerPage)
                                         TurntablePlayer(
                                             title = currentSong?.title ?: nusaText("Pilih lagu", "Choose a song"),
                                             artist = currentSong?.artist ?: nusaText("Perpustakaan musik lokal Anda", "Your local music library"),
@@ -2963,6 +2966,8 @@ private fun NusaMusicApp(
                                             hasSong = currentSong != null,
                                             positionMsState = positionMsState,
                                             durationMs = durationMs,
+                                            waveform = waveform.data,
+                                            isWaveformLoading = waveform.loading,
                                             shuffleEnabled = shuffleEnabled,
                                             repeatMode = repeatMode,
                                             labels = TurntableLabels(
@@ -2980,7 +2985,10 @@ private fun NusaMusicApp(
                                                 seek = nusaText("Posisi pemutaran", "Playback position"),
                                                 settings = nusaText("Pengaturan", "Settings"),
                                                 more = nusaText("Opsi pemutaran", "Playback options"),
-                                                turntable = nusaText("Mesin vinyl", "Turntable")
+                                                turntable = nusaText("Mesin vinyl", "Turntable"),
+                                                waveformLoading = nusaText("Membaca gelombang audio", "Reading audio waveform"),
+                                                waveformUnavailable = nusaText("Gelombang audio tidak tersedia", "Audio waveform unavailable"),
+                                                waveformReady = nusaText("Gelombang audio", "Audio waveform")
                                             ),
                                             onPlayPause = {
                                                 when {

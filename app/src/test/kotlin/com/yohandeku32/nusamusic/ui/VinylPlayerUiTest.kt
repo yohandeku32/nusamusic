@@ -31,7 +31,12 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import com.yohandeku32.nusamusic.VinylRecord
+import com.yohandeku32.nusamusic.data.AudioWaveform
+import com.yohandeku32.nusamusic.data.PcmWaveformAccumulator
+import com.yohandeku32.nusamusic.data.WaveformPcm
 import java.io.File
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import kotlin.math.roundToInt
 import org.junit.Assert.*
 import org.junit.Rule
@@ -65,7 +70,8 @@ class VinylPlayerUiTest {
     private lateinit var inputModeManager: InputModeManager
 
     private fun show(width: Int = 411, height: Int = 914, fontScale: Float = 1f, hasSong: Boolean = true,
-        safeBottom: Int = 0, titleSize: Float = 34f) {
+        safeBottom: Int = 0, titleSize: Float = 34f, waveform: AudioWaveform? = null,
+        waveformLoading: Boolean = false) {
         compose.setContent {
             CompositionLocalProvider(LocalDensity provides Density(1f, fontScale)) {
                 inputModeManager = LocalInputModeManager.current
@@ -73,11 +79,13 @@ class VinylPlayerUiTest {
                     LazyColumn(Modifier.requiredSize(width.dp, (height - safeBottom).dp).testTag("vinyl-preview")) {
                         item {
                             TurntablePlayer(
-                                title = title.value, artist = "LINKIN PARK",
+                                title = title.value, artist = if (waveform == null) "LINKIN PARK" else "Audio test fixture",
                                 titleFontFamily = FontFamily.Serif, titleFontSize = titleSize,
                                 viewportHeight = (height - safeBottom).dp, isPlaying = playing.value,
                                 isVisible = true, hasSong = hasSong,
-                                positionMsState = remember { mutableStateOf(75_000L) }, durationMs = 190_000L,
+                                positionMsState = remember { mutableStateOf(if (waveform == null) 75_000L else waveform.durationMs * 2 / 5) },
+                                durationMs = waveform?.durationMs ?: 190_000L,
+                                waveform = waveform, isWaveformLoading = waveformLoading,
                                 shuffleEnabled = shuffled.value, repeatMode = repeated.value,
                                 labels = TurntableLabels("Play", "Pause", "Previous", "Next",
                                     "Shuffle", "Shuffle on", "Shuffle off", "Repeat", "Repeat off",
@@ -148,6 +156,54 @@ class VinylPlayerUiTest {
         compose.onNodeWithContentDescription("Share").performClick()
         compose.onNodeWithContentDescription("Favorite").performClick()
         assertEquals(listOf(2, 1, 1, 1, 1, 1, 1), listOf(plays, previous, next, settings, lyricsOpens, shares, favorites))
+    }
+
+    @Test fun sourcePcmEnvelopeShowsAmplitudeAndSilenceAndRetainsSeeking() {
+        val pcm = ByteBuffer.allocate(800).order(ByteOrder.LITTLE_ENDIAN)
+        repeat(400) { frame ->
+            val amplitude = when (frame / 100) { 0 -> 0.25f; 1 -> 1f; 2 -> 0f; else -> 0.75f }
+            pcm.putShort((amplitude * 32767 * if (frame % 2 == 0) 1 else -1).toInt().toShort())
+        }
+        pcm.flip()
+        val accumulator = PcmWaveformAccumulator(4_000_000)
+        accumulator.add(pcm, 0, 100, 1, WaveformPcm.SIGNED_16)
+        title.value = "Waveform fixture"
+        show(waveform = requireNotNull(accumulator.finish()))
+        val seek = compose.onNodeWithContentDescription("Seek")
+        seek.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Audio waveform"))
+        val progress = compose.onNodeWithTag("vinyl-progress").getUnclippedBoundsInRoot()
+        compose.runOnIdle {
+            val view = compose.activity.findViewById<View>(android.R.id.content)
+            val image = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+            view.draw(Canvas(image))
+            fun pixel(fraction: Float, offsetY: Int): Int = image.getPixel(
+                (progress.left.value + (progress.right - progress.left).value * fraction).roundToInt(),
+                progress.top.value.roundToInt() + offsetY)
+            assertEquals("Played loud audio is dark", 0xFF171717.toInt(), pixel(0.30f, 18))
+            assertEquals("Quiet audio has a lower envelope", 0xFFF2F1EB.toInt(), pixel(0.10f, 17))
+            assertEquals("Unplayed loud audio is gray", 0xFF85847E.toInt(), pixel(0.90f, 18))
+            assertEquals("Silence has no invented waveform", 0xFFF2F1EB.toInt(), pixel(0.60f, 18))
+            assertEquals("Waveform starts at the shared 36 dp content edge", 0xFF171717.toInt(), pixel(0f, 24))
+            assertEquals("Waveform must not extend into the content margin", 0xFFF2F1EB.toInt(),
+                image.getPixel(progress.left.value.roundToInt() - 2, progress.top.value.roundToInt() + 24))
+            image.recycle()
+        }
+        snapshot("waveform-player-fixture")
+        seek.performSemanticsAction(SemanticsActions.SetProgress) { it(0.75f) }
+        assertEquals(3_000L, sought)
+        seek.performTouchInput { click(androidx.compose.ui.geometry.Offset(width * 0.25f, height / 2f)) }
+        assertTrue("Touch seeking uses the waveform's time axis", sought in 800L..1200L)
+        assertEveryControlFits()
+    }
+
+    @Test fun waveformLoadingKeepsSeekAvailableAndUsesTheExistingLayout() {
+        show(waveformLoading = true)
+        compose.onNodeWithContentDescription("Seek")
+            .assertIsEnabled()
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Reading audio waveform"))
+            .performSemanticsAction(SemanticsActions.SetProgress) { it(0.5f) }
+        assertEquals(95_000L, sought)
+        assertEveryControlFits()
     }
 
     @Test fun compactPhoneWithLargeTextCanScrollToEveryControl() {

@@ -125,6 +125,8 @@ The build also accepts a `LASTFM_API_KEY` Gradle property or environment variabl
 
 The standard build uses Android/Media3 decoders. FFmpeg is available only when a matching native Media3 1.9.3 AAR is supplied at `app/libs/media3-decoder-ffmpeg.aar`. Both the main and crossfade players can use it as a fallback. It does not add missing container extractors.
 
+Vinyl's waveform analyzer uses Android MediaExtractor/MediaCodec independently of that optional renderer. It needs no FFmpeg AAR; formats unavailable to the platform analyzer retain a usable straight seek track. See the [waveform implementation record](docs/implementation-timeline/vinyl-player/2026-10-31-add-source-audio-waveform.md) for caching, cancellation, and verification limits.
+
 See [FFmpeg Android integration](docs/FFMPEG_ANDROID.md) for the native build script, manual workflow and distribution notices.
 
 ### Optional CD sticker font

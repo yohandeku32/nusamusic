@@ -1,6 +1,5 @@
 package com.yohandeku32.nusamusic.ui
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -16,14 +15,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import com.yohandeku32.nusamusic.data.AudioWaveform
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -53,7 +52,10 @@ data class TurntableLabels(
     val seek: String,
     val settings: String,
     val more: String,
-    val turntable: String = "Turntable"
+    val turntable: String = "Turntable",
+    val waveformLoading: String = "Reading audio waveform",
+    val waveformUnavailable: String = "Audio waveform unavailable",
+    val waveformReady: String = "Audio waveform"
 )
 
 @Composable
@@ -83,7 +85,9 @@ fun TurntablePlayer(
     quality: @Composable () -> Unit,
     footer: @Composable () -> Unit,
     emptyState: @Composable () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    waveform: AudioWaveform? = null,
+    isWaveformLoading: Boolean = false
 ) {
     MaterialTheme(
         colorScheme = lightColorScheme(
@@ -210,7 +214,7 @@ fun TurntablePlayer(
                     Box(Modifier.fillMaxWidth().height(44.dp), contentAlignment = Alignment.CenterStart) { quality() }
                 }
                 Spacer(Modifier.height(progressGap))
-                TurntableProgress(positionMsState, durationMs, hasSong, labels.seek, onSeek)
+                TurntableProgress(positionMsState, durationMs, hasSong, labels, onSeek, waveform, isWaveformLoading)
                 Spacer(Modifier.height(transportGap))
                 Row(
                     Modifier.widthIn(max = 480.dp).fillMaxWidth().padding(horizontal = VinylGutter),
@@ -270,8 +274,10 @@ private fun TurntableProgress(
     positionMsState: State<Long>,
     durationMs: Long,
     hasSong: Boolean,
-    label: String,
-    onSeek: (Long) -> Unit
+    labels: TurntableLabels,
+    onSeek: (Long) -> Unit,
+    waveform: AudioWaveform?,
+    isWaveformLoading: Boolean
 ) {
     val positionMs by positionMsState
     val enabled = hasSong && durationMs > 0L
@@ -286,18 +292,17 @@ private fun TurntableProgress(
             value = fraction,
             onValueChange = { onSeek((it * durationMs).toLong()) },
             enabled = enabled,
-            modifier = Modifier.fillMaxWidth().height(48.dp).semantics { contentDescription = label },
-            thumb = {},
-            track = { state ->
-                Canvas(Modifier.fillMaxWidth().height(4.dp)) {
-                    val y = size.height / 2f
-                    // Material reserves half the track height at each end, even without a thumb.
-                    val start = -size.height / 2f
-                    val end = size.width + size.height / 2f
-                    drawLine(Color(0xFFCECDC8), Offset(start, y), Offset(end, y), 3.dp.toPx(), StrokeCap.Butt)
-                    drawLine(VinylInk, Offset(start, y), Offset(start + (end - start) * state.value, y),
-                        3.dp.toPx(), StrokeCap.Butt)
+            modifier = Modifier.fillMaxWidth().height(48.dp).semantics {
+                contentDescription = labels.seek
+                if (hasSong) stateDescription = when {
+                    waveform != null -> labels.waveformReady
+                    isWaveformLoading -> labels.waveformLoading
+                    else -> labels.waveformUnavailable
                 }
+            },
+            thumb = { Spacer(Modifier.size(width = 4.dp, height = 0.dp)) },
+            track = { state ->
+                VinylWaveformTrack(waveform) { state.value }
             }
         )
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
