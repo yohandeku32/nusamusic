@@ -21,40 +21,45 @@ internal fun vinylLabelDiameter(discDiameter: Int): Int {
     return if ((discDiameter - diameter) % 2 == 0) diameter else diameter - 1
 }
 
-/** Brushes and the original fine groove geometry are cached at the measured size. */
+/** Pressed grooves rotate with the record; specular lighting is drawn in a stationary layer. */
 internal class VinylPainter(size: Size) {
     private val radius = size.minDimension / 2f
     private val discCenter = Offset(size.width / 2f, size.height / 2f)
     private val face = Brush.radialGradient(
-        0f to Color(0xFF323232),
-        0.24f to Color(0xFF1A1A1A),
-        0.52f to Color(0xFF090909),
-        0.78f to Color(0xFF020202),
+        0f to Color(0xFF0C0D0D),
+        0.57f to Color(0xFF050606),
+        0.65f to Color(0xFF101112),
+        0.94f to Color(0xFF08090A),
+        0.985f to Color(0xFF191B1C),
         1f to Color.Black,
-        center = Offset(size.width * 0.32f, size.height * 0.27f),
-        radius = radius * 1.08f
+        center = discCenter,
+        radius = radius
     )
-    private val reflection = Brush.radialGradient(
-        0f to Color.White.copy(alpha = 0.085f),
-        0.22f to Color.White.copy(alpha = 0.042f),
-        0.52f to Color.White.copy(alpha = 0.012f),
-        1f to Color.Transparent,
-        center = Offset(size.width * 0.27f, size.height * 0.19f),
-        radius = radius * 0.90f
+    private val reflection = Brush.sweepGradient(
+        0f to Color.Transparent, 0.25f to Color.White.copy(alpha = 0.025f),
+        0.35f to Color(0xFFD6DEE2).copy(alpha = 0.20f),
+        0.405f to Color(0xFFE6ECEF).copy(alpha = 0.58f),
+        0.47f to Color.White.copy(alpha = 0.10f), 0.54f to Color.Transparent,
+        0.70f to Color.Transparent, 0.78f to Color.White.copy(alpha = 0.10f),
+        0.845f to Color(0xFFDCE6EB).copy(alpha = 0.52f),
+        0.91f to Color.White.copy(alpha = 0.16f), 1f to Color.Transparent,
+        center = discCenter
     )
-    private val grooves = List(179) { index ->
-        Groove(
-            radius = radius * (0.232f + index / 178f * 0.742f),
-            alpha = when {
-                index % 31 == 0 -> 0.082f
-                index % 13 == 0 -> 0.042f
-                index % 5 == 0 -> 0.019f
-                else -> 0.0075f
-            },
-            width = if (index % 31 == 0) 0.90f else 0.28f,
-            hasDarkEdge = index % 7 == 0
-        )
+    private val grooves = Random(781).let { random ->
+        val count = (radius * 0.326f / 0.85f).roundToInt().coerceIn(48, 240)
+        List(count) { index ->
+            Groove(
+                radius = radius * (0.65f + index.toFloat() / (count - 1) * 0.326f),
+                alpha = 0.025f + random.nextFloat() * 0.05f,
+                width = 0.3f + random.nextFloat() * 0.25f
+            )
+        }
     }
+    private val sheenBands = List(24) { index ->
+        val position = (index + 0.5f) / 24f
+        radius * (0.65f + position * 0.326f) to 0.55f * sin(PI * position).toFloat()
+    }
+    private val sheenWidth = radius * 0.326f / 24f + 0.25f
 
     fun DrawScope.drawFace() {
         drawCircle(Color.Black, radius, discCenter)
@@ -62,15 +67,26 @@ internal class VinylPainter(size: Size) {
         for (groove in grooves) {
             drawCircle(Color.White.copy(alpha = groove.alpha), groove.radius,
                 discCenter, style = Stroke(groove.width))
-            if (groove.hasDarkEdge) {
-                drawCircle(Color.Black.copy(alpha = 0.20f), groove.radius + 0.55f,
-                    discCenter, style = Stroke(0.65f))
-            }
+            drawCircle(Color.Black.copy(alpha = 0.35f), groove.radius + 0.38f,
+                discCenter, style = Stroke(0.3f))
         }
     }
 
     fun DrawScope.drawReflections() {
-        drawCircle(reflection, radius * 0.995f, discCenter)
+        for ((bandRadius, strength) in sheenBands) {
+            drawCircle(reflection, bandRadius, discCenter, alpha = strength, style = Stroke(sheenWidth))
+        }
+        for (groove in grooves) {
+            val position = (groove.radius / radius - 0.65f) / 0.326f
+            val softness = sin(PI * position.coerceIn(0f, 1f)).toFloat()
+            drawCircle(reflection, groove.radius, discCenter,
+                alpha = (0.32f + groove.alpha * 6f) * (0.3f + 0.7f * softness),
+                style = Stroke(groove.width + 0.35f))
+        }
+        for (band in listOf(0.58f, 0.606f, 0.632f)) {
+            drawCircle(reflection, radius * band, discCenter, alpha = 0.16f,
+                style = Stroke(0.4f))
+        }
         drawCircle(Color.White.copy(alpha = 0.06f), radius * 0.985f, discCenter,
             style = Stroke((radius * 0.004f).coerceAtLeast(0.5f)))
         drawCircle(Color.Black.copy(alpha = 0.65f), radius * 0.997f, discCenter,
@@ -82,7 +98,7 @@ internal class VinylPainter(size: Size) {
         drawCircle(Color(0xFFA8A8A8), radius * 0.017f, discCenter)
     }
 
-    private data class Groove(val radius: Float, val alpha: Float, val width: Float, val hasDarkEdge: Boolean)
+    private data class Groove(val radius: Float, val alpha: Float, val width: Float)
 }
 
 internal class VinylLabelPainter(size: Size) {

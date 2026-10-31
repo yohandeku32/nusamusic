@@ -4707,15 +4707,6 @@ internal fun VinylRecord(
                 },
             contentAlignment = Alignment.Center
         ) {
-            Box(
-                Modifier
-                    .matchParentSize()
-                    .drawWithCache {
-                        val painter = VinylPainter(size)
-                        onDrawBehind { with(painter) { drawReflections() } }
-                    }
-            )
-
             // Preserve the large artwork label from the original Vinyl presentation.
             Box(
                 modifier = Modifier
@@ -4740,7 +4731,7 @@ internal fun VinylRecord(
             }
         }
 
-        // The spindle stays centered while the record and its reflections rotate.
+        // Lighting and spindle stay fixed while the grooves and artwork rotate beneath them.
         Box(
             Modifier
                 .fillMaxSize()
@@ -4748,6 +4739,7 @@ internal fun VinylRecord(
                     val painter = VinylPainter(size)
                     onDrawBehind {
                         with(painter) { drawSpindle() }
+                        with(painter) { drawReflections() }
                     }
                 }
         )

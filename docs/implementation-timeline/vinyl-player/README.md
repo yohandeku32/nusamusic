@@ -2,6 +2,7 @@
 
 Record rendering, playback controls, lyrics, artist portraits, and presentation selection.
 
+- [2026-10-31: Refine the pressed-vinyl surface](2026-10-31-refine-pressed-vinyl-surface.md)
 - [2026-10-31: Browse stacked record sleeves](2026-10-31-stacked-record-sleeve-library.md)
 - [2026-10-31: Compact text-only quality](2026-10-31-compact-text-only-quality.md)
 - [2026-10-31: Refine materials and contact shadows](2026-10-31-refine-material-and-contact-shadows.md)

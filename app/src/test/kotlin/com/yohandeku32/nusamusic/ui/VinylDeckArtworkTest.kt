@@ -149,6 +149,7 @@ class VinylDeckArtworkTest {
         compose.waitForIdle()
         val bounds = compose.onNodeWithTag("deck-preview").getUnclippedBoundsInRoot()
         compose.onNodeWithTag("record-with-artwork").assertIsDisplayed()
+        val disc = compose.onNodeWithTag("record-with-artwork").getUnclippedBoundsInRoot()
         compose.runOnIdle {
             val image = Bitmap.createBitmap(411, 430, Bitmap.Config.ARGB_8888)
             val output = Canvas(image)
@@ -157,6 +158,24 @@ class VinylDeckArtworkTest {
             val pixel = image.getPixel(240, 215)
             assertTrue("The loaded cover remains pink inside the record label",
                 android.graphics.Color.red(pixel) > android.graphics.Color.green(pixel) + 40)
+            val cx = ((disc.left + disc.right) / 2).value
+            val cy = ((disc.top + disc.bottom) / 2).value
+            val diagonal = (disc.right - disc.left).value * 0.5f * 0.8f * 0.7071f
+            fun brightness(x: Float, y: Float): Float {
+                var total = 0f
+                for (dx in -3..3) for (dy in -3..3) {
+                    val color = image.getPixel(x.toInt() + dx, y.toInt() + dy)
+                    total += (android.graphics.Color.red(color) + android.graphics.Color.green(color) +
+                        android.graphics.Color.blue(color)) / 3f
+                }
+                return total / 49
+            }
+            val dark = brightness(cx - diagonal, cy - diagonal)
+            assertTrue("Grooves catch light at the upper right", brightness(cx + diagonal, cy - diagonal) > dark + 6)
+            assertTrue("The opposite lower-left lobe also catches light", brightness(cx - diagonal, cy + diagonal) > dark + 6)
+            val innerDiagonal = diagonal * 0.61f / 0.8f
+            assertTrue("The run-out area stays darker than the illuminated playing grooves",
+                brightness(cx + diagonal, cy - diagonal) > brightness(cx + innerDiagonal, cy - innerDiagonal) + 12)
             val dir = File("build/reports/vinyl-preview").apply { mkdirs() }
             File(dir, "silver-machine-artwork.png").outputStream().use {
                 image.compress(Bitmap.CompressFormat.PNG, 100, it)
