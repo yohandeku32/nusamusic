@@ -95,7 +95,7 @@ class VinylPlayerUiTest {
                                     )
                                 },
                                 footer = {
-                                    Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
+                                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
                                         IconButton(onClick = { lyricsOpens++ }) { Icon(Icons.Default.KeyboardArrowDown, "Lyrics") }
                                         Spacer(Modifier.weight(1f))
                                         IconButton(onClick = { shares++ }) { Icon(Icons.Default.Share, "Share") }
@@ -261,6 +261,13 @@ class VinylPlayerUiTest {
     @Test fun machineControlsRetainTouchAreasAndKeyboardActivationOnShortScreens() {
         show(width = 360, height = 640, safeBottom = 24, titleSize = 44f)
         val deck = compose.onNodeWithTag("vinyl-deck").getUnclippedBoundsInRoot()
+        val progress = compose.onNodeWithTag("vinyl-progress").getUnclippedBoundsInRoot()
+        val record = compose.onNodeWithTag("vinyl-record").getUnclippedBoundsInRoot()
+        assertEquals(progress.left.value, deck.left.value, 0.5f)
+        assertEquals(progress.right.value, deck.right.value, 0.5f)
+        assertEquals((record.right - record.left).value, (record.bottom - record.top).value, 0.5f)
+        assertTrue("A short viewport uses a wider chassis while keeping the record circular",
+            (deck.right - deck.left) > (deck.bottom - deck.top))
         for (description in listOf("Turntable: Play", "Turntable: Repeat")) {
             val bounds = compose.onNodeWithContentDescription(description).getUnclippedBoundsInRoot()
             assertTrue((bounds.right - bounds.left).value >= 44f)
@@ -274,6 +281,44 @@ class VinylPlayerUiTest {
         compose.onNodeWithContentDescription("Turntable: Repeat").assertIsFocused()
         compose.onNodeWithContentDescription("Turntable: Repeat").performKeyInput { pressKey(Key.Enter) }
         assertEquals(1, repeated.value)
+    }
+
+    @Test fun enlargedMachineAndLeftAlignedMetadataShareTheProgressBarEdges() {
+        show()
+        val progress = compose.onNodeWithTag("vinyl-progress").getUnclippedBoundsInRoot()
+        val deck = compose.onNodeWithTag("vinyl-deck").getUnclippedBoundsInRoot()
+        assertEquals(progress.left.value, deck.left.value, 0.5f)
+        assertEquals(progress.right.value, deck.right.value, 0.5f)
+        assertTrue("The normal phone chassis grows beyond the previous 349 dp", (deck.right - deck.left).value > 360f)
+        for (text in listOf(title.value, "LINKIN PARK")) {
+            val node = compose.onNodeWithText(text)
+            val bounds = node.getUnclippedBoundsInRoot()
+            val layout = mutableListOf<TextLayoutResult>()
+            node.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layout) }
+            assertEquals(progress.left.value, bounds.left.value, 0.5f)
+            assertEquals("Visible English text starts at the shared left edge", 0f, layout.single().getLineLeft(0), 0.5f)
+        }
+        snapshot("aligned-machine-metadata")
+    }
+
+    @Test fun rectangularQualityFaceSitsUnderTheArtistAtTheSameLeftEdge() {
+        show()
+        val artist = compose.onNodeWithText("LINKIN PARK").getUnclippedBoundsInRoot()
+        val face = compose.onNodeWithTag("vinyl-quality-face", useUnmergedTree = true).getUnclippedBoundsInRoot()
+        val progress = compose.onNodeWithTag("vinyl-progress").getUnclippedBoundsInRoot()
+        assertEquals(artist.left.value, face.left.value, 0.5f)
+        assertTrue(face.top >= artist.bottom && face.bottom <= progress.top)
+        assertTrue("The badge stays close below its artist", (face.top - artist.bottom).value <= 16f)
+        compose.runOnIdle {
+            val view = compose.activity.findViewById<View>(android.R.id.content)
+            val image = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+            view.draw(Canvas(image))
+            assertEquals("A square corner is filled, rather than clipped into a capsule", 0xFFDAD4BF.toInt(),
+                image.getPixel(face.left.value.roundToInt() + 1, face.top.value.roundToInt() + 1))
+            assertEquals("The visible progress line starts at the same edge as the chassis", 0xFF171717.toInt(),
+                image.getPixel(progress.left.value.roundToInt() + 1, progress.top.value.roundToInt() + 24))
+            image.recycle()
+        }
     }
 
     @Test fun longTitleAndLargerTitlePreferenceFitAboveTheNavigationArea() {

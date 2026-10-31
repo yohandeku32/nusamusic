@@ -2,6 +2,7 @@
 
 Record rendering, playback controls, lyrics, artist portraits, and presentation selection.
 
+- [2026-10-31: Enlarge the deck and align metadata with the progress bar](2026-10-31-enlarge-deck-align-metadata-and-quality.md)
 - [2026-10-31: Add the silver turntable chassis and mechanical controls](2026-10-31-redesign-silver-turntable-machine.md)
 - [2026-10-31: Resolve first-artist portraits directly and warm Vinyl playback](2026-10-31-fix-artist-portrait-resolution-and-cache.md)
 - [2026-10-31: Lock record geometry and reveal half-height lyrics](2026-10-31-lock-record-and-use-half-height-lyrics.md)

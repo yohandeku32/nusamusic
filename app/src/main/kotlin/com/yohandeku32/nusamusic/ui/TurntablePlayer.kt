@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
@@ -34,6 +35,8 @@ import androidx.compose.ui.unit.sp
 
 internal val VinylPaper = Color(0xFFF2F1EB)
 private val VinylInk = Color(0xFF171717)
+private val VinylContentWidth = 512.dp
+private val VinylGutter = 16.dp
 
 data class TurntableLabels(
     val play: String,
@@ -99,15 +102,15 @@ fun TurntablePlayer(
             val density = LocalDensity.current
             val room = ((viewportHeight.value - 640f) / 240f).coerceIn(0f, 1f)
             fun space(compact: Int, tall: Int) = (compact + (tall - compact) * room).dp
-            val topPadding = space(12, 36)
-            val headerGap = space(8, 16)
-            val recordGap = space(12, 28)
+            val topPadding = space(12, 20)
+            val headerGap = space(8, 12)
+            val recordGap = space(12, 16)
             val titleGap = space(6, 8)
-            val progressGap = space(8, 20)
+            val progressGap = space(4, 8)
             val transportGap = space(4, 8)
-            val transportSize = space(76, 92)
-            val footerGap = space(8, 24)
-            val qualityGap = space(0, 4)
+            val transportSize = space(76, 84)
+            val footerGap = space(8, 12)
+            val qualityGap = 2.dp
             val bottomPadding = space(8, 12)
             val navigationHeight = with(density) { WindowInsets.navigationBars.getBottom(this).toDp() }
             val titleStyle = LocalTextStyle.current.copy(
@@ -129,7 +132,7 @@ fun TurntablePlayer(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+                    Modifier.widthIn(max = VinylContentWidth).fillMaxWidth().padding(horizontal = VinylGutter),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     avatar(Modifier.size(44.dp))
@@ -162,13 +165,14 @@ fun TurntablePlayer(
                 }
                 Spacer(Modifier.height(headerGap))
                 BoxWithConstraints(
-                    Modifier.fillMaxWidth().weight(1f),
+                    Modifier.widthIn(max = VinylContentWidth).fillMaxWidth()
+                        .padding(horizontal = VinylGutter).weight(1f),
                     contentAlignment = Alignment.BottomCenter
                 ) {
-                    val deckSize = minOf(maxWidth - 32.dp, 416.dp, maxHeight - 8.dp)
-                    if (deckSize >= 88.dp) {
+                    val deckHeight = minOf(maxWidth, maxHeight - 8.dp)
+                    if (deckHeight >= 88.dp) {
                         VinylTurntableDeck(
-                            size = deckSize, isPlaying = isPlaying, isVisible = isVisible,
+                            size = maxWidth, height = deckHeight, isPlaying = isPlaying, isVisible = isVisible,
                             hasSong = hasSong, positionMsState = positionMsState,
                             durationMs = durationMs, repeatMode = repeatMode, labels = labels,
                             onPlayPause = onPlayPause, onRepeat = onRepeat, record = record
@@ -177,35 +181,38 @@ fun TurntablePlayer(
                 }
                 Spacer(Modifier.height(recordGap))
                 Column(
-                    Modifier.fillMaxWidth().heightIn(min = titleHeight + titleGap + with(density) { 22.sp.toDp() }),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
+                    Modifier.widthIn(max = VinylContentWidth).fillMaxWidth().padding(horizontal = VinylGutter)
+                        .heightIn(min = titleHeight + titleGap + with(density) { 22.sp.toDp() } + qualityGap + 44.dp),
+                    horizontalAlignment = Alignment.Start,
+                    verticalArrangement = Arrangement.Bottom
                 ) {
                     Text(
                         title,
                         style = titleStyle,
-                        textAlign = TextAlign.Center,
+                        textAlign = TextAlign.Start,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.widthIn(max = 560.dp).fillMaxWidth().padding(horizontal = 32.dp)
+                        modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(Modifier.height(titleGap))
                     Text(
                         artist,
                         fontSize = 16.sp,
                         lineHeight = 22.sp,
-                        textAlign = TextAlign.Center,
+                        textAlign = TextAlign.Start,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp)
+                        modifier = Modifier.fillMaxWidth()
                     )
+                    Spacer(Modifier.height(qualityGap))
+                    Box(Modifier.fillMaxWidth().height(44.dp), contentAlignment = Alignment.CenterStart) { quality() }
                 }
                 Spacer(Modifier.height(progressGap))
                 TurntableProgress(positionMsState, durationMs, hasSong, labels.seek, onSeek)
                 Spacer(Modifier.height(transportGap))
                 Row(
-                    Modifier.widthIn(max = 480.dp).fillMaxWidth().padding(horizontal = 36.dp),
+                    Modifier.widthIn(max = VinylContentWidth).fillMaxWidth().padding(horizontal = VinylGutter),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
@@ -224,12 +231,8 @@ fun TurntablePlayer(
                     )
                 }
                 Spacer(Modifier.height(footerGap))
-                Box(Modifier.fillMaxWidth().height(48.dp), contentAlignment = Alignment.Center) { footer() }
-                Spacer(Modifier.height(qualityGap))
-                Box(
-                    Modifier.fillMaxWidth().height(44.dp),
-                    contentAlignment = Alignment.Center
-                ) { quality() }
+                Box(Modifier.widthIn(max = VinylContentWidth).fillMaxWidth().height(48.dp),
+                    contentAlignment = Alignment.Center) { footer() }
                 emptyState()
             }
         }
@@ -276,7 +279,8 @@ private fun TurntableProgress(
         val seconds = ms.coerceAtLeast(0L) / 1000L
         return "${seconds / 60}:${(seconds % 60).toString().padStart(2, '0')}"
     }
-    Column(Modifier.widthIn(max = 560.dp).fillMaxWidth().padding(horizontal = 36.dp)) {
+    Column(Modifier.widthIn(max = VinylContentWidth).fillMaxWidth().padding(horizontal = VinylGutter)
+        .testTag("vinyl-progress")) {
         Slider(
             value = fraction,
             onValueChange = { onSeek((it * durationMs).toLong()) },
@@ -286,8 +290,12 @@ private fun TurntableProgress(
             track = { state ->
                 Canvas(Modifier.fillMaxWidth().height(4.dp)) {
                     val y = size.height / 2f
-                    drawLine(Color(0xFFCECDC8), Offset(0f, y), Offset(size.width, y), 3.dp.toPx(), StrokeCap.Butt)
-                    drawLine(VinylInk, Offset(0f, y), Offset(size.width * state.value, y), 3.dp.toPx(), StrokeCap.Butt)
+                    // Material reserves half the track height at each end, even without a thumb.
+                    val start = -size.height / 2f
+                    val end = size.width + size.height / 2f
+                    drawLine(Color(0xFFCECDC8), Offset(start, y), Offset(end, y), 3.dp.toPx(), StrokeCap.Butt)
+                    drawLine(VinylInk, Offset(start, y), Offset(start + (end - start) * state.value, y),
+                        3.dp.toPx(), StrokeCap.Butt)
                 }
             }
         )

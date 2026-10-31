@@ -3009,7 +3009,7 @@ private fun NusaMusicApp(
                                             quality = { AudioQualityPill(song = currentSong, vinyl = true) },
                                             footer = {
                                                 Row(
-                                                    Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+                                                    Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                                                     verticalAlignment = Alignment.CenterVertically
                                                 ) {
                                                     IconButton(

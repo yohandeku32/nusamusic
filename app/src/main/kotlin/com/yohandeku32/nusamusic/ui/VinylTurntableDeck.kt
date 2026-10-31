@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.shadow
@@ -38,22 +39,25 @@ internal fun VinylTurntableDeck(
     labels: TurntableLabels,
     onPlayPause: () -> Unit,
     onRepeat: () -> Unit,
-    record: @Composable (Modifier) -> Unit
+    record: @Composable (Modifier) -> Unit,
+    height: Dp = size
 ) {
-    val shape = RoundedCornerShape(size * 0.065f)
+    val mechanismSize = minOf(size, height)
+    val shape = RoundedCornerShape(mechanismSize * 0.065f)
     Box(
-        Modifier.size(size).testTag("vinyl-deck")
+        Modifier.size(size, height).testTag("vinyl-deck")
             .shadow(7.dp, shape, clip = false)
             .drawWithCache {
                 val painter = VinylDeckPainter(this.size)
                 onDrawBehind { with(painter) { drawDeck(isPlaying, repeatMode) } }
             }
     ) {
-        record(Modifier.offset(size * 0.105f, size * 0.105f).size(size * 0.79f))
+        record(Modifier.offset((size - mechanismSize) / 2 + mechanismSize * 0.105f,
+            (height - mechanismSize) / 2 + mechanismSize * 0.105f).size(mechanismSize * 0.79f))
         VinylTonearm(
             isPlaying = isPlaying && isVisible, hasSong = hasSong,
             positionMsState = positionMsState, durationMs = durationMs,
-            modifier = Modifier.matchParentSize()
+            modifier = Modifier.size(mechanismSize).align(Alignment.Center)
         )
         val playLabel = if (isPlaying) labels.pause else labels.play
         DeckControl(
@@ -61,7 +65,7 @@ internal fun VinylTurntableDeck(
             onClick = onPlayPause,
             modifier = Modifier.offset(
                 (size * 0.075f - 24.dp).coerceIn(0.dp, size - 48.dp),
-                (size * 0.86f - 28.dp).coerceIn(0.dp, size - 56.dp)
+                (height * 0.86f - 28.dp).coerceIn(0.dp, height - 56.dp)
             )
         )
         DeckControl(
@@ -70,7 +74,7 @@ internal fun VinylTurntableDeck(
             enabled = hasSong, onClick = onRepeat,
             modifier = Modifier.offset(
                 (size * 0.90f - 24.dp).coerceIn(0.dp, size - 48.dp),
-                (size * 0.86f - 28.dp).coerceIn(0.dp, size - 56.dp)
+                (height * 0.86f - 28.dp).coerceIn(0.dp, height - 56.dp)
             )
         )
     }
@@ -89,28 +93,30 @@ private fun DeckControl(name: String, state: String, modifier: Modifier, enabled
 }
 
 private class VinylDeckPainter(size: Size) {
+    private val width = size.width
+    private val height = size.height
     private val edge = size.minDimension
     private val corner = CornerRadius(edge * 0.065f)
     private val body = Brush.linearGradient(
         listOf(Color(0xFFD2D5D5), Color(0xFFBFC4C5), Color(0xFFA5ABAD)),
-        Offset.Zero, Offset(edge, edge)
+        Offset.Zero, Offset(width, height)
     )
     private val rim = Brush.linearGradient(
         listOf(Color(0xFFEDEFEE), Color(0xFF878D90), Color(0xFFBCC1C2), Color(0xFF777E83)),
         Offset(edge * 0.2f, edge * 0.06f), Offset(edge * 0.8f, edge * 0.94f)
     )
-    private val center = Offset(edge * 0.5f, edge * 0.5f)
+    private val center = Offset(width * 0.5f, height * 0.5f)
     private val well = Brush.radialGradient(
         0f to Color(0xFF111416), 0.88f to Color(0xFF292D30),
         0.94f to Color(0xFF747B80), 0.98f to Color(0xFFC0C5C7), 1f to Color(0xFF6D757B),
         center = center, radius = edge * 0.444f
     )
     private val grain = Random(741).let { random ->
-        List(900) { Offset(random.nextFloat() * edge, random.nextFloat() * edge) }
+        List(900) { Offset(random.nextFloat() * width, random.nextFloat() * height) }
     }
     private val knob = Brush.horizontalGradient(
         listOf(Color(0xFF292D30), Color(0xFF7A8083), Color(0xFF30363A)),
-        edge * 0.06f, edge * 0.09f
+        width * 0.075f - edge * 0.015f, width * 0.075f + edge * 0.015f
     )
 
     fun DrawScope.drawDeck(playing: Boolean, repeatMode: Int) {
@@ -118,11 +124,11 @@ private class VinylDeckPainter(size: Size) {
         drawRoundRect(body, topLeft = Offset(0f, -edge * 0.006f), cornerRadius = corner)
         drawRoundRect(Color.White.copy(alpha = 0.28f),
             topLeft = Offset(edge * 0.003f, edge * 0.003f),
-            size = Size(edge * 0.994f, edge * 0.987f), cornerRadius = corner,
+            size = Size(width - edge * 0.006f, height - edge * 0.013f), cornerRadius = corner,
             style = Stroke(edge * 0.003f))
         for ((index, point) in grain.withIndex()) {
             // Keep grain inside the rounded shell without an offscreen blur layer.
-            if (point.x in edge * 0.025f..edge * 0.975f && point.y in edge * 0.025f..edge * 0.975f) {
+            if (point.x in edge * 0.025f..width - edge * 0.025f && point.y in edge * 0.025f..height - edge * 0.025f) {
                 drawCircle(if (index % 2 == 0) Color.White.copy(alpha = 0.095f)
                     else Color(0xFF343D43).copy(alpha = 0.07f), edge * 0.0009f, point)
             }
@@ -132,16 +138,16 @@ private class VinylDeckPainter(size: Size) {
         drawCircle(Color(0xFF30363B), edge * 0.414f, center)
         drawCircle(Color.Black.copy(alpha = 0.45f), edge * 0.405f, center + Offset(0f, edge * 0.002f))
 
-        val screw = Offset(edge * 0.072f, edge * 0.078f)
+        val screw = Offset(width * 0.072f, height * 0.078f)
         drawCircle(Color(0xFF7C858B), edge * 0.009f, screw)
         drawCircle(Color(0xFFDEE1E2), edge * 0.0065f, screw)
         drawLine(Color(0xFF6A747C), screw - Offset(edge * 0.004f, 0f),
             screw + Offset(edge * 0.004f, 0f), edge * 0.002f)
 
-        val power = Offset(edge * 0.075f, edge * 0.86f)
-        drawCircle(Color(0xFF6B747A), edge * 0.017f, Offset(power.x, edge * 0.75f))
+        val power = Offset(width * 0.075f, height * 0.86f)
+        drawCircle(Color(0xFF6B747A), edge * 0.017f, Offset(power.x, height * 0.75f))
         drawCircle(if (playing) Color(0xFFDBD8AD) else Color(0xFF444C53), edge * 0.010f,
-            Offset(power.x, edge * 0.75f))
+            Offset(power.x, height * 0.75f))
         drawRoundRect(Color(0xFF3C4349), power - Offset(edge * 0.016f, edge * 0.054f),
             Size(edge * 0.032f, edge * 0.111f), CornerRadius(edge * 0.012f))
         val lever = Path().apply {
@@ -166,7 +172,7 @@ private class VinylDeckPainter(size: Size) {
             }, glyphColor)
         }
 
-        val rocker = Offset(edge * 0.90f, edge * 0.86f)
+        val rocker = Offset(width * 0.90f, height * 0.86f)
         drawRoundRect(Color(0xFF4E5860), rocker - Offset(edge * 0.023f, edge * 0.069f),
             Size(edge * 0.046f, edge * 0.138f), CornerRadius(edge * 0.009f))
         drawRoundRect(Color(0xFF292F34), rocker - Offset(edge * 0.018f, edge * 0.062f),
