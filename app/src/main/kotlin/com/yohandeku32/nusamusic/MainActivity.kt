@@ -4118,8 +4118,9 @@ private fun ArtistAvatar(song: Song?, modifier: Modifier = Modifier) {
     Box(modifier.clip(CircleShape)) {
         val image = portrait
         if (image != null) {
+            val monochrome = remember { ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) }
             Image(image.asImageBitmap(), contentDescription = artist,
-                contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(), colorFilter = monochrome)
         } else {
             ArtworkView(song = song, maxSizePx = 128, modifier = Modifier.fillMaxSize(),
                 monochrome = true, grainOverlay = false)

@@ -218,7 +218,7 @@ class VinylPlayerUiTest {
         assertEquals(1, qualityClicks)
         val face = compose.onNodeWithTag("vinyl-quality-face", useUnmergedTree = true).getUnclippedBoundsInRoot()
         val target = compose.onNodeWithTag("quality").getUnclippedBoundsInRoot()
-        assertEquals(24f, (face.bottom - face.top).value, 0.5f)
+        assertEquals(16f, (face.bottom - face.top).value, 0.5f)
         assertTrue((target.bottom - target.top).value >= 44f)
         snapshot("phone-compact-badge")
     }
@@ -302,7 +302,7 @@ class VinylPlayerUiTest {
         snapshot("aligned-machine-metadata")
     }
 
-    @Test fun rectangularQualityFaceSitsUnderTheArtistAtTheSameLeftEdge() {
+    @Test fun plainQualityLabelSitsUnderTheArtistWithoutABackgroundShape() {
         show()
         val artist = compose.onNodeWithText("LINKIN PARK").getUnclippedBoundsInRoot()
         val face = compose.onNodeWithTag("vinyl-quality-face", useUnmergedTree = true).getUnclippedBoundsInRoot()
@@ -314,8 +314,8 @@ class VinylPlayerUiTest {
             val view = compose.activity.findViewById<View>(android.R.id.content)
             val image = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
             view.draw(Canvas(image))
-            assertEquals("A square corner is filled, rather than clipped into a capsule", 0xFFDAD4BF.toInt(),
-                image.getPixel(face.left.value.roundToInt() + 1, face.top.value.roundToInt() + 1))
+            assertEquals("The icon/text gap shows the page rather than a badge background", 0xFFF2F1EB.toInt(),
+                image.getPixel(face.left.value.roundToInt() + 18, face.top.value.roundToInt() + 1))
             assertEquals("The visible progress line starts at the same edge as the chassis", 0xFF171717.toInt(),
                 image.getPixel(progress.left.value.roundToInt() + 1, progress.top.value.roundToInt() + 24))
             image.recycle()

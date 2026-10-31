@@ -1,6 +1,5 @@
 package com.yohandeku32.nusamusic.ui
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Icon
@@ -8,9 +7,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
@@ -32,16 +29,15 @@ internal fun VinylQualityBadge(
         contentAlignment = Alignment.CenterStart
     ) {
         Row(
-            Modifier.testTag("vinyl-quality-face").clip(RectangleShape)
-                .background(Color(0xFFDAD4BF)).padding(horizontal = 9.dp, vertical = 3.dp),
+            Modifier.testTag("vinyl-quality-face"),
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (showLosslessIcon) {
                 Icon(painterResource(R.drawable.apple_lossless_logo), null,
-                    Modifier.size(18.dp), tint = Color(0xFF39372E))
-                Spacer(Modifier.width(5.dp))
+                    Modifier.size(16.dp), tint = Color(0xFF39372E))
+                Spacer(Modifier.width(4.dp))
             }
-            Text(label, fontSize = 12.sp, lineHeight = 16.sp,
+            Text(label, fontSize = 11.sp, lineHeight = 14.sp,
                 color = Color(0xFF39372E), maxLines = 1)
         }
     }

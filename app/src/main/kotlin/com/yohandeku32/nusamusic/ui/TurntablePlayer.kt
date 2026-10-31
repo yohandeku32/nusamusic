@@ -182,7 +182,8 @@ fun TurntablePlayer(
                 Spacer(Modifier.height(recordGap))
                 Column(
                     Modifier.widthIn(max = VinylContentWidth).fillMaxWidth().padding(horizontal = VinylGutter)
-                        .heightIn(min = titleHeight + titleGap + with(density) { 22.sp.toDp() } + qualityGap + 44.dp),
+                        .heightIn(min = titleHeight + titleGap + with(density) { 22.sp.toDp() } + qualityGap + 44.dp)
+                        .offset(y = 8.dp),
                     horizontalAlignment = Alignment.Start,
                     verticalArrangement = Arrangement.Bottom
                 ) {

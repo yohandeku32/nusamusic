@@ -2,6 +2,7 @@
 
 Record rendering, playback controls, lyrics, artist portraits, and presentation selection.
 
+- [2026-10-31: Simplify quality, lower metadata, and use a monochrome avatar](2026-10-31-simplify-quality-and-monochrome-avatar.md)
 - [2026-10-31: Restore the previous player margins](2026-10-31-restore-previous-player-margins.md)
 - [2026-10-31: Enlarge the deck and align metadata with the progress bar](2026-10-31-enlarge-deck-align-metadata-and-quality.md)
 - [2026-10-31: Add the silver turntable chassis and mechanical controls](2026-10-31-redesign-silver-turntable-machine.md)
