@@ -12,6 +12,9 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.asAndroidPath
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
@@ -62,33 +65,52 @@ fun VinylTonearm(
         Brush.horizontalGradient(listOf(Color(0xFF484F55), Color(0xFFDDE1E3),
             Color(0xFF969FA6), Color(0xFF4B5258)), 312f, 336f)
     }
+    val bearingShadow = remember {
+        vinylShadowLayer(96, 96) { it.drawCircle(48f, 48f, 26f, vinylShadowPaint(7f, 95)) }
+    }
+    val weightShadow = remember {
+        vinylShadowLayer(60, 60) { it.drawRoundRect(10f, 10f, 36f, 32f, 2f, 2f, vinylShadowPaint(5f, 85)) }
+    }
+    val tubeShadow = remember {
+        val paint = vinylShadowPaint(3f, 85).apply {
+            style = android.graphics.Paint.Style.STROKE
+            strokeWidth = 7f
+            strokeCap = android.graphics.Paint.Cap.ROUND
+        }
+        vinylShadowLayer(360, 360) { it.translate(3f, 5f); it.drawPath(tube.asAndroidPath(), paint) }
+    }
+    val bearing = remember {
+        Brush.linearGradient(listOf(Color(0xFF737670), Color(0xFF292B29), Color(0xFF101210)),
+            Offset(296f, 27f), Offset(340f, 77f))
+    }
+    val cap = remember {
+        Brush.radialGradient(listOf(Color(0xFFB4B7B0), Color(0xFF666B65), Color(0xFF30352F)),
+            center = Offset(312f, 44f), radius = 23f)
+    }
     Canvas(modifier) {
         // One 360-unit mechanical drawing keeps the pivot, tube and cartridge concentric.
         scale(size.minDimension / 360f, pivot = Offset.Zero) {
             val pivot = Offset(317f, 50f)
-            drawCircle(Color.Black.copy(alpha = 0.13f), 29f, pivot + Offset(2f, 3f))
-            drawCircle(Color(0xFF59636A), 26f, pivot)
-            drawCircle(Color(0xFF252D34), 23f, pivot)
-            drawCircle(Color(0xFFB5BDC3), 15f, pivot)
-            drawCircle(Color(0xFF4B5660), 12f, pivot)
-            drawCircle(Color(0xFF6D7881), 8f, pivot)
-            drawCircle(Color.White.copy(alpha = 0.24f), 14f, pivot, style = Stroke(1f))
+            drawIntoCanvas { it.nativeCanvas.drawBitmap(bearingShadow, 273f, 9f, null) }
+            drawCircle(bearing, 26f, pivot)
+            drawCircle(Color(0xFF1E211E), 22f, pivot)
+            drawCircle(cap, 14f, pivot)
+            drawCircle(Color(0xFFD4D7D0).copy(alpha = 0.7f), 14f, pivot, style = Stroke(0.9f))
 
             rotate(angle, pivot) {
                 drawLine(Color(0xFF4B554D), Offset(319f, 35f), Offset(325f, 1f), 7f, StrokeCap.Round)
                 rotate(10f, Offset(326f, 8f)) {
-                    drawRoundRect(Color.Black.copy(alpha = 0.12f), Offset(315f, 0f), Size(26f, 22f), CornerRadius(2f))
+                    drawIntoCanvas { it.nativeCanvas.drawBitmap(weightShadow, 306f, -7f, null) }
                     drawRoundRect(weight, Offset(312f, -2f), Size(26f, 20f), CornerRadius(2f))
                     drawLine(Color(0xFFE6EAE2), Offset(315f, -1f), Offset(315f, 16f), 2f)
                     drawRoundRect(Color(0xFF434C45), Offset(320f, -10f), Size(9f, 9f), CornerRadius(1f))
                     drawLine(Color(0xFFB4BDB2), Offset(322f, -9f), Offset(322f, -3f), 1f)
                 }
-                translate(2f, 3f) { drawPath(tube, Color.Black.copy(alpha = 0.22f), style = Stroke(9f, cap = StrokeCap.Round)) }
+                drawIntoCanvas { it.nativeCanvas.drawBitmap(tubeShadow, 0f, 0f, null) }
                 drawPath(tube, Color(0xFF434F46), style = Stroke(7f, cap = StrokeCap.Round))
                 drawPath(tube, metal, style = Stroke(4.5f, cap = StrokeCap.Round))
                 translate(-0.8f, -0.5f) { drawPath(tube, Color(0xFFE7EBE2).copy(alpha = 0.72f), style = Stroke(1f, cap = StrokeCap.Round)) }
-                drawCircle(Color(0xFF9EA99E), 5f, pivot)
-                drawCircle(Color(0xFF576358), 2f, pivot)
+                drawCircle(cap, 3f, pivot)
 
                 translate(1f, 2f) { drawPath(cartridge, Color.Black.copy(alpha = 0.30f)) }
                 drawPath(cartridge, Color(0xFF2C3742))

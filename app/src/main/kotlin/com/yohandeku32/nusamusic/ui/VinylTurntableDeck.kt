@@ -8,7 +8,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -16,6 +15,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -25,7 +26,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import kotlin.random.Random
 
 @Composable
 internal fun VinylTurntableDeck(
@@ -43,13 +43,31 @@ internal fun VinylTurntableDeck(
     height: Dp = size
 ) {
     val mechanismSize = minOf(size, height)
-    val shape = RoundedCornerShape(mechanismSize * 0.065f)
     Box(
         Modifier.size(size, height).testTag("vinyl-deck")
-            .shadow(7.dp, shape, clip = false)
             .drawWithCache {
                 val painter = VinylDeckPainter(this.size)
-                onDrawBehind { with(painter) { drawDeck(isPlaying, repeatMode) } }
+                val ambient = vinylShadowPaint(13.dp.toPx(), 58)
+                val contact = vinylShadowPaint(3.dp.toPx(), 48)
+                val radius = mechanismSize.toPx() * 0.065f
+                val padding = 52.dp.toPx()
+                val bounds = android.graphics.RectF(-padding, -padding,
+                    this.size.width + padding, this.size.height + padding)
+                val shadow = vinylShadowLayer(kotlin.math.ceil(bounds.width() / 2).toInt(),
+                    kotlin.math.ceil(bounds.height() / 2).toInt()) { canvas ->
+                    canvas.scale(0.5f, 0.5f)
+                    canvas.translate(padding, padding)
+                    canvas.drawRoundRect(2.dp.toPx(), 10.dp.toPx(),
+                        this.size.width + 2.dp.toPx(), this.size.height + 10.dp.toPx(), radius, radius, ambient)
+                    canvas.drawRoundRect(0f, 3.dp.toPx(), this.size.width,
+                        this.size.height + 3.dp.toPx(), radius, radius, contact)
+                }
+                onDrawBehind {
+                    drawIntoCanvas { canvas ->
+                        canvas.nativeCanvas.drawBitmap(shadow, null, bounds, null)
+                    }
+                    with(painter) { drawDeck(isPlaying, repeatMode) }
+                }
             }
     ) {
         record(Modifier.offset((size - mechanismSize) / 2 + mechanismSize * 0.105f,
@@ -92,13 +110,27 @@ private fun DeckControl(name: String, state: String, modifier: Modifier, enabled
     ) { Box(Modifier.fillMaxSize()) }
 }
 
+internal fun vinylShadowPaint(blur: Float, alpha: Int) = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+    color = android.graphics.Color.argb(alpha, 12, 14, 15)
+    maskFilter = android.graphics.BlurMaskFilter(blur, android.graphics.BlurMaskFilter.Blur.NORMAL)
+}
+
+// Blur into a software bitmap once; hardware Canvas does not support Paint mask filters.
+internal fun vinylShadowLayer(width: Int, height: Int, draw: (android.graphics.Canvas) -> Unit): android.graphics.Bitmap {
+    return android.graphics.Bitmap.createBitmap(width.coerceAtLeast(1), height.coerceAtLeast(1),
+        android.graphics.Bitmap.Config.ARGB_8888).apply {
+        density = android.graphics.Bitmap.DENSITY_NONE
+        draw(android.graphics.Canvas(this))
+    }
+}
+
 private class VinylDeckPainter(size: Size) {
     private val width = size.width
     private val height = size.height
     private val edge = size.minDimension
     private val corner = CornerRadius(edge * 0.065f)
     private val body = Brush.linearGradient(
-        listOf(Color(0xFFD2D5D5), Color(0xFFBFC4C5), Color(0xFFA5ABAD)),
+        listOf(Color(0xFFD4D6D4), Color(0xFFBFC2C0), Color(0xFFA9ADAA)),
         Offset.Zero, Offset(width, height)
     )
     private val rim = Brush.linearGradient(
@@ -111,8 +143,15 @@ private class VinylDeckPainter(size: Size) {
         0.94f to Color(0xFF747B80), 0.98f to Color(0xFFC0C5C7), 1f to Color(0xFF6D757B),
         center = center, radius = edge * 0.444f
     )
-    private val grain = Random(741).let { random ->
-        List(900) { Offset(random.nextFloat() * width, random.nextFloat() * height) }
+    private val grain = android.graphics.Paint().apply {
+        val random = kotlin.random.Random(741)
+        val pixels = IntArray(128 * 128) {
+            val ink = if (random.nextBoolean()) 255 else 0
+            android.graphics.Color.argb(random.nextInt(3, 19), ink, ink, ink)
+        }
+        val bitmap = android.graphics.Bitmap.createBitmap(pixels, 128, 128, android.graphics.Bitmap.Config.ARGB_8888)
+        shader = android.graphics.BitmapShader(bitmap, android.graphics.Shader.TileMode.REPEAT,
+            android.graphics.Shader.TileMode.REPEAT)
     }
     private val knob = Brush.horizontalGradient(
         listOf(Color(0xFF292D30), Color(0xFF7A8083), Color(0xFF30363A)),
@@ -126,12 +165,9 @@ private class VinylDeckPainter(size: Size) {
             topLeft = Offset(edge * 0.003f, edge * 0.003f),
             size = Size(width - edge * 0.006f, height - edge * 0.013f), cornerRadius = corner,
             style = Stroke(edge * 0.003f))
-        for ((index, point) in grain.withIndex()) {
-            // Keep grain inside the rounded shell without an offscreen blur layer.
-            if (point.x in edge * 0.025f..width - edge * 0.025f && point.y in edge * 0.025f..height - edge * 0.025f) {
-                drawCircle(if (index % 2 == 0) Color.White.copy(alpha = 0.095f)
-                    else Color(0xFF343D43).copy(alpha = 0.07f), edge * 0.0009f, point)
-            }
+        drawIntoCanvas { canvas ->
+            canvas.nativeCanvas.drawRoundRect(0f, 0f, width, height - edge * 0.006f,
+                corner.x, corner.y, grain)
         }
         drawCircle(rim, edge * 0.45f, center)
         drawCircle(well, edge * 0.444f, center)
