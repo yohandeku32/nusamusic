@@ -1383,10 +1383,10 @@ class MainActivity : ComponentActivity() {
      */
     private fun scheduleArtistPortraitLookahead(player: MediaController) {
         if (restoringPlaybackQueue) return
-        val immersive = PlayerPresentationMode.fromPreference(
+        val portraitMode = PlayerPresentationMode.fromPreference(
             uiPrefsForFonts().getString("player_presentation_mode", null)
-        ) == PlayerPresentationMode.IMMERSIVE_ARTWORK
-        if (!immersive || songs.isEmpty() || player.mediaItemCount == 0 ||
+        ) != PlayerPresentationMode.CD
+        if (!portraitMode || songs.isEmpty() || player.mediaItemCount == 0 ||
             player.currentTimeline.isEmpty
         ) {
             nextArtistPortraitJob?.cancel()
@@ -2074,7 +2074,7 @@ private fun NusaMusicApp(
     // The queue lookahead also includes this Artist; the loader shares cache
     // and de-duplicates requests when both paths are active.
     LaunchedEffect(artistKey, playerPresentationMode) {
-        if (playerPresentationMode != PlayerPresentationMode.IMMERSIVE_ARTWORK) {
+        if (playerPresentationMode == PlayerPresentationMode.CD) {
             return@LaunchedEffect
         }
         val name = ArtistNameUtils.firstArtist(currentSong?.artist)
@@ -4111,7 +4111,7 @@ private fun ArtistAvatar(song: Song?, modifier: Modifier = Modifier) {
     var portrait by remember(ArtistNameUtils.cacheKey(artist)) {
         mutableStateOf(AppleArtistPortraitLoader.cached(artist))
     }
-    LaunchedEffect(artist) {
+    LaunchedEffect(artist, song?.uri) {
         if (portrait == null) portrait = AppleArtistPortraitLoader.load(context, artist)
     }
     Box(modifier.clip(CircleShape)) {
