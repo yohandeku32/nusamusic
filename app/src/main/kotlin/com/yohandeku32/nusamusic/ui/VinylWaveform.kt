@@ -75,10 +75,6 @@ internal fun VinylWaveformTrack(
         val peaks = waveform?.peaks
         val maximum = peaks?.maxOrNull()?.takeIf { it.isFinite() && it > 0f }
         val curves = Array(3) { Path() }
-        val windows = FloatArray(97) { index ->
-            val value = sin(PI * index / 96).toFloat()
-            value * value * value
-        }
         val offsets = floatArrayOf(0f, 0.65f, -0.55f)
         val heights = floatArrayOf(1f, 0.72f, 0.5f)
         val ink = Color(0xFF171717)
@@ -107,8 +103,11 @@ internal fun VinylWaveformTrack(
                     for (index in 0..96) {
                         val t = index / 96f
                         val x = start + (end - start) * t
-                        val y = middle - sin(t * (PI * 3.6).toFloat() - travel + offsets[layer]) *
-                            windows[index] * level * heights[layer] * (middle - 2.dp.toPx()).coerceAtLeast(0f)
+                        val local = (t - played) / 0.16f
+                        val taper = if (played >= 1f) 0f else
+                            (1f - local * local).coerceAtLeast(0f).let { it * it }
+                        val y = middle - sin(local * (PI * 1.4).toFloat() - travel + offsets[layer]) *
+                            taper * level * heights[layer] * (middle - 2.dp.toPx()).coerceAtLeast(0f)
                         if (index == 0) curve.moveTo(x, y) else curve.lineTo(x, y)
                     }
                     drawPath(curve, unplayed, style = stroke)

@@ -266,6 +266,29 @@ class VinylPlayerUiTest {
         assertArrayEquals("Disabled system animations freeze the curves", reduced, progressPixels())
     }
 
+    @Test fun wavePacketTravelsWithProgressAndLeavesThePassedTrackStraight() {
+        title.value = "Traveling wave fixture"
+        show(waveform = AudioWaveform(4000, FloatArray(256) { 1f }))
+        fun height(pixels: IntArray, left: Float, right: Float): Int {
+            val width = pixels.size / 48
+            return pixels.indices.filter { it % width in (width * left).toInt() until (width * right).toInt() &&
+                (pixels[it] shr 16 and 255) < 210 }.maxOfOrNull { kotlin.math.abs(it / width - 24) } ?: 0
+        }
+        compose.runOnIdle { position.value = 400 }
+        val early = progressPixels()
+        assertTrue("At 10% the packet is near the left end", height(early, 0f, 0.25f) >= 8)
+        assertTrue("Track ahead of the packet stays straight", height(early, 0.3f, 1f) <= 2)
+        compose.runOnIdle { position.value = 3600 }
+        val late = progressPixels()
+        assertTrue("At 90% the packet reaches the right end", height(late, 0.75f, 1f) >= 8)
+        assertTrue("The passed track returns to a straight line", height(late, 0f, 0.7f) <= 2)
+        assertTrue("Played ink advances with the packet", late.count { (it shr 16 and 255) < 70 } >
+            early.count { (it shr 16 and 255) < 70 } * 2)
+        snapshot("traveling-wave-progress")
+        compose.runOnIdle { position.value = 4000 }
+        assertTrue("Completed playback leaves the whole track straight", excursion(progressPixels()) <= 2)
+    }
+
     @Test fun waveformLoadingKeepsSeekAvailableAndUsesTheExistingLayout() {
         show(waveformLoading = true)
         compose.onNodeWithContentDescription("Seek")
@@ -442,8 +465,10 @@ class VinylPlayerUiTest {
             view.draw(Canvas(image))
             assertEquals("The icon/text gap shows the page rather than a badge background", 0xFFF2F1EB.toInt(),
                 image.getPixel(face.left.value.roundToInt() + 18, face.top.value.roundToInt() + 1))
-            assertTrue("The visible progress line starts at the same edge as the chassis",
-                (image.getPixel(progress.left.value.roundToInt() + 1, progress.top.value.roundToInt() + 24) shr 16 and 255) < 210)
+            assertTrue("The wave starts at the same edge as the chassis",
+                (4..44).any { y ->
+                    (image.getPixel(progress.left.value.roundToInt() + 1, progress.top.value.roundToInt() + y) shr 16 and 255) < 210
+                })
             image.recycle()
         }
     }
