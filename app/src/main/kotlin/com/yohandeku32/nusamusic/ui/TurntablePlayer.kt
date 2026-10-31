@@ -36,7 +36,7 @@ import androidx.compose.ui.unit.sp
 internal val VinylPaper = Color(0xFFF2F1EB)
 private val VinylInk = Color(0xFF171717)
 private val VinylContentWidth = 512.dp
-private val VinylGutter = 16.dp
+private val VinylGutter = 36.dp
 
 data class TurntableLabels(
     val play: String,
@@ -102,14 +102,14 @@ fun TurntablePlayer(
             val density = LocalDensity.current
             val room = ((viewportHeight.value - 640f) / 240f).coerceIn(0f, 1f)
             fun space(compact: Int, tall: Int) = (compact + (tall - compact) * room).dp
-            val topPadding = space(12, 20)
-            val headerGap = space(8, 12)
-            val recordGap = space(12, 16)
+            val topPadding = space(12, 36)
+            val headerGap = space(8, 16)
+            val recordGap = space(12, 28)
             val titleGap = space(6, 8)
-            val progressGap = space(4, 8)
+            val progressGap = space(8, 20)
             val transportGap = space(4, 8)
-            val transportSize = space(76, 84)
-            val footerGap = space(8, 12)
+            val transportSize = space(76, 92)
+            val footerGap = space(8, 24)
             val qualityGap = 2.dp
             val bottomPadding = space(8, 12)
             val navigationHeight = with(density) { WindowInsets.navigationBars.getBottom(this).toDp() }
@@ -132,7 +132,7 @@ fun TurntablePlayer(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Row(
-                    Modifier.widthIn(max = VinylContentWidth).fillMaxWidth().padding(horizontal = VinylGutter),
+                    Modifier.fillMaxWidth().padding(horizontal = 24.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     avatar(Modifier.size(44.dp))
@@ -212,7 +212,7 @@ fun TurntablePlayer(
                 TurntableProgress(positionMsState, durationMs, hasSong, labels.seek, onSeek)
                 Spacer(Modifier.height(transportGap))
                 Row(
-                    Modifier.widthIn(max = VinylContentWidth).fillMaxWidth().padding(horizontal = VinylGutter),
+                    Modifier.widthIn(max = 480.dp).fillMaxWidth().padding(horizontal = VinylGutter),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
@@ -231,7 +231,7 @@ fun TurntablePlayer(
                     )
                 }
                 Spacer(Modifier.height(footerGap))
-                Box(Modifier.widthIn(max = VinylContentWidth).fillMaxWidth().height(48.dp),
+                Box(Modifier.fillMaxWidth().height(48.dp),
                     contentAlignment = Alignment.Center) { footer() }
                 emptyState()
             }

@@ -95,7 +95,7 @@ class VinylPlayerUiTest {
                                     )
                                 },
                                 footer = {
-                                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                                    Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
                                         IconButton(onClick = { lyricsOpens++ }) { Icon(Icons.Default.KeyboardArrowDown, "Lyrics") }
                                         Spacer(Modifier.weight(1f))
                                         IconButton(onClick = { shares++ }) { Icon(Icons.Default.Share, "Share") }
@@ -283,13 +283,14 @@ class VinylPlayerUiTest {
         assertEquals(1, repeated.value)
     }
 
-    @Test fun enlargedMachineAndLeftAlignedMetadataShareTheProgressBarEdges() {
+    @Test fun machineAndLeftAlignedMetadataShareTheOriginalProgressMargins() {
         show()
         val progress = compose.onNodeWithTag("vinyl-progress").getUnclippedBoundsInRoot()
         val deck = compose.onNodeWithTag("vinyl-deck").getUnclippedBoundsInRoot()
         assertEquals(progress.left.value, deck.left.value, 0.5f)
         assertEquals(progress.right.value, deck.right.value, 0.5f)
-        assertTrue("The normal phone chassis grows beyond the previous 349 dp", (deck.right - deck.left).value > 360f)
+        assertEquals("Restore the 36 dp progress margin used before the enlarged revision", 36f, deck.left.value, 0.5f)
+        assertEquals(375f, deck.right.value, 0.5f)
         for (text in listOf(title.value, "LINKIN PARK")) {
             val node = compose.onNodeWithText(text)
             val bounds = node.getUnclippedBoundsInRoot()
