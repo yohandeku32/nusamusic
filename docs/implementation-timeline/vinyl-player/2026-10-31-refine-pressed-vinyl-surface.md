@@ -1,0 +1,10 @@
+# Refine the pressed-vinyl surface
+
+> Date: 2026-10-31
+> Status: verified locally; physical-device appearance/frame pacing pending
+
+The owner's marked photo calls for fine pressed grooves, opposing diagonal specular lobes, and a darker run-out area around the paper label. Replace the sparse periodic bright rings and off-center radial shine with size-adaptive fine paired groove edges, restrained deterministic groove variation, and sweep-gradient highlights. Keep a smooth dark band between the artwork and playing grooves, with only a few faint lead-out traces. Preserve the accepted 56% artwork-label diameter, center alignment, chassis geometry, and playback controls. No reference bitmap, artwork, or logo is bundled.
+
+Separate material from lighting: face/grooves/artwork stay in the rotating layer, while annular reflections and the spindle sit in a stationary sibling. The light does not rotate with the album picture. Reflection strokes are outside the label and do not wash out the cover. Brushes and groove arrays remain cached by measured size; 48–240 groove samples adapt to pixel radius. No new animation loop, raster asset, dependency, or audio behavior is introduced. ENERGY 2 / RHYTHM 2 / MOTION 2 remain unchanged.
+
+All 26 selected checks pass (2 artwork, 20 player UI, 4 library). The native artwork regression compares average pixel brightness at upper-right/lower-left reflection lobes against the dark upper-left sector and verifies the run-out area remains darker, while retaining its real artwork-loader/record-renderer path and pink-cover assertion. A cached 24-band radial feather adds a broad, soft sheen beneath fine groove glints. Final native close-up was inspected, final debug assembly/signature/whitespace pass. The full Lint run had zero errors before the final sheen-strength tuning; final source was recompiled and the 26 tests rerun after that tuning. Stationary lighting is verified by layer ownership in source, not an automated physical rotation measurement. Physical-device appearance/frame pacing remain unverified.

@@ -177,6 +177,12 @@ import com.yohandeku32.nusamusic.ui.PlayerSettingsContent
 import com.yohandeku32.nusamusic.ui.CdSongGrid
 import com.yohandeku32.nusamusic.ui.CdPlayer
 import com.yohandeku32.nusamusic.ui.TurntablePlayer
+import com.yohandeku32.nusamusic.ui.VinylLyricsSection
+import com.yohandeku32.nusamusic.ui.VinylQualityBadge
+import com.yohandeku32.nusamusic.ui.rememberVinylWaveform
+import com.yohandeku32.nusamusic.ui.VinylPaper
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import com.yohandeku32.nusamusic.ui.TurntableLabels
 import com.yohandeku32.nusamusic.ui.VinylSongList
 import com.yohandeku32.nusamusic.ui.ImmersiveMusicLibrary
@@ -1378,10 +1384,10 @@ class MainActivity : ComponentActivity() {
      */
     private fun scheduleArtistPortraitLookahead(player: MediaController) {
         if (restoringPlaybackQueue) return
-        val immersive = PlayerPresentationMode.fromPreference(
+        val portraitMode = PlayerPresentationMode.fromPreference(
             uiPrefsForFonts().getString("player_presentation_mode", null)
-        ) == PlayerPresentationMode.IMMERSIVE_ARTWORK
-        if (!immersive || songs.isEmpty() || player.mediaItemCount == 0 ||
+        ) != PlayerPresentationMode.CD
+        if (!portraitMode || songs.isEmpty() || player.mediaItemCount == 0 ||
             player.currentTimeline.isEmpty
         ) {
             nextArtistPortraitJob?.cancel()
@@ -1775,7 +1781,7 @@ private fun ChatGptStyleShareIcon(
 }
 
 @Composable
-private fun BiographyArrowIcon(
+private fun PlayerDetailsArrowIcon(
     modifier: Modifier = Modifier,
     color: Color = androidx.compose.material3.LocalContentColor.current
 ) {
@@ -2040,11 +2046,6 @@ private fun NusaMusicApp(
             playerGlassArtworkColor = Color(it)
         }
     }
-    // Color belongs to the current track, not the selected app theme.
-    // Reuse cached art where possible; extract only when Vinyl is active.
-    var vinylAccentColor by remember(currentSong?.uri) {
-        mutableStateOf(Color(0xFFAAB0B8))
-    }
     val uiPrefs = remember(context) {
         context.getSharedPreferences("ui_preferences", android.content.Context.MODE_PRIVATE)
     }
@@ -2070,26 +2071,11 @@ private fun NusaMusicApp(
             )
         )
     }
-    LaunchedEffect(currentSong?.uri, playerPresentationMode) {
-        val active = currentSong ?: return@LaunchedEffect
-        if (playerPresentationMode != PlayerPresentationMode.VINYL) return@LaunchedEffect
-        val cacheKey = active.albumId.takeIf { it > 0L }?.toString()
-        val image = ArtworkLoader.cached(
-            uriString = active.uri, maxSize = 256, cacheKey = cacheKey
-        ) ?: ArtworkLoader.load(
-            context = context, uriString = active.uri, maxSize = 256, cacheKey = cacheKey
-        )
-        if (image != null) {
-            vinylAccentColor = withContext(kotlinx.coroutines.Dispatchers.Default) {
-                vinylAccentFromArtwork(image)
-            }
-        }
-    }
     // Cover the brief startup window before Media3 restores its queue.
     // The queue lookahead also includes this Artist; the loader shares cache
     // and de-duplicates requests when both paths are active.
     LaunchedEffect(artistKey, playerPresentationMode) {
-        if (playerPresentationMode != PlayerPresentationMode.IMMERSIVE_ARTWORK) {
+        if (playerPresentationMode == PlayerPresentationMode.CD) {
             return@LaunchedEffect
         }
         val name = ArtistNameUtils.firstArtist(currentSong?.artist)
@@ -2563,7 +2549,7 @@ private fun NusaMusicApp(
     val pageBackdrop = when (playerPresentationMode) {
         PlayerPresentationMode.CD -> Color(0xFF111111)
         PlayerPresentationMode.IMMERSIVE_ARTWORK -> Color.Black
-        else -> MaterialTheme.colorScheme.background
+        else -> VinylPaper
     }
     // Lyrics is an in-page focus mode, no modal dialog or slide-up sheet.
     // Back closes the focus mode first and keeps the Now Playing page intact.
@@ -2953,7 +2939,7 @@ private fun NusaMusicApp(
                                     ) {
                                         Color.Black
                                     } else {
-                                        MaterialTheme.colorScheme.background
+                                        VinylPaper
                                     }
                                 ),
                             contentPadding = PaddingValues(0.dp)
@@ -2964,9 +2950,11 @@ private fun NusaMusicApp(
                                         .fillMaxWidth()
                                         .heightIn(min = playerViewportHeight)
                                         .clip(RoundedCornerShape(bottomStart = 34.dp, bottomEnd = 34.dp))
-                                        .background(MaterialTheme.colorScheme.background)
+                                        .background(VinylPaper)
                                 ) {
                                     if (playerPresentationMode == PlayerPresentationMode.VINYL) {
+                                        val waveform = rememberVinylWaveform(currentSong,
+                                            pagerState.settledPage == playerPage)
                                         TurntablePlayer(
                                             title = currentSong?.title ?: nusaText("Pilih lagu", "Choose a song"),
                                             artist = currentSong?.artist ?: nusaText("Perpustakaan musik lokal Anda", "Your local music library"),
@@ -2978,9 +2966,10 @@ private fun NusaMusicApp(
                                             hasSong = currentSong != null,
                                             positionMsState = positionMsState,
                                             durationMs = durationMs,
+                                            waveform = waveform.data,
+                                            isWaveformLoading = waveform.loading,
                                             shuffleEnabled = shuffleEnabled,
                                             repeatMode = repeatMode,
-                                            realisticControls = realisticControls,
                                             labels = TurntableLabels(
                                                 play = nusaText("Putar", "Play"),
                                                 pause = nusaText("Jeda", "Pause"),
@@ -2993,7 +2982,13 @@ private fun NusaMusicApp(
                                                 repeatOff = nusaText("Ulangi nonaktif", "Repeat off"),
                                                 repeatAll = nusaText("Ulangi semua", "Repeat all"),
                                                 repeatOne = nusaText("Ulangi satu lagu", "Repeat one"),
-                                                seek = nusaText("Posisi pemutaran", "Playback position")
+                                                seek = nusaText("Posisi pemutaran", "Playback position"),
+                                                settings = nusaText("Pengaturan", "Settings"),
+                                                more = nusaText("Opsi pemutaran", "Playback options"),
+                                                turntable = nusaText("Mesin vinyl", "Turntable"),
+                                                waveformLoading = nusaText("Membaca gelombang audio", "Reading audio waveform"),
+                                                waveformUnavailable = nusaText("Gelombang audio tidak tersedia", "Audio waveform unavailable"),
+                                                waveformReady = nusaText("Gelombang audio", "Audio waveform")
                                             ),
                                             onPlayPause = {
                                                 when {
@@ -3008,6 +3003,10 @@ private fun NusaMusicApp(
                                             onSeek = onSeek,
                                             onShuffle = onToggleShuffle,
                                             onRepeat = onToggleRepeat,
+                                            onSettings = { showSettings = true },
+                                            avatar = { avatarModifier ->
+                                                ArtistAvatar(song = currentSong, modifier = avatarModifier.clip(CircleShape))
+                                            },
                                             record = { recordModifier ->
                                                 VinylRecord(
                                                     song = currentSong,
@@ -3015,27 +3014,30 @@ private fun NusaMusicApp(
                                                     modifier = recordModifier
                                                 )
                                             },
-                                            accentColor = vinylAccentColor,
-                                            sleeve = { sleeveModifier ->
-                                                ArtworkView(
-                                                    song = currentSong,
-                                                    maxSizePx = 512,
-                                                    modifier = sleeveModifier,
-                                                    grainOverlay = false
-                                                )
-                                            },
-                                            quality = { AudioQualityPill(song = currentSong) },
+                                            quality = { AudioQualityPill(song = currentSong, vinyl = true) },
                                             footer = {
                                                 Row(
                                                     Modifier.fillMaxWidth().padding(horizontal = 24.dp),
                                                     verticalAlignment = Alignment.CenterVertically
                                                 ) {
-                                                    // Settings takes the former arrow position at the left.
-                                                    IconButton(onClick = { showSettings = true }) {
-                                                        Icon(
-                                                            Icons.Default.MoreHoriz,
-                                                            contentDescription = nusaText("Pengaturan", "Settings"),
-                                                            tint = MaterialTheme.colorScheme.onSurface
+                                                    IconButton(
+                                                        enabled = currentSong != null,
+                                                        onClick = {
+                                                            scope.launch {
+                                                                playerScrollState.animateScrollToItem(
+                                                                    if (revealPlayerCurve) 0 else 1
+                                                                )
+                                                            }
+                                                        },
+                                                        modifier = Modifier.semantics {
+                                                            contentDescription = nusaText("Lirik", "Lyrics")
+                                                        }
+                                                    ) {
+                                                        PlayerDetailsArrowIcon(
+                                                            Modifier.size(25.dp).graphicsLayer {
+                                                                rotationZ = if (revealPlayerCurve) 180f else 0f
+                                                            },
+                                                            color = MaterialTheme.colorScheme.onSurface
                                                         )
                                                     }
                                                     Spacer(Modifier.weight(1f))
@@ -3059,6 +3061,33 @@ private fun NusaMusicApp(
                                                 }
                                             },
                                             modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+                                }
+                            }
+
+                            if (currentSong != null) {
+                                item(key = "vinyl-lyrics") {
+                                    VinylLyricsSection(
+                                        heading = nusaText("LIRIK", "LYRICS"),
+                                        viewportHeight = playerViewportHeight
+                                    ) { lyricsModifier ->
+                                        ImmersiveLyricsPanel(
+                                            song = currentSong,
+                                            positionMs = positionMsState,
+                                            readPlaybackPosition = readPlaybackPosition,
+                                            readPlaybackEpoch = readPlaybackEpoch,
+                                            isPlaying = isPlaying && pagerState.settledPage == playerPage,
+                                            playbackEpoch = lyricsPlaybackEpoch,
+                                            durationMs = durationMs,
+                                            state = lyricsState,
+                                            onSeek = onSeek,
+                                            fontSize = lyricsFontSize,
+                                            onlineLyricsEnabled = onlineLyricsEnabled,
+                                            modifier = lyricsModifier,
+                                            onQueueLyrics = onQueueLyrics,
+                                            isLyricsQueued = isLyricsQueued,
+                                            topAligned = true
                                         )
                                     }
                                 }
@@ -3242,11 +3271,12 @@ private fun NusaMusicApp(
                                         playLabel = nusaText("Putar", "Play"),
                                         pauseLabel = nusaText("Jeda", "Pause"),
                                         unknownArtistLabel = nusaText("Artis tidak dikenal", "Unknown artist"),
+                                        deleteLabel = nusaText("Hapus", "Delete"),
                                         onPlay = { onPlay(it, filtered) },
                                         onRequestDelete = { deleteFromLibrary = it },
                                         onTogglePlay = onTogglePlay,
                                         artwork = { song, artworkModifier ->
-                                            ArtworkView(song = song, maxSizePx = 256, modifier = artworkModifier)
+                                            ArtworkView(song = song, maxSizePx = 512, modifier = artworkModifier)
                                         },
                                         modifier = Modifier.fillMaxSize().padding(top = 76.dp, bottom = 84.dp)
                                     )
@@ -3732,7 +3762,8 @@ private fun AudioQualityPill(
     song: Song?,
     immersive: Boolean = false,
     immersiveLightMode: Boolean = false,
-    onBadgeVisibilityChanged: ((Boolean) -> Unit)? = null
+    onBadgeVisibilityChanged: ((Boolean) -> Unit)? = null,
+    vinyl: Boolean = false
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     // Use already verified codec data immediately when a row/player exists
@@ -3786,6 +3817,20 @@ private fun AudioQualityPill(
         animationSpec = tween(durationMillis = 240),
         label = "audioQualityBadge"
     ) { visibleBadge ->
+        if (vinyl) {
+            if (visibleBadge != null) {
+                VinylQualityBadge(
+                    label = when (visibleBadge) {
+                        AudioQualityBadge.HI_RES -> "Hi-Res"
+                        AudioQualityBadge.LOSSLESS -> "Lossless"
+                        AudioQualityBadge.DOLBY -> "Dolby Atmos"
+                    },
+                    enabled = metadataMatchesSong && info != null,
+                    onClick = { showMetadataDialog = true }
+                )
+            }
+            return@Crossfade
+        }
         when (visibleBadge) {
             AudioQualityBadge.LOSSLESS,
             AudioQualityBadge.HI_RES -> {
@@ -3794,9 +3839,6 @@ private fun AudioQualityPill(
                     modifier = Modifier
                         .padding(top = if (immersive) 0.dp else 4.dp)
                         .then(
-                            // Preserve the original compact rounded rectangle;
-                            // only its translucent glass material matches the
-                            // bottom controls, not their capsule silhouette.
                             if (immersive) Modifier.immersiveGlassPill(7.dp, immersiveLightMode)
                             else Modifier
                                 .clip(RoundedCornerShape(7.dp))
@@ -3810,15 +3852,17 @@ private fun AudioQualityPill(
                         .padding(horizontal = 9.dp, vertical = 4.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = if (hiRes) "Hi-Res" else "Lossless",
-                        fontSize = if (immersive) 11.sp else 10.sp,
-                        lineHeight = if (immersive) 13.sp else 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = if (immersive) {
-                            if (immersiveLightMode) Color(0xFF171A20) else Color.White
-                        } else MaterialTheme.colorScheme.onSurface
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = if (hiRes) "Hi-Res" else "Lossless",
+                            fontSize = if (immersive) 11.sp else 10.sp,
+                            lineHeight = if (immersive) 13.sp else 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (immersive) {
+                                if (immersiveLightMode) Color(0xFF171A20) else Color.White
+                            } else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 }
             }
             AudioQualityBadge.DOLBY -> {
@@ -3869,7 +3913,7 @@ private fun AudioQualityPill(
         }
     }
 
-    if (badge != null && !immersive) {
+    if (badge != null && !immersive && !vinyl) {
         Spacer(Modifier.height(4.dp))
     }
 
@@ -4071,15 +4115,25 @@ private fun MetadataDivider(hiRes: Boolean = false) {
 
 @Composable
 private fun ArtistAvatar(song: Song?, modifier: Modifier = Modifier) {
-    // Local art is available immediately; never start a Deezer request for a
-    // small control that needs to respond at 90/120Hz.
-    ArtworkView(
-        song = song,
-        maxSizePx = 128,
-        modifier = modifier,
-        monochrome = true,
-        grainOverlay = false
-    )
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val artist = ArtistNameUtils.firstArtist(song?.artist)
+    var portrait by remember(ArtistNameUtils.cacheKey(artist)) {
+        mutableStateOf(AppleArtistPortraitLoader.cached(artist))
+    }
+    LaunchedEffect(artist, song?.uri) {
+        if (portrait == null) portrait = AppleArtistPortraitLoader.load(context, artist)
+    }
+    Box(modifier.clip(CircleShape)) {
+        val image = portrait
+        if (image != null) {
+            val monochrome = remember { ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) }
+            Image(image.asImageBitmap(), contentDescription = artist,
+                contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(), colorFilter = monochrome)
+        } else {
+            ArtworkView(song = song, maxSizePx = 128, modifier = Modifier.fillMaxSize(),
+                monochrome = true, grainOverlay = false)
+        }
+    }
 }
 
 @Composable
@@ -4570,52 +4624,21 @@ private fun RealisticControlButton(
 }
 
 
-/**
- * Select a readable, saturated-but-not-neon accent from the current album art.
- * The small sample and HSV conversion run off the UI thread once per track.
- * Neutral covers fall back to brushed-silver rather than a fixed red theme.
- */
-private fun vinylAccentFromArtwork(bitmap: Bitmap): Color {
-    val hsv = FloatArray(3)
-    val weights = FloatArray(12)
-    for (row in 0 until 8) {
-        for (column in 0 until 8) {
-            val x = ((column + 0.5f) / 8f * bitmap.width).toInt()
-                .coerceIn(0, bitmap.width - 1)
-            val y = ((row + 0.5f) / 8f * bitmap.height).toInt()
-                .coerceIn(0, bitmap.height - 1)
-            android.graphics.Color.colorToHSV(bitmap.getPixel(x, y), hsv)
-            val saturation = hsv[1]
-            val value = hsv[2]
-            if (saturation < 0.22f || value < 0.16f || value > 0.97f) continue
-            val bucket = ((hsv[0] / 30f).toInt()).coerceIn(0, weights.lastIndex)
-            weights[bucket] += saturation * value
-        }
-    }
-    val winningIndex = weights.indices.maxByOrNull { weights[it] } ?: 0
-    if (weights[winningIndex] < 0.50f) return Color(0xFFAAB0B8)
-    val hue = winningIndex * 30f + 15f
-    return Color(
-        android.graphics.Color.HSVToColor(
-            floatArrayOf(hue, 0.62f, 0.88f)
-        )
-    )
-}
-
 @Composable
-private fun VinylRecord(
+internal fun VinylRecord(
     song: Song?,
     isPlaying: Boolean,
     modifier: Modifier = Modifier
 ) {
+    val spinEnabled = isPlaying && android.animation.ValueAnimator.areAnimatorsEnabled()
     // Keep the physical angle continuous while changing rotation speed.
     // Playback starts and stops with a gentle acceleration/deceleration instead
     // of an abrupt jump.
     val rotation = remember { mutableFloatStateOf(0f) }
     val rotationSpeed = remember { Animatable(0f) }
 
-    LaunchedEffect(isPlaying) {
-        val targetSpeed = if (isPlaying) {
+    LaunchedEffect(spinEnabled) {
+        val targetSpeed = if (spinEnabled) {
             360f / 6.5f
         } else {
             0f
@@ -4630,11 +4653,11 @@ private fun VinylRecord(
         )
     }
 
-    LaunchedEffect(isPlaying) {
+    LaunchedEffect(spinEnabled) {
         var lastFrameNanos = 0L
 
         while (isActive) {
-            if (isPlaying || rotationSpeed.value > 0.01f) {
+            if (spinEnabled || rotationSpeed.value > 0.01f) {
                 val frameNanos = androidx.compose.runtime.withFrameNanos { it }
 
                 if (lastFrameNanos != 0L) {
@@ -4669,7 +4692,7 @@ private fun VinylRecord(
             Modifier
                 .fillMaxSize()
                 .drawWithCache {
-                    val painter = VinylShadowPainter(size, 16.dp.toPx(), 6.dp.toPx())
+                    val painter = VinylShadowPainter(size, 4.dp.toPx(), 1.dp.toPx())
                     onDrawBehind { with(painter) { drawShadow() } }
                 }
         )
@@ -4684,16 +4707,7 @@ private fun VinylRecord(
                 },
             contentAlignment = Alignment.Center
         ) {
-            Box(
-                Modifier
-                    .matchParentSize()
-                    .drawWithCache {
-                        val painter = VinylPainter(size)
-                        onDrawBehind { with(painter) { drawReflections() } }
-                    }
-            )
-
-            // A 12-inch record's paper label is approximately a third of its diameter.
+            // Preserve the large artwork label from the original Vinyl presentation.
             Box(
                 modifier = Modifier
                     .size(labelSize)
@@ -4703,6 +4717,7 @@ private fun VinylRecord(
                 ArtworkView(
                     song = song,
                     maxSizePx = 512,
+                    retainWhileLoading = true,
                     modifier = Modifier.fillMaxSize()
                 )
                 Box(
@@ -4716,7 +4731,7 @@ private fun VinylRecord(
             }
         }
 
-        // The spindle stays centered while the record and its reflections rotate.
+        // Lighting and spindle stay fixed while the grooves and artwork rotate beneath them.
         Box(
             Modifier
                 .fillMaxSize()
@@ -4724,6 +4739,7 @@ private fun VinylRecord(
                     val painter = VinylPainter(size)
                     onDrawBehind {
                         with(painter) { drawSpindle() }
+                        with(painter) { drawReflections() }
                     }
                 }
         )
@@ -5428,13 +5444,14 @@ private fun ArtworkView(
     fallbackMaxSizePx: Int? = null,
     loadDelayMs: Long = 0L,
     loadAllowed: Boolean = true,
-    grainOverlay: Boolean = true
+    grainOverlay: Boolean = true,
+    retainWhileLoading: Boolean = false
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val density = androidx.compose.ui.platform.LocalDensity.current
     // A cached carousel thumbnail is shown instantly until the full CD cover
     // is ready. Preserve default behaviour in Vinyl and other player modes.
-    var bitmap by remember(song?.uri, maxSizePx, fallbackMaxSizePx) {
+    var bitmap by remember(if (retainWhileLoading) null else song?.uri, maxSizePx, fallbackMaxSizePx) {
         mutableStateOf(
             song?.let {
                 val cacheKey = it.albumId.takeIf { albumId -> albumId > 0L }?.toString()

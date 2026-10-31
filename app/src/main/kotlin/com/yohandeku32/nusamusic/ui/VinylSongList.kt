@@ -1,264 +1,121 @@
 package com.yohandeku32.nusamusic.ui
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.yohandeku32.nusamusic.model.Song
-import kotlin.math.abs
-import kotlin.math.pow
-
-/** A browsable record wheel. Scrolling changes focus; only a tap starts playback. */
-@Composable
-fun VinylSongList(
-    songs: List<Song>,
-    state: LazyListState,
-    currentSongId: Long?,
-    isPlaying: Boolean,
-    backgroundColor: Color,
-    playLabel: String,
-    pauseLabel: String,
-    unknownArtistLabel: String,
-    onPlay: (Song) -> Unit,
-    onRequestDelete: (Song) -> Unit,
-    onTogglePlay: () -> Unit,
-    artwork: @Composable (Song, Modifier) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val fontScale = LocalDensity.current.fontScale.coerceIn(1f, 1.5f)
-    val itemHeight = 104.dp * fontScale
-    val cardColor = MaterialTheme.colorScheme.surface
-    val focusedKey by remember(state) {
-        derivedStateOf {
-            val layout = state.layoutInfo
-            val center = (layout.viewportStartOffset + layout.viewportEndOffset) / 2f
-            layout.visibleItemsInfo.minByOrNull { item ->
-                abs(item.offset + item.size / 2f - center)
-            }?.key
-        }
-    }
-
-    BoxWithConstraints(modifier.clipToBounds()) {
-        // Equal padding lets the first and last records also settle in the center.
-        val centerPadding = ((maxHeight - itemHeight) / 2f).coerceAtLeast(0.dp)
-        val edgeFadeHeight = (maxHeight * 0.16f).coerceAtMost(80.dp)
-        LazyColumn(
-            state = state,
-            flingBehavior = rememberSnapFlingBehavior(lazyListState = state),
-            contentPadding = PaddingValues(
-                top = centerPadding,
-                bottom = centerPadding,
-                start = 26.dp,
-                end = 30.dp
-            ),
-            modifier = Modifier.fillMaxSize()
-        ) {
-            itemsIndexed(songs, key = { _, song -> song.id }, contentType = { _, _ -> "vinyl-song" }) { _, song ->
-                val focused = focusedKey == song.id
-                VinylSongRow(
-                    song = song,
-                    focused = focused,
-                    current = currentSongId == song.id,
-                    playing = currentSongId == song.id && isPlaying,
-                    cardColor = cardColor,
-                    playLabel = playLabel,
-                    pauseLabel = pauseLabel,
-                    unknownArtistLabel = unknownArtistLabel,
-                    onClick = {
-                        if (currentSongId == song.id) onTogglePlay() else onPlay(song)
-                    },
-                    onLongClick = { onRequestDelete(song) },
-                    artwork = artwork,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(itemHeight)
-                        .graphicsLayer {
-                            // Read scrolling offsets in the drawing phase so each scroll
-                            // frame only moves the visible layers, without reloading artwork.
-                            val layout = state.layoutInfo
-                            val item = layout.visibleItemsInfo.firstOrNull { it.key == song.id }
-                            val viewportHeight = (layout.viewportEndOffset - layout.viewportStartOffset)
-                                .toFloat().coerceAtLeast(1f)
-                            val center = (layout.viewportStartOffset + layout.viewportEndOffset) / 2f
-                            val distance = if (item != null) {
-                                ((item.offset + item.size / 2f - center) / (viewportHeight / 2f))
-                                    .coerceIn(-1f, 1f)
-                            } else 0f
-                            val edgeDistance = abs(distance)
-                            val scale = 1f - 0.12f * edgeDistance
-
-                            transformOrigin = TransformOrigin(40.dp.toPx() / size.width, 0.5f)
-                            translationX = size.width * 0.43f * distance * distance
-                            rotationZ = -distance * 42f
-                            scaleX = scale
-                            scaleY = scale
-                            alpha = 1f - 0.94f * edgeDistance.pow(1.6f)
-                        }
-                )
-            }
-        }
-
-        // Fade into the page itself at both ends of the wheel.
-        Box(
-            Modifier.align(Alignment.TopCenter).fillMaxWidth().height(edgeFadeHeight)
-                .background(Brush.verticalGradient(listOf(backgroundColor, backgroundColor.copy(alpha = 0f))))
-        )
-        Box(
-            Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(edgeFadeHeight)
-                .background(Brush.verticalGradient(listOf(backgroundColor.copy(alpha = 0f), backgroundColor)))
-        )
-    }
-}
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun VinylSongRow(
-    song: Song,
-    focused: Boolean,
-    current: Boolean,
-    playing: Boolean,
-    cardColor: Color,
-    playLabel: String,
-    pauseLabel: String,
-    unknownArtistLabel: String,
-    onClick: () -> Unit,
-    onLongClick: () -> Unit,
-    artwork: @Composable (Song, Modifier) -> Unit,
-    modifier: Modifier = Modifier
+fun VinylSongList(
+    songs: List<Song>, state: LazyListState, currentSongId: Long?, isPlaying: Boolean,
+    backgroundColor: Color, playLabel: String, pauseLabel: String, unknownArtistLabel: String,
+    onPlay: (Song) -> Unit, onRequestDelete: (Song) -> Unit, onTogglePlay: () -> Unit,
+    artwork: @Composable (Song, Modifier) -> Unit, modifier: Modifier = Modifier,
+    deleteLabel: String = "Delete"
 ) {
-    val focusAlpha by animateFloatAsState(
-        targetValue = if (focused) 1f else 0f,
-        animationSpec = tween(180),
-        label = "vinylSongFocus"
-    )
-    val cardEdge = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f)
-
-    Box(modifier, contentAlignment = Alignment.Center) {
-        Surface(
-            modifier = Modifier.fillMaxWidth().height(72.dp).graphicsLayer { alpha = focusAlpha },
-            shape = RoundedCornerShape(50),
-            color = cardColor,
-            border = BorderStroke(1.dp, cardEdge),
-            shadowElevation = 3.dp
-        ) {}
-
-        Row(
-            modifier = Modifier.fillMaxWidth()
-                .clip(RoundedCornerShape(50))
-                .combinedClickable(
-                    role = Role.Button,
-                    onClickLabel = if (playing) pauseLabel else playLabel,
-                    onLongClickLabel = "Delete ${song.title} permanently",
-                    onClick = onClick,
-                    onLongClick = onLongClick
-                )
-                .semantics { selected = current }
-                .padding(vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
+    val fontScale = LocalDensity.current.fontScale
+    val motion = (rememberCoroutineScope().coroutineContext[MotionDurationScale]?.scaleFactor ?: 1f) > 0f
+    val stacked = fontScale < 1.6f
+    val shape = RoundedCornerShape(6.dp)
+    val scrim = remember {
+        Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.72f),
+            0.85f to Color.Black.copy(alpha = 0.65f), 1f to Color.Transparent)
+    }
+    BoxWithConstraints(modifier.background(backgroundColor).testTag("vinyl-crate")) {
+        val sleeveSize = (maxWidth - 48.dp).coerceIn(160.dp, 420.dp)
+        val exposedHeight = 80.dp * fontScale.coerceAtLeast(1f)
+        LazyColumn(
+            state = state,
+            contentPadding = PaddingValues(top = 20.dp, bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(if (stacked) exposedHeight - sleeveSize else 14.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.fillMaxSize().testTag("vinyl-sleeves")
         ) {
-            Box(
-                modifier = Modifier.size(80.dp)
-                    .shadow(4.dp, CircleShape, clip = false)
-                    .clip(CircleShape)
-                    .border(1.5.dp, cardColor, CircleShape)
-            ) {
-                artwork(song, Modifier.fillMaxSize())
-            }
-            Spacer(Modifier.width(14.dp))
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(3.dp)
-            ) {
-                Text(
-                    text = song.title,
-                    fontSize = 16.sp,
-                    lineHeight = 20.sp,
-                    fontWeight = if (focused || current) FontWeight.SemiBold else FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = song.artist.ifBlank { unknownArtistLabel },
-                    fontSize = 12.sp,
-                    lineHeight = 16.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            if (focused) {
+            itemsIndexed(songs, key = { _, song -> song.id }, contentType = { _, _ -> "record-sleeve" }) { index, song ->
+                val current = currentSongId == song.id
+                val playing = current && isPlaying
+                val artist = song.artist.ifBlank { unknownArtistLabel }
                 Box(
-                    modifier = Modifier.widthIn(min = 64.dp).heightIn(min = 48.dp)
-                        .padding(horizontal = 8.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(50),
-                        color = cardColor,
-                        border = BorderStroke(1.dp, cardEdge),
-                        shadowElevation = 2.dp,
-                        modifier = Modifier.graphicsLayer { alpha = focusAlpha }
-                    ) {
-                        Text(
-                            text = if (playing) pauseLabel else playLabel,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(horizontal = 13.dp, vertical = 8.dp)
+                    Modifier.size(sleeveSize).zIndex(index.toFloat())
+                        .graphicsLayer {
+                            scaleX = 1f
+                            rotationX = 0f
+                            if (stacked && motion) {
+                                val layout = state.layoutInfo
+                                val item = layout.visibleItemsInfo.firstOrNull { it.key == song.id }
+                                val room = (layout.viewportEndOffset - layout.viewportStartOffset).coerceAtLeast(1)
+                                val depth = ((item?.offset ?: 0) - layout.viewportStartOffset).toFloat() / room
+                                scaleX = 0.82f + 0.18f * depth.coerceIn(0f, 1f)
+                                transformOrigin = TransformOrigin(0.5f, 1f)
+                                rotationX = -10f
+                                cameraDistance = size.height * 2.5f
+                            }
+                        }
+                        .shadow(8.dp, shape, clip = false).clip(shape).background(Color(0xFF282824))
+                        .combinedClickable(
+                            role = Role.Button, onClickLabel = if (playing) pauseLabel else playLabel,
+                            onLongClickLabel = "$deleteLabel ${song.title}",
+                            onClick = { if (current) onTogglePlay() else onPlay(song) },
+                            onLongClick = { onRequestDelete(song) }
                         )
+                        .semantics { selected = current; contentDescription = "${song.title}, $artist" }
+                        .testTag("vinyl-sleeve-${song.id}")
+                ) {
+                    artwork(song, Modifier.fillMaxSize())
+                    Box(Modifier.fillMaxWidth().height(if (stacked) exposedHeight + 48.dp else sleeveSize)
+                        .background(scrim))
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(48.dp).clip(RoundedCornerShape(2.dp))) {
+                            artwork(song, Modifier.fillMaxSize())
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(song.title, color = Color.White, fontSize = 17.sp, lineHeight = 22.sp,
+                                fontWeight = FontWeight.SemiBold, maxLines = if (stacked) 1 else 2,
+                                overflow = TextOverflow.Ellipsis)
+                            Text(artist, color = Color.White, fontSize = 12.sp, lineHeight = 18.sp,
+                                maxLines = if (stacked) 1 else 2, overflow = TextOverflow.Ellipsis)
+                            if (current && !stacked) Text(if (playing) pauseLabel else playLabel,
+                                color = Color.White, fontSize = 12.sp, lineHeight = 18.sp)
+                        }
+                        if (current && stacked) {
+                            Spacer(Modifier.width(12.dp))
+                            Text(if (playing) pauseLabel else playLabel, color = Color.White,
+                                fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        }
                     }
+                    if (current) Box(Modifier.matchParentSize().border(2.dp, Color.White, shape))
                 }
-            } else {
-                Spacer(Modifier.width(10.dp))
             }
         }
     }

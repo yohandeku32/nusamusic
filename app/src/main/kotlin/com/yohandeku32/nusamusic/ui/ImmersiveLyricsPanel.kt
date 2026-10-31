@@ -63,7 +63,8 @@ fun ImmersiveLyricsPanel(
     onlineLyricsEnabled: Boolean,
     modifier: Modifier = Modifier,
     onQueueLyrics: suspend (Song, SongLyrics) -> Unit,
-    isLyricsQueued: (Song) -> Boolean
+    isLyricsQueued: (Song) -> Boolean,
+    topAligned: Boolean = false
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -208,7 +209,8 @@ fun ImmersiveLyricsPanel(
                     modifier = Modifier.fillMaxSize(),
                     inferredEnds = data.inferredEnds,
                     duetRightLines = data.duetRightLines,
-                    pronunciations = data.pronunciations
+                    pronunciations = data.pronunciations,
+                    topAligned = topAligned
                 )
             }
 
