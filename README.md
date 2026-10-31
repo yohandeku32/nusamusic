@@ -1,6 +1,6 @@
 # Aruna
 
-Aruna is an Android music player for the music stored on your device, built with Kotlin, Jetpack Compose and AndroidX Media3. Start with the Immersive player or choose CD in Settings, browse your collection, and follow synchronized lyrics while you listen.
+Aruna is an Android music player for the music stored on your device, built with Kotlin, Jetpack Compose and AndroidX Media3. Start with the Immersive player or choose Vinyl or CD in Settings, browse your collection, and follow synchronized lyrics while you listen.
 
 Requires **Android 10 (API 29) or newer**. The app is under active development.
 
@@ -36,6 +36,8 @@ Open an artist or album from Discovery to browse that artist's local tracks and 
 ## Lyrics
 
 Open **Lyrics** from the Immersive player's controls. Lyrics replace the artwork foreground within the player while playback controls remain available. Tap Lyrics again to return to the artwork. In Settings, adjust lyric size, enable or disable online lyrics, or reload the current song's lyrics.
+
+In Vinyl, scroll below the player or tap its footer arrow to reveal a half-screen lyrics section. Active lyrics follow near the top of its rounded panel. The record adapts to screen height so the normal playback area fits through its quality badge. A fixed metadata area keeps the record, artist portrait, lower controls, and quality slot stable as titles change. One-line titles remain close to the artist name. The small artist portrait resolves Apple Music artwork through the existing unavatar provider, with local cover art as a fallback.
 
 - Embedded lyrics load first. The reader accepts plain text, LRC, Enhanced LRC and TTML from supported audio metadata.
 - Fully timed embedded karaoke takes priority. When online lyrics are enabled, lrc.red can provide a more precisely synchronized version; LRCLIB provides a line-synced fallback.

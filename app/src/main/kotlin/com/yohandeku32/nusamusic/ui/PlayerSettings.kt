@@ -229,6 +229,14 @@ internal fun PlayerSettingsContent(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         SettingModeTile(
+                            label = "Vinyl",
+                            icon = Icons.Default.Album,
+                            selected = playerPresentationMode == PlayerPresentationMode.VINYL,
+                            enabled = PlayerPresentationMode.VINYL.isAvailable,
+                            onClick = { onPresentationSelected(PlayerPresentationMode.VINYL) },
+                            modifier = Modifier.weight(1f)
+                        )
+                        SettingModeTile(
                             label = "CD",
                             icon = Icons.Default.Album,
                             selected = playerPresentationMode == PlayerPresentationMode.CD,
@@ -324,10 +332,12 @@ internal fun PlayerSettingsContent(
                     }
                 }
             }
-            if (LYRICS_ENABLED && playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) item(key = "lyrics") {
+            if (LYRICS_ENABLED && playerPresentationMode != PlayerPresentationMode.CD) item(key = "lyrics") {
                 SettingsSection(settingsText("Lirik", "Lyrics")) {
-                    MiniLyricsSetting(miniLyricsEnabled, onMiniLyricsChange)
-                    SettingsDivider()
+                    if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
+                        MiniLyricsSetting(miniLyricsEnabled, onMiniLyricsChange)
+                        SettingsDivider()
+                    }
                     ArunaSaltTheme { ItemSwitcher(
                         text = settingsText("Lirik online", "Online lyrics"),
                         sub = settingsText(
@@ -643,7 +653,7 @@ private fun SettingModeTile(
     ) {
         Column(
             modifier = Modifier.fillMaxWidth()
-                .height(120.dp)
+                .heightIn(min = 120.dp)
                 .selectable(
                     selected = selected,
                     enabled = enabled,
@@ -678,7 +688,7 @@ private fun SettingModeTile(
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
                     color = colors.onSurface.copy(alpha = if (enabled) 1f else 0.4f),
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
                 if (!enabled) {
