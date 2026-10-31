@@ -157,6 +157,23 @@ private class VinylDeckPainter(size: Size) {
         listOf(Color(0xFF292D30), Color(0xFF7A8083), Color(0xFF30363A)),
         width * 0.075f - edge * 0.015f, width * 0.075f + edge * 0.015f
     )
+    private val lamp = Offset(width * 0.075f, height * 0.75f)
+    private val lampRim = Brush.linearGradient(
+        listOf(Color(0xFFD0D1C9), Color(0xFF74756C), Color(0xFF383B35)),
+        lamp - Offset(edge * 0.012f, edge * 0.016f), lamp + Offset(edge * 0.014f, edge * 0.016f))
+    private val litLens = Brush.radialGradient(
+        0f to Color(0xFFFF7867), 0.35f to Color(0xFFFF2119),
+        0.7f to Color(0xFFE30808), 1f to Color(0xFF850500),
+        center = lamp - Offset(edge * 0.003f, edge * 0.003f), radius = edge * 0.017f)
+    private val idleLens = Brush.radialGradient(
+        listOf(Color(0xFFEB2520), Color(0xFFC40908), Color(0xFF730805)),
+        center = lamp - Offset(edge * 0.003f, edge * 0.003f), radius = edge * 0.017f)
+    private val litReflection = Brush.radialGradient(
+        listOf(Color(0xFFFF2416).copy(alpha = 0.28f), Color.Transparent),
+        center = lamp, radius = edge * 0.036f)
+    private val idleReflection = Brush.radialGradient(
+        listOf(Color(0xFFD61C12).copy(alpha = 0.09f), Color.Transparent),
+        center = lamp, radius = edge * 0.032f)
 
     fun DrawScope.drawDeck(playing: Boolean, repeatMode: Int) {
         drawRoundRect(Color(0xFF898F93), cornerRadius = corner)
@@ -181,9 +198,13 @@ private class VinylDeckPainter(size: Size) {
             screw + Offset(edge * 0.004f, 0f), edge * 0.002f)
 
         val power = Offset(width * 0.075f, height * 0.86f)
-        drawCircle(Color(0xFF6B747A), edge * 0.017f, Offset(power.x, height * 0.75f))
-        drawCircle(if (playing) Color(0xFFEF3E36) else Color(0xFF692A29), edge * 0.010f,
-            Offset(power.x, height * 0.75f))
+        drawCircle(if (playing) litReflection else idleReflection, edge * 0.036f, lamp)
+        drawCircle(Color.Black.copy(alpha = 0.22f), edge * 0.017f, lamp + Offset(0f, edge * 0.002f))
+        drawCircle(lampRim, edge * 0.017f, lamp)
+        drawCircle(Color(0xFF4C130E), edge * 0.013f, lamp)
+        drawCircle(if (playing) litLens else idleLens, edge * 0.0115f, lamp)
+        drawOval(Color(0xFFFFE4D8).copy(alpha = if (playing) 0.72f else 0.38f),
+            lamp - Offset(edge * 0.006f, edge * 0.007f), Size(edge * 0.008f, edge * 0.0035f))
         drawRoundRect(Color(0xFF3C4349), power - Offset(edge * 0.016f, edge * 0.054f),
             Size(edge * 0.032f, edge * 0.111f), CornerRadius(edge * 0.012f))
         val lever = Path().apply {

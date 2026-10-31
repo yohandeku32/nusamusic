@@ -29,7 +29,7 @@ internal fun VinylQualityBadge(
         Text(label, fontSize = 10.sp, lineHeight = 12.sp,
             color = Color(0xFF242424), maxLines = 1,
             modifier = Modifier.testTag("vinyl-quality-face")
-                .background(Color.Black.copy(alpha = 0.12f), RoundedCornerShape(2.dp))
+                .background(Color.Black.copy(alpha = 0.12f), RoundedCornerShape(6.dp))
                 .padding(horizontal = 5.dp, vertical = 3.dp))
     }
 }

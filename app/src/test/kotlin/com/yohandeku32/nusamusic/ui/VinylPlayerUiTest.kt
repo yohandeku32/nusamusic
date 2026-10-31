@@ -394,6 +394,7 @@ class VinylPlayerUiTest {
         show()
         compose.onNodeWithContentDescription("Turntable: Play").performClick()
         compose.onNodeWithContentDescription("Pause").assertExists()
+        snapshot("vinyl-red-led-playing")
         compose.onNodeWithContentDescription("Turntable: Pause").performClick()
         assertEquals(2, plays)
         val repeat = compose.onNodeWithContentDescription("Turntable: Repeat")

@@ -3271,11 +3271,12 @@ private fun NusaMusicApp(
                                         playLabel = nusaText("Putar", "Play"),
                                         pauseLabel = nusaText("Jeda", "Pause"),
                                         unknownArtistLabel = nusaText("Artis tidak dikenal", "Unknown artist"),
+                                        deleteLabel = nusaText("Hapus", "Delete"),
                                         onPlay = { onPlay(it, filtered) },
                                         onRequestDelete = { deleteFromLibrary = it },
                                         onTogglePlay = onTogglePlay,
                                         artwork = { song, artworkModifier ->
-                                            ArtworkView(song = song, maxSizePx = 256, modifier = artworkModifier)
+                                            ArtworkView(song = song, maxSizePx = 512, modifier = artworkModifier)
                                         },
                                         modifier = Modifier.fillMaxSize().padding(top = 76.dp, bottom = 84.dp)
                                     )
