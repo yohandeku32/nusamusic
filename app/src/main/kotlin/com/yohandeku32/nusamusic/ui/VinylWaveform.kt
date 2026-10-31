@@ -3,20 +3,28 @@ package com.yohandeku32.nusamusic.ui
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.animation.core.withInfiniteAnimationFrameNanos
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import com.yohandeku32.nusamusic.data.AudioWaveform
 import com.yohandeku32.nusamusic.data.AudioWaveformLoader
 import com.yohandeku32.nusamusic.model.Song
 import kotlin.math.sqrt
+import kotlin.math.PI
+import kotlin.math.sin
 
 internal data class VinylWaveformState(val data: AudioWaveform? = null, val loading: Boolean = false)
 
@@ -37,52 +45,77 @@ internal fun rememberVinylWaveform(
 }
 
 @Composable
-internal fun VinylWaveformTrack(waveform: AudioWaveform?, fraction: () -> Float) {
-    Box(Modifier.fillMaxWidth().height(24.dp).drawWithCache {
+internal fun VinylWaveformTrack(
+    waveform: AudioWaveform?, hasSong: Boolean, isPlaying: Boolean, isVisible: Boolean, fraction: () -> Float
+) {
+    val phase = remember { mutableFloatStateOf(0f) }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val scale = rememberCoroutineScope().coroutineContext[MotionDurationScale]?.scaleFactor ?: 1f
+    LaunchedEffect(isPlaying, isVisible, hasSong, scale, lifecycle) {
+        if (isPlaying && isVisible && hasSong && scale > 0f) {
+            lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                var previous = 0L
+                while (true) withInfiniteAnimationFrameNanos { now ->
+                    if (previous == 0L) previous = now
+                    val elapsed = now - previous
+                    if (elapsed >= 33_000_000L) {
+                        phase.floatValue = (phase.floatValue + elapsed.coerceAtMost(100_000_000L) /
+                            1_000_000_000f * (2 * PI / 3.6).toFloat() / scale) % (2 * PI).toFloat()
+                        previous = now
+                    }
+                }
+            }
+        }
+    }
+    Box(Modifier.fillMaxWidth().height(40.dp).drawWithCache {
         // The invisible 4 dp thumb reserves 2 dp at either edge of Material's track.
         val start = -2.dp.toPx()
         val end = size.width + 2.dp.toPx()
         val middle = size.height / 2f
         val peaks = waveform?.peaks
         val maximum = peaks?.maxOrNull()?.takeIf { it.isFinite() && it > 0f }
-        val amplitudes = if (peaks != null && maximum != null && peaks.size >= 2) {
-            FloatArray(peaks.size) { index ->
-                val value = peaks[index].takeIf { it.isFinite() }?.coerceIn(0f, maximum) ?: 0f
-                sqrt(value / maximum) * (size.height / 2f - 1.dp.toPx()).coerceAtLeast(0f)
-            }
-        } else null
-        val envelope = amplitudes?.let { heights ->
-            Path().apply {
-                val step = (end - start) / (heights.size - 1)
-                moveTo(start, middle)
-                lineTo(start, middle - heights[0])
-                for (index in 1 until heights.size) {
-                    val previousX = start + (index - 1) * step
-                    val x = start + index * step
-                    quadraticTo(previousX, middle - heights[index - 1],
-                        (previousX + x) / 2f, middle - (heights[index - 1] + heights[index]) / 2f)
-                }
-                lineTo(end, middle - heights.last())
-                lineTo(end, middle + heights.last())
-                for (index in heights.lastIndex - 1 downTo 0) {
-                    val previousX = start + (index + 1) * step
-                    val x = start + index * step
-                    quadraticTo(previousX, middle + heights[index + 1],
-                        (previousX + x) / 2f, middle + (heights[index + 1] + heights[index]) / 2f)
-                }
-                lineTo(start, middle + heights[0]); close()
-            }
+        val curves = Array(3) { Path() }
+        val windows = FloatArray(97) { index ->
+            val value = sin(PI * index / 96).toFloat()
+            value * value * value
         }
+        val offsets = floatArrayOf(0f, 0.65f, -0.55f)
+        val heights = floatArrayOf(1f, 0.72f, 0.5f)
+        val ink = Color(0xFF171717)
+        val unplayed = Color(0xFF85847E)
+        val secondary = Color(0xFF77766F)
+        val stroke = Stroke(1.4.dp.toPx(), cap = StrokeCap.Round)
         onDrawBehind {
             val played = fraction().coerceIn(0f, 1f)
             val cursor = start + (end - start) * played
-            if (envelope == null) {
-                drawLine(Color(0xFF85847E), Offset(start, middle), Offset(end, middle), 3.dp.toPx(), StrokeCap.Butt)
-                drawLine(Color(0xFF171717), Offset(start, middle), Offset(cursor, middle), 3.dp.toPx(), StrokeCap.Butt)
+            val sourceIndex = played * ((peaks?.size ?: 1) - 1)
+            val before = sourceIndex.toInt()
+            val after = (before + 1).coerceAtMost((peaks?.lastIndex ?: 0))
+            val level = if (peaks != null && maximum != null && peaks.size >= 2) {
+                val a = peaks[before].takeIf { it.isFinite() }?.coerceIn(0f, maximum) ?: 0f
+                val b = peaks[after].takeIf { it.isFinite() }?.coerceIn(0f, maximum) ?: 0f
+                sqrt((a + (b - a) * (sourceIndex - before)) / maximum)
+            } else if (waveform == null && hasSong) 0.7f else 0f
+            if (level == 0f) {
+                drawLine(unplayed, Offset(start, middle), Offset(end, middle), 3.dp.toPx(), StrokeCap.Butt)
+                drawLine(ink, Offset(start, middle), Offset(cursor, middle), 3.dp.toPx(), StrokeCap.Butt)
             } else {
-                drawPath(envelope, Color(0xFF85847E))
-                clipRect(left = start, right = cursor) { drawPath(envelope, Color(0xFF171717)) }
-                drawLine(Color(0xFF171717), Offset(cursor, 0f), Offset(cursor, size.height), 1.dp.toPx())
+                val travel = phase.floatValue
+                for (layer in 2 downTo 0) {
+                    val curve = curves[layer]
+                    curve.reset()
+                    for (index in 0..96) {
+                        val t = index / 96f
+                        val x = start + (end - start) * t
+                        val y = middle - sin(t * (PI * 3.6).toFloat() - travel + offsets[layer]) *
+                            windows[index] * level * heights[layer] * (middle - 2.dp.toPx()).coerceAtLeast(0f)
+                        if (index == 0) curve.moveTo(x, y) else curve.lineTo(x, y)
+                    }
+                    drawPath(curve, unplayed, style = stroke)
+                    clipRect(left = start, right = cursor) {
+                        drawPath(curve, if (layer == 0) ink else secondary, style = stroke)
+                    }
+                }
             }
         }
     })

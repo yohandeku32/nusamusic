@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.InputMode
@@ -29,6 +30,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.DpRect
 import androidx.compose.ui.unit.dp
 import com.yohandeku32.nusamusic.VinylRecord
 import com.yohandeku32.nusamusic.data.AudioWaveform
@@ -51,7 +53,10 @@ import org.robolectric.annotation.GraphicsMode
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @OptIn(ExperimentalTestApi::class)
 class VinylPlayerUiTest {
-    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+    private val animationScale = object : MotionDurationScale {
+        override var scaleFactor by mutableFloatStateOf(1f)
+    }
+    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>(effectContext = animationScale)
     private var plays = 0
     private var previous = 0
     private var next = 0
@@ -62,6 +67,8 @@ class VinylPlayerUiTest {
     private var qualityClicks = 0
     private var sought = 0L
     private val playing = mutableStateOf(false)
+    private val visible = mutableStateOf(true)
+    private val position = mutableStateOf(75_000L)
     private val shuffled = mutableStateOf(false)
     private val repeated = mutableStateOf(0)
     private val title = mutableStateOf("The Emptiness Machine")
@@ -72,6 +79,7 @@ class VinylPlayerUiTest {
     private fun show(width: Int = 411, height: Int = 914, fontScale: Float = 1f, hasSong: Boolean = true,
         safeBottom: Int = 0, titleSize: Float = 34f, waveform: AudioWaveform? = null,
         waveformLoading: Boolean = false) {
+        position.value = if (waveform == null) 75_000L else waveform.durationMs * 2 / 5
         compose.setContent {
             CompositionLocalProvider(LocalDensity provides Density(1f, fontScale)) {
                 inputModeManager = LocalInputModeManager.current
@@ -82,8 +90,8 @@ class VinylPlayerUiTest {
                                 title = title.value, artist = if (waveform == null) "LINKIN PARK" else "Audio test fixture",
                                 titleFontFamily = FontFamily.Serif, titleFontSize = titleSize,
                                 viewportHeight = (height - safeBottom).dp, isPlaying = playing.value,
-                                isVisible = true, hasSong = hasSong,
-                                positionMsState = remember { mutableStateOf(if (waveform == null) 75_000L else waveform.durationMs * 2 / 5) },
+                                isVisible = visible.value, hasSong = hasSong,
+                                positionMsState = position,
                                 durationMs = waveform?.durationMs ?: 190_000L,
                                 waveform = waveform, isWaveformLoading = waveformLoading,
                                 shuffleEnabled = shuffled.value, repeatMode = repeated.value,
@@ -158,7 +166,7 @@ class VinylPlayerUiTest {
         assertEquals(listOf(2, 1, 1, 1, 1, 1, 1), listOf(plays, previous, next, settings, lyricsOpens, shares, favorites))
     }
 
-    @Test fun sourcePcmEnvelopeShowsAmplitudeAndSilenceAndRetainsSeeking() {
+    private fun pcmFixture(): AudioWaveform {
         val pcm = ByteBuffer.allocate(800).order(ByteOrder.LITTLE_ENDIAN)
         repeat(400) { frame ->
             val amplitude = when (frame / 100) { 0 -> 0.25f; 1 -> 1f; 2 -> 0f; else -> 0.75f }
@@ -167,33 +175,95 @@ class VinylPlayerUiTest {
         pcm.flip()
         val accumulator = PcmWaveformAccumulator(4_000_000)
         accumulator.add(pcm, 0, 100, 1, WaveformPcm.SIGNED_16)
-        title.value = "Waveform fixture"
-        show(waveform = requireNotNull(accumulator.finish()))
-        val seek = compose.onNodeWithContentDescription("Seek")
-        seek.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Audio waveform"))
-        val progress = compose.onNodeWithTag("vinyl-progress").getUnclippedBoundsInRoot()
-        compose.runOnIdle {
+        return requireNotNull(accumulator.finish())
+    }
+
+    private fun progressPixels(knownBounds: DpRect? = null): IntArray {
+        val bounds = knownBounds ?: compose.onNodeWithTag("vinyl-progress").getUnclippedBoundsInRoot()
+        var result = intArrayOf()
+        compose.runOnUiThread {
             val view = compose.activity.findViewById<View>(android.R.id.content)
             val image = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
             view.draw(Canvas(image))
-            fun pixel(fraction: Float, offsetY: Int): Int = image.getPixel(
-                (progress.left.value + (progress.right - progress.left).value * fraction).roundToInt(),
-                progress.top.value.roundToInt() + offsetY)
-            assertEquals("Played loud audio is dark", 0xFF171717.toInt(), pixel(0.30f, 18))
-            assertEquals("Quiet audio has a lower envelope", 0xFFF2F1EB.toInt(), pixel(0.10f, 17))
-            assertEquals("Unplayed loud audio is gray", 0xFF85847E.toInt(), pixel(0.90f, 18))
-            assertEquals("Silence has no invented waveform", 0xFFF2F1EB.toInt(), pixel(0.60f, 18))
-            assertEquals("Waveform starts at the shared 36 dp content edge", 0xFF171717.toInt(), pixel(0f, 24))
-            assertEquals("Waveform must not extend into the content margin", 0xFFF2F1EB.toInt(),
-                image.getPixel(progress.left.value.roundToInt() - 2, progress.top.value.roundToInt() + 24))
+            val width = (bounds.right - bounds.left).value.roundToInt()
+            result = IntArray(width * 48)
+            image.getPixels(result, 0, width, bounds.left.value.roundToInt(), bounds.top.value.roundToInt(), width, 48)
             image.recycle()
         }
-        snapshot("waveform-player-fixture")
+        return result
+    }
+
+    private fun excursion(pixels: IntArray): Int {
+        val width = pixels.size / 48
+        return pixels.indices.filter { (pixels[it] shr 16 and 255) < 210 }
+            .maxOfOrNull { kotlin.math.abs(it / width - 24) } ?: 0
+    }
+
+    @Test fun layeredCurvesUseCurrentSourceAmplitudeAndRetainSeeking() {
+        title.value = "Waveform fixture"
+        show(waveform = pcmFixture())
+        val seek = compose.onNodeWithContentDescription("Seek")
+        seek.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Audio waveform"))
+        val loud = progressPixels()
+        assertTrue("Thin curves leave open space rather than a filled envelope",
+            loud.count { (it shr 16 and 255) < 210 } < (loud.size / 48) * 10)
+        assertTrue("The layered curves extend above and below the baseline", excursion(loud) >= 10)
+        snapshot("animated-wave-player-fixture")
+        compose.runOnIdle { position.value = 400 }
+        val quiet = progressPixels()
+        assertTrue("Quiet source audio has a smaller wave", excursion(quiet) < excursion(loud))
+        compose.runOnIdle { position.value = 2400 }
+        assertTrue("Silent source audio stays flat", excursion(progressPixels()) <= 2)
         seek.performSemanticsAction(SemanticsActions.SetProgress) { it(0.75f) }
         assertEquals(3_000L, sought)
         seek.performTouchInput { click(androidx.compose.ui.geometry.Offset(width * 0.25f, height / 2f)) }
         assertTrue("Touch seeking uses the waveform's time axis", sought in 800L..1200L)
         assertEveryControlFits()
+    }
+
+    @Test fun waveMovesDuringPlaybackAndFreezesWhenPausedOrHidden() {
+        show(waveform = pcmFixture())
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle { playing.value = true }
+        compose.mainClock.advanceTimeBy(32)
+        val first = progressPixels()
+        compose.mainClock.advanceTimeBy(640)
+        assertFalse("Playing changes curve geometry", first.contentEquals(progressPixels()))
+        snapshot("animated-wave-playing")
+        compose.runOnIdle { playing.value = false }
+        compose.mainClock.advanceTimeBy(32)
+        val paused = progressPixels()
+        compose.mainClock.advanceTimeBy(640)
+        assertArrayEquals("Pause freezes all three curves", paused, progressPixels())
+        compose.runOnIdle { playing.value = true; visible.value = false }
+        compose.mainClock.advanceTimeBy(32)
+        val hidden = progressPixels()
+        compose.mainClock.advanceTimeBy(640)
+        assertArrayEquals("Hidden player does not animate", hidden, progressPixels())
+        compose.runOnIdle { visible.value = true }
+        compose.mainClock.advanceTimeBy(32)
+        val backgroundBounds = compose.onNodeWithTag("vinyl-progress").getUnclippedBoundsInRoot()
+        compose.activityRule.scenario.moveToState(androidx.lifecycle.Lifecycle.State.STARTED)
+        val background = progressPixels(backgroundBounds)
+        compose.mainClock.advanceTimeBy(640)
+        assertArrayEquals("Background activity does not animate", background, progressPixels(backgroundBounds))
+        compose.activityRule.scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+    }
+
+    @Test fun waveAppearsBeforeAudioAnalysisAndRespectsReducedMotion() {
+        show(waveformLoading = true)
+        assertTrue("First render has curves without waiting for decoded PCM", excursion(progressPixels()) >= 8)
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle { playing.value = true }
+        compose.mainClock.advanceTimeBy(32)
+        val first = progressPixels()
+        compose.mainClock.advanceTimeBy(640)
+        assertFalse("Playback animates even while analysis is pending", first.contentEquals(progressPixels()))
+        compose.runOnIdle { animationScale.scaleFactor = 0f }
+        compose.mainClock.advanceTimeBy(32)
+        val reduced = progressPixels()
+        compose.mainClock.advanceTimeBy(640)
+        assertArrayEquals("Disabled system animations freeze the curves", reduced, progressPixels())
     }
 
     @Test fun waveformLoadingKeepsSeekAvailableAndUsesTheExistingLayout() {
@@ -372,8 +442,8 @@ class VinylPlayerUiTest {
             view.draw(Canvas(image))
             assertEquals("The icon/text gap shows the page rather than a badge background", 0xFFF2F1EB.toInt(),
                 image.getPixel(face.left.value.roundToInt() + 18, face.top.value.roundToInt() + 1))
-            assertEquals("The visible progress line starts at the same edge as the chassis", 0xFF171717.toInt(),
-                image.getPixel(progress.left.value.roundToInt() + 1, progress.top.value.roundToInt() + 24))
+            assertTrue("The visible progress line starts at the same edge as the chassis",
+                (image.getPixel(progress.left.value.roundToInt() + 1, progress.top.value.roundToInt() + 24) shr 16 and 255) < 210)
             image.recycle()
         }
     }

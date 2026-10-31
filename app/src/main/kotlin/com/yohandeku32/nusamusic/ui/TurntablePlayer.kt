@@ -214,7 +214,8 @@ fun TurntablePlayer(
                     Box(Modifier.fillMaxWidth().height(44.dp), contentAlignment = Alignment.CenterStart) { quality() }
                 }
                 Spacer(Modifier.height(progressGap))
-                TurntableProgress(positionMsState, durationMs, hasSong, labels, onSeek, waveform, isWaveformLoading)
+                TurntableProgress(positionMsState, durationMs, hasSong, labels, onSeek, waveform, isWaveformLoading,
+                    isPlaying, isVisible)
                 Spacer(Modifier.height(transportGap))
                 Row(
                     Modifier.widthIn(max = 480.dp).fillMaxWidth().padding(horizontal = VinylGutter),
@@ -277,7 +278,9 @@ private fun TurntableProgress(
     labels: TurntableLabels,
     onSeek: (Long) -> Unit,
     waveform: AudioWaveform?,
-    isWaveformLoading: Boolean
+    isWaveformLoading: Boolean,
+    isPlaying: Boolean,
+    isVisible: Boolean
 ) {
     val positionMs by positionMsState
     val enabled = hasSong && durationMs > 0L
@@ -302,7 +305,7 @@ private fun TurntableProgress(
             },
             thumb = { Spacer(Modifier.size(width = 4.dp, height = 0.dp)) },
             track = { state ->
-                VinylWaveformTrack(waveform) { state.value }
+                VinylWaveformTrack(waveform, hasSong, isPlaying, isVisible) { state.value }
             }
         )
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {

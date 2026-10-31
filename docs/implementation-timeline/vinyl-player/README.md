@@ -2,6 +2,7 @@
 
 Record rendering, playback controls, lyrics, artist portraits, and presentation selection.
 
+- [2026-10-31: Animate layered line-wave progress immediately](2026-10-31-animate-layered-wave-progress.md)
 - [2026-10-31: Add the source-audio waveform](2026-10-31-add-source-audio-waveform.md)
 - [2026-10-31: Simplify quality, lower metadata, and use a monochrome avatar](2026-10-31-simplify-quality-and-monochrome-avatar.md)
 - [2026-10-31: Restore the previous player margins](2026-10-31-restore-previous-player-margins.md)
