@@ -3824,7 +3824,6 @@ private fun AudioQualityPill(
                         AudioQualityBadge.LOSSLESS -> "Lossless"
                         AudioQualityBadge.DOLBY -> "Dolby Atmos"
                     },
-                    showLosslessIcon = visibleBadge != AudioQualityBadge.DOLBY,
                     enabled = metadataMatchesSong && info != null,
                     onClick = { showMetadataDialog = true }
                 )
