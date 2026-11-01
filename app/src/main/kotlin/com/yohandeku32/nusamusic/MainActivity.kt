@@ -171,6 +171,7 @@ import com.yohandeku32.nusamusic.model.Song
 import com.yohandeku32.nusamusic.playback.PlaybackService
 import com.yohandeku32.nusamusic.ui.vinylLabelDiameter
 import com.yohandeku32.nusamusic.ui.VinylLabelPainter
+import com.yohandeku32.nusamusic.ui.VinylShadowPainter
 import com.yohandeku32.nusamusic.ui.VinylPainter
 import com.yohandeku32.nusamusic.ui.PlayerSettingsContent
 import com.yohandeku32.nusamusic.ui.CdSongGrid
@@ -4693,6 +4694,12 @@ internal fun VinylRecord(
     ) {
         val labelPixels = vinylLabelDiameter(minOf(constraints.maxWidth, constraints.maxHeight))
         val labelSize = with(LocalDensity.current) { labelPixels.toDp() }
+        Box(
+            Modifier.fillMaxSize().drawWithCache {
+                val painter = VinylShadowPainter(size, 4.dp.toPx(), 1.dp.toPx())
+                onDrawBehind { with(painter) { drawShadow() } }
+            }
+        )
         Box(
             modifier = Modifier
                 .fillMaxSize()

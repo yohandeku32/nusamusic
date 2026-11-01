@@ -166,7 +166,6 @@ class VinylDeckArtworkTest {
                 android.graphics.Color.red(pixel) > android.graphics.Color.green(pixel) + 40)
             val cx = ((disc.left + disc.right) / 2).value
             val cy = ((disc.top + disc.bottom) / 2).value
-            val diagonal = (disc.right - disc.left).value * 0.5f * 0.8f * 0.7071f
             fun brightness(x: Float, y: Float): Float {
                 var total = 0f
                 for (dx in -3..3) for (dy in -3..3) {
@@ -176,17 +175,69 @@ class VinylDeckArtworkTest {
                 }
                 return total / 49
             }
-            val dark = brightness(cx - diagonal, cy - diagonal)
-            assertTrue("Grooves catch light at the upper right", brightness(cx + diagonal, cy - diagonal) > dark + 6)
-            assertTrue("The opposite lower-left lobe also catches light", brightness(cx - diagonal, cy + diagonal) > dark + 6)
-            val innerDiagonal = diagonal * 0.66f / 0.8f
-            assertTrue("The run-out area stays darker than the illuminated playing grooves",
-                brightness(cx + diagonal, cy - diagonal) > brightness(cx + innerDiagonal, cy - innerDiagonal) + 12)
+            val radial = (disc.right - disc.left).value * 0.5f
+            assertTrue("Soft top light reveals the playing grooves",
+                brightness(cx, cy - radial * 0.8f) > brightness(cx - radial * 0.8f, cy) + 6)
+            assertTrue("The narrow center collar stays dark",
+                brightness(cx, cy - radial * 0.8f) > brightness(cx, cy - radial * 0.54f) + 6)
             val dir = File("build/reports/vinyl-preview").apply { mkdirs() }
             File(dir, "silver-machine-artwork.png").outputStream().use {
                 image.compress(Bitmap.CompressFormat.PNG, 100, it)
             }
             image.recycle()
         }
+    }
+
+    @Test fun recordArtworkAndSurfaceVisiblyRotateThenSettleWhenPaused() = runBlocking {
+        val cover = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(cover)
+        canvas.drawColor(android.graphics.Color.rgb(210, 65, 100))
+        canvas.drawRect(0f, 0f, 28f, 64f, Paint().apply { color = android.graphics.Color.CYAN })
+        VinylPreviewMetadataRetriever.artwork = ByteArrayOutputStream().also {
+            cover.compress(Bitmap.CompressFormat.PNG, 100, it)
+        }.toByteArray()
+        cover.recycle()
+        val song = Song(992L, "Rotation fixture", "Fixture", "Fixture",
+            "file:///vinyl-rotation-${System.nanoTime()}.mp3", 190_000L, 0L)
+        assertNotNull(ArtworkLoader.load(compose.activity, song.uri, 512))
+        val playing = mutableStateOf(false)
+        compose.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f)) {
+                MaterialTheme { VinylRecord(song, playing.value, Modifier.size(240.dp).testTag("spinning-record")) }
+            }
+        }
+        fun pixels(name: String? = null): IntArray {
+            val bounds = compose.onNodeWithTag("spinning-record").getUnclippedBoundsInRoot()
+            var result = IntArray(240 * 240)
+            compose.runOnIdle {
+                val bitmap = Bitmap.createBitmap(240, 240, Bitmap.Config.ARGB_8888)
+                val output = Canvas(bitmap)
+                output.translate(-bounds.left.value, -bounds.top.value)
+                compose.activity.findViewById<View>(android.R.id.content).draw(output)
+                bitmap.getPixels(result, 0, 240, 0, 0, 240, 240)
+                if (name != null) {
+                    val dir = File("build/reports/vinyl-preview").apply { mkdirs() }
+                    File(dir, "$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                }
+                bitmap.recycle()
+            }
+            return result
+        }
+        compose.waitForIdle()
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle { playing.value = true }
+        compose.mainClock.advanceTimeBy(1600)
+        val first = pixels("record-rotation-a")
+        compose.mainClock.advanceTimeBy(640)
+        val second = pixels("record-rotation-b")
+        assertTrue("Artwork turns visibly", first.indices.count { first[it] != second[it] } > 1000)
+        compose.runOnIdle { playing.value = false }
+        compose.mainClock.advanceTimeBy(1400)
+        val paused = pixels()
+        compose.mainClock.advanceTimeBy(640)
+        assertArrayEquals("Paused record remains still after deceleration", paused, pixels())
+        compose.runOnIdle { playing.value = true }
+        compose.mainClock.advanceTimeBy(1600)
+        assertFalse("Playback resumes the rotation", paused.contentEquals(pixels()))
     }
 }
