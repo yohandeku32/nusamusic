@@ -175,7 +175,7 @@ fun TurntablePlayer(
                             0.62f to companionTint.copy(alpha = 0.14f),
                             1f to Color.Transparent,
                             center = Offset(size.width * 0.83f, size.height * 0.98f),
-                            radius = maxOf(size.width * 0.80f, size.height * 0.45f)
+                            radius = maxOf(size.width * 0.75f, size.height * 0.37f)
                         ) else null
                         onDrawBehind {
                             drawRect(gradient)
