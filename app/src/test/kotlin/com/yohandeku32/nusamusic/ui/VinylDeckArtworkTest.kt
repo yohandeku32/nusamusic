@@ -144,7 +144,7 @@ class VinylDeckArtworkTest {
                 MaterialTheme {
                     Box(Modifier.requiredSize(411.dp, 430.dp).background(VinylPaper).testTag("deck-preview"),
                         contentAlignment = Alignment.Center) {
-                        VinylTurntableDeck(360.dp, false, true, true, mutableStateOf(0L),
+                        VinylTurntableDeck(360.dp, false, true, true, position,
                             song.durationMs, 0,
                             TurntableLabels("Play", "Pause", "Previous", "Next", "Shuffle", "Shuffle on", "Shuffle off",
                                 "Repeat", "Repeat off", "Repeat all", "Repeat one", "Seek", "Settings", "Playback options"),

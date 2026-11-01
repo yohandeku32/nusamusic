@@ -96,7 +96,8 @@ internal fun vinylArtworkTint(color: Color?): Color {
     repeat(12) {
         if (ColorUtils.calculateContrast(0xFF505055.toInt(), tint) >= 4.5 &&
             ColorUtils.calculateContrast(0xFF686760.toInt(), tint) >= 3.0) return Color(tint)
-        tint = ColorUtils.blendARGB(tint, VinylPaper.toArgb(), 0.09f)
+        // Float blending can truncate an opaque alpha to 254; the paper must stay opaque.
+        tint = ColorUtils.setAlphaComponent(ColorUtils.blendARGB(tint, VinylPaper.toArgb(), 0.09f), 255)
     }
     return VinylPaper
 }
