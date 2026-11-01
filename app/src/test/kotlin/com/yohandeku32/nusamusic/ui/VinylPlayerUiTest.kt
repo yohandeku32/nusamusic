@@ -110,7 +110,8 @@ class VinylPlayerUiTest {
                                 onSettings = { settings++ },
                                 onOpenSongs = { songListOpens++ },
                                 avatar = { Box(it.testTag("artist-profile").background(Color.Black, CircleShape)) },
-                                record = { VinylRecord(song = null, isPlaying = false, modifier = it.testTag("vinyl-record")) },
+                                record = { VinylRecord(song = null, isPlaying = false, modifier = it.testTag("vinyl-record"),
+                                    compactLabel = machineTheme.value == VinylMachineTheme.STUDIO_BLACK) },
                                 quality = {
                                     if (qualityVisible.value && hasSong) VinylQualityBadge(
                                         qualityLabel.value, true, { qualityClicks++ }, Modifier.testTag("quality")
@@ -135,6 +136,9 @@ class VinylPlayerUiTest {
             }
         }
         compose.waitForIdle()
+        if (machineTheme.value == VinylMachineTheme.STUDIO_BLACK) compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("studio-black-raster").fetchSemanticsNodes().isNotEmpty()
+        }
     }
 
     private fun snapshot(name: String) {
@@ -187,6 +191,9 @@ class VinylPlayerUiTest {
         val titleBounds = compose.onNodeWithText(title.value).getUnclippedBoundsInRoot()
         compose.runOnIdle { machineTheme.value = VinylMachineTheme.STUDIO_BLACK }
         compose.waitForIdle()
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("studio-black-raster").fetchSemanticsNodes().isNotEmpty()
+        }
         assertEquals(deck, compose.onNodeWithTag("vinyl-deck").getUnclippedBoundsInRoot())
         assertEquals(titleBounds, compose.onNodeWithText(title.value).getUnclippedBoundsInRoot())
         compose.onNodeWithContentDescription("Turntable: Play").performClick()
@@ -197,6 +204,23 @@ class VinylPlayerUiTest {
         compose.runOnIdle { machineTheme.value = VinylMachineTheme.CLASSIC }
         compose.waitForIdle()
         assertEquals(deck, compose.onNodeWithTag("vinyl-deck").getUnclippedBoundsInRoot())
+    }
+
+    @Test fun studioBlackFitsShortPhoneWithEveryControlVisible() {
+        machineTheme.value = VinylMachineTheme.STUDIO_BLACK
+        show(width = 360, height = 640)
+        assertEveryControlFits()
+        snapshot("studio-black-short-phone")
+    }
+
+    @Test fun studioBlackMechanicalControlsRemainOperableWithLargeText() {
+        machineTheme.value = VinylMachineTheme.STUDIO_BLACK
+        show(width = 320, height = 640, fontScale = 2f)
+        compose.onNodeWithContentDescription("Turntable: Play").performScrollTo().performClick()
+        assertEquals(1, plays)
+        compose.onNodeWithContentDescription("Turntable: Repeat").performScrollTo().performClick()
+        assertEquals(1, repeated.value)
+        compose.onNodeWithContentDescription("Favorite").performScrollTo().assertIsDisplayed()
     }
 
     @Test fun transportMenusSeekAndFooterUsePlaybackCallbacks() {

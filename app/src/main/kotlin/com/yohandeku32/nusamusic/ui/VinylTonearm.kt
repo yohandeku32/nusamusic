@@ -27,10 +27,8 @@ fun VinylTonearm(
     hasSong: Boolean,
     positionMsState: State<Long>,
     durationMs: Long,
-    modifier: Modifier = Modifier,
-    theme: VinylMachineTheme = VinylMachineTheme.CLASSIC
+    modifier: Modifier = Modifier
 ) {
-    val studio = theme == VinylMachineTheme.STUDIO_BLACK
     val position by positionMsState
     val progress = if (durationMs > 0L) (position.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
     val angle by animateFloatAsState(
@@ -63,9 +61,8 @@ fun VinylTonearm(
         Brush.horizontalGradient(listOf(Color(0xFF41484D), Color(0xFFE5E9EB),
             Color(0xFF969FA5), Color(0xFFF3F5F5), Color(0xFF59646D)), 220f, 321f)
     }
-    val weight = remember(studio) {
-        Brush.horizontalGradient(if (studio) listOf(Color(0xFF171B1F), Color(0xFF737A80),
-            Color(0xFF30363C), Color(0xFF111518)) else listOf(Color(0xFF484F55), Color(0xFFDDE1E3),
+    val weight = remember {
+        Brush.horizontalGradient(listOf(Color(0xFF484F55), Color(0xFFDDE1E3),
             Color(0xFF969FA6), Color(0xFF4B5258)), 312f, 336f)
     }
     val bearingShadow = remember {
@@ -82,14 +79,12 @@ fun VinylTonearm(
         }
         vinylShadowLayer(360, 360) { it.translate(3f, 5f); it.drawPath(tube.asAndroidPath(), paint) }
     }
-    val bearing = remember(studio) {
-        Brush.linearGradient(if (studio) listOf(Color(0xFF626970), Color(0xFF20262B), Color(0xFF0D1114))
-            else listOf(Color(0xFF737670), Color(0xFF292B29), Color(0xFF101210)),
+    val bearing = remember {
+        Brush.linearGradient(listOf(Color(0xFF737670), Color(0xFF292B29), Color(0xFF101210)),
             Offset(296f, 27f), Offset(340f, 77f))
     }
-    val cap = remember(studio) {
-        Brush.radialGradient(if (studio) listOf(Color(0xFF777E84), Color(0xFF343B41), Color(0xFF13181C))
-            else listOf(Color(0xFFB4B7B0), Color(0xFF666B65), Color(0xFF30352F)),
+    val cap = remember {
+        Brush.radialGradient(listOf(Color(0xFFB4B7B0), Color(0xFF666B65), Color(0xFF30352F)),
             center = Offset(312f, 44f), radius = 23f)
     }
     Canvas(modifier) {
@@ -98,7 +93,7 @@ fun VinylTonearm(
             val pivot = Offset(317f, 50f)
             drawIntoCanvas { it.nativeCanvas.drawBitmap(bearingShadow, 273f, 9f, null) }
             drawCircle(bearing, 26f, pivot)
-            drawCircle(if (studio) Color(0xFF151A1E) else Color(0xFF1E211E), 22f, pivot)
+            drawCircle(Color(0xFF1E211E), 22f, pivot)
             drawCircle(cap, 14f, pivot)
             drawCircle(Color(0xFFD4D7D0).copy(alpha = 0.7f), 14f, pivot, style = Stroke(0.9f))
 

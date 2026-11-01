@@ -170,6 +170,8 @@ import com.yohandeku32.nusamusic.model.LibraryContentState
 import com.yohandeku32.nusamusic.model.Song
 import com.yohandeku32.nusamusic.playback.PlaybackService
 import com.yohandeku32.nusamusic.ui.vinylLabelDiameter
+import com.yohandeku32.nusamusic.ui.VinylMachineTheme
+import com.yohandeku32.nusamusic.ui.LocalVinylRecordTexture
 import com.yohandeku32.nusamusic.ui.VinylThemePreference
 import com.yohandeku32.nusamusic.ui.VinylLabelPainter
 import com.yohandeku32.nusamusic.ui.VinylShadowPainter
@@ -3025,7 +3027,8 @@ private fun NusaMusicApp(
                                                     song = currentSong,
                                                     isPlaying = isPlaying && pagerState.settledPage == playerPage,
                                                     modifier = recordModifier,
-                                                    onArtworkColor = { vinylArtworkColor = it }
+                                                    onArtworkColor = { vinylArtworkColor = it },
+                                                    compactLabel = vinylMachineTheme == VinylMachineTheme.STUDIO_BLACK
                                                 )
                                             },
                                             quality = { AudioQualityPill(song = currentSong, vinyl = true) },
@@ -4643,9 +4646,11 @@ internal fun VinylRecord(
     song: Song?,
     isPlaying: Boolean,
     modifier: Modifier = Modifier,
-    onArtworkColor: ((Color?) -> Unit)? = null
+    onArtworkColor: ((Color?) -> Unit)? = null,
+    compactLabel: Boolean = false
 ) {
     val spinEnabled = isPlaying && android.animation.ValueAnimator.areAnimatorsEnabled()
+    val recordTexture = LocalVinylRecordTexture.current
     // Keep the physical angle continuous while changing rotation speed.
     // Playback starts and stops with a gentle acceleration/deceleration instead
     // of an abrupt jump.
@@ -4700,7 +4705,7 @@ internal fun VinylRecord(
         modifier = modifier,
         contentAlignment = Alignment.Center
     ) {
-        val labelPixels = vinylLabelDiameter(minOf(constraints.maxWidth, constraints.maxHeight))
+        val labelPixels = vinylLabelDiameter(minOf(constraints.maxWidth, constraints.maxHeight), compactLabel)
         val labelSize = with(LocalDensity.current) { labelPixels.toDp() }
         Box(
             Modifier.fillMaxSize().drawWithCache {
@@ -4713,11 +4718,16 @@ internal fun VinylRecord(
                 .fillMaxSize()
                 .graphicsLayer { rotationZ = rotation.floatValue }
                 .drawWithCache {
-                    val painter = VinylPainter(size)
+                    val painter = VinylPainter(size, compactLabel)
                     onDrawBehind {
-                        with(painter) {
-                            drawFace()
-                            drawReflections()
+                        if (recordTexture != null) {
+                            drawImage(recordTexture, dstSize = androidx.compose.ui.unit.IntSize(
+                                size.width.toInt(), size.height.toInt()))
+                        } else {
+                            with(painter) {
+                                drawFace()
+                                drawReflections()
+                            }
                         }
                     }
                 },
@@ -4753,9 +4763,9 @@ internal fun VinylRecord(
             Modifier
                 .fillMaxSize()
                 .drawWithCache {
-                    val painter = VinylPainter(size)
+                    val painter = VinylPainter(size, compactLabel)
                     onDrawBehind {
-                        with(painter) { drawSpindle() }
+                        if (recordTexture == null) with(painter) { drawSpindle() }
                     }
                 }
         )

@@ -14,21 +14,25 @@ import kotlin.random.Random
 
 internal const val VINYL_LABEL_FRACTION = 0.50f
 
-internal fun vinylLabelDiameter(discDiameter: Int): Int {
+internal fun vinylLabelDiameter(discDiameter: Int, compactLabel: Boolean = false): Int {
     if (discDiameter <= 1) return discDiameter.coerceAtLeast(0)
-    val diameter = (discDiameter * VINYL_LABEL_FRACTION).roundToInt().coerceIn(2, discDiameter)
+    val diameter = (discDiameter * if (compactLabel) 0.32f else VINYL_LABEL_FRACTION).roundToInt().coerceIn(2, discDiameter)
     // Matching pixel parity puts the artwork, rings and spindle on the same center.
     return if ((discDiameter - diameter) % 2 == 0) diameter else diameter - 1
 }
 
 /** Grooves and material sheen share the record's rotation so movement remains visible outside the cover. */
-internal class VinylPainter(size: Size) {
+internal class VinylPainter(size: Size, compactLabel: Boolean = false) {
+    private val grooveStart = if (compactLabel) 0.42f else 0.58f
+    private val grooveSpan = if (compactLabel) 0.556f else 0.396f
+    private val collar = if (compactLabel) 0.40f else 0.56f
+    private val collarEdge = if (compactLabel) 0.405f else 0.565f
     private val radius = size.minDimension / 2f
     private val discCenter = Offset(size.width / 2f, size.height / 2f)
     private val face = Brush.radialGradient(
         0f to Color(0xFF0C0D0D),
-        0.57f to Color(0xFF050606),
-        0.65f to Color(0xFF101112),
+        (if (compactLabel) 0.41f else 0.57f) to Color(0xFF050606),
+        (if (compactLabel) 0.49f else 0.65f) to Color(0xFF101112),
         0.94f to Color(0xFF08090A),
         0.985f to Color(0xFF191B1C),
         1f to Color.Black,
@@ -49,10 +53,10 @@ internal class VinylPainter(size: Size) {
         center = discCenter
     )
     private val grooves = Random(781).let { random ->
-        val count = (radius * 0.396f / 0.85f).roundToInt().coerceIn(48, 240)
+        val count = (radius * grooveSpan / 0.85f).roundToInt().coerceIn(48, 240)
         List(count) { index ->
             Groove(
-                radius = radius * (0.58f + index.toFloat() / (count - 1) * 0.396f),
+                radius = radius * (grooveStart + index.toFloat() / (count - 1) * grooveSpan),
                 alpha = 0.012f + random.nextFloat() * 0.025f,
                 width = 0.3f + random.nextFloat() * 0.25f
             )
@@ -60,14 +64,14 @@ internal class VinylPainter(size: Size) {
     }
     private val sheenBands = List(24) { index ->
         val position = (index + 0.5f) / 24f
-        radius * (0.58f + position * 0.396f) to 0.55f * sin(PI * position).toFloat()
+        radius * (grooveStart + position * grooveSpan) to 0.55f * sin(PI * position).toFloat()
     }
-    private val sheenWidth = radius * 0.396f / 24f + 0.25f
+    private val sheenWidth = radius * grooveSpan / 24f + 0.25f
 
     fun DrawScope.drawFace() {
         drawCircle(Color.Black, radius, discCenter)
         drawCircle(face, radius * 0.995f, discCenter)
-        drawCircle(Color(0xFF080909), radius * 0.56f, discCenter)
+        drawCircle(Color(0xFF080909), radius * collar, discCenter)
         for (groove in grooves) {
             drawCircle(Color.White.copy(alpha = groove.alpha), groove.radius,
                 discCenter, style = Stroke(groove.width))
@@ -92,13 +96,13 @@ internal class VinylPainter(size: Size) {
             drawCircle(reflection, bandRadius, discCenter, alpha = strength, style = Stroke(sheenWidth))
         }
         for (groove in grooves) {
-            val position = (groove.radius / radius - 0.58f) / 0.396f
+            val position = (groove.radius / radius - grooveStart) / grooveSpan
             val softness = sin(PI * position.coerceIn(0f, 1f)).toFloat()
             drawCircle(reflection, groove.radius, discCenter,
                 alpha = (0.32f + groove.alpha * 6f) * (0.3f + 0.7f * softness),
                 style = Stroke(groove.width + 0.35f))
         }
-        for (band in listOf(0.565f)) {
+        for (band in listOf(collarEdge)) {
             drawCircle(reflection, radius * band, discCenter, alpha = 0.16f,
                 style = Stroke(0.4f))
         }
