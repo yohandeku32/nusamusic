@@ -26,6 +26,48 @@ class VinylArtworkTintTest {
         bitmap.recycle()
     }
 
+    @Test fun realTwoColorArtworkProducesAnActualSecondHue() = runBlocking {
+        val bitmap = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888)
+        for (y in 0 until 64) for (x in 0 until 64) {
+            bitmap.setPixel(x, y, if (x < 35) 0xFF2751BA.toInt() else 0xFFE07828.toInt())
+        }
+        try {
+            val palette = requireNotNull(vinylArtworkPalette(bitmap))
+            val first = FloatArray(3)
+            val second = FloatArray(3)
+            ColorUtils.colorToHSL(palette.primary.toArgb(), first)
+            ColorUtils.colorToHSL(palette.secondary.toArgb(), second)
+            val distance = kotlin.math.abs(first[0] - second[0])
+            assertTrue("A split blue/orange cover should supply two distinct real hues",
+                minOf(distance, 360f - distance) >= 32f)
+            assertEquals("Legacy primary extraction still agrees with the palette",
+                palette.primary, vinylArtworkColor(bitmap))
+            for (color in listOf(palette.primary, palette.secondary)) {
+                assertTrue("Tint must retain readable artist metadata",
+                    ColorUtils.calculateContrast(0xFF505055.toInt(), vinylArtworkTint(color).toArgb()) >= 4.5)
+            }
+            assertFalse(bitmap.isRecycled)
+        } finally {
+            bitmap.recycle()
+        }
+    }
+
+    @Test fun oneColorAndNeutralArtworkAvoidInventingASecondHue() = runBlocking {
+        val bitmap = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888)
+        try {
+            bitmap.eraseColor(0xFF8C4FC1.toInt())
+            val solid = requireNotNull(vinylArtworkPalette(bitmap))
+            assertEquals("Solid covers must not invent a complementary accent", solid.primary, solid.secondary)
+            bitmap.eraseColor(0xFF666666.toInt())
+            val gray = requireNotNull(vinylArtworkPalette(bitmap))
+            assertEquals("Monochrome album art stays monochrome", gray.primary, gray.secondary)
+            bitmap.eraseColor(android.graphics.Color.TRANSPARENT)
+            assertNull("Transparent/missing art has no palette", vinylArtworkPalette(bitmap))
+        } finally {
+            bitmap.recycle()
+        }
+    }
+
     @Test fun everyHueKeepsArtistTextReadableAndMissingArtworkStaysNeutral() {
         assertEquals(VinylPaper, vinylArtworkTint(null))
         for (hue in 0..359 step 5) {
