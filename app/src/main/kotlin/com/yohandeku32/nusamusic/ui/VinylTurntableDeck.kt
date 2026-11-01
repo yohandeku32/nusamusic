@@ -40,14 +40,8 @@ internal fun VinylTurntableDeck(
     onPlayPause: () -> Unit,
     onRepeat: () -> Unit,
     record: @Composable (Modifier) -> Unit,
-    height: Dp = size,
-    theme: VinylMachineTheme = VinylMachineTheme.CLASSIC
+    height: Dp = size
 ) {
-    if (theme == VinylMachineTheme.STUDIO_BLACK) {
-        StudioBlackTurntableDeck(size, height, isPlaying, hasSong,
-            repeatMode, labels, onPlayPause, onRepeat, record)
-        return
-    }
     val mechanismSize = minOf(size, height)
     Box(
         Modifier.size(size, height).testTag("vinyl-deck")
