@@ -5,6 +5,18 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class LyricsExpressionControllerTest {
+    @Test fun shortNotesUseHighlightWithoutDecorativeHaloOrWave() {
+        for (duration in listOf(180L, 350L, 500L, 650L)) {
+            val controller = LyricsExpressionController(1000, 1000 + duration.toInt(),
+                LyricsAdaptiveExpression(duration, nextStartMs = 1000 + duration.toInt()))
+            for (now in 900..2000 step 8) {
+                controller.update(now)
+                assertEquals(0f, controller.glow, 0f)
+                assertEquals(0f, controller.wave, 0f)
+            }
+        }
+    }
+
     @Test fun consecutiveNotesShareASoftOutgoingHaloWithoutEarlyHighlightOrGlow() {
         val profiles = lyricsAdaptiveExpressions(listOf(
             LyricsExpressionTiming(1000, 2000), LyricsExpressionTiming(2000, 5000)))

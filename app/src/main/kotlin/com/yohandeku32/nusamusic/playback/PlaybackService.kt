@@ -33,6 +33,7 @@ class PlaybackService : MediaSessionService() {
     private var expectedNextMediaId: String? = null
     private var handoffDone = false
     private val listeningCounter = ListeningCounter()
+    private var lastRecentUri: String? = null
     private val listeningTick = object : Runnable {
         override fun run() {
             recordListening()
@@ -43,6 +44,10 @@ class PlaybackService : MediaSessionService() {
     private fun recordListening() {
         val player = primaryPlayer ?: return
         val uri = player.currentMediaItem?.localConfiguration?.uri?.toString()
+        if (player.isPlaying && uri != null && uri != lastRecentUri) {
+            PlaybackHistory.recordRecent(this, uri)
+            lastRecentUri = uri
+        }
         listeningCounter.sample(uri, player.isPlaying, android.os.SystemClock.elapsedRealtime(), player.duration)
             ?.let { PlaybackHistory.record(this, it) }
     }

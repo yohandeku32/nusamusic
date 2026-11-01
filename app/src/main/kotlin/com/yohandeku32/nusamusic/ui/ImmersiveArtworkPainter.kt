@@ -1,5 +1,6 @@
 package com.yohandeku32.nusamusic.ui
 
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
@@ -30,7 +31,7 @@ internal class ImmersiveArtworkPainter(
     private val scrim by lazy { createMask(dark = true) }
 
     private fun createMask(dark: Boolean): ImageBitmap {
-        val width = 96
+        val width = 192
         val height = 256
         val mask = ImageBitmap(width, height)
         val bottom = artworkBottom / frameSize.height.coerceAtLeast(1f) * height
@@ -46,14 +47,34 @@ internal class ImmersiveArtworkPainter(
                 progress to if (dark) Color.Black.copy(alpha = smooth)
                     else Color.White.copy(alpha = 1f - smooth)
             }
-            drawRect(
-                brush = Brush.verticalGradient(
-                    *stops,
-                    startY = bottom - span,
-                    endY = bottom
-                ),
-                blendMode = BlendMode.Src
-            )
+            if (dark) {
+                // Legacy scrim behaviour remains a straight feather.
+                drawRect(
+                    brush = Brush.verticalGradient(*stops,
+                        startY = bottom - span, endY = bottom),
+                    blendMode = BlendMode.Src
+                )
+            } else {
+                // A soft U-shaped alpha mask dissolves the sharp cover into
+                // its own real blurred bitmap. Edges feather slightly higher,
+                // the centre flows lower: no hard horizontal seam, no tint.
+                // Cache once per artwork size rather than per animation frame.
+                val curveDepth = (bottom * 0.14f).coerceAtMost(height * 0.11f)
+                for (column in 0 until width) {
+                    val normalizedX = (column + 0.5f) / width.toFloat()
+                    val distance = kotlin.math.abs(normalizedX * 2f - 1f)
+                    val edgeLift = distance * distance * curveDepth
+                    val curveBottom = bottom - edgeLift
+                    drawRect(
+                        brush = Brush.verticalGradient(*stops,
+                            startY = curveBottom - span,
+                            endY = curveBottom),
+                        topLeft = Offset(column.toFloat(), 0f),
+                        size = Size(1f, height.toFloat()),
+                        blendMode = BlendMode.Src
+                    )
+                }
+            }
         }
         return mask
     }

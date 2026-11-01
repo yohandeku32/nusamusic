@@ -137,7 +137,7 @@ object ArtistBiographyLoader {
             connection.readTimeout = READ_TIMEOUT_MS
             connection.setRequestProperty(
                 "User-Agent",
-                "NusaMusic/1.0 (local music player)"
+                "Aruna/1.0 (local music player)"
             )
             connection.setRequestProperty("Accept", "application/json")
             connection.instanceFollowRedirects = true

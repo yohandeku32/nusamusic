@@ -4,7 +4,16 @@ import android.content.Context
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.net.Uri
+import androidx.compose.runtime.mutableStateMapOf
+import com.yohandeku32.nusamusic.model.Song
+import java.security.MessageDigest
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -14,13 +23,132 @@ object AudioCodecLoader {
     // Metadata is expensive: opening a MediaExtractor for every row that
     // enters the viewport can saturate storage while the user scrolls.
     // Keep a small LRU (including missing/unreadable results) and allow only
-    // two native metadata reads at once across the entire app.
-    private val metadataCache = object : LinkedHashMap<String, AudioCodecInfo?>(192, 0.75f, true) {
+    // one background read at a time across the entire app. Avoid flash
+    // storage contention with artwork decoding while the user scrolls.
+    private val metadataCache = object : LinkedHashMap<String, AudioCodecInfo?>(2_048, 0.75f, true) {
         override fun removeEldestEntry(
             eldest: MutableMap.MutableEntry<String, AudioCodecInfo?>?
-        ): Boolean = size > 192
+        ): Boolean = size > 2_048
     }
-    private val metadataPermit = Semaphore(2)
+    private val metadataPermit = Semaphore(1)
+    // The LazyColumn recycles track rows when scrolling. Do not tie native
+    // audio probing to each row's composition lifecycle: that restarted file
+    // reads for ordinary tracks every time they re-entered the viewport.
+    // One background request per URI survives row disposal and is remembered
+    // even when the bounded detail cache eventually evicts an old result.
+    private val inspectScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val pendingBadgeInspections = HashSet<String>()
+    private val inspectedBadgeUris = object : LinkedHashMap<String, Boolean>(16_384, 0.75f, true) {
+        override fun removeEldestEntry(
+            eldest: MutableMap.MutableEntry<String, Boolean>?
+        ): Boolean = size > 16_384
+    }
+
+    fun requestHiResBadgeOnce(context: Context, uriString: String) {
+        if (uriString.isBlank()) return
+        if (isHiResCached(uriString)) return
+        synchronized(metadataCache) {
+            if (metadataCache.containsKey(uriString)) return
+        }
+        synchronized(pendingBadgeInspections) {
+            if (uriString in pendingBadgeInspections ||
+                inspectedBadgeUris.containsKey(uriString)
+            ) return
+            pendingBadgeInspections.add(uriString)
+        }
+        val appContext = context.applicationContext
+        inspectScope.launch {
+            try {
+                // A short one-time grace period keeps native extractors away
+                // from the first frames after a fast flick stops.
+                delay(380L)
+                runCatching { load(appContext, uriString) }
+            } finally {
+                synchronized(pendingBadgeInspections) {
+                    pendingBadgeInspections.remove(uriString)
+                    inspectedBadgeUris[uriString] = true
+                }
+            }
+        }
+    }
+    // Compose observes the verified badge of each song separately. This makes
+    // already-visible rows update as soon as metadata becomes available,
+    // without recomposing the entire library or decoding its logo per row.
+    private val verifiedHiRes = mutableStateMapOf<String, Boolean>()
+
+    fun isHiResCached(uriString: String): Boolean = verifiedHiRes[uriString] == true
+
+    private suspend fun publishHiRes(uriString: String, info: AudioCodecInfo?) {
+        if (info?.isHiRes == true) withContext(Dispatchers.Main.immediate) {
+            verifiedHiRes[uriString] = true
+        }
+    }
+    private const val HI_RES_PREFS = "hi_res_index_v1"
+    private const val HI_RES_TTL_MS = 14L * 24 * 60 * 60 * 1_000
+
+    private fun persistKey(uri: String): String =
+        MessageDigest.getInstance("SHA-256")
+            .digest(uri.toByteArray(Charsets.UTF_8))
+            .take(12).joinToString("") { "%02x".format(it) }
+
+    // Only persist confirmed bit depths; an audio file extension alone
+    // cannot prove that a track qualifies for the Hi-Res badge.
+    private fun decodeStored(record: String?, now: Long): AudioCodecInfo? {
+        val parts = record?.split('|') ?: return null
+        if (parts.size != 4 || (parts[0].toLongOrNull() ?: 0L) <= now) return null
+        val bits = parts[3].toIntOrNull() ?: return null
+        if (bits < 24) return null
+        return AudioCodecInfo(
+            codecName = parts[1],
+            sampleRateHz = parts[2].toIntOrNull()?.takeIf { it > 0 },
+            bitDepth = bits
+        )
+    }
+
+    private fun savedHiRes(context: Context, uri: String): AudioCodecInfo? =
+        decodeStored(
+            context.applicationContext.getSharedPreferences(
+                HI_RES_PREFS, Context.MODE_PRIVATE
+            ).getString(persistKey(uri), null),
+            System.currentTimeMillis()
+        )
+
+    private fun saveHiRes(context: Context, uri: String, info: AudioCodecInfo) {
+        if (!info.isHiRes) return
+        val record = "${System.currentTimeMillis() + HI_RES_TTL_MS}|${info.codecName}|${info.sampleRateHz ?: -1}|${info.bitDepth}"
+        context.applicationContext.getSharedPreferences(HI_RES_PREFS, Context.MODE_PRIVATE)
+            .edit().putString(persistKey(uri), record).apply()
+    }
+
+    /**
+     * Read the persisted index once off-main and publish the entire verified
+     * set in one snapshot on main. No file extraction or bitmap work during
+     * IME animations or fast LazyColumn flings.
+     */
+    suspend fun warmVerifiedBadges(context: Context, songs: List<Song>) {
+        val restored = withContext(Dispatchers.IO) {
+            val records = context.applicationContext.getSharedPreferences(
+                HI_RES_PREFS, Context.MODE_PRIVATE
+            ).all
+            val now = System.currentTimeMillis()
+            buildMap<String, AudioCodecInfo> {
+                for (song in songs) {
+                    currentCoroutineContext().ensureActive()
+                    val info = decodeStored(records[persistKey(song.uri)] as? String, now)
+                        ?: continue
+                    synchronized(metadataCache) {
+                        if (!metadataCache.containsKey(song.uri)) metadataCache[song.uri] = info
+                    }
+                    put(song.uri, info)
+                }
+            }
+        }
+        withContext(Dispatchers.Main.immediate) {
+            // One Compose snapshot notification rather than thousands of
+            // separate row invalidations during library startup.
+            verifiedHiRes.putAll(restored.mapValues { true })
+        }
+    }
 
     /** Instant, non-blocking lookup for badges in recycled list rows. */
     fun cached(uriString: String): AudioCodecInfo? =
@@ -33,6 +161,11 @@ object AudioCodecLoader {
                     return@withContext metadataCache[uriString]
                 }
             }
+            savedHiRes(context, uriString)?.let { saved ->
+                synchronized(metadataCache) { metadataCache[uriString] = saved }
+                publishHiRes(uriString, saved)
+                return@withContext saved
+            }
             metadataPermit.withPermit {
                 // A neighbouring row may have finished the same lookup
                 // while this coroutine waited for a metadata permit.
@@ -43,6 +176,10 @@ object AudioCodecLoader {
                 }
                 val info = inspect(context, uriString)
                 synchronized(metadataCache) { metadataCache[uriString] = info }
+                if (info?.isHiRes == true) {
+                    saveHiRes(context, uriString, info)
+                    publishHiRes(uriString, info)
+                }
                 info
             }
         }

@@ -34,7 +34,8 @@ class LyricsDiskStore(private val directory: File, private val maxEntries: Int? 
         val entry = StoredLyrics(props.getProperty("content") ?: return null,
             props.getProperty("source") ?: return null, props.getProperty("plain").toBoolean(),
             props.getProperty("instrumental").toBoolean(), props.getProperty("checkedAt").toLong(),
-            SongCredits(creditNames(props.getProperty("composers")), creditNames(props.getProperty("lyricists"))))
+            SongCredits(creditNames(props.getProperty("composers")), creditNames(props.getProperty("lyricists")),
+                creditNames(props.getProperty("songwriters"))))
         if (entry.content.isEmpty() && !entry.instrumental && (now < entry.checkedAt || now - entry.checkedAt >= MISSING_TTL_MS)) return null
         entry
     }.getOrNull()
@@ -48,6 +49,7 @@ class LyricsDiskStore(private val directory: File, private val maxEntries: Int? 
             Properties().apply {
                 setProperty("composers", entry.credits.composers.joinToString("\u0000"))
                 setProperty("lyricists", entry.credits.lyricists.joinToString("\u0000"))
+                setProperty("songwriters", entry.credits.songwriters.joinToString("\u0000"))
                 setProperty("version", "1"); setProperty("content", entry.content)
                 setProperty("source", entry.source); setProperty("plain", entry.plain.toString())
                 setProperty("instrumental", entry.instrumental.toString()); setProperty("checkedAt", entry.checkedAt.toString())

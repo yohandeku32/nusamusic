@@ -1,16 +1,17 @@
 package com.yohandeku32.nusamusic.ui
 
 /**
- * Anchors an edge-to-edge sheet directly beneath the MEASURED Settings
- * control, rather than estimating half the display height.
+ * Place the edge-to-edge Lyrics sheet just below the safe top inset.
+ * Settings is now in the bottom pill, so no measured top-right control is
+ * required. The offset is device-specific and never a screen-height ratio.
  */
 internal fun immersiveLyricsSheetTopPx(
-    settingsBottomPx: Int,
+    safeTopInsetPx: Int,
     viewportHeightPx: Int,
     clearancePx: Int
 ): Int {
     val viewport = viewportHeightPx.coerceAtLeast(0)
-    return (settingsBottomPx.coerceAtLeast(0).toLong() +
+    return (safeTopInsetPx.coerceAtLeast(0).toLong() +
         clearancePx.coerceAtLeast(0).toLong()).coerceIn(0L, viewport.toLong()).toInt()
 }
 

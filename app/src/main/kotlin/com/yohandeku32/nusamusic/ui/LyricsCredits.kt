@@ -18,6 +18,7 @@ internal fun LyricsCredits(credits: SongCredits, modifier: Modifier = Modifier) 
     Column(modifier.fillMaxWidth().padding(top = 24.dp, bottom = 12.dp)) {
         if (credits.composers.isNotEmpty()) CreditRole("Composed by", credits.composers)
         if (credits.lyricists.isNotEmpty()) CreditRole("Lyrics by", credits.lyricists)
+        if (credits.songwriters.isNotEmpty()) CreditRole("Written by", credits.songwriters)
     }
 }
 
