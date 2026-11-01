@@ -5,6 +5,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
@@ -100,9 +101,17 @@ fun TurntablePlayer(
     modifier: Modifier = Modifier,
     waveform: AudioWaveform? = null,
     isWaveformLoading: Boolean = false,
-    artworkColor: Color? = null
+    artworkColor: Color? = null,
+    artworkPalette: VinylArtworkPalette? = null
 ) {
-    val artworkTint = animateColorAsState(vinylArtworkTint(artworkColor), tween(450), label = "Vinyl artwork tint")
+    val palette = artworkPalette ?: artworkColor?.let { VinylArtworkPalette(it) }
+    val mainTint by animateColorAsState(
+        vinylArtworkTint(palette?.primary), tween(650), label = "Vinyl dominant artwork tint"
+    )
+    val companionTint by animateColorAsState(
+        vinylArtworkTint(palette?.secondary), tween(650), label = "Vinyl secondary artwork tint"
+    )
+    val hasCompanion = palette != null && palette.secondary != palette.primary
     MaterialTheme(
         colorScheme = lightColorScheme(
             background = VinylPaper,
@@ -150,12 +159,28 @@ fun TurntablePlayer(
                     // Draw on the fixed player surface, not on the variable-height
                     // empty-state container; loading a song must not stretch the tint.
                     .drawWithCache {
-                        val tint = artworkTint.value
+                        // Keep the record and upper controls on paper. Let the lower
+                        // surface bloom gently into the dominant album color.
                         val gradient = Brush.verticalGradient(
-                            0f to VinylPaper, 0.52f to VinylPaper,
-                            0.82f to lerp(VinylPaper, tint, 0.6f), 1f to tint
+                            0f to VinylPaper,
+                            0.43f to VinylPaper,
+                            0.58f to lerp(VinylPaper, mainTint, 0.10f),
+                            0.80f to lerp(VinylPaper, mainTint, 0.42f),
+                            1f to mainTint
                         )
-                        onDrawBehind { drawRect(gradient) }
+                        // A soft lower-right wash carries a second, substantial
+                        // artwork hue without introducing stripes or muddy midtones.
+                        val companionWash = if (hasCompanion) Brush.radialGradient(
+                            0f to companionTint.copy(alpha = 0.43f),
+                            0.62f to companionTint.copy(alpha = 0.14f),
+                            1f to Color.Transparent,
+                            center = Offset(size.width * 0.83f, size.height * 0.98f),
+                            radius = maxOf(size.width * 0.80f, size.height * 0.45f)
+                        ) else null
+                        onDrawBehind {
+                            drawRect(gradient)
+                            if (companionWash != null) drawRect(companionWash)
+                        }
                     }
                     .navigationBarsPadding().padding(top = topPadding, bottom = bottomPadding),
                 horizontalAlignment = Alignment.CenterHorizontally
