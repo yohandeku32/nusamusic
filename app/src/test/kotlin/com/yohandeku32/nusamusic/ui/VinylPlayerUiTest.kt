@@ -299,6 +299,32 @@ class VinylPlayerUiTest {
         assertEveryControlFits()
     }
 
+    @Test fun optionAFiveControlsFitCompactWidthAndExposeTheirActualStates() {
+        show(width = 320, height = 640)
+        val controls = listOf("Shuffle", "Previous", "Play", "Next", "Repeat").map {
+            compose.onNodeWithContentDescription(it).getUnclippedBoundsInRoot()
+        }
+        controls.forEach { assertTrue((it.right - it.left).value >= 44f && (it.bottom - it.top).value >= 44f) }
+        controls.zipWithNext().forEach { (left, right) -> assertTrue(left.right <= right.left) }
+        val shuffle = compose.onNodeWithContentDescription("Shuffle")
+        shuffle.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Shuffle off"))
+        shuffle.performClick()
+        shuffle.assertIsSelected().assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Shuffle on"))
+        val repeat = compose.onNodeWithContentDescription("Repeat")
+        repeat.performClick()
+        repeat.assertIsSelected().assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Repeat one"))
+        snapshot("option-a-active-compact")
+        repeat.performClick()
+        repeat.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Repeat all"))
+        repeat.performClick()
+        repeat.assertIsNotSelected().assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Repeat off"))
+        compose.runOnIdle { inputModeManager.requestInputMode(InputMode.Keyboard) }
+        shuffle.performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+        shuffle.performKeyInput { pressKey(Key.Enter) }
+        assertFalse(shuffled.value)
+        assertEveryControlFits()
+    }
+
     @Test fun compactPhoneWithLargeTextCanScrollToEveryControl() {
         show(width = 320, height = 640, fontScale = 2f)
         compose.onNodeWithContentDescription("Play").performScrollTo().assertIsDisplayed().performClick()
@@ -312,6 +338,8 @@ class VinylPlayerUiTest {
         compose.onNodeWithContentDescription("Previous").assertIsNotEnabled()
         compose.onNodeWithContentDescription("Next").assertIsNotEnabled()
         compose.onNodeWithContentDescription("Seek").assertIsNotEnabled()
+        compose.onNodeWithContentDescription("Shuffle").assertIsNotEnabled()
+        compose.onNodeWithContentDescription("Repeat").assertIsNotEnabled()
         compose.onNodeWithContentDescription("Play").assertIsEnabled()
         compose.onNodeWithContentDescription("Settings").assertIsEnabled()
         compose.onNodeWithContentDescription("Turntable: Repeat").assertIsNotEnabled()
@@ -380,7 +408,7 @@ class VinylPlayerUiTest {
 
     private fun assertEveryControlFits() {
         val viewport = compose.onNodeWithTag("vinyl-preview").getUnclippedBoundsInRoot()
-        for (description in listOf("Settings", "Seek", "Previous", "Play", "Next", "Lyrics", "Share", "Favorite",
+        for (description in listOf("Settings", "Seek", "Shuffle", "Previous", "Play", "Next", "Repeat", "Lyrics", "Share", "Favorite",
                 "Turntable: Play", "Turntable: Repeat")) {
             val bounds = compose.onNodeWithContentDescription(description).getUnclippedBoundsInRoot()
             assertTrue("$description must fit above the screen bottom", bounds.bottom <= viewport.bottom)

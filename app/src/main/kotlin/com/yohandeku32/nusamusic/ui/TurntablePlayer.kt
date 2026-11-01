@@ -11,6 +11,9 @@ import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.material.icons.rounded.FastRewind
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Shuffle
+import androidx.compose.material.icons.rounded.Repeat
+import androidx.compose.material.icons.rounded.RepeatOne
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,6 +25,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.selected
 import com.yohandeku32.nusamusic.data.AudioWaveform
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -217,24 +221,38 @@ fun TurntablePlayer(
                 TurntableProgress(positionMsState, durationMs, hasSong, labels, onSeek, waveform, isWaveformLoading,
                     isPlaying, isVisible)
                 Spacer(Modifier.height(transportGap))
-                Row(
-                    Modifier.widthIn(max = 480.dp).fillMaxWidth().padding(horizontal = VinylGutter),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                BoxWithConstraints(
+                    Modifier.widthIn(max = 480.dp).fillMaxWidth().padding(horizontal = VinylGutter)
+                        .height(transportSize)
                 ) {
-                    TurntableButton(
-                        Icons.Rounded.FastRewind, labels.previous, onPrevious, hasSong,
-                        Modifier.weight(1f).height(space(52, 64)), 32.dp
-                    )
-                    TurntableButton(
-                        if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                        if (isPlaying) labels.pause else labels.play,
-                        onPlayPause, true, Modifier.size(transportSize), 42.dp, primary = true
-                    )
-                    TurntableButton(
-                        Icons.Rounded.FastForward, labels.next, onNext, hasSong,
-                        Modifier.weight(1f).height(space(52, 64)), 32.dp
-                    )
+                    val compact = maxWidth < 280.dp
+                    val side = if (compact) 44.dp else 48.dp
+                    val primarySize = if (compact) 64.dp else 72.dp
+                    Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween) {
+                        TurntableOption(Icons.Rounded.Shuffle, labels.shuffle,
+                            if (shuffleEnabled) labels.shuffleOn else labels.shuffleOff,
+                            shuffleEnabled, hasSong, onShuffle, side)
+                        TurntableButton(
+                            Icons.Rounded.FastRewind, labels.previous, onPrevious, hasSong,
+                            Modifier.size(side), 28.dp
+                        )
+                        TurntableButton(
+                            if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                            if (isPlaying) labels.pause else labels.play,
+                            onPlayPause, true, Modifier.size(primarySize), 36.dp, primary = true
+                        )
+                        TurntableButton(
+                            Icons.Rounded.FastForward, labels.next, onNext, hasSong,
+                            Modifier.size(side), 28.dp
+                        )
+                        TurntableOption(if (repeatMode == 1) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
+                            labels.repeat, when (repeatMode) {
+                                1 -> labels.repeatOne
+                                2 -> labels.repeatAll
+                                else -> labels.repeatOff
+                            }, repeatMode != 0, hasSong, onRepeat, side)
+                    }
                 }
                 Spacer(Modifier.height(footerGap))
                 Box(Modifier.fillMaxWidth().height(48.dp),
@@ -258,13 +276,30 @@ private fun TurntableButton(
     Surface(
         onClick = onClick,
         enabled = enabled,
-        shape = if (primary) CircleShape else RoundedCornerShape(50),
+        shape = if (primary) CircleShape else RoundedCornerShape(14.dp),
         color = if (primary) Color(0xFF111111) else Color(0xFFE3E2DD),
         modifier = modifier
     ) {
         Box(contentAlignment = Alignment.Center) {
             Icon(icon, label, Modifier.size(size), tint = if (primary) Color.White
                 else Color(0xFF505055).copy(alpha = if (enabled) 1f else 0.38f))
+        }
+    }
+}
+
+@Composable
+private fun TurntableOption(icon: ImageVector, label: String, state: String, active: Boolean,
+    enabled: Boolean, onClick: () -> Unit, side: Dp) {
+    IconButton(onClick = onClick, enabled = enabled, modifier = Modifier.size(side).semantics {
+        contentDescription = label
+        stateDescription = state
+        selected = active
+    }) {
+        Box(Modifier.size(24.dp)) {
+            Icon(icon, null, Modifier.fillMaxSize(), tint = VinylInk.copy(
+                alpha = if (!enabled) 0.38f else if (active) 1f else 0.7f))
+            if (active && enabled) Box(Modifier.align(Alignment.TopEnd).offset(x = 3.dp, y = (-2).dp)
+                .size(4.dp).background(Color(0xFFD91C16), CircleShape))
         }
     }
 }
