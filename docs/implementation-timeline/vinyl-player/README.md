@@ -2,6 +2,7 @@
 
 Record rendering, playback controls, lyrics, artist portraits, and presentation selection.
 
+- [2026-11-01: Rotate the complete black record surface](2026-11-01-rotate-the-complete-record-surface.md)
 - [2026-11-01: Softer record and visible rotation](2026-11-01-soft-groove-record-and-visible-rotation.md)
 - [2026-11-01: Floating chassis shadow and larger center label](2026-11-01-floating-shadow-and-center-collar.md)
 - [2026-11-01: Match the outlined playback reference](2026-11-01-outline-reference-playback-controls.md)

@@ -4706,7 +4706,12 @@ internal fun VinylRecord(
                 .graphicsLayer { rotationZ = rotation.floatValue }
                 .drawWithCache {
                     val painter = VinylPainter(size)
-                    onDrawBehind { with(painter) { drawFace() } }
+                    onDrawBehind {
+                        with(painter) {
+                            drawFace()
+                            drawReflections()
+                        }
+                    }
                 },
             contentAlignment = Alignment.Center
         ) {
@@ -4735,7 +4740,7 @@ internal fun VinylRecord(
             }
         }
 
-        // Lighting and spindle stay fixed while the grooves and artwork rotate beneath them.
+        // The spindle stays fixed while the complete record surface rotates beneath it.
         Box(
             Modifier
                 .fillMaxSize()
@@ -4743,7 +4748,6 @@ internal fun VinylRecord(
                     val painter = VinylPainter(size)
                     onDrawBehind {
                         with(painter) { drawSpindle() }
-                        with(painter) { drawReflections() }
                     }
                 }
         )

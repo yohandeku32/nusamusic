@@ -231,6 +231,14 @@ class VinylDeckArtworkTest {
         compose.mainClock.advanceTimeBy(640)
         val second = pixels("record-rotation-b")
         assertTrue("Artwork turns visibly", first.indices.count { first[it] != second[it] } > 1000)
+        val movingSurface = first.indices.count { index ->
+            val dx = index % 240 - 120
+            val dy = index / 240 - 120
+            val distanceSquared = dx * dx + dy * dy
+            distanceSquared in 75 * 75..112 * 112 &&
+                kotlin.math.abs(android.graphics.Color.red(first[index]) - android.graphics.Color.red(second[index])) >= 8
+        }
+        assertTrue("The black playing surface visibly rotates independently of the artwork", movingSurface > 300)
         compose.runOnIdle { playing.value = false }
         compose.mainClock.advanceTimeBy(1400)
         val paused = pixels()

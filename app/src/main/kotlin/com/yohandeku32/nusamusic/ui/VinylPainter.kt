@@ -21,7 +21,7 @@ internal fun vinylLabelDiameter(discDiameter: Int): Int {
     return if ((discDiameter - diameter) % 2 == 0) diameter else diameter - 1
 }
 
-/** Pressed grooves rotate with the record; specular lighting is drawn in a stationary layer. */
+/** Grooves and material sheen share the record's rotation so movement remains visible outside the cover. */
 internal class VinylPainter(size: Size) {
     private val radius = size.minDimension / 2f
     private val discCenter = Offset(size.width / 2f, size.height / 2f)
