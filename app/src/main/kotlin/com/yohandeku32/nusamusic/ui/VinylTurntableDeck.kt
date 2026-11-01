@@ -47,9 +47,9 @@ internal fun VinylTurntableDeck(
         Modifier.size(size, height).testTag("vinyl-deck")
             .drawWithCache {
                 val painter = VinylDeckPainter(this.size)
-                val ambient = vinylShadowPaint(26.dp.toPx(), 34)
-                val cast = vinylShadowPaint(18.dp.toPx(), 82)
-                val contact = vinylShadowPaint(3.dp.toPx(), 48)
+                val ambient = vinylShadowPaint(26.dp.toPx(), 29)
+                val cast = vinylShadowPaint(18.dp.toPx(), 70)
+                val contact = vinylShadowPaint(3.dp.toPx(), 41)
                 val radius = mechanismSize.toPx() * 0.065f
                 val padding = 52.dp.toPx()
                 val bounds = android.graphics.RectF(-padding, -padding,

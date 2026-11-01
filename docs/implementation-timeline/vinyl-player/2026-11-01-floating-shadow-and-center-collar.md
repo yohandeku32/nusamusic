@@ -12,3 +12,8 @@ ENERGY 2 / RHYTHM 2 / MOTION 2 remain unchanged. Verified: production native mac
 ## Follow-up: flat artwork edge
 
 The owner requested removal of shading at the artwork boundary. Replace the collar radial bevel with a flat charcoal fill, and remove the label vignette and dark perimeter stroke. Keep the larger artwork, metal pin, outer record reflections, and chassis cast/contact shadows. The follow-up also removes the record cast/contact shadow and the recessed platter shading where black vinyl meets the gray ring. The ring uses a flat gray face. Only the chassis exterior retains cast/contact shadows. Verified: the native artwork render shows clean flat boundaries; all 30 selected tests pass, debug assembly succeeds, and full Android Lint reports no errors.
+
+
+## Follow-up: slightly lighter exterior shadow
+
+Reduce only exterior shadow opacity by about 15%: ambient alpha 34 to 29, cast 82 to 70, contact 48 to 41. Keep blur radii, offsets, record-to-machine shadow, and complete-record rotation unchanged. Verified: three artwork/rotation renderer tests and debug assembly pass; native preview inspected. The previous revision supplies the full lint and broader regression baseline.
