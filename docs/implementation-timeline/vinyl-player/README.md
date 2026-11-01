@@ -2,8 +2,6 @@
 
 Record rendering, playback controls, lyrics, artist portraits, and presentation selection.
 
-- [2026-11-01: Use the original Studio Black render](2026-11-01-render-based-studio-black.md)
-- [2026-11-01: Studio Black as a second machine theme](2026-11-01-studio-black-machine-theme.md)
 - [2026-11-01: Rotate the complete black record surface](2026-11-01-rotate-the-complete-record-surface.md)
 - [2026-11-01: Softer record and visible rotation](2026-11-01-soft-groove-record-and-visible-rotation.md)
 - [2026-11-01: Floating chassis shadow and larger center label](2026-11-01-floating-shadow-and-center-collar.md)
