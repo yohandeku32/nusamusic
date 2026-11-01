@@ -45,6 +45,7 @@ internal val VinylPaper = Color(0xFFF2F1EB)
 private val VinylInk = Color(0xFF171717)
 private val VinylContentWidth = 512.dp
 private val VinylGutter = 36.dp
+private const val VinylDeckScale = 0.96f // Subtle 4% reduction; leave other content gutters untouched.
 
 data class TurntableLabels(
     val play: String,
@@ -193,10 +194,12 @@ fun TurntablePlayer(
                         .padding(horizontal = VinylGutter).weight(1f),
                     contentAlignment = Alignment.BottomCenter
                 ) {
-                    val deckHeight = minOf(maxWidth, maxHeight - 8.dp)
-                    if (deckHeight >= 88.dp) {
+                    val availableDeckHeight = minOf(maxWidth, maxHeight - 8.dp)
+                    val deckWidth = maxWidth * VinylDeckScale
+                    val deckHeight = availableDeckHeight * VinylDeckScale
+                    if (availableDeckHeight >= 88.dp) {
                         VinylTurntableDeck(
-                            size = maxWidth, height = deckHeight, isPlaying = isPlaying, isVisible = isVisible,
+                            size = deckWidth, height = deckHeight, isPlaying = isPlaying, isVisible = isVisible,
                             hasSong = hasSong, positionMsState = positionMsState,
                             durationMs = durationMs, repeatMode = repeatMode, labels = labels,
                             onPlayPause = onPlayPause, onRepeat = onRepeat, record = record
