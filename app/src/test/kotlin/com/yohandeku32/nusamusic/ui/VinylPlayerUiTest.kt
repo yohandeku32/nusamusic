@@ -77,6 +77,7 @@ class VinylPlayerUiTest {
     private val qualityVisible = mutableStateOf(true)
     private val qualityLabel = mutableStateOf("Hi-Res")
     private val artworkColor = mutableStateOf<Color?>(null)
+    private val artworkPalette = mutableStateOf<VinylArtworkPalette?>(null)
     private lateinit var inputModeManager: InputModeManager
 
     private fun show(width: Int = 411, height: Int = 914, fontScale: Float = 1f, hasSong: Boolean = true,
@@ -99,6 +100,7 @@ class VinylPlayerUiTest {
                                 durationMs = waveform?.durationMs ?: 190_000L,
                                 waveform = waveform, isWaveformLoading = waveformLoading,
                                 artworkColor = artworkColor.value,
+                                artworkPalette = artworkPalette.value,
                                 shuffleEnabled = shuffled.value, repeatMode = repeated.value,
                                 labels = TurntableLabels("Play", "Pause", "Previous", "Next",
                                     "Shuffle", "Shuffle on", "Shuffle off", "Repeat", "Repeat off",
@@ -179,6 +181,41 @@ class VinylPlayerUiTest {
         compose.mainClock.advanceTimeBy(600)
         compose.waitForIdle()
         assertEquals(VinylPaper, backgroundPixel(900))
+    }
+
+    @Test fun twoToneArtworkBlendsSoftlyAtBottomWithoutShiftingControls() {
+        show()
+        val originalPlay = compose.onNodeWithContentDescription("Play").getUnclippedBoundsInRoot()
+        fun pixelAt(x: Int, y: Int): Color {
+            var result = Color.Transparent
+            compose.runOnIdle {
+                val bitmap = Bitmap.createBitmap(411, 914, Bitmap.Config.ARGB_8888)
+                compose.activity.findViewById<View>(android.R.id.content).draw(Canvas(bitmap))
+                result = Color(bitmap.getPixel(x, y))
+                bitmap.recycle()
+            }
+            return result
+        }
+
+        compose.runOnIdle {
+            artworkPalette.value = VinylArtworkPalette(Color(0xFFDB562E), Color(0xFF2D60C5))
+        }
+        compose.mainClock.advanceTimeBy(750)
+        compose.waitForIdle()
+
+        assertEquals("The upper Vinyl surface remains neutral", VinylPaper, pixelAt(4, 4))
+        val left = pixelAt(4, 898)
+        val right = pixelAt(405, 898)
+        assertTrue("The lower-left side preserves the dominant warm hue", left.red > left.blue)
+        assertTrue("The lower-right side carries the real blue companion",
+            right.blue > left.blue + 0.025f)
+        assertEquals("Album palette animation must not alter playback positions",
+            originalPlay, compose.onNodeWithContentDescription("Play").getUnclippedBoundsInRoot())
+
+        compose.runOnIdle { artworkPalette.value = null }
+        compose.mainClock.advanceTimeBy(750)
+        compose.waitForIdle()
+        assertEquals("The empty palette restores the original neutral paper", VinylPaper, pixelAt(4, 898))
     }
 
     @Test fun classicMechanicalControlsRemainOperable() {

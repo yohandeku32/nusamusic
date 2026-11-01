@@ -198,6 +198,8 @@ import com.yohandeku32.nusamusic.ui.ImmersiveLyricsState
 import com.yohandeku32.nusamusic.ui.MiuixHorizontalPager
 import com.yohandeku32.nusamusic.ui.animateMiuixScrollToPage
 import com.yohandeku32.nusamusic.ui.vinylArtworkColor
+import com.yohandeku32.nusamusic.ui.vinylArtworkPalette
+import com.yohandeku32.nusamusic.ui.VinylArtworkPalette
 import com.yohandeku32.nusamusic.ui.artworkBackdropColor
 import com.yohandeku32.nusamusic.ui.PlayerScaleHost
 import com.yohandeku32.nusamusic.ui.PlayerScalePreference
@@ -2954,7 +2956,7 @@ private fun NusaMusicApp(
                                         .background(VinylPaper)
                                 ) {
                                     if (playerPresentationMode == PlayerPresentationMode.VINYL) {
-                                        var vinylArtworkColor by remember { mutableStateOf<Color?>(null) }
+                                        var vinylPalette by remember { mutableStateOf<VinylArtworkPalette?>(null) }
                                         val waveform = rememberVinylWaveform(currentSong,
                                             pagerState.settledPage == playerPage)
                                         TurntablePlayer(
@@ -2968,7 +2970,7 @@ private fun NusaMusicApp(
                                             hasSong = currentSong != null,
                                             positionMsState = positionMsState,
                                             durationMs = durationMs,
-                                            artworkColor = vinylArtworkColor,
+                                            artworkPalette = vinylPalette,
                                             waveform = waveform.data,
                                             isWaveformLoading = waveform.loading,
                                             shuffleEnabled = shuffleEnabled,
@@ -3017,7 +3019,7 @@ private fun NusaMusicApp(
                                                     song = currentSong,
                                                     isPlaying = isPlaying && pagerState.settledPage == playerPage,
                                                     modifier = recordModifier,
-                                                    onArtworkColor = { vinylArtworkColor = it }
+                                                    onArtworkPalette = { vinylPalette = it }
                                                 )
                                             },
                                             quality = { AudioQualityPill(song = currentSong, vinyl = true) },
@@ -4635,7 +4637,8 @@ internal fun VinylRecord(
     song: Song?,
     isPlaying: Boolean,
     modifier: Modifier = Modifier,
-    onArtworkColor: ((Color?) -> Unit)? = null
+    onArtworkColor: ((Color?) -> Unit)? = null,
+    onArtworkPalette: ((VinylArtworkPalette?) -> Unit)? = null
 ) {
     val spinEnabled = isPlaying && android.animation.ValueAnimator.areAnimatorsEnabled()
     // Keep the physical angle continuous while changing rotation speed.
@@ -4727,6 +4730,7 @@ internal fun VinylRecord(
                     maxSizePx = 512,
                     retainWhileLoading = true,
                     onArtworkColor = onArtworkColor,
+                    onArtworkPalette = onArtworkPalette,
                     modifier = Modifier.fillMaxSize()
                 )
                 Box(
@@ -5454,7 +5458,8 @@ private fun ArtworkView(
     loadAllowed: Boolean = true,
     grainOverlay: Boolean = true,
     retainWhileLoading: Boolean = false,
-    onArtworkColor: ((Color?) -> Unit)? = null
+    onArtworkColor: ((Color?) -> Unit)? = null,
+    onArtworkPalette: ((VinylArtworkPalette?) -> Unit)? = null
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val density = androidx.compose.ui.platform.LocalDensity.current
@@ -5480,9 +5485,13 @@ private fun ArtworkView(
     }
 
     val artworkColorCallback by rememberUpdatedState(onArtworkColor)
-    LaunchedEffect(bitmap, onArtworkColor != null) {
-        if (onArtworkColor != null) {
-            artworkColorCallback?.invoke(bitmap?.let { vinylArtworkColor(it) })
+    val artworkPaletteCallback by rememberUpdatedState(onArtworkPalette)
+    LaunchedEffect(bitmap, onArtworkColor != null, onArtworkPalette != null) {
+        if (onArtworkColor != null || onArtworkPalette != null) {
+            // Extract once off the main thread and share the result with either consumer.
+            val palette = bitmap?.let { vinylArtworkPalette(it) }
+            artworkPaletteCallback?.invoke(palette)
+            artworkColorCallback?.invoke(palette?.primary)
         }
     }
     LaunchedEffect(song?.uri, maxSizePx, loadDelayMs, loadAllowed) {
