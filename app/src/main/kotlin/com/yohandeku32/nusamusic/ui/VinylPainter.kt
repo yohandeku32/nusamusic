@@ -14,25 +14,25 @@ import kotlin.random.Random
 
 internal const val VINYL_LABEL_FRACTION = 0.50f
 
-internal fun vinylLabelDiameter(discDiameter: Int, compactLabel: Boolean = false): Int {
+internal fun vinylLabelDiameter(discDiameter: Int): Int {
     if (discDiameter <= 1) return discDiameter.coerceAtLeast(0)
-    val diameter = (discDiameter * if (compactLabel) 0.32f else VINYL_LABEL_FRACTION).roundToInt().coerceIn(2, discDiameter)
+    val diameter = (discDiameter * VINYL_LABEL_FRACTION).roundToInt().coerceIn(2, discDiameter)
     // Matching pixel parity puts the artwork, rings and spindle on the same center.
     return if ((discDiameter - diameter) % 2 == 0) diameter else diameter - 1
 }
 
 /** Grooves and material sheen share the record's rotation so movement remains visible outside the cover. */
-internal class VinylPainter(size: Size, compactLabel: Boolean = false) {
-    private val grooveStart = if (compactLabel) 0.42f else 0.58f
-    private val grooveSpan = if (compactLabel) 0.556f else 0.396f
-    private val collar = if (compactLabel) 0.40f else 0.56f
-    private val collarEdge = if (compactLabel) 0.405f else 0.565f
+internal class VinylPainter(size: Size) {
+    private val grooveStart = 0.58f
+    private val grooveSpan = 0.396f
+    private val collar = 0.56f
+    private val collarEdge = 0.565f
     private val radius = size.minDimension / 2f
     private val discCenter = Offset(size.width / 2f, size.height / 2f)
     private val face = Brush.radialGradient(
         0f to Color(0xFF0C0D0D),
-        (if (compactLabel) 0.41f else 0.57f) to Color(0xFF050606),
-        (if (compactLabel) 0.49f else 0.65f) to Color(0xFF101112),
+        0.57f to Color(0xFF050606),
+        0.65f to Color(0xFF101112),
         0.94f to Color(0xFF08090A),
         0.985f to Color(0xFF191B1C),
         1f to Color.Black,
