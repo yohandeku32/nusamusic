@@ -49,7 +49,8 @@ internal fun SyncedLyricsView(
     onSeek: (ISyncedLine) -> Unit, fontSize: Float, credits: SongCredits = SongCredits(), modifier: Modifier = Modifier,
     inferredEnds: Set<LyricsUnitKey> = emptySet(),
     duetRightLines: Set<Int> = emptySet(),
-    pronunciations: Map<Int, LyricsPronunciation> = emptyMap()
+    pronunciations: Map<Int, LyricsPronunciation> = emptyMap(),
+    topAligned: Boolean = false
 ) {
     val clock = remember { LyricsPlaybackClock(position, visible) }
     SideEffect { clock.update(position, visible) }
@@ -118,7 +119,7 @@ internal fun SyncedLyricsView(
                 }
             } else emptyArray()
         }
-        LaunchedEffect(display, visible, interaction.canFollow, fontSize, maxHeight, maxWidth, motionState.revision) {
+        LaunchedEffect(display, visible, interaction.canFollow, fontSize, maxHeight, maxWidth, motionState.revision, topAligned) {
             val motion = LyricsFollowMotion()
             lineMotion.reset()
             val directionGuard = LyricsFollowDirectionGuard()
@@ -126,7 +127,9 @@ internal fun SyncedLyricsView(
             if (!visible || !interaction.canFollow) return@LaunchedEffect
             snapshotFlow { listState.layoutInfo.totalItemsCount }.first { it == display.rows.size + if (credits.isEmpty) 0 else 1 }
             fun center(target: Int) = with(listState.layoutInfo) {
-                lyricsFollowAnchor(viewportStartOffset, viewportEndOffset, target == firstVocalRow,
+                if (topAligned) viewportStartOffset + 24f * density +
+                    (mainHeights[target]?.toFloat() ?: 0f) / 2f
+                else lyricsFollowAnchor(viewportStartOffset, viewportEndOffset, target == firstVocalRow,
                     mainHeight = mainHeights[target]?.toFloat() ?: 0f, minimumPadding = 24f * density)
             }
             fun distance(target: Int, offset: Float): Float {
@@ -276,7 +279,11 @@ internal fun SyncedLyricsView(
                     } finally { interaction.touchUp() }
                 }
             }.lyricsEdgeFade(),
-            contentPadding = PaddingValues(top = maxHeight / 2, bottom = if (credits.isEmpty) maxHeight / 2 else 24.dp)
+            contentPadding = PaddingValues(
+                top = if (topAligned) 24.dp else maxHeight / 2,
+                bottom = if (topAligned) (maxHeight - 24.dp).coerceAtLeast(24.dp)
+                    else if (credits.isEmpty) maxHeight / 2 else 24.dp
+            )
         ) {
             itemsIndexed(display.rows, key = { _, row -> row.sourceIndex }, contentType = { _, _ -> "lyric-group" }) { index, row ->
                 Column(Modifier.fillMaxWidth()) {

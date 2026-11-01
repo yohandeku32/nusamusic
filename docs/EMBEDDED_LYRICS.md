@@ -2,6 +2,8 @@
 
 Lyrics are available in the Immersive player. Tap **Lyrics** in the player controls to switch from artwork to lyrics, then tap it again to return. The lyric view occupies the player foreground, with playback controls still available.
 
+Vinyl uses the same lyric engine in a half-viewport section beneath the player. Scroll down or tap the footer arrow to reveal it; the remaining player stays above it, following the former biography composition. Timed rows follow near the top of the rounded lyric panel and seek through the same playback callback. The optional top alignment applies only to Vinyl; Immersive retains its centered follow position. Lyrics settings for font size, online lookup, and reload are available in Vinyl too.
+
 In **Settings > Lyrics**, change the font size, toggle online lookup, or reload the current song's lyrics. A timed row seeks to its authored start when tapped. Manual browsing suspends automatic following until scrolling stops and the browsing grace period has passed.
 
 ## Sources and synchronization

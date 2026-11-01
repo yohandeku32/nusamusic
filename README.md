@@ -1,6 +1,6 @@
 # Aruna
 
-Aruna is an Android music player for the music stored on your device, built with Kotlin, Jetpack Compose and AndroidX Media3. Start with the Immersive player or choose CD in Settings, browse your collection, and follow synchronized lyrics while you listen.
+Aruna is an Android music player for the music stored on your device, built with Kotlin, Jetpack Compose and AndroidX Media3. Start with the Immersive player or choose Vinyl or CD in Settings, browse your collection, and follow synchronized lyrics while you listen.
 
 Requires **Android 10 (API 29) or newer**. The app is under active development.
 
@@ -36,6 +36,10 @@ Open an artist or album from Discovery to browse that artist's local tracks and 
 ## Lyrics
 
 Open **Lyrics** from the Immersive player's controls. Lyrics replace the artwork foreground within the player while playback controls remain available. Tap Lyrics again to return to the artwork. In Settings, adjust lyric size, enable or disable online lyrics, or reload the current song's lyrics.
+
+Vinyl presents a silver turntable with a recessed platter, fine record grooves, album artwork label, and curved metallic tonearm. Its left mechanical switch plays/pauses and its right rocker cycles repeat off/one/all, using the same playback actions as the normal controls. The chassis, left-aligned song title/artist, small unboxed quality label below the artist, and progress bar share the previous 36 dp phone content margin; header/footer retain their 24 dp margins. The title/artist/quality group sits slightly lower without moving the machine or progress controls. The circular artist portrait displays in monochrome, including resolved Apple photos. A short viewport reduces chassis height while keeping the record and arm proportional. A fixed metadata area keeps the machine, artist portrait, lower controls, and quality slot stable as titles change; one-line titles remain close to the artist name.
+
+Scroll below the Vinyl player or tap its footer arrow to reveal a half-screen lyrics section. Active lyrics follow near the top of its rounded panel. Artist portraits use the first listed singer: an exact Apple catalog match resolves that artist's public Apple Music portrait, downloaded directly from Apple's image CDN. Memory/disk caching and queue lookahead serve repeat artists without another network lookup; local cover art remains the fallback. Temporary failures can retry after 30 seconds and do not become 12-hour missing-photo entries.
 
 - Embedded lyrics load first. The reader accepts plain text, LRC, Enhanced LRC and TTML from supported audio metadata.
 - Fully timed embedded karaoke takes priority. When online lyrics are enabled, lrc.red can provide a more precisely synchronized version; LRCLIB provides a line-synced fallback.
@@ -120,6 +124,8 @@ The build also accepts a `LASTFM_API_KEY` Gradle property or environment variabl
 ### Optional FFmpeg decoder
 
 The standard build uses Android/Media3 decoders. FFmpeg is available only when a matching native Media3 1.9.3 AAR is supplied at `app/libs/media3-decoder-ffmpeg.aar`. Both the main and crossfade players can use it as a fallback. It does not add missing container extractors.
+
+Vinyl's line-wave progress appears immediately and animates during playback. Its source-amplitude analyzer uses Android MediaExtractor/MediaCodec independently of the optional FFmpeg renderer. While data is pending or unavailable, progress keeps a stylized animation; decoded amplitudes refine its height when ready. See [animated progress](docs/implementation-timeline/vinyl-player/2026-10-31-animate-layered-wave-progress.md) and the [analyzer/cache contract](docs/implementation-timeline/vinyl-player/2026-10-31-add-source-audio-waveform.md) for behavior and verification limits.
 
 See [FFmpeg Android integration](docs/FFMPEG_ANDROID.md) for the native build script, manual workflow and distribution notices.
 

@@ -5,15 +5,15 @@ import org.junit.Test
 
 class PlayerPresentationModeTest {
     @Test
-    fun onlyCdAndImmersivePlayerPresentationsAreAvailable() {
+    fun vinylCdAndImmersivePlayerPresentationsAreAvailable() {
         assertTrue(PlayerPresentationMode.CD.isAvailable)
         assertTrue(PlayerPresentationMode.IMMERSIVE_ARTWORK.isAvailable)
-        assertFalse(PlayerPresentationMode.VINYL.isAvailable)
+        assertTrue(PlayerPresentationMode.VINYL.isAvailable)
     }
 
     @Test
     fun enabledModesRestoreTheirSavedSelection() {
-        for (mode in listOf(PlayerPresentationMode.CD, PlayerPresentationMode.IMMERSIVE_ARTWORK)) {
+        for (mode in PlayerPresentationMode.entries) {
             assertEquals(mode, PlayerPresentationMode.fromPreference(mode.preferenceValue))
         }
     }
@@ -24,8 +24,8 @@ class PlayerPresentationModeTest {
     }
 
     @Test
-    fun disabledVinylOrUnknownPreferencesFallBackToImmersive() {
-        for (value in listOf("", "unknown", "vinyl", PlayerPresentationMode.VINYL.preferenceValue)) {
+    fun unknownPreferencesFallBackToImmersive() {
+        for (value in listOf("", "unknown")) {
             assertEquals(PlayerPresentationMode.IMMERSIVE_ARTWORK, PlayerPresentationMode.fromPreference(value))
         }
     }
