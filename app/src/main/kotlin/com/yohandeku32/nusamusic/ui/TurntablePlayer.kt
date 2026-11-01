@@ -99,8 +99,7 @@ fun TurntablePlayer(
     modifier: Modifier = Modifier,
     waveform: AudioWaveform? = null,
     isWaveformLoading: Boolean = false,
-    artworkColor: Color? = null,
-    machineTheme: VinylMachineTheme = VinylMachineTheme.CLASSIC
+    artworkColor: Color? = null
 ) {
     val artworkTint = animateColorAsState(vinylArtworkTint(artworkColor), tween(450), label = "Vinyl artwork tint")
     MaterialTheme(
@@ -200,8 +199,7 @@ fun TurntablePlayer(
                             size = maxWidth, height = deckHeight, isPlaying = isPlaying, isVisible = isVisible,
                             hasSong = hasSong, positionMsState = positionMsState,
                             durationMs = durationMs, repeatMode = repeatMode, labels = labels,
-                            onPlayPause = onPlayPause, onRepeat = onRepeat, record = record,
-                            theme = machineTheme
+                            onPlayPause = onPlayPause, onRepeat = onRepeat, record = record
                         )
                     }
                 }
