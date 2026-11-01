@@ -30,27 +30,8 @@ import org.robolectric.annotation.GraphicsMode
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class VinylThemeSettingsTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
-    private val preferences get() = compose.activity.getSharedPreferences("vinyl-theme-test", Context.MODE_PRIVATE)
-
-    @Test fun missingUnknownAndWrongTypeKeepClassicWithoutChangingTheSavedPlayerMode() {
-        preferences.edit().clear().putString("player_presentation_mode", "vinyl").commit()
-        assertEquals(VinylMachineTheme.CLASSIC, VinylThemePreference.read(preferences))
-        assertFalse(preferences.contains("vinyl_machine_theme"))
-        preferences.edit().putString("vinyl_machine_theme", "future-theme").commit()
-        assertEquals(VinylMachineTheme.CLASSIC, VinylThemePreference.read(preferences))
-        preferences.edit().putInt("vinyl_machine_theme", 42).commit()
-        assertEquals(VinylMachineTheme.CLASSIC, VinylThemePreference.read(preferences))
-        VinylThemePreference.write(preferences, VinylMachineTheme.STUDIO_BLACK)
-        assertEquals(VinylMachineTheme.STUDIO_BLACK, VinylThemePreference.read(preferences))
-        assertEquals("vinyl", preferences.getString("player_presentation_mode", null))
-        VinylThemePreference.write(preferences, VinylMachineTheme.CLASSIC)
-        assertEquals(VinylMachineTheme.CLASSIC, VinylThemePreference.read(preferences))
-    }
-
     private fun show(width: Int = 411, scale: Float = 1f) {
-        preferences.edit().clear().commit()
         compose.setContent {
-            var theme by remember { mutableStateOf(VinylThemePreference.read(preferences)) }
             var mode by remember { mutableStateOf(PlayerPresentationMode.VINYL) }
             CompositionLocalProvider(LocalDensity provides Density(1f, scale)) {
                 MaterialTheme(colorScheme = darkColorScheme()) {
@@ -72,41 +53,27 @@ class VinylThemeSettingsTest {
                             onCrossfadeChange = {}, crossfadeDurationSeconds = 3f,
                             onCrossfadeDurationChange = {}, onCrossfadeDurationChangeFinished = {},
                             musicFolders = emptyList(), isScanningMusic = false, onSelectMusicFolder = {},
-                            onRemoveMusicFolder = {}, onScanMusic = {}, onDismiss = {},
-                            vinylMachineTheme = theme, onVinylMachineThemeChange = {
-                                theme = it; VinylThemePreference.write(preferences, it)
-                            })
+                            onRemoveMusicFolder = {}, onScanMusic = {}, onDismiss = {})
                     }
                 }
             }
         }
     }
 
-    @Test fun studioBlackIsSecondSelectionPersistsAndClassicRemainsAvailable() {
+    @Test fun vinylShowsNoMachineThemeSelector() {
         show()
-        compose.onNodeWithText("Classic").assertIsSelected()
-        compose.onNodeWithText("Studio Black").performClick().assertIsSelected()
-        assertEquals(VinylMachineTheme.STUDIO_BLACK, VinylThemePreference.read(preferences))
-        compose.runOnIdle {
-            val view = compose.activity.findViewById<View>(android.R.id.content)
-            val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
-            view.draw(Canvas(bitmap))
-            val file = File("build/reports/vinyl-preview/settings-studio-black.png").apply { parentFile!!.mkdirs() }
-            file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
-            bitmap.recycle()
-        }
-        compose.onNodeWithText("CD").performClick()
+        compose.onNodeWithText("Vinyl").assertExists()
         compose.onNodeWithText("Studio Black").assertDoesNotExist()
+        compose.onNodeWithText("Vinyl machine theme").assertDoesNotExist()
+        compose.onNodeWithText("CD").performClick()
         compose.onNodeWithText("Vinyl").performClick()
-        compose.onNodeWithText("Studio Black").assertIsSelected()
-        compose.onNodeWithText("Classic").performClick().assertIsSelected()
-        assertEquals(VinylMachineTheme.CLASSIC, VinylThemePreference.read(preferences))
+        compose.onNodeWithText("Studio Black").assertDoesNotExist()
     }
 
-    @Test fun compactLargeTextKeepsBothThemeChoicesOperable() {
+    @Test fun compactLargeTextKeepsVinylModeAvailable() {
         show(320, 2f)
-        compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("Studio Black"))
-        compose.onNodeWithText("Studio Black").performClick().assertIsSelected()
-        compose.onNodeWithText("Classic").performClick().assertIsSelected()
+        compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("Vinyl"))
+        compose.onNodeWithText("Vinyl").assertExists()
+        compose.onNodeWithText("Studio Black").assertDoesNotExist()
     }
 }
