@@ -226,7 +226,7 @@ class VinylDeckArtworkTest {
         val movingSurface = first.indices.count { index ->
             val dx = index % 240 - 120
             val dy = index / 240 - 120
-            val distanceSquared = dx * dx + dy * dy
+            val distanceSquared = (dx * dx + dy * dy).toFloat()
             distanceSquared in (75f * 75f)..(112f * 112f) &&
                 kotlin.math.abs(android.graphics.Color.red(first[index]) - android.graphics.Color.red(second[index])) >= 8
         }
