@@ -73,6 +73,7 @@ class VinylPlayerUiTest {
     private val shuffled = mutableStateOf(false)
     private val repeated = mutableStateOf(0)
     private val title = mutableStateOf("The Emptiness Machine")
+    private val songLoaded = mutableStateOf(true)
     private val qualityVisible = mutableStateOf(true)
     private val qualityLabel = mutableStateOf("Hi-Res")
     private val artworkColor = mutableStateOf<Color?>(null)
@@ -82,6 +83,7 @@ class VinylPlayerUiTest {
         safeBottom: Int = 0, titleSize: Float = 34f, waveform: AudioWaveform? = null,
         waveformLoading: Boolean = false) {
         position.value = if (waveform == null) 75_000L else waveform.durationMs * 2 / 5
+        songLoaded.value = hasSong
         compose.setContent {
             CompositionLocalProvider(LocalDensity provides Density(1f, fontScale)) {
                 inputModeManager = LocalInputModeManager.current
@@ -92,7 +94,7 @@ class VinylPlayerUiTest {
                                 title = title.value, artist = if (waveform == null) "LINKIN PARK" else "Audio test fixture",
                                 titleFontFamily = FontFamily.Serif, titleFontSize = titleSize,
                                 viewportHeight = (height - safeBottom).dp, isPlaying = playing.value,
-                                isVisible = visible.value, hasSong = hasSong,
+                                isVisible = visible.value, hasSong = songLoaded.value,
                                 positionMsState = position,
                                 durationMs = waveform?.durationMs ?: 190_000L,
                                 waveform = waveform, isWaveformLoading = waveformLoading,
@@ -110,7 +112,7 @@ class VinylPlayerUiTest {
                                 avatar = { Box(it.testTag("artist-profile").background(Color.Black, CircleShape)) },
                                 record = { VinylRecord(song = null, isPlaying = false, modifier = it.testTag("vinyl-record")) },
                                 quality = {
-                                    if (qualityVisible.value && hasSong) VinylQualityBadge(
+                                    if (qualityVisible.value && songLoaded.value) VinylQualityBadge(
                                         qualityLabel.value, true, { qualityClicks++ }, Modifier.testTag("quality")
                                     )
                                 },
@@ -123,7 +125,7 @@ class VinylPlayerUiTest {
                                     }
                                 },
                                 emptyState = {
-                                    if (!hasSong) Text("Choose a song")
+                                    if (!songLoaded.value) Text("Choose a song")
                                     Box(Modifier.height(1.dp).testTag("player-bottom"))
                                 }
                             )
@@ -395,6 +397,41 @@ class VinylPlayerUiTest {
         compose.onNodeWithContentDescription("Settings").assertIsEnabled()
         compose.onNodeWithContentDescription("Turntable: Repeat").assertIsNotEnabled()
         compose.onNodeWithText("Choose a song").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test fun restoringLastSongDoesNotResizeVinylOrShiftPlaybackOnCompactPhone() {
+        show(width = 360, height = 740, hasSong = false)
+        val initialDeck = compose.onNodeWithTag("vinyl-deck").getUnclippedBoundsInRoot()
+        val initialRecord = compose.onNodeWithTag("vinyl-record").getUnclippedBoundsInRoot()
+        val initialTransport = compose.onNodeWithTag("vinyl-transport").getUnclippedBoundsInRoot()
+        val initialProgress = compose.onNodeWithTag("vinyl-progress").getUnclippedBoundsInRoot()
+
+        // Simulate async saved-song / library restore after the very first frame.
+        compose.runOnIdle { songLoaded.value = true }
+        compose.waitForIdle()
+
+        assertEquals("Machine bounds must not jump when the first song loads",
+            initialDeck, compose.onNodeWithTag("vinyl-deck").getUnclippedBoundsInRoot())
+        assertEquals("Record must not scale after startup",
+            initialRecord, compose.onNodeWithTag("vinyl-record").getUnclippedBoundsInRoot())
+        assertEquals("Playback buttons must not shift after song restore",
+            initialTransport, compose.onNodeWithTag("vinyl-transport").getUnclippedBoundsInRoot())
+        assertEquals("Waveform area stays in the same position",
+            initialProgress, compose.onNodeWithTag("vinyl-progress").getUnclippedBoundsInRoot())
+        compose.runOnIdle { songLoaded.value = false }
+        compose.waitForIdle()
+        assertEquals("Returning to the empty state keeps the original chassis size",
+            initialDeck, compose.onNodeWithTag("vinyl-deck").getUnclippedBoundsInRoot())
+    }
+
+    @Test fun restoringLastSongDoesNotResizeVinylOnRegularPhone() {
+        show(width = 411, height = 914, hasSong = false)
+        val initialDeck = compose.onNodeWithTag("vinyl-deck").getUnclippedBoundsInRoot()
+        val initialRecord = compose.onNodeWithTag("vinyl-record").getUnclippedBoundsInRoot()
+        compose.runOnIdle { songLoaded.value = true }
+        compose.waitForIdle()
+        assertEquals(initialDeck, compose.onNodeWithTag("vinyl-deck").getUnclippedBoundsInRoot())
+        assertEquals(initialRecord, compose.onNodeWithTag("vinyl-record").getUnclippedBoundsInRoot())
     }
 
     @Test fun changingFromShortToLongTitlesKeepsTransportAndQualityInPlace() {
