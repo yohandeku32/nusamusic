@@ -141,11 +141,6 @@ private class VinylDeckPainter(size: Size) {
         Offset(edge * 0.2f, edge * 0.06f), Offset(edge * 0.8f, edge * 0.94f)
     )
     private val center = Offset(width * 0.5f, height * 0.5f)
-    private val well = Brush.radialGradient(
-        0f to Color(0xFF111416), 0.88f to Color(0xFF292D30),
-        0.94f to Color(0xFF747B80), 0.98f to Color(0xFFC0C5C7), 1f to Color(0xFF6D757B),
-        center = center, radius = edge * 0.444f
-    )
     private val grain = android.graphics.Paint().apply {
         val random = kotlin.random.Random(741)
         val pixels = IntArray(128 * 128) {
@@ -190,9 +185,7 @@ private class VinylDeckPainter(size: Size) {
                 corner.x, corner.y, grain)
         }
         drawCircle(rim, edge * 0.45f, center)
-        drawCircle(well, edge * 0.444f, center)
-        drawCircle(Color(0xFF30363B), edge * 0.414f, center)
-        drawCircle(Color.Black.copy(alpha = 0.45f), edge * 0.405f, center + Offset(0f, edge * 0.002f))
+        drawCircle(Color(0xFF8A9093), edge * 0.444f, center)
 
         val screw = Offset(width * 0.072f, height * 0.078f)
         drawCircle(Color(0xFF7C858B), edge * 0.009f, screw)

@@ -45,13 +45,6 @@ internal class VinylPainter(size: Size) {
         0.91f to Color.White.copy(alpha = 0.16f), 1f to Color.Transparent,
         center = discCenter
     )
-    private val labelCollar = Brush.radialGradient(
-        0f to Color(0xFF171919),
-        0.86f to Color(0xFF1C1E1E),
-        0.97f to Color(0xFF262828),
-        1f to Color(0xFF303232),
-        center = discCenter, radius = radius * 0.70f
-    )
     private val grooves = Random(781).let { random ->
         val count = (radius * 0.256f / 0.85f).roundToInt().coerceIn(48, 240)
         List(count) { index ->
@@ -71,7 +64,7 @@ internal class VinylPainter(size: Size) {
     fun DrawScope.drawFace() {
         drawCircle(Color.Black, radius, discCenter)
         drawCircle(face, radius * 0.995f, discCenter)
-        drawCircle(labelCollar, radius * 0.70f, discCenter)
+        drawCircle(Color(0xFF222424), radius * 0.70f, discCenter)
         for (groove in grooves) {
             drawCircle(Color.White.copy(alpha = groove.alpha), groove.radius,
                 discCenter, style = Stroke(groove.width))
@@ -114,14 +107,6 @@ internal class VinylPainter(size: Size) {
 internal class VinylLabelPainter(size: Size) {
     private val radius = size.minDimension / 2f
     private val labelCenter = Offset(size.width / 2f, size.height / 2f)
-    private val shading = Brush.radialGradient(
-        0f to Color.Transparent,
-        0.85f to Color.Black.copy(alpha = 0.015f),
-        0.98f to Color.Black.copy(alpha = 0.10f),
-        1f to Color.Black.copy(alpha = 0.24f),
-        center = labelCenter,
-        radius = radius
-    )
     private val random = Random(2047)
     private val grain = List(180) {
         val angle = random.nextFloat() * (2 * PI).toFloat()
@@ -131,7 +116,6 @@ internal class VinylLabelPainter(size: Size) {
 
     fun DrawScope.drawFinish() {
         drawCircle(Color(0xFF302C24).copy(alpha = 0.045f), radius, labelCenter)
-        drawCircle(shading, radius, labelCenter)
         for ((index, point) in grain.withIndex()) {
             drawCircle(
                 if (index % 2 == 0) Color.White.copy(alpha = 0.035f)
@@ -140,10 +124,5 @@ internal class VinylLabelPainter(size: Size) {
                 center = point
             )
         }
-        val borderWidth = (radius * 0.008f).coerceAtLeast(0.6f)
-        drawCircle(
-            Color.Black.copy(alpha = 0.20f), radius - borderWidth * 0.5f - 0.25f, labelCenter,
-            style = Stroke(borderWidth)
-        )
     }
 }
