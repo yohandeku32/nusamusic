@@ -2,6 +2,7 @@
 
 Record rendering, playback controls, lyrics, artist portraits, and presentation selection.
 
+- [2026-11-01: Slightly stronger artwork gradient](2026-11-01-stronger-artwork-gradient.md)
 - [2026-11-01: Vinyl cover catalog, option C](2026-11-01-vinyl-cover-catalog.md)
 - [2026-11-01: Rotate the complete black record surface](2026-11-01-rotate-the-complete-record-surface.md)
 - [2026-11-01: Softer record and visible rotation](2026-11-01-soft-groove-record-and-visible-rotation.md)

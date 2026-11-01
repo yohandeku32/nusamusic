@@ -89,8 +89,8 @@ internal fun vinylArtworkTint(color: Color?): Color {
     if (color == null) return VinylPaper
     val hsl = FloatArray(3)
     ColorUtils.colorToHSL(color.toArgb(), hsl)
-    // Bright but muted paper tints preserve both artwork identity and readable text.
-    hsl[1] = (hsl[1] * 0.82f).coerceAtMost(0.60f)
+    // Keep the cover hue visible on bright paper while retaining readable text.
+    hsl[1] = (hsl[1] * 0.94f).coerceAtMost(0.68f)
     hsl[2] = 0.82f
     var tint = ColorUtils.HSLToColor(hsl)
     repeat(12) {

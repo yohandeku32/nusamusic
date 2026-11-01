@@ -164,8 +164,8 @@ fun TurntablePlayer(
                         val gradient = Brush.verticalGradient(
                             0f to VinylPaper,
                             0.43f to VinylPaper,
-                            0.58f to lerp(VinylPaper, mainTint, 0.10f),
-                            0.80f to lerp(VinylPaper, mainTint, 0.42f),
+                            0.58f to lerp(VinylPaper, mainTint, 0.14f),
+                            0.80f to lerp(VinylPaper, mainTint, 0.52f),
                             1f to mainTint
                         )
                         // A soft lower-right wash carries a second, substantial
