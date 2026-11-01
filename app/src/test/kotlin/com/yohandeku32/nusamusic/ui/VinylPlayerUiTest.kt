@@ -76,6 +76,7 @@ class VinylPlayerUiTest {
     private val qualityVisible = mutableStateOf(true)
     private val qualityLabel = mutableStateOf("Hi-Res")
     private val artworkColor = mutableStateOf<Color?>(null)
+    private val machineTheme = mutableStateOf(VinylMachineTheme.CLASSIC)
     private lateinit var inputModeManager: InputModeManager
 
     private fun show(width: Int = 411, height: Int = 914, fontScale: Float = 1f, hasSong: Boolean = true,
@@ -97,6 +98,7 @@ class VinylPlayerUiTest {
                                 durationMs = waveform?.durationMs ?: 190_000L,
                                 waveform = waveform, isWaveformLoading = waveformLoading,
                                 artworkColor = artworkColor.value,
+                                machineTheme = machineTheme.value,
                                 shuffleEnabled = shuffled.value, repeatMode = repeated.value,
                                 labels = TurntableLabels("Play", "Pause", "Previous", "Next",
                                     "Shuffle", "Shuffle on", "Shuffle off", "Repeat", "Repeat off",
@@ -177,6 +179,24 @@ class VinylPlayerUiTest {
         compose.mainClock.advanceTimeBy(600)
         compose.waitForIdle()
         assertEquals(VinylPaper, backgroundPixel(900))
+    }
+
+    @Test fun studioBlackKeepsGeometryAndMechanicalPlaybackControls() {
+        show()
+        val deck = compose.onNodeWithTag("vinyl-deck").getUnclippedBoundsInRoot()
+        val titleBounds = compose.onNodeWithText(title.value).getUnclippedBoundsInRoot()
+        compose.runOnIdle { machineTheme.value = VinylMachineTheme.STUDIO_BLACK }
+        compose.waitForIdle()
+        assertEquals(deck, compose.onNodeWithTag("vinyl-deck").getUnclippedBoundsInRoot())
+        assertEquals(titleBounds, compose.onNodeWithText(title.value).getUnclippedBoundsInRoot())
+        compose.onNodeWithContentDescription("Turntable: Play").performClick()
+        assertEquals(1, plays)
+        compose.onNodeWithContentDescription("Turntable: Repeat").performClick()
+        assertEquals(1, repeated.value)
+        snapshot("studio-black-phone")
+        compose.runOnIdle { machineTheme.value = VinylMachineTheme.CLASSIC }
+        compose.waitForIdle()
+        assertEquals(deck, compose.onNodeWithTag("vinyl-deck").getUnclippedBoundsInRoot())
     }
 
     @Test fun transportMenusSeekAndFooterUsePlaybackCallbacks() {

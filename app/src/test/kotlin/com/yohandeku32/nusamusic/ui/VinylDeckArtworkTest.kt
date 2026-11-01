@@ -138,6 +138,7 @@ class VinylDeckArtworkTest {
             "file:///vinyl-artwork-${System.nanoTime()}.mp3", 190_000L, 0L)
         assertNotNull(ArtworkLoader.load(compose.activity, song.uri, 512))
         val position = mutableStateOf(0L)
+        val theme = mutableStateOf(VinylMachineTheme.CLASSIC)
         compose.setContent {
             CompositionLocalProvider(LocalDensity provides Density(1f)) {
                 MaterialTheme {
@@ -147,7 +148,8 @@ class VinylDeckArtworkTest {
                             song.durationMs, 0,
                             TurntableLabels("Play", "Pause", "Previous", "Next", "Shuffle", "Shuffle on", "Shuffle off",
                                 "Repeat", "Repeat off", "Repeat all", "Repeat one", "Seek", "Settings", "Playback options"),
-                            {}, {}, { modifier -> VinylRecord(song, false, modifier.testTag("record-with-artwork")) })
+                            {}, {}, { modifier -> VinylRecord(song, false, modifier.testTag("record-with-artwork")) },
+                            theme = theme.value)
                     }
                 }
             }
@@ -156,35 +158,40 @@ class VinylDeckArtworkTest {
         val bounds = compose.onNodeWithTag("deck-preview").getUnclippedBoundsInRoot()
         compose.onNodeWithTag("record-with-artwork").assertIsDisplayed()
         val disc = compose.onNodeWithTag("record-with-artwork").getUnclippedBoundsInRoot()
-        compose.runOnIdle {
-            val image = Bitmap.createBitmap(411, 430, Bitmap.Config.ARGB_8888)
-            val output = Canvas(image)
-            output.translate(-bounds.left.value, -bounds.top.value)
-            compose.activity.findViewById<View>(android.R.id.content).draw(output)
-            val pixel = image.getPixel(240, 215)
-            assertTrue("The loaded cover remains pink inside the record label",
-                android.graphics.Color.red(pixel) > android.graphics.Color.green(pixel) + 40)
-            val cx = ((disc.left + disc.right) / 2).value
-            val cy = ((disc.top + disc.bottom) / 2).value
-            fun brightness(x: Float, y: Float): Float {
-                var total = 0f
-                for (dx in -3..3) for (dy in -3..3) {
-                    val color = image.getPixel(x.toInt() + dx, y.toInt() + dy)
-                    total += (android.graphics.Color.red(color) + android.graphics.Color.green(color) +
-                        android.graphics.Color.blue(color)) / 3f
+        for (selectedTheme in VinylMachineTheme.entries) {
+            compose.runOnIdle { theme.value = selectedTheme }
+            compose.waitForIdle()
+            compose.runOnIdle {
+                val image = Bitmap.createBitmap(411, 430, Bitmap.Config.ARGB_8888)
+                val output = Canvas(image)
+                output.translate(-bounds.left.value, -bounds.top.value)
+                compose.activity.findViewById<View>(android.R.id.content).draw(output)
+                val pixel = image.getPixel(240, 215)
+                assertTrue("The loaded cover remains pink inside the record label",
+                    android.graphics.Color.red(pixel) > android.graphics.Color.green(pixel) + 40)
+                val cx = ((disc.left + disc.right) / 2).value
+                val cy = ((disc.top + disc.bottom) / 2).value
+                fun brightness(x: Float, y: Float): Float {
+                    var total = 0f
+                    for (dx in -3..3) for (dy in -3..3) {
+                        val color = image.getPixel(x.toInt() + dx, y.toInt() + dy)
+                        total += (android.graphics.Color.red(color) + android.graphics.Color.green(color) +
+                            android.graphics.Color.blue(color)) / 3f
+                    }
+                    return total / 49
                 }
-                return total / 49
+                val radial = (disc.right - disc.left).value * 0.5f
+                assertTrue("Soft top light reveals the playing grooves",
+                    brightness(cx, cy - radial * 0.8f) > brightness(cx - radial * 0.8f, cy) + 6)
+                assertTrue("The narrow center collar stays dark",
+                    brightness(cx, cy - radial * 0.8f) > brightness(cx, cy - radial * 0.54f) + 6)
+                val dir = File("build/reports/vinyl-preview").apply { mkdirs() }
+                val name = if (selectedTheme == VinylMachineTheme.CLASSIC) "silver-machine-artwork" else "studio-black-artwork"
+                File(dir, "$name.png").outputStream().use {
+                    image.compress(Bitmap.CompressFormat.PNG, 100, it)
+                }
+                image.recycle()
             }
-            val radial = (disc.right - disc.left).value * 0.5f
-            assertTrue("Soft top light reveals the playing grooves",
-                brightness(cx, cy - radial * 0.8f) > brightness(cx - radial * 0.8f, cy) + 6)
-            assertTrue("The narrow center collar stays dark",
-                brightness(cx, cy - radial * 0.8f) > brightness(cx, cy - radial * 0.54f) + 6)
-            val dir = File("build/reports/vinyl-preview").apply { mkdirs() }
-            File(dir, "silver-machine-artwork.png").outputStream().use {
-                image.compress(Bitmap.CompressFormat.PNG, 100, it)
-            }
-            image.recycle()
         }
     }
 

@@ -170,6 +170,7 @@ import com.yohandeku32.nusamusic.model.LibraryContentState
 import com.yohandeku32.nusamusic.model.Song
 import com.yohandeku32.nusamusic.playback.PlaybackService
 import com.yohandeku32.nusamusic.ui.vinylLabelDiameter
+import com.yohandeku32.nusamusic.ui.VinylThemePreference
 import com.yohandeku32.nusamusic.ui.VinylLabelPainter
 import com.yohandeku32.nusamusic.ui.VinylShadowPainter
 import com.yohandeku32.nusamusic.ui.VinylPainter
@@ -2065,6 +2066,7 @@ private fun NusaMusicApp(
             uiPrefs.getString("title_font_family", "Serif") ?: "Serif"
         )
     }
+    var vinylMachineTheme by remember { mutableStateOf(VinylThemePreference.read(uiPrefs)) }
     var playerPresentationMode by remember {
         mutableStateOf(
             PlayerPresentationMode.fromPreference(
@@ -2472,6 +2474,11 @@ private fun NusaMusicApp(
                 },
                 onChooseCustomTitleFont = onChooseCustomTitleFont,
                 onResetCustomTitleFont = onResetCustomTitleFont,
+                vinylMachineTheme = vinylMachineTheme,
+                onVinylMachineThemeChange = { theme ->
+                    vinylMachineTheme = theme
+                    VinylThemePreference.write(uiPrefs, theme)
+                },
                 playerPresentationMode = playerPresentationMode,
                 playerScale = playerScale,
                 onPlayerScaleChange = { value ->
@@ -2968,6 +2975,7 @@ private fun NusaMusicApp(
                                             hasSong = currentSong != null,
                                             positionMsState = positionMsState,
                                             durationMs = durationMs,
+                                            machineTheme = vinylMachineTheme,
                                             artworkColor = vinylArtworkColor,
                                             waveform = waveform.data,
                                             isWaveformLoading = waveform.loading,
