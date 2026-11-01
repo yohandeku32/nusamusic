@@ -9,7 +9,7 @@ import kotlinx.coroutines.withContext
 import kotlin.math.abs
 
 /** The dominant artwork hue plus a genuinely represented, distinct complementary artwork hue. */
-internal data class VinylArtworkPalette(val primary: Color, val secondary: Color = primary)
+data class VinylArtworkPalette(val primary: Color, val secondary: Color = primary)
 
 /** One small bitmap sample and one background-worker pass; never sample album art per animation frame. */
 internal suspend fun vinylArtworkPalette(bitmap: Bitmap): VinylArtworkPalette? = withContext(Dispatchers.Default) {
