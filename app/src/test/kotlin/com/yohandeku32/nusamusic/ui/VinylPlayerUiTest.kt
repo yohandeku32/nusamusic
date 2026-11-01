@@ -492,8 +492,10 @@ class VinylPlayerUiTest {
         val deck = compose.onNodeWithTag("vinyl-deck").getUnclippedBoundsInRoot()
         val progress = compose.onNodeWithTag("vinyl-progress").getUnclippedBoundsInRoot()
         val record = compose.onNodeWithTag("vinyl-record").getUnclippedBoundsInRoot()
-        assertEquals(progress.left.value, deck.left.value, 0.5f)
-        assertEquals(progress.right.value, deck.right.value, 0.5f)
+        assertEquals("Vinyl stays horizontally centered", ((progress.left + progress.right) / 2f).value,
+            ((deck.left + deck.right) / 2f).value, 0.5f)
+        assertEquals("Vinyl chassis scales down by only 4%", (progress.right - progress.left).value * 0.96f,
+            (deck.right - deck.left).value, 0.5f)
         assertEquals((record.right - record.left).value, (record.bottom - record.top).value, 0.5f)
         assertTrue("A short viewport uses a wider chassis while keeping the record circular",
             (deck.right - deck.left) > (deck.bottom - deck.top))
@@ -517,12 +519,14 @@ class VinylPlayerUiTest {
         val progress = compose.onNodeWithTag("vinyl-progress").getUnclippedBoundsInRoot()
         val deck = compose.onNodeWithTag("vinyl-deck").getUnclippedBoundsInRoot()
         val transport = compose.onNodeWithTag("vinyl-transport").getUnclippedBoundsInRoot()
-        assertEquals(progress.left.value, deck.left.value, 0.5f)
-        assertEquals(progress.right.value, deck.right.value, 0.5f)
+        assertEquals("Vinyl remains centered over the progress", ((progress.left + progress.right) / 2f).value,
+            ((deck.left + deck.right) / 2f).value, 0.5f)
+        assertEquals("Vinyl is only 4% smaller", (progress.right - progress.left).value * 0.96f,
+            (deck.right - deck.left).value, 0.5f)
         assertEquals("Playback controls must share the same left gutter", progress.left.value, transport.left.value, 0.5f)
         assertEquals("Playback controls must share the same right gutter", progress.right.value, transport.right.value, 0.5f)
-        assertEquals("Restore the 36 dp progress margin used before the enlarged revision", 36f, deck.left.value, 0.5f)
-        assertEquals(375f, deck.right.value, 0.5f)
+        assertEquals("Keep the 36 dp progress and metadata gutter", 36f, progress.left.value, 0.5f)
+        assertEquals(375f, progress.right.value, 0.5f)
         for (text in listOf(title.value, "LINKIN PARK")) {
             val node = compose.onNodeWithText(text)
             val bounds = node.getUnclippedBoundsInRoot()
@@ -589,6 +593,11 @@ class VinylPlayerUiTest {
         assertEquals(400f, ((record.left + record.right) / 2f).value, 1f)
         val progress = compose.onNodeWithTag("vinyl-progress").getUnclippedBoundsInRoot()
         val transport = compose.onNodeWithTag("vinyl-transport").getUnclippedBoundsInRoot()
+        val deck = compose.onNodeWithTag("vinyl-deck").getUnclippedBoundsInRoot()
+        assertEquals("Wide-screen Vinyl stays centered", ((progress.left + progress.right) / 2f).value,
+            ((deck.left + deck.right) / 2f).value, 0.5f)
+        assertEquals("Wide-screen Vinyl scales down by 4%", (progress.right - progress.left).value * 0.96f,
+            (deck.right - deck.left).value, 0.5f)
         assertEquals("Wide-screen transport matches waveform's left gutter", progress.left.value, transport.left.value, 0.5f)
         assertEquals("Wide-screen transport matches waveform's right gutter", progress.right.value, transport.right.value, 0.5f)
         assertEquals("Both use 512 dp max width minus the 36 dp gutters", 440f, (transport.right - transport.left).value, 1f)
