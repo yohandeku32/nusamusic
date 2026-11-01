@@ -115,14 +115,7 @@ fun TurntablePlayer(
             onPrimary = Color.White
         )
     ) {
-        Column(modifier.fillMaxWidth().drawWithCache {
-            val tint = artworkTint.value
-            val gradient = Brush.verticalGradient(
-                0f to VinylPaper, 0.52f to VinylPaper,
-                0.82f to lerp(VinylPaper, tint, 0.6f), 1f to tint
-            )
-            onDrawBehind { drawRect(gradient) }
-        }) {
+        Column(modifier.fillMaxWidth().background(VinylPaper)) {
             val titleSize = titleFontSize.coerceIn(24f, 56f)
             val density = LocalDensity.current
             val room = ((viewportHeight.value - 640f) / 240f).coerceIn(0f, 1f)
@@ -154,6 +147,16 @@ fun TurntablePlayer(
                 footerGap + 48.dp + qualityGap + 44.dp + bottomPadding + navigationHeight
             Column(
                 Modifier.fillMaxWidth().height(maxOf(viewportHeight, minimumHeight))
+                    // Draw on the fixed player surface, not on the variable-height
+                    // empty-state container; loading a song must not stretch the tint.
+                    .drawWithCache {
+                        val tint = artworkTint.value
+                        val gradient = Brush.verticalGradient(
+                            0f to VinylPaper, 0.52f to VinylPaper,
+                            0.82f to lerp(VinylPaper, tint, 0.6f), 1f to tint
+                        )
+                        onDrawBehind { drawRect(gradient) }
+                    }
                     .navigationBarsPadding().padding(top = topPadding, bottom = bottomPadding),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
