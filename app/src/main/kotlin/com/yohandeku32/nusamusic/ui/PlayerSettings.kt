@@ -102,9 +102,7 @@ internal fun PlayerSettingsContent(
     playerScale: Float = 1f,
     onPlayerScaleChange: (Float) -> Unit = {},
     miniLyricsEnabled: Boolean = false,
-    onMiniLyricsChange: (Boolean) -> Unit = {},
-    vinylMachineTheme: VinylMachineTheme = VinylMachineTheme.CLASSIC,
-    onVinylMachineThemeChange: (VinylMachineTheme) -> Unit = {}
+    onMiniLyricsChange: (Boolean) -> Unit = {}
 ) {
     val colors = MaterialTheme.colorScheme
     val listState = rememberLazyListState()
@@ -256,10 +254,6 @@ internal fun PlayerSettingsContent(
                         )
                     }
                     SettingsDivider()
-                    if (playerPresentationMode == PlayerPresentationMode.VINYL) {
-                        VinylThemeSetting(vinylMachineTheme, onVinylMachineThemeChange)
-                        SettingsDivider()
-                    }
                     if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
                         PlayerScaleSetting(playerScale, onPlayerScaleChange)
                         SettingsDivider()
@@ -902,16 +896,3 @@ private fun SettingsDivider() {
     )
 }
 
-@Composable
-internal fun VinylThemeSetting(theme: VinylMachineTheme, onChange: (VinylMachineTheme) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(settingsText("Tema mesin vinyl", "Vinyl machine theme"),
-            style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
-        Row(Modifier.fillMaxWidth().selectableGroup(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SettingModeTile(settingsText("Klasik", "Classic"), Icons.Default.Album,
-                theme == VinylMachineTheme.CLASSIC, true, { onChange(VinylMachineTheme.CLASSIC) }, Modifier.weight(1f))
-            SettingModeTile("Studio Black", Icons.Default.Album,
-                theme == VinylMachineTheme.STUDIO_BLACK, true, { onChange(VinylMachineTheme.STUDIO_BLACK) }, Modifier.weight(1f))
-        }
-    }
-}
