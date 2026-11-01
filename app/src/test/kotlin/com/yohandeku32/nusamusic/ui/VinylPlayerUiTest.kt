@@ -76,7 +76,6 @@ class VinylPlayerUiTest {
     private val qualityVisible = mutableStateOf(true)
     private val qualityLabel = mutableStateOf("Hi-Res")
     private val artworkColor = mutableStateOf<Color?>(null)
-    private val machineTheme = mutableStateOf(VinylMachineTheme.CLASSIC)
     private lateinit var inputModeManager: InputModeManager
 
     private fun show(width: Int = 411, height: Int = 914, fontScale: Float = 1f, hasSong: Boolean = true,
@@ -98,7 +97,6 @@ class VinylPlayerUiTest {
                                 durationMs = waveform?.durationMs ?: 190_000L,
                                 waveform = waveform, isWaveformLoading = waveformLoading,
                                 artworkColor = artworkColor.value,
-                                machineTheme = machineTheme.value,
                                 shuffleEnabled = shuffled.value, repeatMode = repeated.value,
                                 labels = TurntableLabels("Play", "Pause", "Previous", "Next",
                                     "Shuffle", "Shuffle on", "Shuffle off", "Repeat", "Repeat off",
@@ -110,8 +108,7 @@ class VinylPlayerUiTest {
                                 onSettings = { settings++ },
                                 onOpenSongs = { songListOpens++ },
                                 avatar = { Box(it.testTag("artist-profile").background(Color.Black, CircleShape)) },
-                                record = { VinylRecord(song = null, isPlaying = false, modifier = it.testTag("vinyl-record"),
-                                    compactLabel = machineTheme.value == VinylMachineTheme.STUDIO_BLACK) },
+                                record = { VinylRecord(song = null, isPlaying = false, modifier = it.testTag("vinyl-record")) },
                                 quality = {
                                     if (qualityVisible.value && hasSong) VinylQualityBadge(
                                         qualityLabel.value, true, { qualityClicks++ }, Modifier.testTag("quality")
@@ -136,9 +133,6 @@ class VinylPlayerUiTest {
             }
         }
         compose.waitForIdle()
-        if (machineTheme.value == VinylMachineTheme.STUDIO_BLACK) compose.waitUntil(10_000) {
-            compose.onAllNodesWithTag("studio-black-raster").fetchSemanticsNodes().isNotEmpty()
-        }
     }
 
     private fun snapshot(name: String) {
@@ -185,36 +179,16 @@ class VinylPlayerUiTest {
         assertEquals(VinylPaper, backgroundPixel(900))
     }
 
-    @Test fun studioBlackKeepsGeometryAndMechanicalPlaybackControls() {
+    @Test fun classicMechanicalControlsRemainOperable() {
         show()
-        val deck = compose.onNodeWithTag("vinyl-deck").getUnclippedBoundsInRoot()
-        val titleBounds = compose.onNodeWithText(title.value).getUnclippedBoundsInRoot()
-        compose.runOnIdle { machineTheme.value = VinylMachineTheme.STUDIO_BLACK }
-        compose.waitForIdle()
-        compose.waitUntil(10_000) {
-            compose.onAllNodesWithTag("studio-black-raster").fetchSemanticsNodes().isNotEmpty()
-        }
-        assertEquals(deck, compose.onNodeWithTag("vinyl-deck").getUnclippedBoundsInRoot())
-        assertEquals(titleBounds, compose.onNodeWithText(title.value).getUnclippedBoundsInRoot())
         compose.onNodeWithContentDescription("Turntable: Play").performClick()
         assertEquals(1, plays)
         compose.onNodeWithContentDescription("Turntable: Repeat").performClick()
         assertEquals(1, repeated.value)
-        snapshot("studio-black-phone")
-        compose.runOnIdle { machineTheme.value = VinylMachineTheme.CLASSIC }
-        compose.waitForIdle()
-        assertEquals(deck, compose.onNodeWithTag("vinyl-deck").getUnclippedBoundsInRoot())
+        snapshot("classic-mechanical-controls")
     }
 
-    @Test fun studioBlackFitsShortPhoneWithEveryControlVisible() {
-        machineTheme.value = VinylMachineTheme.STUDIO_BLACK
-        show(width = 360, height = 640)
-        assertEveryControlFits()
-        snapshot("studio-black-short-phone")
-    }
-
-    @Test fun studioBlackMechanicalControlsRemainOperableWithLargeText() {
-        machineTheme.value = VinylMachineTheme.STUDIO_BLACK
+    @Test fun classicFitsCompactPhoneWithLargeText() {
         show(width = 320, height = 640, fontScale = 2f)
         compose.onNodeWithContentDescription("Turntable: Play").performScrollTo().performClick()
         assertEquals(1, plays)
