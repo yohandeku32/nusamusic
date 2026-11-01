@@ -197,6 +197,7 @@ import com.yohandeku32.nusamusic.ui.ImmersiveLyricsPanel
 import com.yohandeku32.nusamusic.ui.ImmersiveLyricsState
 import com.yohandeku32.nusamusic.ui.MiuixHorizontalPager
 import com.yohandeku32.nusamusic.ui.animateMiuixScrollToPage
+import com.yohandeku32.nusamusic.ui.vinylArtworkColor
 import com.yohandeku32.nusamusic.ui.artworkBackdropColor
 import com.yohandeku32.nusamusic.ui.PlayerScaleHost
 import com.yohandeku32.nusamusic.ui.PlayerScalePreference
@@ -2953,6 +2954,7 @@ private fun NusaMusicApp(
                                         .background(VinylPaper)
                                 ) {
                                     if (playerPresentationMode == PlayerPresentationMode.VINYL) {
+                                        var vinylArtworkColor by remember { mutableStateOf<Color?>(null) }
                                         val waveform = rememberVinylWaveform(currentSong,
                                             pagerState.settledPage == playerPage)
                                         TurntablePlayer(
@@ -2966,6 +2968,7 @@ private fun NusaMusicApp(
                                             hasSong = currentSong != null,
                                             positionMsState = positionMsState,
                                             durationMs = durationMs,
+                                            artworkColor = vinylArtworkColor,
                                             waveform = waveform.data,
                                             isWaveformLoading = waveform.loading,
                                             shuffleEnabled = shuffleEnabled,
@@ -2988,7 +2991,8 @@ private fun NusaMusicApp(
                                                 turntable = nusaText("Mesin vinyl", "Turntable"),
                                                 waveformLoading = nusaText("Membaca gelombang audio", "Reading audio waveform"),
                                                 waveformUnavailable = nusaText("Gelombang audio tidak tersedia", "Audio waveform unavailable"),
-                                                waveformReady = nusaText("Gelombang audio", "Audio waveform")
+                                                waveformReady = nusaText("Gelombang audio", "Audio waveform"),
+                                                songs = nusaText("Daftar lagu", "Songs")
                                             ),
                                             onPlayPause = {
                                                 when {
@@ -3004,6 +3008,7 @@ private fun NusaMusicApp(
                                             onShuffle = onToggleShuffle,
                                             onRepeat = onToggleRepeat,
                                             onSettings = { showSettings = true },
+                                            onOpenSongs = { scope.launch { pagerState.animateMiuixScrollToPage(libraryPage) } },
                                             avatar = { avatarModifier ->
                                                 ArtistAvatar(song = currentSong, modifier = avatarModifier.clip(CircleShape))
                                             },
@@ -3011,7 +3016,8 @@ private fun NusaMusicApp(
                                                 VinylRecord(
                                                     song = currentSong,
                                                     isPlaying = isPlaying && pagerState.settledPage == playerPage,
-                                                    modifier = recordModifier
+                                                    modifier = recordModifier,
+                                                    onArtworkColor = { vinylArtworkColor = it }
                                                 )
                                             },
                                             quality = { AudioQualityPill(song = currentSong, vinyl = true) },
@@ -4628,7 +4634,8 @@ private fun RealisticControlButton(
 internal fun VinylRecord(
     song: Song?,
     isPlaying: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onArtworkColor: ((Color?) -> Unit)? = null
 ) {
     val spinEnabled = isPlaying && android.animation.ValueAnimator.areAnimatorsEnabled()
     // Keep the physical angle continuous while changing rotation speed.
@@ -4718,6 +4725,7 @@ internal fun VinylRecord(
                     song = song,
                     maxSizePx = 512,
                     retainWhileLoading = true,
+                    onArtworkColor = onArtworkColor,
                     modifier = Modifier.fillMaxSize()
                 )
                 Box(
@@ -5445,7 +5453,8 @@ private fun ArtworkView(
     loadDelayMs: Long = 0L,
     loadAllowed: Boolean = true,
     grainOverlay: Boolean = true,
-    retainWhileLoading: Boolean = false
+    retainWhileLoading: Boolean = false,
+    onArtworkColor: ((Color?) -> Unit)? = null
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val density = androidx.compose.ui.platform.LocalDensity.current
@@ -5470,6 +5479,12 @@ private fun ArtworkView(
         )
     }
 
+    val artworkColorCallback by rememberUpdatedState(onArtworkColor)
+    LaunchedEffect(bitmap, onArtworkColor != null) {
+        if (onArtworkColor != null) {
+            artworkColorCallback?.invoke(bitmap?.let { vinylArtworkColor(it) })
+        }
+    }
     LaunchedEffect(song?.uri, maxSizePx, loadDelayMs, loadAllowed) {
         if (!loadAllowed) return@LaunchedEffect
         // Recycled Library rows may already have a full-resolution-enough

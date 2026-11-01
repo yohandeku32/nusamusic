@@ -2,6 +2,7 @@
 
 Record rendering, playback controls, lyrics, artist portraits, and presentation selection.
 
+- [2026-11-01: Match the outlined playback reference](2026-11-01-outline-reference-playback-controls.md)
 - [2026-11-01: Apply option A playback controls](2026-11-01-apply-option-a-playback-controls.md)
 - [2026-10-31: Refine the pressed-vinyl surface](2026-10-31-refine-pressed-vinyl-surface.md)
 - [2026-10-31: Browse stacked record sleeves](2026-10-31-stacked-record-sleeve-library.md)

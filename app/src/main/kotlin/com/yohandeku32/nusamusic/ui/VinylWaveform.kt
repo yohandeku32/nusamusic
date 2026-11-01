@@ -78,8 +78,8 @@ internal fun VinylWaveformTrack(
         val offsets = floatArrayOf(0f, 0.65f, -0.55f)
         val heights = floatArrayOf(1f, 0.72f, 0.5f)
         val ink = Color(0xFF171717)
-        val unplayed = Color(0xFF85847E)
-        val secondary = Color(0xFF77766F)
+        val unplayed = Color(0xFF686760)
+        val secondary = Color(0xFF686760)
         val stroke = Stroke(1.4.dp.toPx(), cap = StrokeCap.Round)
         onDrawBehind {
             val played = fraction().coerceIn(0f, 1f)

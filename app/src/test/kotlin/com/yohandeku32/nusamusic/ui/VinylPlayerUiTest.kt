@@ -61,6 +61,7 @@ class VinylPlayerUiTest {
     private var previous = 0
     private var next = 0
     private var settings = 0
+    private var songListOpens = 0
     private var lyricsOpens = 0
     private var shares = 0
     private var favorites = 0
@@ -74,6 +75,7 @@ class VinylPlayerUiTest {
     private val title = mutableStateOf("The Emptiness Machine")
     private val qualityVisible = mutableStateOf(true)
     private val qualityLabel = mutableStateOf("Hi-Res")
+    private val artworkColor = mutableStateOf<Color?>(null)
     private lateinit var inputModeManager: InputModeManager
 
     private fun show(width: Int = 411, height: Int = 914, fontScale: Float = 1f, hasSong: Boolean = true,
@@ -94,6 +96,7 @@ class VinylPlayerUiTest {
                                 positionMsState = position,
                                 durationMs = waveform?.durationMs ?: 190_000L,
                                 waveform = waveform, isWaveformLoading = waveformLoading,
+                                artworkColor = artworkColor.value,
                                 shuffleEnabled = shuffled.value, repeatMode = repeated.value,
                                 labels = TurntableLabels("Play", "Pause", "Previous", "Next",
                                     "Shuffle", "Shuffle on", "Shuffle off", "Repeat", "Repeat off",
@@ -103,6 +106,7 @@ class VinylPlayerUiTest {
                                 onShuffle = { shuffled.value = !shuffled.value },
                                 onRepeat = { repeated.value = (repeated.value + 1) % 3 },
                                 onSettings = { settings++ },
+                                onOpenSongs = { songListOpens++ },
                                 avatar = { Box(it.testTag("artist-profile").background(Color.Black, CircleShape)) },
                                 record = { VinylRecord(song = null, isPlaying = false, modifier = it.testTag("vinyl-record")) },
                                 quality = {
@@ -142,6 +146,37 @@ class VinylPlayerUiTest {
             val dir = File("build/reports/vinyl-preview").apply { mkdirs() }
             File(dir, "$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
         }
+    }
+
+    @Test fun coverGradientColorsOnlyTheLowerPanelWithoutMovingControls() {
+        artworkColor.value = Color(0xFF8852AC)
+        show()
+        val before = compose.onNodeWithContentDescription("Play").getUnclippedBoundsInRoot()
+        fun backgroundPixel(y: Int): Color {
+            var pixel = Color.Transparent
+            compose.runOnIdle {
+                val bitmap = Bitmap.createBitmap(411, 914, Bitmap.Config.ARGB_8888)
+                compose.activity.findViewById<View>(android.R.id.content).draw(Canvas(bitmap))
+                pixel = Color(bitmap.getPixel(4, y))
+                bitmap.recycle()
+            }
+            return pixel
+        }
+        assertEquals(VinylPaper, backgroundPixel(4))
+        val purple = backgroundPixel(900)
+        assertTrue(purple.blue > purple.green)
+        snapshot("artwork-gradient-purple")
+        compose.runOnIdle { artworkColor.value = Color(0xFF328145) }
+        compose.mainClock.advanceTimeBy(600)
+        compose.waitForIdle()
+        val green = backgroundPixel(900)
+        assertTrue(green.green > green.red)
+        assertEquals(before, compose.onNodeWithContentDescription("Play").getUnclippedBoundsInRoot())
+        snapshot("artwork-gradient-green")
+        compose.runOnIdle { artworkColor.value = null }
+        compose.mainClock.advanceTimeBy(600)
+        compose.waitForIdle()
+        assertEquals(VinylPaper, backgroundPixel(900))
     }
 
     @Test fun transportMenusSeekAndFooterUsePlaybackCallbacks() {
@@ -299,29 +334,27 @@ class VinylPlayerUiTest {
         assertEveryControlFits()
     }
 
-    @Test fun optionAFiveControlsFitCompactWidthAndExposeTheirActualStates() {
+    @Test fun outlinedTransportFitsCompactWidthAndOpensTheSongList() {
         show(width = 320, height = 640)
-        val controls = listOf("Shuffle", "Previous", "Play", "Next", "Repeat").map {
+        val controls = listOf("Repeat", "Previous", "Play", "Next", "Songs").map {
             compose.onNodeWithContentDescription(it).getUnclippedBoundsInRoot()
         }
         controls.forEach { assertTrue((it.right - it.left).value >= 44f && (it.bottom - it.top).value >= 44f) }
         controls.zipWithNext().forEach { (left, right) -> assertTrue(left.right <= right.left) }
-        val shuffle = compose.onNodeWithContentDescription("Shuffle")
-        shuffle.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Shuffle off"))
-        shuffle.performClick()
-        shuffle.assertIsSelected().assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Shuffle on"))
         val repeat = compose.onNodeWithContentDescription("Repeat")
         repeat.performClick()
         repeat.assertIsSelected().assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Repeat one"))
-        snapshot("option-a-active-compact")
+        snapshot("outlined-transport-active-compact")
         repeat.performClick()
         repeat.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Repeat all"))
         repeat.performClick()
         repeat.assertIsNotSelected().assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Repeat off"))
         compose.runOnIdle { inputModeManager.requestInputMode(InputMode.Keyboard) }
-        shuffle.performSemanticsAction(SemanticsActions.RequestFocus) { it() }
-        shuffle.performKeyInput { pressKey(Key.Enter) }
-        assertFalse(shuffled.value)
+        repeat.performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+        repeat.performKeyInput { pressKey(Key.Enter) }
+        assertEquals(1, repeated.value)
+        compose.onNodeWithContentDescription("Songs").performClick()
+        assertEquals(1, songListOpens)
         assertEveryControlFits()
     }
 
@@ -338,7 +371,7 @@ class VinylPlayerUiTest {
         compose.onNodeWithContentDescription("Previous").assertIsNotEnabled()
         compose.onNodeWithContentDescription("Next").assertIsNotEnabled()
         compose.onNodeWithContentDescription("Seek").assertIsNotEnabled()
-        compose.onNodeWithContentDescription("Shuffle").assertIsNotEnabled()
+        compose.onNodeWithContentDescription("Songs").assertIsEnabled()
         compose.onNodeWithContentDescription("Repeat").assertIsNotEnabled()
         compose.onNodeWithContentDescription("Play").assertIsEnabled()
         compose.onNodeWithContentDescription("Settings").assertIsEnabled()
@@ -408,7 +441,7 @@ class VinylPlayerUiTest {
 
     private fun assertEveryControlFits() {
         val viewport = compose.onNodeWithTag("vinyl-preview").getUnclippedBoundsInRoot()
-        for (description in listOf("Settings", "Seek", "Shuffle", "Previous", "Play", "Next", "Repeat", "Lyrics", "Share", "Favorite",
+        for (description in listOf("Settings", "Seek", "Repeat", "Previous", "Play", "Next", "Songs", "Lyrics", "Share", "Favorite",
                 "Turntable: Play", "Turntable: Repeat")) {
             val bounds = compose.onNodeWithContentDescription(description).getUnclippedBoundsInRoot()
             assertTrue("$description must fit above the screen bottom", bounds.bottom <= viewport.bottom)

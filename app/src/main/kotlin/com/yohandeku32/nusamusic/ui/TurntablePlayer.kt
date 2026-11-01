@@ -1,17 +1,22 @@
 package com.yohandeku32.nusamusic.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.rounded.FastForward
-import androidx.compose.material.icons.rounded.FastRewind
+import androidx.compose.material.icons.rounded.SkipNext
+import androidx.compose.material.icons.rounded.SkipPrevious
+import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.RepeatOne
 import androidx.compose.material3.*
@@ -59,7 +64,8 @@ data class TurntableLabels(
     val turntable: String = "Turntable",
     val waveformLoading: String = "Reading audio waveform",
     val waveformUnavailable: String = "Audio waveform unavailable",
-    val waveformReady: String = "Audio waveform"
+    val waveformReady: String = "Audio waveform",
+    val songs: String = "Songs"
 )
 
 @Composable
@@ -84,6 +90,7 @@ fun TurntablePlayer(
     onShuffle: () -> Unit,
     onRepeat: () -> Unit,
     onSettings: () -> Unit,
+    onOpenSongs: () -> Unit,
     avatar: @Composable (Modifier) -> Unit,
     record: @Composable (Modifier) -> Unit,
     quality: @Composable () -> Unit,
@@ -91,8 +98,10 @@ fun TurntablePlayer(
     emptyState: @Composable () -> Unit,
     modifier: Modifier = Modifier,
     waveform: AudioWaveform? = null,
-    isWaveformLoading: Boolean = false
+    isWaveformLoading: Boolean = false,
+    artworkColor: Color? = null
 ) {
+    val artworkTint = animateColorAsState(vinylArtworkTint(artworkColor), tween(450), label = "Vinyl artwork tint")
     MaterialTheme(
         colorScheme = lightColorScheme(
             background = VinylPaper,
@@ -105,7 +114,14 @@ fun TurntablePlayer(
             onPrimary = Color.White
         )
     ) {
-        Box(modifier.fillMaxWidth().background(VinylPaper)) {
+        Box(modifier.fillMaxWidth().drawWithCache {
+            val tint = artworkTint.value
+            val gradient = Brush.verticalGradient(
+                0f to VinylPaper, 0.52f to VinylPaper,
+                0.82f to lerp(VinylPaper, tint, 0.6f), 1f to tint
+            )
+            onDrawBehind { drawRect(gradient) }
+        }) {
             val titleSize = titleFontSize.coerceIn(24f, 56f)
             val density = LocalDensity.current
             val room = ((viewportHeight.value - 640f) / 240f).coerceIn(0f, 1f)
@@ -230,28 +246,29 @@ fun TurntablePlayer(
                     val primarySize = if (compact) 64.dp else 72.dp
                     Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween) {
-                        TurntableOption(Icons.Rounded.Shuffle, labels.shuffle,
-                            if (shuffleEnabled) labels.shuffleOn else labels.shuffleOff,
-                            shuffleEnabled, hasSong, onShuffle, side)
-                        TurntableButton(
-                            Icons.Rounded.FastRewind, labels.previous, onPrevious, hasSong,
-                            Modifier.size(side), 28.dp
-                        )
-                        TurntableButton(
-                            if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                            if (isPlaying) labels.pause else labels.play,
-                            onPlayPause, true, Modifier.size(primarySize), 36.dp, primary = true
-                        )
-                        TurntableButton(
-                            Icons.Rounded.FastForward, labels.next, onNext, hasSong,
-                            Modifier.size(side), 28.dp
-                        )
                         TurntableOption(if (repeatMode == 1) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
                             labels.repeat, when (repeatMode) {
                                 1 -> labels.repeatOne
                                 2 -> labels.repeatAll
                                 else -> labels.repeatOff
                             }, repeatMode != 0, hasSong, onRepeat, side)
+                        TurntableButton(
+                            Icons.Rounded.SkipPrevious, labels.previous, onPrevious, hasSong,
+                            Modifier.size(side), 44.dp
+                        )
+                        TurntableButton(
+                            if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                            if (isPlaying) labels.pause else labels.play,
+                            onPlayPause, true, Modifier.size(primarySize), 40.dp, primary = true
+                        )
+                        TurntableButton(
+                            Icons.Rounded.SkipNext, labels.next, onNext, hasSong,
+                            Modifier.size(side), 44.dp
+                        )
+                        IconButton(onClick = onOpenSongs, modifier = Modifier.size(side)) {
+                            Icon(Icons.Rounded.QueueMusic, labels.songs, Modifier.size(26.dp),
+                                tint = VinylInk.copy(alpha = 0.7f))
+                        }
                     }
                 }
                 Spacer(Modifier.height(footerGap))
@@ -276,13 +293,13 @@ private fun TurntableButton(
     Surface(
         onClick = onClick,
         enabled = enabled,
-        shape = if (primary) CircleShape else RoundedCornerShape(14.dp),
-        color = if (primary) Color(0xFF111111) else Color(0xFFE3E2DD),
+        shape = CircleShape,
+        color = Color.Transparent,
+        border = if (primary) BorderStroke(2.dp, VinylInk) else null,
         modifier = modifier
     ) {
         Box(contentAlignment = Alignment.Center) {
-            Icon(icon, label, Modifier.size(size), tint = if (primary) Color.White
-                else Color(0xFF505055).copy(alpha = if (enabled) 1f else 0.38f))
+            Icon(icon, label, Modifier.size(size), tint = VinylInk.copy(alpha = if (enabled) 1f else 0.38f))
         }
     }
 }

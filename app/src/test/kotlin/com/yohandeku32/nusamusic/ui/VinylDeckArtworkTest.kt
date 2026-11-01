@@ -71,9 +71,11 @@ class VinylDeckArtworkTest {
         VinylPreviewMetadataRetriever.artwork = cover(android.graphics.Color.RED)
         assertNotNull(ArtworkLoader.load(compose.activity, first.uri, 512))
         val song = mutableStateOf(first)
+        val artworkColor = java.util.concurrent.atomic.AtomicReference<Color?>()
         compose.setContent {
             CompositionLocalProvider(LocalDensity provides Density(1f)) {
-                MaterialTheme { VinylRecord(song.value, false, Modifier.size(240.dp).testTag("record")) }
+                MaterialTheme { VinylRecord(song.value, false, Modifier.size(240.dp).testTag("record"),
+                    onArtworkColor = artworkColor::set) }
             }
         }
         fun labelPixel(): Int {
@@ -89,6 +91,8 @@ class VinylDeckArtworkTest {
             return pixel
         }
         val old = labelPixel()
+        compose.waitUntil(5000) { artworkColor.get()?.let { it.red > it.blue } == true }
+        val oldColor = artworkColor.get()
         assertTrue(android.graphics.Color.red(old) > android.graphics.Color.blue(old) + 80)
         val release = CountDownLatch(1)
         VinylPreviewMetadataRetriever.artwork = cover(android.graphics.Color.BLUE)
@@ -99,11 +103,13 @@ class VinylDeckArtworkTest {
             compose.waitForIdle()
             compose.waitUntil(5000) { VinylPreviewMetadataRetriever.entered!!.count == 0L }
             assertEquals("The prior cover stays visible during a blocked decode", old, labelPixel())
+            assertEquals("The tint follows the retained cover", oldColor, artworkColor.get())
             release.countDown()
             compose.waitUntil(5000) { ArtworkLoader.cached(second.uri, 512) != null }
             val updated = labelPixel()
             assertTrue("New cover replaces the retained cover", android.graphics.Color.blue(updated) >
                 android.graphics.Color.red(updated) + 80)
+            compose.waitUntil(5000) { artworkColor.get()?.let { it.blue > it.red } == true }
         } finally {
             release.countDown()
             VinylPreviewMetadataRetriever.gate = null
