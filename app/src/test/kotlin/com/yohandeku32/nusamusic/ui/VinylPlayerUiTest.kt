@@ -516,8 +516,11 @@ class VinylPlayerUiTest {
         show()
         val progress = compose.onNodeWithTag("vinyl-progress").getUnclippedBoundsInRoot()
         val deck = compose.onNodeWithTag("vinyl-deck").getUnclippedBoundsInRoot()
+        val transport = compose.onNodeWithTag("vinyl-transport").getUnclippedBoundsInRoot()
         assertEquals(progress.left.value, deck.left.value, 0.5f)
         assertEquals(progress.right.value, deck.right.value, 0.5f)
+        assertEquals("Playback controls must share the same left gutter", progress.left.value, transport.left.value, 0.5f)
+        assertEquals("Playback controls must share the same right gutter", progress.right.value, transport.right.value, 0.5f)
         assertEquals("Restore the 36 dp progress margin used before the enlarged revision", 36f, deck.left.value, 0.5f)
         assertEquals(375f, deck.right.value, 0.5f)
         for (text in listOf(title.value, "LINKIN PARK")) {
@@ -584,6 +587,11 @@ class VinylPlayerUiTest {
         assertTrue("The record fits its remaining height and keeps the 380 dp cap",
             (record.right - record.left).value in 180f..380f)
         assertEquals(400f, ((record.left + record.right) / 2f).value, 1f)
+        val progress = compose.onNodeWithTag("vinyl-progress").getUnclippedBoundsInRoot()
+        val transport = compose.onNodeWithTag("vinyl-transport").getUnclippedBoundsInRoot()
+        assertEquals("Wide-screen transport matches waveform's left gutter", progress.left.value, transport.left.value, 0.5f)
+        assertEquals("Wide-screen transport matches waveform's right gutter", progress.right.value, transport.right.value, 0.5f)
+        assertEquals("Both use 512 dp max width minus the 36 dp gutters", 440f, (transport.right - transport.left).value, 1f)
         compose.runOnIdle { title.value = "A very long song title that wraps onto several different lines" }
         assertEquals(record, compose.onNodeWithTag("vinyl-record").getUnclippedBoundsInRoot())
         compose.onNodeWithContentDescription("Seek").performScrollTo()
