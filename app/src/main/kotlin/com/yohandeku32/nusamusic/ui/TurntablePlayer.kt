@@ -238,8 +238,9 @@ fun TurntablePlayer(
                     isPlaying, isVisible)
                 Spacer(Modifier.height(transportGap))
                 BoxWithConstraints(
-                    Modifier.widthIn(max = 480.dp).fillMaxWidth().padding(horizontal = VinylGutter)
-                        .height(transportSize)
+                    Modifier.widthIn(max = VinylContentWidth).fillMaxWidth()
+                        .padding(horizontal = VinylGutter).height(transportSize)
+                        .testTag("vinyl-transport")
                 ) {
                     val compact = maxWidth < 280.dp
                     val side = if (compact) 44.dp else 48.dp
