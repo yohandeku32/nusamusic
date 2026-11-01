@@ -3,6 +3,8 @@ package com.yohandeku32.nusamusic.data
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.Assert.assertEquals
+import org.json.JSONObject
 
 class SpotifyCanvasArtworkLoaderTest {
     @Test fun acceptsOnlyRealSpotifyCanvasMp4CdnUrls() {
@@ -70,5 +72,30 @@ class SpotifyCanvasArtworkLoaderTest {
         assertFalse(SpotifyCanvasArtworkLoader.similarArtist(
             "Taylor Swift", "The Weeknd"
         ))
+    }
+
+    @Test fun preservesChineseJapaneseAndKoreanTitlesAndArtistNames() {
+        for (title in listOf("平行线", "夜に駆ける", "사랑해")) {
+            assertTrue(title, SpotifyCanvasArtworkLoader.similarTitle(title, title))
+        }
+        assertTrue(SpotifyCanvasArtworkLoader.similarArtist("黃霄雲", "黃霄雲, Willim"))
+        assertFalse(SpotifyCanvasArtworkLoader.similarTitle("平行线", "夜に駆ける"))
+    }
+
+    @Test fun directSpotifyVideoWinsOverAnEquivalentProxyWhenBothAreAvailable() {
+        val proxy = "https://www.spotycovs.lol/api/canvas?id=4iZ4pt7kvcaH6Yo8UoZ4s2&stream=1"
+        val direct = "https://canvaz.scdn.co/upload/artist/clip.cnvs.mp4"
+        val reply = JSONObject().put("canvasUrl", proxy).put("videoUrl", direct)
+        assertEquals(direct, SpotifyCanvasArtworkLoader.canvasVideoUrl(reply))
+        assertEquals(proxy, SpotifyCanvasArtworkLoader.canvasVideoUrl(JSONObject().put("canvasUrl", proxy)))
+        assertEquals("A direct URL in another candidate must not change the selected recording", proxy,
+            SpotifyCanvasArtworkLoader.canvasVideoUrl(JSONObject().put("canvasUrl", proxy)
+                .put("data", JSONObject().put("videoUrl", direct))))
+    }
+
+    @Test fun meaningfulNonLatinMarksRemainDistinctWhileLatinAccentsStillMatch() {
+        assertFalse(SpotifyCanvasArtworkLoader.similarTitle("かみ", "がみ"))
+        assertFalse(SpotifyCanvasArtworkLoader.similarTitle("पल", "पाल"))
+        assertTrue(SpotifyCanvasArtworkLoader.similarArtist("Beyoncé", "Beyonce"))
     }
 }

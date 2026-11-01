@@ -66,8 +66,11 @@ internal class LyricsLongVocalMotion(
             horizontalDp.toDouble() * 0.0045
         val breathX = 0.5 + 0.5 * sin(phase - 0.65)
         val breathY = 0.5 + 0.5 * sin(phase - 0.4)
-        scaleX = (1.0 + 0.052 * energy * breathX).toFloat()
-        scaleY = (1.0 + 0.056 * energy * breathY).toFloat()
+        // The V6 floating carrier already contributes up to 1.75% scale.
+        // Bound the added slow-vowel pulse to ~2.3/2.5%, so combined motion
+        // never abruptly balloons beyond the 4.5% shared visual ceiling.
+        scaleX = (1.0 + 0.023 * energy * breathX).toFloat()
+        scaleY = (1.0 + 0.025 * energy * breathY).toFloat()
 
         // Continuous 1.0–1.4Hz resonances, under 0.32dp combined.
         // They move the complete glyph run as a unit, never its sub-pixels
@@ -84,7 +87,8 @@ internal class LyricsLongVocalMotion(
 
         // The original progressive highlight controls which letters glow.
         // This small breathing factor only nudges its existing halo strength.
-        glowBoost = (energy * breathY.toFloat()).coerceIn(0f, 1f)
+        // Avoid a conspicuous brightness kick in the short 320 ms attack.
+        glowBoost = (0.75f * energy * breathY.toFloat()).coerceIn(0f, 1f)
 
         // A visual crescendo only: authored syllable duration supplies timing,
         // NOT any inferred information about vocal volume or real vibrato.

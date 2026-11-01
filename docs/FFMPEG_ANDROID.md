@@ -1,10 +1,10 @@
-# Optional FFmpeg decoder for NusaMusic (Android)
+# Optional FFmpeg decoder for Aruna (Android)
 
-NusaMusic uses **AndroidX Media3 1.9.3**. The default APK uses Android / Media3's
+Aruna uses **AndroidX Media3 1.9.3**. The default APK uses Android / Media3's
 built-in audio decoders. Media3's official `decoder_ffmpeg` extension **is not
 published to Google's Maven repository** and must be built with Android NDK
-and packaged separately. NusaMusic has the renderer wiring in place, but
-**FFmpeg is NOT active in an APK unless its native AAR is provided**.
+and packaged separately. Aruna has the renderer wiring in place, but
+**FFmpeg becomes available only when its native AAR is provided**.
 
 ## What it can and cannot do
 
@@ -21,13 +21,13 @@ and packaged separately. NusaMusic has the renderer wiring in place, but
 
 ## Build the official native extension (Linux)
 
-Prerequisites: JDK, Android SDK, **NDK r26b**, CMake 3.21+, Git and Make.
+Prerequisites: JDK 21, Android SDK, **NDK r26b**, CMake 3.21+, Git and Make.
 The helper script pins AndroidX Media3 to **1.9.3** and FFmpeg to **n6.0**
 rather than using an unverified third-party AAR.
 
 1. Install the NDK using Android SDK Manager; set
    `ANDROID_NDK_HOME=/path/to/Android/Sdk/ndk/26.1.10909125`.
-2. From the **NusaMusic repository root**, run:
+2. From the **repository root**, run:
 
    ```bash
    bash scripts/build-ffmpeg-android.sh
@@ -38,7 +38,7 @@ rather than using an unverified third-party AAR.
    `armeabi-v7a`, `arm64-v8a`, `x86`, and `x86_64`, assembles the AndroidX
    `media3-lib-decoder-ffmpeg` release AAR, and copies it to
    `app/libs/media3-decoder-ffmpeg.aar`.
-3. Build a **real FFmpeg-enabled** NusaMusic APK:
+3. Build a **real FFmpeg-enabled** Aruna APK:
 
    ```bash
    ./gradlew :app:assembleDebug -PrequireFfmpegDecoder=true
@@ -69,8 +69,8 @@ select **Build FFmpeg-enabled Nusa APK**, then select **Run workflow**. The
 workflow installs Android NDK r26b, compiles the upstream FFmpeg native decoder,
 assembles an APK with `-PrequireFfmpegDecoder=true`, and uploads:
 
-- `nusa-ffmpeg-android-debug` — a debug APK with FFmpeg packaged;
-- `media3-ffmpeg-1_9_3-aar` — the matching native extension AAR.
+- `nusa-ffmpeg-android-debug`: a debug APK with FFmpeg packaged;
+- `media3-ffmpeg-1_9_3-aar`: the matching native extension AAR.
 
 This manual native workflow is **separate** from the fast normal Android build.
 It may take considerable time because four Android architectures are compiled.
@@ -93,3 +93,5 @@ References:
 - [AndroidX Media3 FFmpeg decoder build instructions (tag 1.9.3)](https://github.com/androidx/media/blob/1.9.3/libraries/decoder_ffmpeg/README.md)
 - [AndroidX Media3 supported formats and extractor limitations](https://developer.android.com/media/media3/exoplayer/supported-formats)
 - [FFmpeg licensing](https://ffmpeg.org/legal.html)
+
+The workflow and artifact names above retain their legacy Nusa names. The app installed from this source is named Aruna. Return to the [main README](../README.md) for standard setup and checks.

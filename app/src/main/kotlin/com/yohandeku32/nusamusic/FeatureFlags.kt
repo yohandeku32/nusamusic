@@ -1,4 +1,4 @@
 package com.yohandeku32.nusamusic
 
-// Embedded lyrics are available only in the Immersive player.
+// Embedded and online lyrics are available in Immersive and Vinyl.
 internal const val LYRICS_ENABLED = true

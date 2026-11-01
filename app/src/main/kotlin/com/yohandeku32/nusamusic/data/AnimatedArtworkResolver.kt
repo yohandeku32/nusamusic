@@ -67,9 +67,7 @@ internal suspend fun resolveAnimatedArtwork(
     return ArtworkReply(failed = failed)
 }
 
-/** The portrait stream is always first; retain the square stream for playback failure. */
-internal fun preferredAnimatedArtworkUrls(tall: String?, square: String?): List<String> =
-    listOfNotNull(tall, square)
-        .map(String::trim)
-        .filter { it.isNotEmpty() && it != "null" }
-        .distinct()
+/** Immersive playback accepts only Apple's authored portrait animation. */
+internal fun preferredAnimatedArtworkUrls(tall: String?): List<String> =
+    listOfNotNull(tall?.trim())
+        .filter { it.isNotEmpty() && !it.equals("null", true) && !it.equals("none", true) }

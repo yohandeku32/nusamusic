@@ -1,0 +1,16 @@
+# Browse Vinyl songs as stacked record sleeves
+
+> Date: 2026-10-31
+> Status: verified locally; physical-device scrolling and TalkBack pending
+
+Replace the Vinyl library's rotating wheel of circular thumbnails with overlapping square record jackets, following the owner's marked stepped-card reference. Each sleeve shows the actual song title, artist, full-cover thumbnail, and full-size artwork behind its exposed header. Gentle depth-dependent width and a backward tilt suggest browsing a physical crate. Later sleeves draw in front, with 80 dp exposed headers at normal text size; square artwork is capped at 420 dp on wide screens. Existing app typography and theme remain; album art supplies color rather than invented reference categories or branding.
+
+Reuse the parent's filtered/sorted list, lazy list state, playback queue callback, current-track toggle, and delete-confirmation callback. Scrolling only browses. Tap the exposed header to play/toggle; long press requests the existing confirmation. Stable song-ID keys preserve identity through filtering/reordering. Current-track state is communicated by semantics, white edging, and localized Play/Pause text. Empty/permission/scanning presentation stays owned by the existing route. Other presentation modes are unchanged.
+
+At font scale 1.6 and above, remove overlap and perspective so enlarged text has room. When system motion is disabled, remove the scroll-dependent perspective while retaining the sleeve hierarchy. Keep native clickable keyboard/semantics behavior. White text uses a dark artwork scrim; at the text-bearing header's lightest intended opacity (65% black over white), contrast exceeds 4.5:1. Artwork uses the shared production loader/cache at 512 px, reused for the face and thumbnail; the loader rechecks its cache after acquiring the decode permit. Only lazy visible/prefetched sleeves are composed. No auto-playing scroll, continuous animation, screenshot asset, font, or dependency is added.
+
+Direction: ENERGY 2 / RHYTHM 2 / MOTION 2. The overlapping boundaries and perspective serve the user's record-selection metaphor, rather than decorative cards unrelated to content.
+
+All 26 selected checks pass: 4 library, 20 player UI, and 2 artwork. Native tests cover exposed-header touch, current-track toggle, delete request, scroll without playback, final item, stable identity after filtering/reordering, large text/keyboard, and wide/reduced-motion transitions. At 200% text, metadata can use two lines and current-track status moves below it; the short selected title is not ellipsized. Native phone, wide, enlarged-text, and playing-LED previews were inspected. Fixtures use explicitly labelled synthetic covers. Debug assembly, Android Lint (zero errors), signature, whitespace, and documentation links pass. Physical device scrolling, TalkBack, and a real user library remain unverified.
+
+The owner's follow-up also requests rounder quality-label corners and a stronger red indicator with realistic reflected light. Keep the text-only low-opacity quality treatment, increase its corner radius to 6 dp, and refine the LED lens with a red depth gradient, a small upper-left specular highlight, and a restrained local reflection on the metal body. These are part of the same revision, without changing player geometry or adding pulsing animation.

@@ -43,4 +43,34 @@ class LyricsPlaybackStateTest {
         assertEquals(Int.MAX_VALUE.toLong(), playback.position.longValue)
         assertEquals(Int.MAX_VALUE, playback.motion.resetAt)
     }
+    @Test fun media3ClockCorrectionsCannotMoveTheEntireLyricsTimelineBackwards() {
+        val playback = LyricsPlaybackState(1100, 7)
+        for (sample in listOf(1120L, 1140L, 1030L, 1099L, 1130L, 1180L, 1168L)) {
+            playback.publish(sample, 7)
+            assertTrue("same epoch must not rewind lyrics", playback.position.longValue >= 1100L)
+        }
+        assertEquals(1180L, playback.position.longValue)
+        assertEquals(0, playback.motion.revision)
+        // A user-requested seek reanchors immediately, including a small one.
+        playback.publish(1175L, 8)
+        assertEquals(1175L, playback.position.longValue)
+        assertEquals(1, playback.motion.revision)
+        playback.publish(1172L, 8)
+        assertEquals(1175L, playback.position.longValue)
+        playback.publish(500L, 9)
+        assertEquals(500L, playback.position.longValue)
+        assertEquals(2, playback.motion.revision)
+    }
+
+    @Test fun sameEpochJitterDoesNotReTriggerBoundaryAfterLineHasAdvanced() {
+        val playback = LyricsPlaybackState(1950, 0)
+        val samples = listOf(1970L, 1994L, 2010L, 1988L, 1990L, 2030L, 1975L, 2050L)
+        val advanced = ArrayList<Boolean>()
+        for (sample in samples) {
+            playback.publish(sample, 0)
+            advanced.add(playback.position.longValue >= 2000L)
+        }
+        assertEquals(listOf(false, false, true, true, true, true, true, true), advanced)
+    }
+
 }
