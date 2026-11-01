@@ -179,7 +179,7 @@ class VinylDeckArtworkTest {
             val dark = brightness(cx - diagonal, cy - diagonal)
             assertTrue("Grooves catch light at the upper right", brightness(cx + diagonal, cy - diagonal) > dark + 6)
             assertTrue("The opposite lower-left lobe also catches light", brightness(cx - diagonal, cy + diagonal) > dark + 6)
-            val innerDiagonal = diagonal * 0.61f / 0.8f
+            val innerDiagonal = diagonal * 0.66f / 0.8f
             assertTrue("The run-out area stays darker than the illuminated playing grooves",
                 brightness(cx + diagonal, cy - diagonal) > brightness(cx + innerDiagonal, cy - innerDiagonal) + 12)
             val dir = File("build/reports/vinyl-preview").apply { mkdirs() }

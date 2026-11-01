@@ -47,7 +47,8 @@ internal fun VinylTurntableDeck(
         Modifier.size(size, height).testTag("vinyl-deck")
             .drawWithCache {
                 val painter = VinylDeckPainter(this.size)
-                val ambient = vinylShadowPaint(13.dp.toPx(), 58)
+                val ambient = vinylShadowPaint(26.dp.toPx(), 34)
+                val cast = vinylShadowPaint(18.dp.toPx(), 82)
                 val contact = vinylShadowPaint(3.dp.toPx(), 48)
                 val radius = mechanismSize.toPx() * 0.065f
                 val padding = 52.dp.toPx()
@@ -57,8 +58,10 @@ internal fun VinylTurntableDeck(
                     kotlin.math.ceil(bounds.height() / 2).toInt()) { canvas ->
                     canvas.scale(0.5f, 0.5f)
                     canvas.translate(padding, padding)
-                    canvas.drawRoundRect(2.dp.toPx(), 10.dp.toPx(),
-                        this.size.width + 2.dp.toPx(), this.size.height + 10.dp.toPx(), radius, radius, ambient)
+                    canvas.drawRoundRect(0f, 12.dp.toPx(),
+                        this.size.width, this.size.height + 12.dp.toPx(), radius, radius, ambient)
+                    canvas.drawRoundRect(8.dp.toPx(), 18.dp.toPx(),
+                        this.size.width + 8.dp.toPx(), this.size.height + 18.dp.toPx(), radius, radius, cast)
                     canvas.drawRoundRect(0f, 3.dp.toPx(), this.size.width,
                         this.size.height + 3.dp.toPx(), radius, radius, contact)
                 }
