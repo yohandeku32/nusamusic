@@ -115,7 +115,7 @@ fun TurntablePlayer(
             onPrimary = Color.White
         )
     ) {
-        Box(modifier.fillMaxWidth().drawWithCache {
+        Column(modifier.fillMaxWidth().drawWithCache {
             val tint = artworkTint.value
             val gradient = Brush.verticalGradient(
                 0f to VinylPaper, 0.52f to VinylPaper,
@@ -147,10 +147,11 @@ fun TurntablePlayer(
             val textAllowance = with(density) {
                 (titleSize * 2.16f).sp.toDp() + 22.sp.toDp() + 20.sp.toDp()
             }
+            // Reserve the same player height during song restoration: a temporary empty
+            // library must not change the weighted deck size on the first frames.
             val minimumHeight = topPadding + 48.dp + headerGap + 112.dp + recordGap +
                 textAllowance + titleGap + progressGap + 48.dp + transportGap + transportSize +
-                footerGap + 48.dp + qualityGap + 44.dp + bottomPadding + navigationHeight +
-                if (hasSong) 0.dp else 96.dp
+                footerGap + 48.dp + qualityGap + 44.dp + bottomPadding + navigationHeight
             Column(
                 Modifier.fillMaxWidth().height(maxOf(viewportHeight, minimumHeight))
                     .navigationBarsPadding().padding(top = topPadding, bottom = bottomPadding),
@@ -278,8 +279,10 @@ fun TurntablePlayer(
                 Spacer(Modifier.height(footerGap))
                 Box(Modifier.fillMaxWidth().height(48.dp),
                     contentAlignment = Alignment.Center) { footer() }
-                emptyState()
             }
+            // Empty-library copy lives outside the weighted player column so async
+            // restore/scan results cannot resize the deck or shift playback controls.
+            emptyState()
         }
     }
 }
