@@ -78,13 +78,16 @@ class ImmersiveMusicLibraryTest {
 
     private fun show(light: Boolean = true, width: Int = 411, scale: Float = 1f, overlay: Boolean = false,
         empty: Boolean = false, access: Boolean = true, importEnabled: Boolean = false,
-        activeSong: Song? = songs.first()) {
+        activeSong: Song? = songs.first(), libraryStartsOpen: Boolean = true) {
         compose.setContent {
             CompositionLocalProvider(LocalDensity provides Density(1f, scale)) {
                 MaterialTheme(colorScheme = if (light) darkColorScheme() else lightColorScheme()) {
                     Box(Modifier.requiredWidth(width.dp).fillMaxHeight()) {
                         if (!overlay) library(light, empty = empty, access = access,
                             importEnabled = importEnabled, activeSong = activeSong) else {
+                            val libraryOpen = androidx.compose.runtime.remember {
+                                androidx.compose.runtime.mutableStateOf(libraryStartsOpen)
+                            }
                             ImmersiveArtworkPlayer(
                                 title = "Track 01", artist = "Artist 1", composerNames = "",
                                 titleFontFamily = FontFamily.Default, titleFontSize = 32f,
@@ -93,11 +96,11 @@ class ImmersiveMusicLibraryTest {
                                 lyricsOpen = false, lyricsEnabled = true,
                                 onPlayPause = {}, onPrevious = {}, onNext = {}, onShuffle = {},
                                 onRepeat = {}, onFavorite = {}, onLyrics = {}, onDiscovery = {},
-                                libraryOpen = true, libraryLightMode = light, liquidGlassEnabled = false,
+                                libraryOpen = libraryOpen.value, libraryLightMode = light, liquidGlassEnabled = false,
                                 libraryContent = { settled, padding ->
                                     library(light, padding, settled, empty, access, importEnabled, activeSong)
                                 },
-                                onLibrary = {}, onShare = {}, onSettings = {},
+                                onLibrary = { libraryOpen.value = true }, onShare = {}, onSettings = {},
                                 artwork = { modifier, _, _ -> Box(modifier.background(Color.DarkGray)) },
                                 progress = {}, quality = {}, contentInsets = WindowInsets(0, 0, 0, 0)
                             )
@@ -107,6 +110,15 @@ class ImmersiveMusicLibraryTest {
             }
         }
         compose.waitForIdle()
+    }
+
+    @Test fun leftSwipeOnArtworkOpensLibrary() {
+        show(overlay = true, libraryStartsOpen = false)
+        compose.onNodeWithTag("library-test").assertDoesNotExist()
+        compose.onRoot().performTouchInput {
+            swipeLeft(startX = width * 0.8f, endX = width * 0.2f, durationMillis = 350)
+        }
+        compose.onNodeWithTag("library-test").assertIsDisplayed()
     }
 
     private fun menu(track: String = "Track 01") =
