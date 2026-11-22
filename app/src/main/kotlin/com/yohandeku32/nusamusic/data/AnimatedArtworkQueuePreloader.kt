@@ -126,7 +126,7 @@ internal object AnimatedArtworkQueuePreloader {
                 )
             }
         }
-        val candidate = resolve(context, song, order)
+        val candidate = if (song.localArtworkUri == null) resolve(context, song, order) else null
         if (candidate != null) {
             videoSlots.withPermit {
                 when (candidate.provider) {
