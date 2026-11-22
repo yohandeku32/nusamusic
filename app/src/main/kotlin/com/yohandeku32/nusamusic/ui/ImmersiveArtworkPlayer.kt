@@ -111,7 +111,8 @@ internal fun ImmersiveArtworkPlayer(
     lyrics: @Composable (Modifier) -> Unit = {},
     modifier: Modifier = Modifier,
     contentInsets: WindowInsets = WindowInsets.safeDrawing,
-    miniLyrics: (@Composable (Boolean) -> Unit)? = null
+    miniLyrics: (@Composable (Boolean) -> Unit)? = null,
+    onSwipeRight: () -> Unit = onDiscovery
 ) {
     var playerBounds by remember { mutableStateOf<Rect?>(null) }
     var navigationPillBounds by remember { mutableStateOf<Rect?>(null) }
@@ -274,10 +275,12 @@ internal fun ImmersiveArtworkPlayer(
             Modifier.matchParentSize(),
             heroHeight, if (wide) (1f - controlsFraction + 0.06f) else 1f
         )
-        // Rightward drags on the artwork open Discovery; leave vertical scroll,
-        // seeking, and transport-button gestures to their own controls.
-        if (hasSong && !overlayOpen && !lyricsOpen) {
-            Box(Modifier.matchParentSize().pointerInput(onDiscovery) {
+        // The artwork owns both horizontal gestures. The seek bar and
+        // playback controls are layered above this touch surface.
+        if (!portalVisible && !lyricsOpen) {
+            val openLibrary by androidx.compose.runtime.rememberUpdatedState(onLibrary)
+            val openArtist by androidx.compose.runtime.rememberUpdatedState(onSwipeRight)
+            Box(Modifier.matchParentSize().pointerInput(Unit) {
                 var distance = 0f
                 val thresholdPx = 72.dp.toPx()
                 detectHorizontalDragGestures(
@@ -287,7 +290,11 @@ internal fun ImmersiveArtworkPlayer(
                         change.consume()
                     },
                     onDragEnd = {
-                        if (distance >= thresholdPx) onDiscovery()
+                        when {
+                            distance <= -thresholdPx -> openLibrary()
+                            distance >= thresholdPx -> openArtist()
+                            else -> Unit
+                        }
                     },
                     onDragCancel = { distance = 0f }
                 )

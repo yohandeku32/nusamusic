@@ -184,9 +184,6 @@ import com.yohandeku32.nusamusic.ui.VinylPaper
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import com.yohandeku32.nusamusic.ui.TurntableLabels
-import com.yohandeku32.nusamusic.ui.VinylCatalogTrackInfo
-import com.yohandeku32.nusamusic.ui.filterVinylCatalog
-import com.yohandeku32.nusamusic.ui.VinylSongList
 import com.yohandeku32.nusamusic.ui.ImmersiveMusicLibrary
 import com.yohandeku32.nusamusic.ui.immersiveColors
 import com.yohandeku32.nusamusic.ui.ImmersiveArtworkPlayer
@@ -2223,8 +2220,6 @@ private fun NusaMusicApp(
         sortedLibrary = prepared
     }
     val filtered = sortedLibrary.songs
-    var vinylSearchQuery by remember { mutableStateOf("") }
-    val vinylCatalogSongs = remember(filtered, vinylSearchQuery) { filterVinylCatalog(filtered, vinylSearchQuery) }
     val hasMusicAccess = permissionGranted || selectedMusicFolders.isNotEmpty()
     val libraryContentState = LibraryContentState.resolve(
         hasSongs = songs.isNotEmpty(),
@@ -2273,17 +2268,12 @@ private fun NusaMusicApp(
         androidx.compose.foundation.lazy.rememberLazyListState()
     val libraryListState =
         androidx.compose.foundation.lazy.rememberLazyListState()
-    val vinylGridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
-    val libraryIsScrolling by remember(libraryListState, vinylGridState) {
-        derivedStateOf {
-            if (playerPresentationMode == PlayerPresentationMode.VINYL) vinylGridState.isScrollInProgress
-            else libraryListState.isScrollInProgress
-        }
+    val libraryIsScrolling by remember(libraryListState) {
+        derivedStateOf { libraryListState.isScrollInProgress }
     }
-    LaunchedEffect(vinylSearchQuery) { vinylGridState.scrollToItem(0) }
     // Cached covers remain visible while scrolling; pause expensive
     // native metadata/image reads until the list has settled.
-    val libraryRowLoadsEnabled by remember(libraryListState, vinylGridState) {
+    val libraryRowLoadsEnabled by remember(libraryListState) {
         derivedStateOf { !libraryIsScrolling }
     }
     val scope = rememberCoroutineScope()
@@ -2330,7 +2320,7 @@ private fun NusaMusicApp(
         }
     }
 
-    LaunchedEffect(libraryListState, vinylGridState, playerPresentationMode) {
+    LaunchedEffect(libraryListState, playerPresentationMode) {
         androidx.compose.runtime.snapshotFlow {
             libraryIsScrolling
         }.collect { isScrolling ->
@@ -2642,7 +2632,7 @@ private fun NusaMusicApp(
                 // patch. The previous overlapping page now supplies the real
                 // corner pixels while swiping in either direction.
                 pageSurface = { page ->
-                    if (artistPageEnabled && page == libraryPage) {
+                    if (playerPresentationMode == PlayerPresentationMode.VINYL && page == libraryPage) {
                         immersiveColors(libraryLightMode).background
                     } else pageBackdrop
                 },
@@ -2657,35 +2647,7 @@ private fun NusaMusicApp(
             ) { page ->
                 when {
                     page == playerPage -> {
-                        val swipeEnabled = artistPageEnabled && !artistOverlayOpen &&
-                            !libraryOverlayOpen && !lyricsRequested && !showSettings
-                        val swipeArtist = ArtistNameUtils.firstArtist(currentSong?.artist)
-                        val playerSwipe = if (swipeEnabled) Modifier.pointerInput(swipeArtist) {
-                            var dragDistance = 0f
-                            val threshold = 56.dp.toPx()
-                            detectHorizontalDragGestures(
-                                onDragStart = { dragDistance = 0f },
-                                onDragEnd = {
-                                    when {
-                                        dragDistance <= -threshold -> openImmersiveLibrary()
-                                        dragDistance >= threshold -> {
-                                            if (swipeArtist.isNotBlank()) {
-                                                openDiscoveryArtist(swipeArtist)
-                                            } else {
-                                                discoveryArtistName = null
-                                            }
-                                            artistOverlayOpen = true
-                                        }
-                                        else -> Unit
-                                    }
-                                },
-                                onHorizontalDrag = { change, amount ->
-                                    change.consume()
-                                    dragDistance += amount
-                                }
-                            )
-                        } else Modifier
-                        BoxWithConstraints(Modifier.fillMaxSize().then(playerSwipe)) {
+                        BoxWithConstraints(Modifier.fillMaxSize()) {
                         val playerViewportHeight = maxHeight
                         if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
                             PlayerScaleHost(playerScale) {
@@ -2841,6 +2803,12 @@ private fun NusaMusicApp(
                                         )
                                     },
                                     onLibrary = { openImmersiveLibrary() },
+                                    onSwipeRight = {
+                                        val artist = ArtistNameUtils.firstArtist(currentSong?.artist)
+                                        if (artist.isNotBlank()) openDiscoveryArtist(artist)
+                                        else discoveryArtistName = null
+                                        artistOverlayOpen = true
+                                    },
                                     onShare = { onShare(currentSong) },
                                     onSettings = {
                                         artistOverlayOpen = false
@@ -3147,7 +3115,7 @@ private fun NusaMusicApp(
                     }
 
                     page == libraryPage -> {
-                        if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
+                        if (playerPresentationMode == PlayerPresentationMode.VINYL) {
                             ImmersiveMusicLibrary(
                                 songs = songs,
                                 currentSong = currentSong,
@@ -3161,7 +3129,10 @@ private fun NusaMusicApp(
                                 onReturnToPlayer = {
                                     scope.launch { pagerState.animateMiuixScrollToPage(playerPage) }
                                 },
-                                onPlay = onPlay,
+                                onPlay = { selected, queue ->
+                                    onPlay(selected, queue)
+                                    scope.launch { pagerState.animateMiuixScrollToPage(playerPage) }
+                                },
                                 onPlayNext = onPlayNext,
                                 onDeleteSong = onDeleteSong,
                                 onShare = { onShare(it) },
@@ -3182,13 +3153,7 @@ private fun NusaMusicApp(
                                 }
                             )
                         } else {
-                        val vinylLibrary = playerPresentationMode == PlayerPresentationMode.VINYL
                         val cdLibrary = playerPresentationMode == PlayerPresentationMode.CD
-                        val libraryAlphabetTargets = if (vinylLibrary) remember(vinylCatalogSongs) {
-                            buildMap<Char, Int> { vinylCatalogSongs.forEachIndexed { index, song ->
-                                putIfAbsent(alphabetIndexKey(song.title), index)
-                            } }
-                        } else alphabetTargets
                         // Match the CD player's charcoal background and lime
                         // accents. This theme is scoped ONLY to the song list,
                         // so Vinyl and other presentation modes stay untouched.
@@ -3203,22 +3168,16 @@ private fun NusaMusicApp(
                                 onSurface = Color(0xFFF2F0E9),
                                 onSurfaceVariant = Color(0xFFA5A5A0)
                             )
-                        } else if (vinylLibrary) {
-                            lightColorScheme(background = VinylPaper, surface = VinylPaper,
-                                surfaceVariant = Color(0xFFE5E3DC), onBackground = Color(0xFF171717),
-                                onSurface = Color(0xFF171717), onSurfaceVariant = Color(0xFF565852),
-                                primary = Color(0xFF171717), onPrimary = Color.White)
                         } else {
                             MaterialTheme.colorScheme
                         }
                         MaterialTheme(colorScheme = libraryScheme) {
                         val libraryBackground = MaterialTheme.colorScheme.background
-                        val libraryHeaderHeight = if (vinylLibrary) maxOf(76.dp, with(density) { 52.sp.toDp() }) else 76.dp
+                        val libraryHeaderHeight = 76.dp
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .background(libraryBackground)
-                                .then(if (vinylLibrary) Modifier.imePadding() else Modifier)
                         ) {
                             Row(
                                 modifier = Modifier
@@ -3243,11 +3202,10 @@ private fun NusaMusicApp(
                                 }
 
                                 Text(
-                                    text = if (vinylLibrary) nusaText("Koleksi Vinyl", "Vinyl Collection") else nusaText("Daftar Lagu", "Songs"),
+                                    text = nusaText("Daftar Lagu", "Songs"),
                                     modifier = Modifier.weight(1f),
-                                    textAlign = if (vinylLibrary) TextAlign.Start else TextAlign.Center,
+                                    textAlign = TextAlign.Center,
                                     fontSize = 21.sp,
-                                    fontFamily = if (vinylLibrary) FontFamily.Serif else null,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onBackground
                                 )
@@ -3319,34 +3277,6 @@ private fun NusaMusicApp(
                                             ArtworkView(song = song, maxSizePx = 512, modifier = artworkModifier)
                                         },
                                         modifier = Modifier.fillMaxSize().padding(top = libraryHeaderHeight)
-                                    )
-                                } else if (vinylLibrary &&
-                                    (permissionGranted || selectedMusicFolders.isNotEmpty()) &&
-                                    filtered.isNotEmpty()
-                                ) {
-                                    VinylSongList(
-                                        songs = vinylCatalogSongs,
-                                        state = vinylGridState,
-                                        query = vinylSearchQuery,
-                                        onQueryChange = { vinylSearchQuery = it },
-                                        searchLabel = nusaText("Cari judul atau artis", "Search title or artist"),
-                                        clearSearchLabel = nusaText("Hapus pencarian", "Clear search"),
-                                        noResultsLabel = nusaText("Tidak ada lagu yang cocok", "No matching songs"),
-                                        moreLabel = nusaText("Opsi lagu", "Song options"),
-                                        currentSongId = currentSong?.id,
-                                        isPlaying = isPlaying,
-                                        backgroundColor = libraryBackground,
-                                        playLabel = nusaText("Putar", "Play"),
-                                        pauseLabel = nusaText("Jeda", "Pause"),
-                                        unknownArtistLabel = nusaText("Artis tidak dikenal", "Unknown artist"),
-                                        deleteLabel = nusaText("Hapus", "Delete"),
-                                        onPlay = { onPlay(it, vinylCatalogSongs) },
-                                        onRequestDelete = { deleteFromLibrary = it },
-                                        onTogglePlay = onTogglePlay,
-                                        artwork = { song, artworkModifier ->
-                                            ArtworkView(song = song, maxSizePx = 512, loadAllowed = libraryRowLoadsEnabled, modifier = artworkModifier)
-                                        },
-                                        modifier = Modifier.fillMaxSize().padding(top = libraryHeaderHeight, bottom = maxOf(44.dp, with(density) { 36.sp.toDp() }) + 46.dp)
                                     )
                                 } else {
                                 LazyColumn(
@@ -3433,7 +3363,7 @@ private fun NusaMusicApp(
                                 if (targetIndex < 0) return
 
                                 scope.launch {
-                                    if (vinylLibrary) vinylGridState.animateScrollToItem(targetIndex) else libraryListState.animateScrollToItem(
+                                    libraryListState.animateScrollToItem(
                                         index = targetIndex,
                                         scrollOffset = 0
                                     )
@@ -3449,7 +3379,7 @@ private fun NusaMusicApp(
                                 // alphabet movement does not build a coroutine backlog.
                                 alphabetDragJob?.cancel()
                                 alphabetDragJob = scope.launch {
-                                    if (vinylLibrary) vinylGridState.scrollToItem(targetIndex) else libraryListState.scrollToItem(
+                                    libraryListState.scrollToItem(
                                         index = targetIndex,
                                         scrollOffset = 0
                                     )
@@ -3464,7 +3394,7 @@ private fun NusaMusicApp(
                                     end = 2.dp
                                 )
                                 .width(22.dp)
-                                .pointerInput(libraryAlphabetTargets, filtered) {
+                                .pointerInput(alphabetTargets, filtered) {
                                     var lastDragTarget = -1
 
                                     detectDragGestures(
@@ -3478,7 +3408,7 @@ private fun NusaMusicApp(
                                                 .toInt()
                                                 .coerceIn(0, alphabet.lastIndex)
                                             val targetIndex =
-                                                libraryAlphabetTargets[alphabet[slot]] ?: -1
+                                                alphabetTargets[alphabet[slot]] ?: -1
 
                                             if (targetIndex >= 0) {
                                                 lastDragTarget = targetIndex
@@ -3495,7 +3425,7 @@ private fun NusaMusicApp(
                                                 .toInt()
                                                 .coerceIn(0, alphabet.lastIndex)
                                             val targetIndex =
-                                                libraryAlphabetTargets[alphabet[slot]] ?: -1
+                                                alphabetTargets[alphabet[slot]] ?: -1
 
                                             if (
                                                 targetIndex >= 0 &&
@@ -3537,7 +3467,7 @@ private fun NusaMusicApp(
                                     verticalArrangement = Arrangement.SpaceEvenly
                                 ) {
                                     alphabet.forEach { letter ->
-                                    val targetIndex = libraryAlphabetTargets[letter] ?: -1
+                                    val targetIndex = alphabetTargets[letter] ?: -1
                                     val available = targetIndex >= 0
 
                                     Box(
@@ -3570,11 +3500,8 @@ private fun NusaMusicApp(
                                 }
                             }
 
-                            val showFloatingControls by remember(vinylLibrary, filtered.isNotEmpty()) {
-                                derivedStateOf {
-                                    if (vinylLibrary) filtered.isNotEmpty()
-                                    else libraryListState.firstVisibleItemIndex >= 4
-                                }
+                            val showFloatingControls by remember(libraryListState) {
+                                derivedStateOf { libraryListState.firstVisibleItemIndex >= 4 }
                             }
                             val floatingAlpha by animateFloatAsState(
                                 targetValue = if (showFloatingControls) 1f else 0f,
@@ -3591,38 +3518,21 @@ private fun NusaMusicApp(
                                 modifier = Modifier.fillMaxSize()
                             ) {
                                 Surface(
-                                    shape = RoundedCornerShape(if (vinylLibrary) 12 else 50),
-                                    color = if (vinylLibrary) MaterialTheme.colorScheme.surface
-                                        else MaterialTheme.colorScheme.surfaceVariant,
+                                    shape = RoundedCornerShape(50),
+                                    color = MaterialTheme.colorScheme.surfaceVariant,
                                     tonalElevation = 3.dp,
                                     modifier = Modifier
                                         .align(Alignment.BottomCenter)
-                                        .padding(start = if (vinylLibrary) 16.dp else 0.dp, end = if (vinylLibrary) 16.dp else 0.dp, bottom = 18.dp)
-                                        .then(if (vinylLibrary) Modifier.widthIn(max = 920.dp).fillMaxWidth() else Modifier)
+                                        .padding(bottom = 18.dp)
                                         .graphicsLayer {
                                             alpha = floatingAlpha
                                             translationY = floatingOffset
                                         }
                                 ) {
                                 Row(
-                                    modifier = Modifier.padding(if (vinylLibrary) 8.dp else 3.dp),
+                                    modifier = Modifier.padding(3.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    if (vinylLibrary) {
-                                        VinylCatalogTrackInfo(
-                                            title = currentSong?.title ?: nusaText("Pilih lagu", "Choose a song"),
-                                            artist = currentSong?.artist?.ifBlank { nusaText("Artis tidak dikenal", "Unknown artist") }.orEmpty(),
-                                            openLabel = nusaText("Buka pemutar", "Open player"),
-                                            onOpen = { scope.launch { pagerState.animateMiuixScrollToPage(playerPage) } },
-                                            artwork = { tile -> ArtworkView(currentSong, maxSizePx = 128, modifier = tile) },
-                                            modifier = Modifier.weight(1f))
-                                        IconButton(onClick = onTogglePlay, enabled = currentSong != null,
-                                            modifier = Modifier.size(44.dp)) {
-                                            Icon(if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                                                nusaText(if (isPlaying) "Jeda" else "Putar", if (isPlaying) "Pause" else "Play"),
-                                                tint = MaterialTheme.colorScheme.onSurface)
-                                        }
-                                    }
                                     val shuffleActiveColor by animateColorAsState(
                                         targetValue = if (shuffleEnabled) {
                                             MaterialTheme.colorScheme.primary
