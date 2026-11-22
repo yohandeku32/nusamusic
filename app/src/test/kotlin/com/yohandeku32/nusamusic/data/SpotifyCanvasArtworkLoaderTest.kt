@@ -93,6 +93,12 @@ class SpotifyCanvasArtworkLoaderTest {
                 .put("data", JSONObject().put("videoUrl", direct))))
     }
 
+    @Test fun readsExistingCanvasPreferenceRegardlessOfCase() {
+        assertEquals(ArtworkSourceOrder.APPLE_FIRST, ArtworkSourceOrder.fromPreference(null))
+        assertEquals(ArtworkSourceOrder.APPLE_FIRST, ArtworkSourceOrder.fromPreference("APPLE_FIRST"))
+        assertEquals(ArtworkSourceOrder.SPOTIFY_ONLY, ArtworkSourceOrder.fromPreference("spotify_only"))
+    }
+
     @Test fun meaningfulNonLatinMarksRemainDistinctWhileLatinAccentsStillMatch() {
         assertFalse(SpotifyCanvasArtworkLoader.similarTitle("かみ", "がみ"))
         assertFalse(SpotifyCanvasArtworkLoader.similarTitle("पल", "पाल"))
