@@ -375,7 +375,8 @@ class MusicRepository(private val context: Context) {
                 }
             }
             folderSongs.forEach { (name, song) ->
-                songs += song.copy(localArtworkUri = artworkByName[name])
+                val artworkUri = artworkByName[name]
+                songs += if (song.localArtworkUri == artworkUri) song else song.copy(localArtworkUri = artworkUri)
             }
         }
 
