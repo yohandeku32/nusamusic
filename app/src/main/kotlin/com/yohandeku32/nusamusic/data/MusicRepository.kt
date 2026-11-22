@@ -84,13 +84,17 @@ class MusicRepository(private val context: Context) {
         } else {
             MediaScan(emptyList(), null)
         }
-        val songs = media.songs.toMutableList()
+        val cachedSongsByUri = cachedSongs.associateBy { it.uri }
+        val songs = media.songs.mapTo(mutableListOf()) { song ->
+            val localArtworkUri = if (scanSelectedFolders || extraFolderUris.isEmpty()) null
+                else cachedSongsByUri[song.uri]?.localArtworkUri
+            song.copy(localArtworkUri = localArtworkUri)
+        }
+        val mediaPositions = songs.withIndex().associate { it.value.id to it.index }
         val existingUris = songs.mapTo(HashSet()) { it.uri }
         val existingKeys = songs.mapTo(HashSet()) {
             songFingerprint(it.title, it.artist, it.album, it.durationMs)
         }
-
-        val cachedSongsByUri = cachedSongs.associateBy { it.uri }
 
         if (scanSelectedFolders) {
             extraFolderUris.forEach { folderUriString ->
@@ -102,6 +106,17 @@ class MusicRepository(private val context: Context) {
                     val key = songFingerprint(
                         song.title, song.artist, song.album, song.durationMs
                     )
+                    if (song.localArtworkUri != null && mediaPositions.isNotEmpty()) {
+                        val mediaId = runCatching {
+                            MediaStore.getMediaUri(context, Uri.parse(song.uri))
+                                ?.let(ContentUris::parseId)
+                        }.getOrNull()
+                        val position = mediaId?.let { mediaPositions[it] }
+                        if (position != null) {
+                            songs[position] = songs[position].copy(localArtworkUri = song.localArtworkUri)
+                            continue
+                        }
+                    }
                     if (existingUris.add(song.uri) && existingKeys.add(key)) {
                         songs += song
                     }
@@ -300,6 +315,9 @@ class MusicRepository(private val context: Context) {
                 DocumentsContract.Document.COLUMN_LAST_MODIFIED
             )
 
+            val folderSongs = mutableListOf<Pair<String, Song>>()
+            val artworkByName = mutableMapOf<String, String>()
+
             resolver.query(
                 childrenUri,
                 projection,
@@ -332,12 +350,13 @@ class MusicRepository(private val context: Context) {
                         continue
                     }
 
+                    val documentUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, documentId)
+                    val baseName = displayName.substringBeforeLast('.').lowercase(Locale.ROOT)
+                    if (displayName.endsWith(".mp4", ignoreCase = true)) {
+                        artworkByName.putIfAbsent(baseName, documentUri.toString())
+                        continue
+                    }
                     if (!isSupportedAudio(displayName, mimeType)) continue
-
-                    val documentUri = DocumentsContract.buildDocumentUriUsingTree(
-                        treeUri,
-                        documentId
-                    )
 
                     val modifiedTimeMs = cursor.getLong(modifiedCol)
                     val cachedSong = cachedSongsByUri[documentUri.toString()]
@@ -352,8 +371,11 @@ class MusicRepository(private val context: Context) {
                         modifiedTimeMs = modifiedTimeMs
                     )
 
-                    song?.let { songs += it }
+                    song?.let { folderSongs += baseName to it }
                 }
+            }
+            folderSongs.forEach { (name, song) ->
+                songs += song.copy(localArtworkUri = artworkByName[name])
             }
         }
 
