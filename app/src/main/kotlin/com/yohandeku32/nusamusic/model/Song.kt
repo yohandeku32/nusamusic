@@ -8,5 +8,6 @@ data class Song(
     val uri: String,
     val durationMs: Long,
     val albumId: Long,
-    val dateAddedMs: Long = 0L
+    val dateAddedMs: Long = 0L,
+    val localArtworkUri: String? = null
 )

@@ -73,6 +73,20 @@ class MusicFolderRefreshTest {
         assertTrue(refreshed.songs.isEmpty())
     }
 
+    @Test fun localArtworkMatchesOnlyTheSameFolderAndIsClearedWhenRemoved() {
+        val video = Entry("cover", "OLD.MP4", "video/mp4", 1000)
+        val repository = MusicRepository(context)
+        val folder = setOf(tree.toString())
+        provider.children["album"] = provider.children.getValue("album") + video
+        val withArtwork = repository.loadSongs(folder, listOf(cached), includeMediaStore = false)
+        assertEquals(document("cover").toString(), withArtwork.songs.single().localArtworkUri)
+
+        provider.children["album"] = provider.children.getValue("album") - video
+        provider.children["music"] = provider.children.getValue("music") + video
+        val moved = repository.loadSongs(folder, withArtwork.songs, includeMediaStore = false)
+        assertNull(moved.songs.single().localArtworkUri)
+    }
+
     data class Entry(val id: String, val name: String, val mime: String, val modified: Long)
     class FolderProvider : ContentProvider() {
         val children = mutableMapOf<String, List<Entry>>()
