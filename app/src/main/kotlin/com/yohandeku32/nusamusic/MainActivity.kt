@@ -2250,8 +2250,8 @@ private fun NusaMusicApp(
         listOf('#') + ('A'..'Z')
     }
 
-    // Artist is a rising in-player overlay; only Now Playing and Library
-    // participate in horizontal pager gestures.
+    // Immersive opens library and artist overlays from its single player page.
+    // Other presentations use the horizontal pager for the library.
     val artistPageEnabled = playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK
     val playerPage = 0
     val libraryPage = 1
@@ -2295,6 +2295,11 @@ private fun NusaMusicApp(
         state.selectedAlbumKey = albumKey
         discoveryArtistName = name
         scope.launch { state.listState.scrollToItem(0) }
+    }
+    fun openImmersiveLibrary() {
+        artistOverlayOpen = false
+        lyricsRequested = false
+        libraryOverlayOpen = true
     }
     var alphabetVisible by remember { mutableStateOf(false) }
     var alphabetDragging by remember { mutableStateOf(false) }
@@ -2652,7 +2657,35 @@ private fun NusaMusicApp(
             ) { page ->
                 when {
                     page == playerPage -> {
-                        BoxWithConstraints(Modifier.fillMaxSize()) {
+                        val swipeEnabled = artistPageEnabled && !artistOverlayOpen &&
+                            !libraryOverlayOpen && !lyricsRequested && !showSettings
+                        val swipeArtist = ArtistNameUtils.firstArtist(currentSong?.artist)
+                        val playerSwipe = if (swipeEnabled) Modifier.pointerInput(swipeArtist) {
+                            var dragDistance = 0f
+                            val threshold = 56.dp.toPx()
+                            detectHorizontalDragGestures(
+                                onDragStart = { dragDistance = 0f },
+                                onDragEnd = {
+                                    when {
+                                        dragDistance <= -threshold -> openImmersiveLibrary()
+                                        dragDistance >= threshold -> {
+                                            if (swipeArtist.isNotBlank()) {
+                                                openDiscoveryArtist(swipeArtist)
+                                            } else {
+                                                discoveryArtistName = null
+                                            }
+                                            artistOverlayOpen = true
+                                        }
+                                        else -> Unit
+                                    }
+                                },
+                                onHorizontalDrag = { change, amount ->
+                                    change.consume()
+                                    dragDistance += amount
+                                }
+                            )
+                        } else Modifier
+                        BoxWithConstraints(Modifier.fillMaxSize().then(playerSwipe)) {
                         val playerViewportHeight = maxHeight
                         if (playerPresentationMode == PlayerPresentationMode.IMMERSIVE_ARTWORK) {
                             PlayerScaleHost(playerScale) {
@@ -2807,11 +2840,7 @@ private fun NusaMusicApp(
                                             }
                                         )
                                     },
-                                    onLibrary = {
-                                        artistOverlayOpen = false
-                                        lyricsRequested = false
-                                        libraryOverlayOpen = true
-                                    },
+                                    onLibrary = { openImmersiveLibrary() },
                                     onShare = { onShare(currentSong) },
                                     onSettings = {
                                         artistOverlayOpen = false
@@ -4871,7 +4900,7 @@ private fun ImmersiveArtwork(
     modifier: Modifier = Modifier,
     lyricsMode: Boolean = false,
     lightMode: Boolean = false,
-    sourceOrder: ArtworkSourceOrder = ArtworkSourceOrder.APPLE_FIRST,
+    sourceOrder: ArtworkSourceOrder = ArtworkSourceOrder.SPOTIFY_FIRST,
     playerPageVisible: Boolean = true,
     pageReveal: () -> Float = { 0f },
     onCoverReady: (String, Bitmap) -> Unit = { _, _ -> },
@@ -4921,11 +4950,21 @@ private fun ImmersiveArtwork(
             hasPresentedArtwork = true
         }
     }
-    var animatedArtworkUrl by remember(song?.id, song?.uri) { mutableStateOf<String?>(null) }
-    var artworkProvider by remember(song?.uri) { mutableStateOf(AnimatedArtworkProvider.APPLE_MUSIC) }
-    var spotifyFallbackRequested by remember(song?.uri) { mutableStateOf(false) }
-    var spotifyPlaybackFailed by remember(song?.uri) { mutableStateOf(false) }
-    var animatedFirstFrameUrl by remember(song?.uri) { mutableStateOf<String?>(null) }
+    var animatedArtworkUrl by remember(song?.uri, sourceOrder, animatedArtworkEnabled) {
+        mutableStateOf<String?>(null)
+    }
+    var artworkProvider by remember(song?.uri, sourceOrder, animatedArtworkEnabled) {
+        mutableStateOf(AnimatedArtworkProvider.APPLE_MUSIC)
+    }
+    var spotifyFallbackRequested by remember(song?.uri, sourceOrder, animatedArtworkEnabled) {
+        mutableStateOf(false)
+    }
+    var spotifyPlaybackFailed by remember(song?.uri, sourceOrder, animatedArtworkEnabled) {
+        mutableStateOf(false)
+    }
+    var animatedFirstFrameUrl by remember(song?.uri, sourceOrder, animatedArtworkEnabled) {
+        mutableStateOf<String?>(null)
+    }
     // Freeze the first usable animated frame's colours for the entire song,
     // including when an unavailable stream switches to an alternative URL.
     var frozenAnimatedBlur by remember(song?.uri) { mutableStateOf<Bitmap?>(null) }
@@ -5030,7 +5069,7 @@ private fun ImmersiveArtwork(
     }
 
     LaunchedEffect(
-        song?.id, song?.title, song?.artist, song?.album,
+        song?.id, song?.uri, song?.title, song?.artist, song?.album,
         animatedArtworkEnabled, spotifyFallbackRequested, spotifyPlaybackFailed, sourceOrder
     ) {
         if (!animatedArtworkEnabled || song == null) {
