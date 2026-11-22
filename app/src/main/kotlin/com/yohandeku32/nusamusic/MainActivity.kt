@@ -4900,7 +4900,7 @@ private fun ImmersiveArtwork(
     modifier: Modifier = Modifier,
     lyricsMode: Boolean = false,
     lightMode: Boolean = false,
-    sourceOrder: ArtworkSourceOrder = ArtworkSourceOrder.SPOTIFY_FIRST,
+    sourceOrder: ArtworkSourceOrder = ArtworkSourceOrder.APPLE_FIRST,
     playerPageVisible: Boolean = true,
     pageReveal: () -> Float = { 0f },
     onCoverReady: (String, Bitmap) -> Unit = { _, _ -> },
