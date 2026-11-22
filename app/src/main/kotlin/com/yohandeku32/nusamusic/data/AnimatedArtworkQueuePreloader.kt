@@ -24,7 +24,7 @@ internal enum class ArtworkSourceOrder {
     APPLE_FIRST, SPOTIFY_FIRST, APPLE_ONLY, SPOTIFY_ONLY;
     companion object {
         fun fromPreference(value: String?): ArtworkSourceOrder =
-            entries.firstOrNull { it.name == value } ?: APPLE_FIRST
+            entries.firstOrNull { it.name.equals(value?.trim(), ignoreCase = true) } ?: SPOTIFY_FIRST
     }
 }
 
