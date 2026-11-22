@@ -852,7 +852,8 @@ class MainActivity : ComponentActivity() {
                     uri = item.getString("uri"),
                     durationMs = item.getLong("durationMs"),
                     albumId = item.getLong("albumId"),
-                    dateAddedMs = item.optLong("dateAddedMs", 0L)
+                    dateAddedMs = item.optLong("dateAddedMs", 0L),
+                    localArtworkUri = item.optString("localArtworkUri", "").takeIf { it.startsWith("content://") }
                 )
                 break
             }
@@ -1051,7 +1052,8 @@ class MainActivity : ComponentActivity() {
                             uri = item.getString("uri"),
                             durationMs = item.getLong("durationMs"),
                             albumId = item.getLong("albumId"),
-                            dateAddedMs = item.optLong("dateAddedMs", 0L)
+                            dateAddedMs = item.optLong("dateAddedMs", 0L),
+                            localArtworkUri = item.optString("localArtworkUri", "").takeIf { it.startsWith("content://") }
                         )
                     )
                 }
@@ -1095,6 +1097,7 @@ class MainActivity : ComponentActivity() {
                     put("durationMs", song.durationMs)
                     put("albumId", song.albumId)
                     put("dateAddedMs", song.dateAddedMs)
+                    put("localArtworkUri", song.localArtworkUri)
                 }
             )
         }
@@ -4799,7 +4802,7 @@ private fun immersiveScrimOpacity(bitmap: Bitmap?): Float {
     return (0.06f + brightness * 0.50f).coerceIn(0.08f, 0.56f)
 }
 
-private enum class AnimatedArtworkProvider { APPLE_MUSIC, SPOTIFY_CANVAS }
+private enum class AnimatedArtworkProvider { LOCAL_VIDEO, APPLE_MUSIC, SPOTIFY_CANVAS }
 
 @Composable
 private fun ImmersiveArtwork(
@@ -4860,7 +4863,11 @@ private fun ImmersiveArtwork(
             hasPresentedArtwork = true
         }
     }
-    var animatedArtworkUrl by remember(song?.uri, sourceOrder, animatedArtworkEnabled) {
+    val localArtworkUri = song?.localArtworkUri
+    var localPlaybackFailed by remember(song?.uri, localArtworkUri, animatedArtworkEnabled) {
+        mutableStateOf(false)
+    }
+    var animatedArtworkUrl by remember(song?.uri, localArtworkUri, sourceOrder, animatedArtworkEnabled) {
         mutableStateOf<String?>(null)
     }
     var artworkProvider by remember(song?.uri, sourceOrder, animatedArtworkEnabled) {
@@ -4980,10 +4987,16 @@ private fun ImmersiveArtwork(
 
     LaunchedEffect(
         song?.id, song?.uri, song?.title, song?.artist, song?.album,
-        animatedArtworkEnabled, spotifyFallbackRequested, spotifyPlaybackFailed, sourceOrder
+        animatedArtworkEnabled, spotifyFallbackRequested, spotifyPlaybackFailed, sourceOrder,
+        localArtworkUri, localPlaybackFailed
     ) {
         if (!animatedArtworkEnabled || song == null) {
             animatedArtworkUrl = null
+            return@LaunchedEffect
+        }
+        if (localArtworkUri != null && !localPlaybackFailed) {
+            artworkProvider = AnimatedArtworkProvider.LOCAL_VIDEO
+            animatedArtworkUrl = localArtworkUri
             return@LaunchedEffect
         }
         // Use the same provider decision prepared for the next five songs.
@@ -5111,6 +5124,10 @@ private fun ImmersiveArtwork(
                         onUnavailable = {
                             if (animatedArtworkUrl == activeUrl) {
                                 when (artworkProvider) {
+                                    AnimatedArtworkProvider.LOCAL_VIDEO -> {
+                                        animatedArtworkUrl = null
+                                        localPlaybackFailed = true
+                                    }
                                     AnimatedArtworkProvider.APPLE_MUSIC -> {
                                         AnimatedArtworkQueuePreloader.invalidate(song, activeUrl)
                                         val alternative = AppleMusicAnimatedArtworkLoader.nextPlaybackUrl(activeUrl)
@@ -5167,6 +5184,7 @@ private fun AnimatedArtworkVideoBackground(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val isCanvasStream = remember(url) { SpotifyCanvasArtworkLoader.isSpotifyCanvasVideo(url) }
+    val isLocalVideo = url.startsWith("content://")
     var videoReady by remember(url) { mutableStateOf(false) }
     var videoVisible by remember(url) { mutableStateOf(false) }
     var playbackRetryCount by remember(url) { mutableIntStateOf(0) }
@@ -5196,7 +5214,7 @@ private fun AnimatedArtworkVideoBackground(
             SpotifyCanvasVideoCache.mediaSourceFactory(context)?.let {
                 builder.setMediaSourceFactory(it)
             }
-        } else {
+        } else if (!isLocalVideo) {
             // Reuse the very same Apple HLS playlist/segment bytes fetched for
             // songs 2-6 in the speculative playback queue.
             AppleTallVideoCache.mediaSourceFactory(context)?.let {
@@ -5237,7 +5255,7 @@ private fun AnimatedArtworkVideoBackground(
                         // /api/canvas?id=...&stream=1 (no .mp4 suffix).
                         // Classifying it as HLS caused Media3 to parse
                         // progressive video bytes as an m3u8 playlist.
-                        if (SpotifyCanvasArtworkLoader.isSpotifyCanvasVideo(url) ||
+                        if (isLocalVideo || isSpotifyCanvas ||
                             url.substringBefore('?').endsWith(".mp4", ignoreCase = true)
                         ) androidx.media3.common.MimeTypes.VIDEO_MP4
                         else androidx.media3.common.MimeTypes.APPLICATION_M3U8
