@@ -25,6 +25,7 @@ import kotlin.math.abs
 import android.view.View
 import android.view.WindowInsets
 import android.view.WindowInsetsController
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -145,6 +146,7 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.yohandeku32.nusamusic.data.ArtworkLoader
+import com.yohandeku32.nusamusic.data.CdStickerStore
 import com.yohandeku32.nusamusic.data.ArtworkBlur
 import com.yohandeku32.nusamusic.data.ImmersiveArtworkCache
 import com.yohandeku32.nusamusic.data.ImmersiveArtworkSnapshot
@@ -257,6 +259,9 @@ class MainActivity : ComponentActivity() {
     private var shuffleEnabled by mutableStateOf(false)
     private var repeatMode by mutableIntStateOf(Player.REPEAT_MODE_OFF)
     private var customTitleFontPath by mutableStateOf<String?>(null)
+    private var cdSticker by mutableStateOf<Bitmap?>(null)
+    private var cdStickerBusy by mutableStateOf(true)
+    private var cdStickerLoadJob: Job? = null
     private var customTitleFontName by mutableStateOf<String?>(null)
 
     private val playbackPrefs: SharedPreferences by lazy {
@@ -319,6 +324,40 @@ class MainActivity : ComponentActivity() {
             persistSelectedMusicFolders(updatedFolders)
             scanMusic()
         }
+
+    private val cdStickerPicker =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri == null) return@registerForActivityResult
+            updateCdSticker(
+                errorMessage = nusaText(
+                    "Gambar gagal diimpor. Coba pilih gambar lain.",
+                    "Could not import the image. Try choosing another one."
+                )
+            ) {
+                CdStickerStore.install(applicationContext, uri)
+            }
+        }
+
+    private fun resetCdSticker() {
+        updateCdSticker(
+            errorMessage = nusaText("Stiker gagal direset. Coba lagi.", "Could not reset the sticker. Try again.")
+        ) {
+            CdStickerStore.reset(applicationContext)
+            null
+        }
+    }
+
+    private fun updateCdSticker(errorMessage: String, change: () -> Bitmap?) {
+        cdStickerLoadJob?.cancel()
+        cdStickerBusy = true
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) { runCatching(change) }
+            result.onSuccess { cdSticker = it }.onFailure {
+                Toast.makeText(this@MainActivity, errorMessage, Toast.LENGTH_LONG).show()
+            }
+            cdStickerBusy = false
+        }
+    }
 
     private val titleFontPicker =
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -506,6 +545,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        cdStickerLoadJob = lifecycleScope.launch {
+            cdSticker = withContext(Dispatchers.IO) {
+                runCatching { CdStickerStore.read(applicationContext) }.getOrNull()
+            }
+            cdStickerBusy = false
+        }
 
         // Draw the white player surface underneath the hidden status-bar area,
         // while keeping the Android navigation bar visible.
@@ -703,6 +748,10 @@ class MainActivity : ComponentActivity() {
                         schedulePendingLyricCommit()
                     },
                     isLyricsQueued = { song -> pendingLyricSaves.isQueued(song.id) },
+                    cdSticker = cdSticker,
+                    cdStickerBusy = cdStickerBusy,
+                    onChooseCdSticker = { cdStickerPicker.launch(arrayOf("image/*")) },
+                    onResetCdSticker = ::resetCdSticker,
                     customTitleFontPath = customTitleFontPath,
                     customTitleFontName = customTitleFontName,
                     onChooseCustomTitleFont = {
@@ -1952,6 +2001,10 @@ private fun NusaMusicApp(
     onTogglePlay: () -> Unit,
     onQueueLyrics: suspend (Song, SongLyrics) -> Unit,
     isLyricsQueued: (Song) -> Boolean,
+    cdSticker: Bitmap?,
+    cdStickerBusy: Boolean,
+    onChooseCdSticker: () -> Unit,
+    onResetCdSticker: () -> Unit,
     customTitleFontPath: String?,
     customTitleFontName: String?,
     onChooseCustomTitleFont: () -> Unit,
@@ -2437,6 +2490,10 @@ private fun NusaMusicApp(
             }
 
             PlayerSettingsContent(
+                hasCustomCdSticker = cdSticker != null,
+                cdStickerBusy = cdStickerBusy,
+                onChooseCdSticker = onChooseCdSticker,
+                onResetCdSticker = onResetCdSticker,
                 miniLyricsEnabled = miniLyricsEnabled,
                 onMiniLyricsChange = { enabled ->
                     miniLyricsEnabled = enabled
@@ -2883,6 +2940,7 @@ private fun NusaMusicApp(
                             // the shared biography container or its black backdrop.
                             CdPlayer(
                                 song = currentSong,
+                                customSticker = cdSticker,
                                 songs = filtered,
                                 isPlaying = isPlaying,
                                 isVisible = pagerState.settledPage == playerPage,

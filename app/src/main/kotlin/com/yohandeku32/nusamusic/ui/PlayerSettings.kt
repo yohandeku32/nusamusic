@@ -102,7 +102,11 @@ internal fun PlayerSettingsContent(
     playerScale: Float = 1f,
     onPlayerScaleChange: (Float) -> Unit = {},
     miniLyricsEnabled: Boolean = false,
-    onMiniLyricsChange: (Boolean) -> Unit = {}
+    onMiniLyricsChange: (Boolean) -> Unit = {},
+    hasCustomCdSticker: Boolean = false,
+    cdStickerBusy: Boolean = false,
+    onChooseCdSticker: (() -> Unit)? = null,
+    onResetCdSticker: (() -> Unit)? = null
 ) {
     val colors = MaterialTheme.colorScheme
     val listState = rememberLazyListState()
@@ -270,6 +274,33 @@ internal fun PlayerSettingsContent(
                         SettingsDivider()
                     }
                     if (playerPresentationMode == PlayerPresentationMode.CD) {
+                        if (onChooseCdSticker != null) {
+                            SettingAction(
+                                title = if (hasCustomCdSticker) {
+                                    settingsText("Ganti gambar stiker", "Change sticker image")
+                                } else {
+                                    settingsText("Pilih gambar stiker", "Choose sticker image")
+                                },
+                                subtitle = if (cdStickerBusy) {
+                                    settingsText("Memproses stiker…", "Processing sticker…")
+                                } else {
+                                    settingsText("Stiker utama pada tutup kotak CD.", "Main sticker on the CD case lid.")
+                                },
+                                icon = Icons.Default.FolderOpen,
+                                onClick = onChooseCdSticker,
+                                enabled = !cdStickerBusy
+                            )
+                            if (hasCustomCdSticker && onResetCdSticker != null) {
+                                SettingAction(
+                                    title = settingsText("Kembalikan stiker bawaan", "Restore default sticker"),
+                                    subtitle = settingsText("Tampilkan kembali nama artis.", "Show the artist name again."),
+                                    icon = Icons.Default.RestartAlt,
+                                    onClick = onResetCdSticker,
+                                    enabled = !cdStickerBusy
+                                )
+                            }
+                            SettingsDivider()
+                        }
                         SettingToggle(
                             settingsText("Sudut carousel", "Carousel corners"),
                             settingsText("Bulat atau kotak.", "Rounded or square."),
@@ -812,11 +843,13 @@ private fun SettingAction(
     subtitle: String,
     icon: ImageVector,
     onClick: () -> Unit,
-    trailingIcon: ImageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight
+    trailingIcon: ImageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+    enabled: Boolean = true
 ) {
     val colors = MaterialTheme.colorScheme
     Surface(
         onClick = onClick,
+        enabled = enabled,
         shape = RoundedCornerShape(14.dp),
         color = Color.Transparent
     ) {
