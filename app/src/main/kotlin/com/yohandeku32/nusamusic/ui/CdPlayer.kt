@@ -1,5 +1,7 @@
 package com.yohandeku32.nusamusic.ui
 
+import android.graphics.Bitmap
+
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -97,7 +99,8 @@ fun CdPlayer(
     artwork: @Composable (Song?, Modifier) -> Unit,
     thumbnailArtwork: @Composable (Song?, Modifier) -> Unit,
     emptyState: @Composable () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    customSticker: Bitmap? = null
 ) {
     MaterialTheme(colorScheme = darkColorScheme(
         background = CdBackground,
@@ -286,7 +289,8 @@ fun CdPlayer(
                                     cdText("Kembalikan CD ke kotak", "Return CD to case")
                                 ) { returnAction.value(); true })
                             } else Modifier),
-                        artistName = displaySong?.artist
+                        artistName = displaySong?.artist,
+                        customSticker = customSticker
                     ) { discModifier ->
                         key(displaySong?.id) {
                             CdDisc(

@@ -1,5 +1,9 @@
 package com.yohandeku32.nusamusic.ui
 
+import android.graphics.Bitmap
+import android.graphics.Paint
+import android.graphics.RectF
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -40,6 +44,7 @@ internal fun CdJewelCase(
     modifier: Modifier = Modifier,
     artistName: String? = null,
     showStickers: Boolean = true,
+    customSticker: Bitmap? = null,
     disc: @Composable (Modifier) -> Unit
 ) {
     BoxWithConstraints(
@@ -71,7 +76,10 @@ internal fun CdJewelCase(
         // into an independent layer. Rotating frames can then reuse that layer
         // instead of submitting the sticker's hundreds of tiny draw operations.
         // Changing songs still invalidates the artist text as normal.
-        CdClearLid(Modifier.matchParentSize(), artistName, showSpindle = true, showStickers = showStickers)
+        CdClearLid(
+            Modifier.matchParentSize(), artistName,
+            showSpindle = true, showStickers = showStickers, customSticker = customSticker
+        )
     }
 }
 
@@ -81,12 +89,14 @@ internal fun CdClearLid(
     modifier: Modifier = Modifier,
     artistName: String? = null,
     showSpindle: Boolean = false,
-    showStickers: Boolean = true
+    showStickers: Boolean = true,
+    customSticker: Bitmap? = null
 ) {
     // This optional personal-use font stays local; public builds use the fallback.
     val context = LocalContext.current.applicationContext
-    val stickerFont = remember(context, showStickers) {
-        if (!showStickers) null else try {
+    val showArtistSticker = showStickers && customSticker == null
+    val stickerFont = remember(context, showArtistSticker) {
+        if (!showArtistSticker) null else try {
             android.graphics.Typeface.createFromAsset(context.assets, "fonts/Aerosoldier_PERSONAL_USE_ONLY.otf")
         } catch (_: RuntimeException) {
             null
@@ -96,7 +106,7 @@ internal fun CdClearLid(
         drawClearLid()
         drawClearCaseReflections()
         if (showSpindle) drawSpindle(Offset(size.width * 0.55f, size.height * 0.5f))
-        if (showStickers) drawJewelCaseStickers(artistName, stickerFont)
+        if (showStickers) drawJewelCaseStickers(artistName, stickerFont, customSticker)
     }
 }
 
@@ -319,12 +329,12 @@ internal fun DrawScope.drawSpindle(centre: Offset) {
 
 /**
  * Small archival paper decals adhered to the outside of the jewel-case lid.
- * Drawn as stationary vectors (no bitmap loading or per-track transitions),
- * with their own paper finish and ink so the rotating CD remains visible.
+ * Both stickers stay fixed while the disc rotates beneath the lid.
  */
 private fun DrawScope.drawJewelCaseStickers(
     artistName: String?,
-    stickerTypeface: android.graphics.Typeface?
+    stickerTypeface: android.graphics.Typeface?,
+    customSticker: Bitmap?
 ) {
     val w = size.width
     val h = size.height
@@ -350,7 +360,19 @@ private fun DrawScope.drawJewelCaseStickers(
     val bw = w * 0.295f
     val bh = h * 0.385f
     // Scale paper, print, borders and stamp together without shifting the lid.
-    scale(scaleX = 0.82f, scaleY = 0.82f, pivot = Offset(bx, by)) {
+    if (customSticker != null) {
+        val slotWidth = bw * 0.82f
+        val slotHeight = bh * 0.82f
+        val fit = minOf(slotWidth / customSticker.width, slotHeight / customSticker.height)
+        val width = customSticker.width * fit
+        val height = customSticker.height * fit
+        val left = bx + (slotWidth - width) / 2f
+        val top = by + (slotHeight - height) / 2f
+        drawContext.canvas.nativeCanvas.drawBitmap(
+            customSticker, null, RectF(left, top, left + width, top + height),
+            Paint(Paint.FILTER_BITMAP_FLAG)
+        )
+    } else scale(scaleX = 0.82f, scaleY = 0.82f, pivot = Offset(bx, by)) {
         // Slightly frayed paper silhouette, with a tiny tear on the right edge.
         val paperEdge = Path().apply {
             moveTo(bx + bw * 0.045f, by)

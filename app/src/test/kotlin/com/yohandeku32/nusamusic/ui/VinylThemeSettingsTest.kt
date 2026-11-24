@@ -30,9 +30,10 @@ import org.robolectric.annotation.GraphicsMode
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class VinylThemeSettingsTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
-    private fun show(width: Int = 411, scale: Float = 1f) {
+    private fun show(width: Int = 411, scale: Float = 1f, onChooseSticker: () -> Unit = {}) {
         compose.setContent {
             var mode by remember { mutableStateOf(PlayerPresentationMode.VINYL) }
+            var hasCustomSticker by remember { mutableStateOf(false) }
             CompositionLocalProvider(LocalDensity provides Density(1f, scale)) {
                 MaterialTheme(colorScheme = darkColorScheme()) {
                     Box(Modifier.requiredSize(width.dp, 914.dp)) {
@@ -53,7 +54,13 @@ class VinylThemeSettingsTest {
                             onCrossfadeChange = {}, crossfadeDurationSeconds = 3f,
                             onCrossfadeDurationChange = {}, onCrossfadeDurationChangeFinished = {},
                             musicFolders = emptyList(), isScanningMusic = false, onSelectMusicFolder = {},
-                            onRemoveMusicFolder = {}, onScanMusic = {}, onDismiss = {})
+                            onRemoveMusicFolder = {}, onScanMusic = {}, onDismiss = {},
+                            hasCustomCdSticker = hasCustomSticker,
+                            onChooseCdSticker = {
+                                onChooseSticker()
+                                hasCustomSticker = true
+                            },
+                            onResetCdSticker = { hasCustomSticker = false })
                     }
                 }
             }
@@ -75,5 +82,24 @@ class VinylThemeSettingsTest {
         compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("Vinyl"))
         compose.onNodeWithText("Vinyl").assertExists()
         compose.onNodeWithText("Studio Black").assertDoesNotExist()
+    }
+
+    @Test fun cdStickerCanBeChosenReplacedAndResetOnlyInCdMode() {
+        var pickerRequests = 0
+        show { pickerRequests++ }
+
+        compose.onNodeWithText("Choose sticker image").assertDoesNotExist()
+        compose.onNodeWithText("CD").performClick()
+        compose.onNodeWithText("Restore default sticker").assertDoesNotExist()
+        compose.onNodeWithText("Choose sticker image").performClick()
+        compose.onNodeWithText("Change sticker image").performClick()
+        compose.runOnIdle { assertEquals(2, pickerRequests) }
+
+        compose.onNodeWithText("Vinyl").performClick()
+        compose.onNodeWithText("Change sticker image").assertDoesNotExist()
+        compose.onNodeWithText("CD").performClick()
+        compose.onNodeWithText("Restore default sticker").performClick()
+        compose.onNodeWithText("Choose sticker image").assertExists()
+        compose.onNodeWithText("Restore default sticker").assertDoesNotExist()
     }
 }
